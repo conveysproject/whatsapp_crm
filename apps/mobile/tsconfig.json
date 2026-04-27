@@ -1,0 +1,7 @@
+{
+  "extends": "@trustcrm/tsconfig/react-native.json",
+  "compilerOptions": {
+    "strict": true
+  },
+  "include": ["**/*.ts", "**/*.tsx"]
+}
