@@ -51,3 +51,6 @@ test-results/
 
 # TypeScript/Build artifacts
 *.tsbuildinfo
+
+# Git worktrees
+.worktrees/
