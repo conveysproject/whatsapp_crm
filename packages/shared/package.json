@@ -1,0 +1,24 @@
+{
+  "name": "@trustcrm/shared",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@trustcrm/tsconfig": "workspace:*",
+    "@trustcrm/eslint-config": "workspace:*",
+    "typescript": "^5.4.0"
+  }
+}
