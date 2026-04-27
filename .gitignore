@@ -48,3 +48,6 @@ test-results/
 
 # Next.js local env variants
 .env.*.local
+
+# TypeScript/Build artifacts
+*.tsbuildinfo
