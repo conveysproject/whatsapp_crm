@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+.next/
+dist/
+.expo/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Turbo
+.turbo/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Test coverage
+coverage/
+
+# Terraform state
+*.tfstate
+*.tfstate.backup
+.terraform/
