@@ -3,7 +3,7 @@ import Fastify from "fastify";
 import { healthRoute } from "./health.js";
 
 describe("GET /health", () => {
-  const app = Fastify();
+  const app = Fastify({ logger: false });
 
   beforeAll(async () => {
     await app.register(healthRoute);
