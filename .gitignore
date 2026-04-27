@@ -30,3 +30,21 @@ coverage/
 *.tfstate
 *.tfstate.backup
 .terraform/
+
+# Logs
+*.log
+pnpm-debug.log*
+
+# Terraform variable files (may contain secrets)
+*.tfvars
+*.tfvars.json
+
+# Test artifacts
+junit.xml
+test-results/
+
+# Sentry CLI config
+.sentryclirc
+
+# Next.js local env variants
+.env.*.local
