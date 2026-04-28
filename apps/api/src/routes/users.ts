@@ -55,4 +55,13 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(204).send();
     }
   );
+
+  fastify.post<{ Body: { pushToken: string } }>("/users/push-token", async (request, reply) => {
+    const { pushToken } = request.body;
+    await fastify.prisma.user.update({
+      where: { id: request.auth.userId },
+      data: { pushToken },
+    });
+    return reply.status(204).send();
+  });
 };
