@@ -11,6 +11,7 @@
     "clean": "rm -rf .next"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.2.7",
     "@sentry/nextjs": "^10.50.0",
     "@trustcrm/shared": "workspace:*",
     "next": "^15.0.0",
