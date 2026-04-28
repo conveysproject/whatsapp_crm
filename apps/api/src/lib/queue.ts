@@ -10,3 +10,8 @@ export const inboundMessageQueue = new Queue("inbound-messages", {
   connection: redisConnection,
   defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 1000 } },
 });
+
+export const campaignQueue = new Queue("campaigns", {
+  connection: redisConnection,
+  defaultJobOptions: { attempts: 2, backoff: { type: "exponential", delay: 5000 } },
+});
