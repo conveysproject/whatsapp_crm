@@ -84,7 +84,7 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
     const phones = await evaluateSegment(
       fastify.prisma,
       organizationId,
-      segment.filters as SegmentFilter[]
+      segment.filters as unknown as SegmentFilter[]
     );
     return reply.send({ data: { phones, count: phones.length } });
   });
