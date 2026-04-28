@@ -6,6 +6,9 @@ import { evaluateRoutingRules } from "../lib/router.js";
 import { transcribeAudio } from "../lib/whisper.js";
 import { flowQueue } from "../lib/queue.js";
 import { handleBotMessage } from "../lib/bot-runner.js";
+import Expo from "expo-server-sdk";
+
+const expo = new Expo();
 
 export interface InboundMessageJob {
   organizationId: string;
@@ -57,6 +60,18 @@ export const inboundWorker = new Worker<InboundMessageJob>(
           where: { id: conversation.id },
           data: { assignedTo: assignment.assignTo },
         });
+        const profile = await prisma.user.findUnique({
+          where: { id: assignment.assignTo },
+          select: { pushToken: true },
+        });
+        if (profile?.pushToken && Expo.isExpoPushToken(profile.pushToken)) {
+          await expo.sendPushNotificationsAsync([{
+            to: profile.pushToken,
+            title: whatsappContactPhone,
+            body: (body ?? "New voice message").slice(0, 100),
+            sound: "default",
+          }]);
+        }
       }
     }
 
