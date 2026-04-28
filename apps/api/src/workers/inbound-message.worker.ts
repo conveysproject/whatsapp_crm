@@ -3,6 +3,7 @@ import { redisConnection } from "../lib/queue.js";
 import { prisma } from "../lib/prisma.js";
 import { getIo } from "../lib/io-ref.js";
 import { evaluateRoutingRules } from "../lib/router.js";
+import { transcribeAudio } from "../lib/whisper.js";
 
 export interface InboundMessageJob {
   organizationId: string;
@@ -57,7 +58,7 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       }
     }
 
-    await prisma.message.create({
+    const storedMessage = await prisma.message.create({
       data: {
         conversationId: conversation.id,
         organizationId,
@@ -69,6 +70,15 @@ export const inboundWorker = new Worker<InboundMessageJob>(
         sentAt: messageDate,
       },
     });
+
+    if (contentType === "audio" && whatsappMessageId) {
+      try {
+        const transcript = await transcribeAudio(whatsappMessageId, process.env["WA_ACCESS_TOKEN"] ?? "");
+        await prisma.message.update({ where: { id: storedMessage.id }, data: { body: transcript } });
+      } catch {
+        // Transcription failure is non-critical
+      }
+    }
 
     await prisma.conversation.update({
       where: { id: conversation.id },
