@@ -90,3 +90,20 @@ describe("DELETE /v1/contacts/:id", () => {
     expect(res.statusCode).toBe(204);
   });
 });
+
+describe("GET /v1/contacts/export", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns CSV with correct headers and data", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([
+      { id: "c-1", organizationId: "org-1", phoneNumber: "+919000000001", name: "Alice", email: "alice@example.com", lifecycleStage: "lead", tags: [], createdAt: new Date() },
+    ]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/export" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/csv");
+    expect(res.body).toContain("phoneNumber");
+    expect(res.body).toContain("+919000000001");
+  });
+});
