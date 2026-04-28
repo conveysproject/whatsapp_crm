@@ -9,6 +9,7 @@ import { messagesRouter } from "./messages.js";
 import { contactsRouter } from "./contacts.js";
 import { companiesRouter } from "./companies.js";
 import { segmentsRouter } from "./segments.js";
+import { templatesRouter } from "./templates.js";
 
 export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoute);
@@ -21,4 +22,5 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(contactsRouter, { prefix: "/v1" });
   await fastify.register(companiesRouter, { prefix: "/v1" });
   await fastify.register(segmentsRouter, { prefix: "/v1" });
+  await fastify.register(templatesRouter, { prefix: "/v1" });
 };

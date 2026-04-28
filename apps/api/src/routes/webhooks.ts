@@ -61,6 +61,17 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
 
       for (const entry of request.body.entry) {
         for (const change of entry.changes) {
+          if (change.field === "message_template_status_update") {
+            const { message_template_id, event } = change.value as unknown as { message_template_id: string; event: string };
+            const statusMap: Record<string, string> = { APPROVED: "approved", REJECTED: "rejected", PENDING: "pending" };
+            const status = statusMap[event] ?? "pending";
+            await fastify.prisma.template.updateMany({
+              where: { metaTemplateId: message_template_id },
+              data: { status: status as "approved" | "rejected" | "pending" },
+            });
+            continue;
+          }
+
           if (change.field !== "messages" || !change.value.messages?.length) continue;
 
           const { phone_number_id } = change.value.metadata;
