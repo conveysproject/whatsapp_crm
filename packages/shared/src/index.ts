@@ -3,6 +3,8 @@
 export type OrganizationId = string & { readonly __brand: "OrganizationId" };
 export type UserId = string & { readonly __brand: "UserId" };
 export type InvitationId = string & { readonly __brand: "InvitationId" };
+export type ConversationId = string & { readonly __brand: "ConversationId" };
+export type MessageId = string & { readonly __brand: "MessageId" };
 
 export type Role = "admin" | "manager" | "agent" | "viewer";
 export type PlanTier = "starter" | "growth" | "scale" | "enterprise";
