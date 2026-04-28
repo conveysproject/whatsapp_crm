@@ -32,6 +32,8 @@ model Organization {
   planTier                  PlanTier @default(starter) @map("plan_tier")
   whatsappBusinessAccountId String?  @map("whatsapp_business_account_id")
   phoneNumberId             String?  @map("phone_number_id")
+  wabaAccessToken           String?  @map("waba_access_token")
+  onboardingStep            String?  @map("onboarding_step")
   settings                  Json     @default("{}")
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")
