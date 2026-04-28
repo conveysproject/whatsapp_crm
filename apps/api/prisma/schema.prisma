@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PlanTier {
+  starter
+  growth
+  scale
+  enterprise
+}
+
+enum Role {
+  admin
+  manager
+  agent
+  viewer
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  expired
+}
+
+model Organization {
+  id                        String   @id @default(uuid())
+  name                      String
+  planTier                  PlanTier @default(starter) @map("plan_tier")
+  whatsappBusinessAccountId String?  @map("whatsapp_business_account_id")
+  phoneNumberId             String?  @map("phone_number_id")
+  settings                  Json     @default("{}")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  users       User[]
+  invitations Invitation[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String   @id
+  organizationId String   @map("organization_id")
+  email          String
+  fullName       String   @map("full_name")
+  role           Role     @default(agent)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+model Invitation {
+  id             String           @id @default(uuid())
+  organizationId String           @map("organization_id")
+  email          String
+  role           Role             @default(agent)
+  token          String           @unique @default(uuid())
+  status         InvitationStatus @default(pending)
+  expiresAt      DateTime         @map("expires_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([token])
+  @@map("invitations")
+}

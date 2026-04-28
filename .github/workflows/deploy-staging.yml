@@ -1,0 +1,76 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-api:
+    name: Build & Deploy API
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_STAGING_DEPLOY_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      - name: Login to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build API
+        run: pnpm --filter @trustcrm/api build
+
+      - name: Build & push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/trustcrm/api:$IMAGE_TAG -f apps/api/Dockerfile .
+          docker push $ECR_REGISTRY/trustcrm/api:$IMAGE_TAG
+
+      - name: Deploy to ECS
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          aws ecs update-service \
+            --cluster trustcrm-staging \
+            --service trustcrm-staging-api \
+            --force-new-deployment \
+            --region ap-south-1
+
+      - name: Wait for deployment
+        run: |
+          aws ecs wait services-stable \
+            --cluster trustcrm-staging \
+            --services trustcrm-staging-api \
+            --region ap-south-1
+
+      - name: Verify health endpoint
+        run: |
+          ALB_URL=$(aws elbv2 describe-load-balancers \
+            --names trustcrm-staging-api \
+            --query 'LoadBalancers[0].DNSName' \
+            --output text)
+          curl --fail http://$ALB_URL/health
