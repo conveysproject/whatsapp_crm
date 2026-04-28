@@ -9,6 +9,7 @@ import { routes } from "./routes/index.js";
 import { setupSearchIndexes } from "./lib/search.js";
 import multipart from "@fastify/multipart";
 import socketioPlugin from "./plugins/socketio.js";
+import { rateLimitPlugin } from "./plugins/rate-limit.js";
 import "./workers/inbound-message.worker.js";
 import "./workers/campaign.worker.js";
 import "./workers/flow.worker.js";
@@ -36,6 +37,7 @@ async function start() {
   await server.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   await server.register(swaggerPlugin);
   await server.register(authPlugin);
+  await server.register(rateLimitPlugin);
   await server.register(socketioPlugin);
   await server.register(routes);
 
