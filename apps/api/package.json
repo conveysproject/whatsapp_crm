@@ -19,8 +19,10 @@
     "@prisma/client": "^7.8.0",
     "@sentry/node": "^10.50.0",
     "@trustcrm/shared": "workspace:*",
+    "bullmq": "^5.76.2",
     "fastify": "^4.27.0",
     "fastify-plugin": "^5.1.0",
+    "ioredis": "^5.10.1",
     "pino": "^9.0.0"
   },
   "devDependencies": {
