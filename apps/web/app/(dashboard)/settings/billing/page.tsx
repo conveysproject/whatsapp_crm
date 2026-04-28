@@ -8,13 +8,14 @@ interface UsageData {
 }
 
 async function getUsage(token: string): Promise<UsageData | null> {
-  const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"] ?? ""}/v1/billing/usage`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
-  const json = await res.json() as { data: UsageData };
-  return json.data;
+  try {
+    const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/billing/usage`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json() as { data: UsageData }).data;
+  } catch { return null; }
 }
 
 function UsageBar({ used, limit, label }: { used: number; limit: number | null; label: string }): JSX.Element {

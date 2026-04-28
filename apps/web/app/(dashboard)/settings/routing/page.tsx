@@ -13,12 +13,14 @@ interface RoutingRule {
 }
 
 async function getRules(token: string): Promise<RoutingRule[]> {
-  const res = await fetch(
-    `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/routing-rules`,
-    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-  );
-  if (!res.ok) return [];
-  return (await res.json() as { data: RoutingRule[] }).data;
+  try {
+    const res = await fetch(
+      `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/routing-rules`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+    );
+    if (!res.ok) return [];
+    return (await res.json() as { data: RoutingRule[] }).data;
+  } catch { return []; }
 }
 
 export default async function RoutingSettingsPage(): Promise<JSX.Element> {

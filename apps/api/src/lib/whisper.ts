@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 
-const openai = new OpenAI({ apiKey: process.env["OPENAI_API_KEY"] });
+function getClient(): OpenAI {
+  if (!process.env["OPENAI_API_KEY"]) throw new Error("OPENAI_API_KEY is not set");
+  return new OpenAI({ apiKey: process.env["OPENAI_API_KEY"] });
+}
 
 export async function downloadWhatsAppMedia(mediaId: string, accessToken: string): Promise<string> {
   const urlRes = await fetch(`https://graph.facebook.com/v20.0/${mediaId}`, {
@@ -27,7 +30,7 @@ export async function downloadWhatsAppMedia(mediaId: string, accessToken: string
 
 export async function transcribeAudio(mediaId: string, accessToken: string): Promise<string> {
   const tmpPath = await downloadWhatsAppMedia(mediaId, accessToken);
-  const transcription = await openai.audio.transcriptions.create({
+  const transcription = await getClient().audio.transcriptions.create({
     file: createReadStream(tmpPath),
     model: "whisper-1",
   });

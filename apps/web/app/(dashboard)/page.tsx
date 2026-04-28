@@ -7,10 +7,14 @@ import { TeamTable } from "@/components/analytics/TeamTable";
 interface Overview { openConversations: number; totalContacts: number; messagesToday: number; pendingInvitations: number; }
 
 async function getOverview(token: string): Promise<Overview | null> {
-  const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/analytics/overview`, {
-    headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
-  });
-  return res.ok ? (await res.json() as { data: Overview }).data : null;
+  try {
+    const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/analytics/overview`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+    });
+    return res.ok ? (await res.json() as { data: Overview }).data : null;
+  } catch {
+    return null;
+  }
 }
 
 export default async function DashboardPage(): Promise<JSX.Element> {

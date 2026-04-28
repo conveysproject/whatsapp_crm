@@ -12,13 +12,14 @@ interface Company {
 }
 
 async function getCompanies(token: string): Promise<Company[]> {
-  const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"]}/v1/companies`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  if (!res.ok) return [];
-  const body = await res.json() as { data: Company[] };
-  return body.data;
+  try {
+    const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/companies`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    return (await res.json() as { data: Company[] }).data;
+  } catch { return []; }
 }
 
 export default async function CompaniesPage(): Promise<JSX.Element> {

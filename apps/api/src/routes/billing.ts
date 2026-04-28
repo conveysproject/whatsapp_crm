@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
-import { stripe, PLAN_PRICE_IDS, PLAN_LIMITS } from "../lib/stripe.js";
+import type Stripe from "stripe";
+import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS } from "../lib/stripe.js";
 import type { PlanTier } from "@prisma/client";
 
 export const billingRouter: FastifyPluginAsync = async (fastify) => {
@@ -37,7 +38,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       const priceId = PLAN_PRICE_IDS[planTier];
       if (!priceId) return reply.status(400).send({ error: "invalid_plan" });
 
-      const session = await stripe.checkout.sessions.create({
+      const session = await getStripe().checkout.sessions.create({
         mode: "subscription",
         line_items: [{ price: priceId, quantity: 1 }],
         success_url: successUrl,
@@ -59,7 +60,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     const customerId = settings?.["stripeCustomerId"];
     if (!customerId) return reply.status(404).send({ error: "no_billing_account" });
 
-    const session = await stripe.billingPortal.sessions.create({
+    const session = await getStripe().billingPortal.sessions.create({
       customer: customerId,
       return_url: `${request.headers.origin ?? ""}/settings/billing`,
     });
@@ -70,9 +71,9 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post("/billing/webhook", async (request, reply) => {
     const sig = request.headers["stripe-signature"];
     const webhookSecret = process.env["STRIPE_WEBHOOK_SECRET"] ?? "";
-    let event: ReturnType<typeof stripe.webhooks.constructEvent>;
+    let event: Stripe.Event;
     try {
-      event = stripe.webhooks.constructEvent(
+      event = getStripe().webhooks.constructEvent(
         JSON.stringify(request.body),
         sig as string,
         webhookSecret

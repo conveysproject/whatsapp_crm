@@ -10,13 +10,15 @@ interface Segment {
 }
 
 async function getSegments(token: string): Promise<Segment[]> {
-  const apiUrl = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
-  const res = await fetch(`${apiUrl}/v1/segments`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  if (!res.ok) return [];
-  return (await res.json() as { data: Segment[] }).data;
+  try {
+    const apiUrl = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+    const res = await fetch(`${apiUrl}/v1/segments`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    return (await res.json() as { data: Segment[] }).data;
+  } catch { return []; }
 }
 
 export default async function SegmentsPage(): Promise<JSX.Element> {

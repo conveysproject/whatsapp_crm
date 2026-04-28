@@ -13,13 +13,15 @@ interface Template {
 }
 
 async function getTemplates(token: string): Promise<Template[]> {
-  const apiUrl = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
-  const res = await fetch(`${apiUrl}/v1/templates`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  if (!res.ok) return [];
-  return (await res.json() as { data: Template[] }).data;
+  try {
+    const apiUrl = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+    const res = await fetch(`${apiUrl}/v1/templates`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    return (await res.json() as { data: Template[] }).data;
+  } catch { return []; }
 }
 
 const statusVariant: Record<string, "yellow" | "green" | "red"> = {

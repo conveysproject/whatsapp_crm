@@ -12,12 +12,14 @@ interface Campaign {
 }
 
 async function getCampaigns(token: string): Promise<Campaign[]> {
-  const res = await fetch(
-    `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/campaigns`,
-    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-  );
-  if (!res.ok) return [];
-  return (await res.json() as { data: Campaign[] }).data;
+  try {
+    const res = await fetch(
+      `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/campaigns`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+    );
+    if (!res.ok) return [];
+    return (await res.json() as { data: Campaign[] }).data;
+  } catch { return []; }
 }
 
 const statusVariant: Record<string, "gray" | "yellow" | "blue" | "green" | "red"> = {

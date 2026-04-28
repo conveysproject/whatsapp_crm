@@ -7,10 +7,12 @@ import Link from "next/link";
 interface Flow { id: string; name: string; triggerType: string; isActive: boolean; }
 
 async function getFlows(token: string): Promise<Flow[]> {
-  const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/flows`, {
-    headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
-  });
-  return res.ok ? (await res.json() as { data: Flow[] }).data : [];
+  try {
+    const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/flows`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+    });
+    return res.ok ? (await res.json() as { data: Flow[] }).data : [];
+  } catch { return []; }
 }
 
 export default async function FlowsPage(): Promise<JSX.Element> {
