@@ -10,6 +10,7 @@ export type CompanyId = string & { readonly __brand: "CompanyId" };
 export type DealId = string & { readonly __brand: "DealId" };
 export type PipelineId = string & { readonly __brand: "PipelineId" };
 export type TemplateId = string & { readonly __brand: "TemplateId" };
+export type SegmentId = string & { readonly __brand: "SegmentId" };
 
 export type Role = "admin" | "manager" | "agent" | "viewer";
 export type PlanTier = "starter" | "growth" | "scale" | "enterprise";
