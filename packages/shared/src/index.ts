@@ -5,6 +5,11 @@ export type UserId = string & { readonly __brand: "UserId" };
 export type InvitationId = string & { readonly __brand: "InvitationId" };
 export type ConversationId = string & { readonly __brand: "ConversationId" };
 export type MessageId = string & { readonly __brand: "MessageId" };
+export type ContactId = string & { readonly __brand: "ContactId" };
+export type CompanyId = string & { readonly __brand: "CompanyId" };
+export type DealId = string & { readonly __brand: "DealId" };
+export type PipelineId = string & { readonly __brand: "PipelineId" };
+export type TemplateId = string & { readonly __brand: "TemplateId" };
 
 export type Role = "admin" | "manager" | "agent" | "viewer";
 export type PlanTier = "starter" | "growth" | "scale" | "enterprise";
