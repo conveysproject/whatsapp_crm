@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
+import type { PrismaClient } from "@prisma/client";
 
 vi.mock("../lib/queue.js", () => ({
   inboundMessageQueue: { add: vi.fn().mockResolvedValue(undefined) },
@@ -18,7 +19,7 @@ const mockPrisma = {
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
-  app.decorate("prisma", mockPrisma);
+  app.decorate("prisma", mockPrisma as unknown as PrismaClient);
   const { webhooksRouter } = await import("./webhooks.js");
   await app.register(webhooksRouter, { prefix: "/v1" });
   return app;

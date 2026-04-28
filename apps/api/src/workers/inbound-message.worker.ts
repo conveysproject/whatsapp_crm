@@ -1,5 +1,6 @@
 import { Worker } from "bullmq";
 import { redisConnection } from "../lib/queue.js";
+
 import { prisma } from "../lib/prisma.js";
 
 export interface InboundMessageJob {
