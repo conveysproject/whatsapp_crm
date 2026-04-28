@@ -2,7 +2,9 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import { sentryPlugin } from "./plugins/sentry.js";
-import { healthRoute } from "./routes/health.js";
+import prismaPlugin from "./plugins/prisma.js";
+import authPlugin from "./plugins/auth.js";
+import { routes } from "./routes/index.js";
 
 const PORT = Number(process.env["API_PORT"] ?? 4000);
 const HOST = process.env["API_HOST"] ?? "0.0.0.0";
@@ -23,8 +25,9 @@ async function start() {
   await server.register(cors, {
     origin: process.env["CORS_ORIGIN"] ?? "http://localhost:3000",
   });
-
-  await server.register(healthRoute);
+  await server.register(prismaPlugin);
+  await server.register(authPlugin);
+  await server.register(routes);
 
   await server.listen({ port: PORT, host: HOST });
   server.log.info(`API running on http://${HOST}:${PORT}`);
