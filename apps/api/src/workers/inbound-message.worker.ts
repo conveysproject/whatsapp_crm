@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
 import { redisConnection } from "../lib/queue.js";
-
 import { prisma } from "../lib/prisma.js";
+import { getIo } from "../lib/io-ref.js";
 
 export interface InboundMessageJob {
   organizationId: string;
@@ -60,6 +60,17 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       where: { id: conversation.id },
       data: { lastMessageAt: messageDate },
     });
+
+    const io = getIo();
+    if (io) {
+      io.to(`org:${organizationId}`).emit("new-message", {
+        conversationId: conversation.id,
+        organizationId,
+        direction: "inbound",
+        body,
+        sentAt: messageDate.toISOString(),
+      });
+    }
   },
   { connection: redisConnection }
 );
