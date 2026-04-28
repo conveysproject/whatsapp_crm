@@ -15,6 +15,7 @@ const navItems: NavItem[] = [
   { href: "/inbox",    label: "Inbox",     icon: "✉" },
   { href: "/contacts", label: "Contacts",  icon: "👤" },
   { href: "/campaigns", label: "Campaigns", icon: "📢" },
+  { href: "/settings/routing", label: "Routing",   icon: "→" },
   { href: "/settings", label: "Settings",  icon: "⚙" },
 ];
 

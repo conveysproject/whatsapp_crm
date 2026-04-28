@@ -2,6 +2,7 @@ import { Worker } from "bullmq";
 import { redisConnection } from "../lib/queue.js";
 import { prisma } from "../lib/prisma.js";
 import { getIo } from "../lib/io-ref.js";
+import { evaluateRoutingRules } from "../lib/router.js";
 
 export interface InboundMessageJob {
   organizationId: string;
@@ -41,6 +42,19 @@ export const inboundWorker = new Worker<InboundMessageJob>(
           lastMessageAt: messageDate,
         },
       });
+      const assignment = await evaluateRoutingRules(prisma, {
+        id: conversation.id,
+        organizationId,
+        whatsappContactId: whatsappContactPhone,
+        status: "open",
+        channelType: "whatsapp",
+      });
+      if (assignment) {
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { assignedTo: assignment.assignTo },
+        });
+      }
     }
 
     await prisma.message.create({
