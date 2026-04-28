@@ -7,6 +7,7 @@ import swaggerPlugin from "./plugins/swagger.js";
 import authPlugin from "./plugins/auth.js";
 import { routes } from "./routes/index.js";
 import { setupSearchIndexes } from "./lib/search.js";
+import multipart from "@fastify/multipart";
 import socketioPlugin from "./plugins/socketio.js";
 import "./workers/inbound-message.worker.js";
 
@@ -30,6 +31,7 @@ async function start() {
     origin: process.env["CORS_ORIGIN"] ?? "http://localhost:3000",
   });
   await server.register(prismaPlugin);
+  await server.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   await server.register(swaggerPlugin);
   await server.register(authPlugin);
   await server.register(socketioPlugin);
