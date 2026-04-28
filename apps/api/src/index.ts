@@ -7,6 +7,7 @@ import swaggerPlugin from "./plugins/swagger.js";
 import authPlugin from "./plugins/auth.js";
 import { routes } from "./routes/index.js";
 import { setupSearchIndexes } from "./lib/search.js";
+import socketioPlugin from "./plugins/socketio.js";
 import "./workers/inbound-message.worker.js";
 
 const PORT = Number(process.env["API_PORT"] ?? 4000);
@@ -31,6 +32,7 @@ async function start() {
   await server.register(prismaPlugin);
   await server.register(swaggerPlugin);
   await server.register(authPlugin);
+  await server.register(socketioPlugin);
   await server.register(routes);
 
   await server.listen({ port: PORT, host: HOST });
