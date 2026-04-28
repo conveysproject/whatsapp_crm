@@ -14,6 +14,12 @@ import { campaignsRouter } from "./campaigns.js";
 import { pipelinesRouter } from "./pipelines.js";
 import { dealsRouter } from "./deals.js";
 import { routingRouter } from "./routing.js";
+import { aiRouter } from "./ai.js";
+import { transcriptionsRouter } from "./transcriptions.js";
+import { flowsRouter } from "./flows.js";
+import { chatbotsRouter } from "./chatbots.js";
+import { analyticsRouter } from "./analytics.js";
+import { trustScoreRouter } from "./trust-score.js";
 
 export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoute);
@@ -31,4 +37,10 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(pipelinesRouter, { prefix: "/v1" });
   await fastify.register(dealsRouter, { prefix: "/v1" });
   await fastify.register(routingRouter, { prefix: "/v1" });
+  await fastify.register(aiRouter, { prefix: "/v1" });
+  await fastify.register(transcriptionsRouter, { prefix: "/v1" });
+  await fastify.register(flowsRouter, { prefix: "/v1" });
+  await fastify.register(chatbotsRouter, { prefix: "/v1" });
+  await fastify.register(analyticsRouter, { prefix: "/v1" });
+  await fastify.register(trustScoreRouter, { prefix: "/v1" });
 };
