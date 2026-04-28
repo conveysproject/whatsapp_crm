@@ -132,3 +132,186 @@ model Invitation {
   @@index([token])
   @@map("invitations")
 }
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum LifecycleStage {
+  lead
+  prospect
+  customer
+  loyal
+  churned
+}
+
+enum TemplateStatus {
+  pending
+  approved
+  rejected
+}
+
+enum TemplateCategory {
+  marketing
+  utility
+  authentication
+}
+
+enum CampaignStatus {
+  draft
+  scheduled
+  running
+  completed
+  cancelled
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model Contact {
+  id             String         @id @default(uuid())
+  organizationId String         @map("organization_id")
+  phoneNumber    String         @map("phone_number")
+  name           String?
+  email          String?
+  companyId      String?        @map("company_id")
+  company        Company?       @relation(fields: [companyId], references: [id])
+  lifecycleStage LifecycleStage @default(lead) @map("lifecycle_stage")
+  tags           String[]
+  customFields   Json           @default("{}") @map("custom_fields")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  @@unique([organizationId, phoneNumber])
+  @@index([organizationId])
+  @@index([organizationId, lifecycleStage])
+  @@map("contacts")
+}
+
+model Company {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  name           String
+  domain         String?
+  industry       String?
+  size           String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  contacts       Contact[]
+
+  @@index([organizationId])
+  @@map("companies")
+}
+
+model Pipeline {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  stages         Json     @default("[]")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deals          Deal[]
+
+  @@index([organizationId])
+  @@map("pipelines")
+}
+
+model Deal {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  title          String
+  value          Decimal?  @db.Decimal(15, 2)
+  stage          String    @default("new")
+  pipelineId     String    @map("pipeline_id")
+  pipeline       Pipeline  @relation(fields: [pipelineId], references: [id])
+  contactId      String?   @map("contact_id")
+  assignedTo     String?   @map("assigned_to")
+  closedAt       DateTime? @map("closed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([organizationId, pipelineId])
+  @@map("deals")
+}
+
+model Template {
+  id             String           @id @default(uuid())
+  organizationId String           @map("organization_id")
+  name           String
+  category       TemplateCategory
+  language       String           @default("en")
+  components     Json             @default("[]")
+  metaTemplateId String?          @map("meta_template_id")
+  status         TemplateStatus   @default(pending)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@map("templates")
+}
+
+model Campaign {
+  id             String         @id @default(uuid())
+  organizationId String         @map("organization_id")
+  name           String
+  templateId     String?        @map("template_id")
+  status         CampaignStatus @default(draft)
+  scheduledAt    DateTime?      @map("scheduled_at")
+  sentAt         DateTime?      @map("sent_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@map("campaigns")
+}
+
+model Flow {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  triggerType    String   @map("trigger_type")
+  isActive       Boolean  @default(false) @map("is_active")
+  flowDefinition Json     @default("{}") @map("flow_definition")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@map("flows")
+}
+
+model Team {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  description    String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@map("teams")
+}
+
+model ApiKey {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  name           String
+  keyHash        String    @unique @map("key_hash")
+  scopes         String[]
+  lastUsedAt     DateTime? @map("last_used_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@map("api_keys")
+}
+
+model Webhook {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  url            String
+  events         String[]
+  secret         String
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@map("webhooks")
+}
