@@ -1,0 +1,19 @@
+import Stripe from "stripe";
+
+export const stripe = new Stripe(process.env["STRIPE_SECRET_KEY"] ?? "", {
+  apiVersion: "2025-04-30.basil",
+});
+
+export const PLAN_PRICE_IDS: Record<string, string> = {
+  starter: process.env["STRIPE_PRICE_STARTER"] ?? "",
+  growth: process.env["STRIPE_PRICE_GROWTH"] ?? "",
+  scale: process.env["STRIPE_PRICE_SCALE"] ?? "",
+  enterprise: process.env["STRIPE_PRICE_ENTERPRISE"] ?? "",
+};
+
+export const PLAN_LIMITS: Record<string, { contacts: number; messages: number }> = {
+  starter: { contacts: 500, messages: 1000 },
+  growth: { contacts: 5000, messages: 20000 },
+  scale: { contacts: 50000, messages: 200000 },
+  enterprise: { contacts: Infinity, messages: Infinity },
+};
