@@ -15,3 +15,8 @@ export const campaignQueue = new Queue("campaigns", {
   connection: redisConnection,
   defaultJobOptions: { attempts: 2, backoff: { type: "exponential", delay: 5000 } },
 });
+
+export const flowQueue = new Queue("flows", {
+  connection: redisConnection,
+  defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 2000 } },
+});

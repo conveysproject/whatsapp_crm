@@ -16,6 +16,7 @@ import { dealsRouter } from "./deals.js";
 import { routingRouter } from "./routing.js";
 import { aiRouter } from "./ai.js";
 import { transcriptionsRouter } from "./transcriptions.js";
+import { flowsRouter } from "./flows.js";
 
 export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoute);
@@ -35,4 +36,5 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(routingRouter, { prefix: "/v1" });
   await fastify.register(aiRouter, { prefix: "/v1" });
   await fastify.register(transcriptionsRouter, { prefix: "/v1" });
+  await fastify.register(flowsRouter, { prefix: "/v1" });
 };
