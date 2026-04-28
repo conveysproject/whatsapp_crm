@@ -4,7 +4,7 @@ import { verifyClerkToken } from "../lib/clerk.js";
 
 const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.addHook("preHandler", async (request, reply) => {
-    const routeConfig = request.routeOptions?.config as Record<string, unknown> | undefined;
+    const routeConfig = request.routeOptions?.config as unknown as Record<string, unknown> | undefined;
     if (routeConfig?.["public"]) return;
 
     try {

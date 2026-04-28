@@ -1,8 +1,4 @@
-import { createClerkClient } from "@clerk/backend";
-
-const clerk = createClerkClient({
-  secretKey: process.env["CLERK_SECRET_KEY"] ?? "",
-});
+import { verifyToken } from "@clerk/backend";
 
 export async function verifyClerkToken(authHeader: string | undefined): Promise<{
   userId: string;
@@ -12,7 +8,9 @@ export async function verifyClerkToken(authHeader: string | undefined): Promise<
   if (!authHeader.startsWith("Bearer ")) throw new Error("Invalid Authorization header format");
 
   const token = authHeader.slice(7);
-  const payload = await clerk.verifyToken(token);
+  const payload = await verifyToken(token, {
+    secretKey: process.env["CLERK_SECRET_KEY"] ?? "",
+  });
 
   const organizationId = payload.org_id;
   if (!organizationId) throw new Error("Token has no organization scope");

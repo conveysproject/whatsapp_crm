@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 
 export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
@@ -26,7 +27,10 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
     async (request) => {
       const org = await prisma.organization.update({
         where: { id: request.auth.organizationId },
-        data: request.body,
+        data: {
+          name: request.body.name,
+          settings: request.body.settings as Prisma.InputJsonValue | undefined,
+        },
       });
       return { data: org };
     }
