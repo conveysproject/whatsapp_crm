@@ -17,7 +17,7 @@ export function VoiceMessage({ transcript, direction }: VoiceMessageProps): JSX.
         <span>Voice message</span>
       </div>
       {transcript ? (
-        <p className="text-sm text-gray-800 italic">"{transcript}"</p>
+        <p className="text-sm text-gray-800 italic">&ldquo;{transcript}&rdquo;</p>
       ) : (
         <p className="text-xs text-gray-400">Transcribing…</p>
       )}

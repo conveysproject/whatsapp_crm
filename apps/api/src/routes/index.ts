@@ -19,6 +19,7 @@ import { transcriptionsRouter } from "./transcriptions.js";
 import { flowsRouter } from "./flows.js";
 import { chatbotsRouter } from "./chatbots.js";
 import { analyticsRouter } from "./analytics.js";
+import { trustScoreRouter } from "./trust-score.js";
 
 export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoute);
@@ -41,4 +42,5 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(flowsRouter, { prefix: "/v1" });
   await fastify.register(chatbotsRouter, { prefix: "/v1" });
   await fastify.register(analyticsRouter, { prefix: "/v1" });
+  await fastify.register(trustScoreRouter, { prefix: "/v1" });
 };

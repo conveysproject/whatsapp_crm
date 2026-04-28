@@ -11,7 +11,7 @@ vi.mock("@anthropic-ai/sdk", () => ({
 }));
 
 vi.mock("../lib/claude.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../lib/claude.js")>();
+  const actual = await importOriginal();
   return actual;
 });
 
