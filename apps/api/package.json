@@ -28,6 +28,7 @@
     "fastify-plugin": "^5.1.0",
     "ioredis": "^5.10.1",
     "meilisearch": "^0.57.0",
+    "openai": "^6.34.0",
     "papaparse": "^5.5.3",
     "pino": "^9.0.0",
     "socket.io": "^4.8.3"
