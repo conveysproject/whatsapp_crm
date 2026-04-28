@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { getIo } from "../lib/io-ref.js";
 import { evaluateRoutingRules } from "../lib/router.js";
 import { transcribeAudio } from "../lib/whisper.js";
+import { flowQueue } from "../lib/queue.js";
 
 export interface InboundMessageJob {
   organizationId: string;
@@ -84,6 +85,22 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       where: { id: conversation.id },
       data: { lastMessageAt: messageDate },
     });
+
+    const activeFlows = await prisma.flow.findMany({
+      where: { organizationId, isActive: true, triggerType: "inbound_message" },
+      select: { id: true },
+    });
+    for (const flow of activeFlows) {
+      await flowQueue.add("trigger-flow", {
+        flowId: flow.id,
+        payload: {
+          conversationId: conversation.id,
+          organizationId,
+          contactPhone: whatsappContactPhone,
+          messageBody: body ?? "",
+        },
+      });
+    }
 
     const io = getIo();
     if (io) {
