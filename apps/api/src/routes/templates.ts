@@ -66,7 +66,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       name: template.name,
       category: template.category,
       language: template.language,
-      components: template.components as object[],
+      components: template.components as unknown as Parameters<typeof submitTemplateToMeta>[0]["components"],
     });
 
     const updated = await fastify.prisma.template.update({
