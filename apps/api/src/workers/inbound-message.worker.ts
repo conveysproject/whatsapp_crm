@@ -5,6 +5,7 @@ import { getIo } from "../lib/io-ref.js";
 import { evaluateRoutingRules } from "../lib/router.js";
 import { transcribeAudio } from "../lib/whisper.js";
 import { flowQueue } from "../lib/queue.js";
+import { handleBotMessage } from "../lib/bot-runner.js";
 
 export interface InboundMessageJob {
   organizationId: string;
@@ -85,6 +86,11 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       where: { id: conversation.id },
       data: { lastMessageAt: messageDate },
     });
+
+    const refreshed = await prisma.conversation.findFirst({ where: { id: conversation.id } });
+    if (refreshed?.status === "bot") {
+      await handleBotMessage(prisma, conversation.id, organizationId, body);
+    }
 
     const activeFlows = await prisma.flow.findMany({
       where: { organizationId, isActive: true, triggerType: "inbound_message" },
