@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX, FormEvent, useState } from "react";
+import { JSX, FormEvent, useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
@@ -8,10 +8,16 @@ import { Input } from "@/components/ui/Input";
 
 interface Props {
   conversationId: string | null;
+  prefillText?: string;
+  onSent?: () => void;
 }
 
-export function SendMessageForm({ conversationId }: Props): JSX.Element {
+export function SendMessageForm({ conversationId, prefillText, onSent }: Props): JSX.Element {
   const [text, setText] = useState("");
+
+  useEffect(() => {
+    if (prefillText) setText(prefillText);
+  }, [prefillText]);
   const [sending, setSending] = useState(false);
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
@@ -34,6 +40,7 @@ export function SendMessageForm({ conversationId }: Props): JSX.Element {
       });
       if (res.ok) {
         setText("");
+        onSent?.();
         await queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
       }
     } finally {
