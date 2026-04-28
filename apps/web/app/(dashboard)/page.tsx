@@ -7,8 +7,8 @@ interface StatCard {
 }
 
 const stats: StatCard[] = [
-  { label: "Open Conversations", value: "—" },
-  { label: "Contacts",           value: "—" },
+  { label: "Open Conversations",  value: "—" },
+  { label: "Contacts",            value: "—" },
   { label: "Messages Sent Today", value: "—" },
   { label: "Pending Invitations", value: "—" },
 ];
