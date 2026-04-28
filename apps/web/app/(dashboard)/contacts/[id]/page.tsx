@@ -14,13 +14,14 @@ interface Contact {
 }
 
 async function getContact(id: string, token: string): Promise<Contact | null> {
-  const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"]}/v1/contacts/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
-  const body = await res.json() as { data: Contact };
-  return body.data;
+  try {
+    const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/contacts/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json() as { data: Contact }).data;
+  } catch { return null; }
 }
 
 async function updateContact(id: string, token: string, data: Partial<Contact>): Promise<void> {

@@ -1,8 +1,8 @@
 import { Meilisearch } from "meilisearch";
 
 export const searchClient = new Meilisearch({
-  host: process.env["MEILISEARCH_URL"] ?? "http://localhost:7700",
-  apiKey: process.env["MEILISEARCH_MASTER_KEY"],
+  host: process.env["MEILISEARCH_HOST"] ?? "http://localhost:7700",
+  apiKey: process.env["MEILISEARCH_MASTER_KEY"] ?? "dev-master-key",
 });
 
 export async function setupSearchIndexes(): Promise<void> {

@@ -24,14 +24,15 @@ const stageVariant: Record<string, "green" | "blue" | "yellow" | "red" | "gray">
 };
 
 async function getContacts(token: string): Promise<Contact[]> {
-  const apiUrl = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
-  const res = await fetch(`${apiUrl}/v1/contacts?limit=50`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  if (!res.ok) return [];
-  const json = await res.json() as ContactsResponse;
-  return json.data;
+  try {
+    const apiUrl = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+    const res = await fetch(`${apiUrl}/v1/contacts?limit=50`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    return (await res.json() as ContactsResponse).data;
+  } catch { return []; }
 }
 
 export default async function ContactsPage(): Promise<JSX.Element> {

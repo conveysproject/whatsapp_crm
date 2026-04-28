@@ -14,13 +14,14 @@ interface Company {
 }
 
 async function getCompany(id: string, token: string): Promise<Company | null> {
-  const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"]}/v1/companies/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
-  const body = await res.json() as { data: Company };
-  return body.data;
+  try {
+    const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/companies/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json() as { data: Company }).data;
+  } catch { return null; }
 }
 
 export default async function CompanyDetailPage({

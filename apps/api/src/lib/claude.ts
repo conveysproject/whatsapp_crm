@@ -1,6 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const client = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
+function getClient(): Anthropic {
+  if (!process.env["ANTHROPIC_API_KEY"]) throw new Error("ANTHROPIC_API_KEY is not set");
+  return new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
+}
 
 export type IntentType = "question" | "complaint" | "order" | "compliment" | "other";
 export type SentimentType = "positive" | "negative" | "neutral";
@@ -18,7 +21,7 @@ export async function generateSuggestions(
   history: Message[],
   count = 3
 ): Promise<string[]> {
-  const response = await client.messages.create({
+  const response = await getClient().messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 512,
     system: SYSTEM_PROMPT,
@@ -42,7 +45,7 @@ export async function generateSuggestions(
 }
 
 export async function detectIntent(messageBody: string): Promise<IntentType> {
-  const response = await client.messages.create({
+  const response = await getClient().messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 16,
     system: "Classify the customer message intent. Reply with exactly one word: question, complaint, order, compliment, or other.",
@@ -55,7 +58,7 @@ export async function detectIntent(messageBody: string): Promise<IntentType> {
 }
 
 export async function analyzeSentiment(messageBody: string): Promise<SentimentType> {
-  const response = await client.messages.create({
+  const response = await getClient().messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 16,
     system: "Classify the sentiment of this customer message. Reply with exactly one word: positive, negative, or neutral.",
