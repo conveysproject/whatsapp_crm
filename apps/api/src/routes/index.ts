@@ -22,6 +22,7 @@ import { analyticsRouter } from "./analytics.js";
 import { trustScoreRouter } from "./trust-score.js";
 import { onboardingRouter } from "./onboarding.js";
 import { searchRouter } from "./search.js";
+import { billingRouter } from "./billing.js";
 
 export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoute);
@@ -47,4 +48,5 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(trustScoreRouter, { prefix: "/v1" });
   await fastify.register(onboardingRouter, { prefix: "/v1/onboarding" });
   await fastify.register(searchRouter, { prefix: "/v1" });
+  await fastify.register(billingRouter, { prefix: "/v1" });
 };
