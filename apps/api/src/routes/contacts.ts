@@ -1,4 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
+import type { Prisma } from "@prisma/client";
+import type { LifecycleStage } from "@prisma/client";
 import { paginate, parsePaginationParams } from "../lib/pagination.js";
 import { indexContact, removeContact, searchContacts } from "../lib/search.js";
 import type { ContactId } from "@trustcrm/shared";
@@ -87,7 +89,13 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       }
       const contact = await fastify.prisma.contact.update({
         where: { id: request.params.id },
-        data: request.body,
+        data: {
+          name: request.body.name,
+          email: request.body.email,
+          lifecycleStage: request.body.lifecycleStage as LifecycleStage | undefined,
+          tags: request.body.tags,
+          customFields: request.body.customFields as Prisma.InputJsonValue | undefined,
+        },
       });
       await indexContact({
         id: contact.id,
