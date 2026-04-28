@@ -13,6 +13,9 @@ export type TemplateId = string & { readonly __brand: "TemplateId" };
 export type SegmentId = string & { readonly __brand: "SegmentId" };
 export type CampaignId = string & { readonly __brand: "CampaignId" };
 
+export type IntentType = "question" | "complaint" | "order" | "compliment" | "other";
+export type SentimentType = "positive" | "negative" | "neutral";
+
 export type Role = "admin" | "manager" | "agent" | "viewer";
 export type PlanTier = "starter" | "growth" | "scale" | "enterprise";
 

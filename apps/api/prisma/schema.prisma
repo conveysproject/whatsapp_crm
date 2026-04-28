@@ -319,6 +319,34 @@ model Flow {
   @@map("flows")
 }
 
+model Chatbot {
+  id             String       @id @default(uuid())
+  organizationId String       @map("organization_id")
+  name           String
+  flowId         String       @map("flow_id")
+  isActive       Boolean      @default(false) @map("is_active")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  sessions       BotSession[]
+
+  @@index([organizationId])
+  @@map("chatbots")
+}
+
+model BotSession {
+  id             String   @id @default(uuid())
+  chatbotId      String   @map("chatbot_id")
+  chatbot        Chatbot  @relation(fields: [chatbotId], references: [id])
+  conversationId String   @unique @map("conversation_id")
+  currentNodeId  String?  @map("current_node_id")
+  isEscalated    Boolean  @default(false) @map("is_escalated")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([conversationId])
+  @@map("bot_sessions")
+}
+
 model Team {
   id             String   @id @default(uuid())
   organizationId String   @map("organization_id")
