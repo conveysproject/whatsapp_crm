@@ -35,8 +35,7 @@ async function getContacts(token: string): Promise<Contact[]> {
 }
 
 export default async function ContactsPage(): Promise<JSX.Element> {
-  const { getToken } = await auth();
-  await auth.protect();
+  const { getToken } = await auth.protect();
   const token = await getToken();
   const contacts = await getContacts(token ?? "");
 
