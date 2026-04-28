@@ -1,0 +1,116 @@
+import type { FastifyPluginAsync } from "fastify";
+import { paginate, parsePaginationParams } from "../lib/pagination.js";
+import { indexContact, removeContact, searchContacts } from "../lib/search.js";
+import type { ContactId } from "@trustcrm/shared";
+
+interface ContactBody {
+  phoneNumber: string;
+  name?: string;
+  email?: string;
+  companyId?: string;
+}
+
+interface ContactPatchBody {
+  name?: string;
+  email?: string;
+  lifecycleStage?: string;
+  tags?: string[];
+  customFields?: Record<string, unknown>;
+}
+
+export const contactsRouter: FastifyPluginAsync = async (fastify) => {
+  fastify.get<{ Querystring: { q?: string } }>("/contacts/search", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const query = (request.query as Record<string, string>)["q"] ?? "";
+    const results = await searchContacts(organizationId, query);
+    return reply.send({ data: results });
+  });
+
+  fastify.get("/contacts", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const { cursor, limit } = parsePaginationParams(request.query as Record<string, string>);
+
+    const contacts = await fastify.prisma.contact.findMany({
+      where: {
+        organizationId,
+        ...(cursor ? { id: { gt: cursor } } : {}),
+      },
+      take: limit + 1,
+      orderBy: { id: "asc" },
+    });
+
+    return reply.send(paginate(contacts, limit));
+  });
+
+  fastify.get<{ Params: { id: ContactId } }>("/contacts/:id", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const contact = await fastify.prisma.contact.findFirst({
+      where: { id: request.params.id, organizationId },
+    });
+    if (!contact) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
+    }
+    return reply.send({ data: contact });
+  });
+
+  fastify.post<{ Body: ContactBody }>("/contacts", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const contact = await fastify.prisma.contact.create({
+      data: {
+        organizationId,
+        phoneNumber: request.body.phoneNumber,
+        name: request.body.name ?? null,
+        email: request.body.email ?? null,
+        companyId: request.body.companyId ?? null,
+      },
+    });
+    await indexContact({
+      id: contact.id,
+      organizationId: contact.organizationId,
+      name: contact.name,
+      phoneNumber: contact.phoneNumber,
+      email: contact.email,
+      lifecycleStage: contact.lifecycleStage,
+    });
+    return reply.status(201).send({ data: contact });
+  });
+
+  fastify.patch<{ Params: { id: ContactId }; Body: ContactPatchBody }>(
+    "/contacts/:id",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const existing = await fastify.prisma.contact.findFirst({
+        where: { id: request.params.id, organizationId },
+      });
+      if (!existing) {
+        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
+      }
+      const contact = await fastify.prisma.contact.update({
+        where: { id: request.params.id },
+        data: request.body,
+      });
+      await indexContact({
+        id: contact.id,
+        organizationId: contact.organizationId,
+        name: contact.name,
+        phoneNumber: contact.phoneNumber,
+        email: contact.email,
+        lifecycleStage: contact.lifecycleStage,
+      });
+      return reply.send({ data: contact });
+    }
+  );
+
+  fastify.delete<{ Params: { id: ContactId } }>("/contacts/:id", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const existing = await fastify.prisma.contact.findFirst({
+      where: { id: request.params.id, organizationId },
+    });
+    if (!existing) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
+    }
+    await fastify.prisma.contact.delete({ where: { id: request.params.id } });
+    await removeContact(request.params.id);
+    return reply.status(204).send();
+  });
+};
