@@ -12,6 +12,7 @@ interface ClerkPublicUserData {
   user_id: string;
   first_name: string | null;
   last_name: string | null;
+  identifier?: string; // primary email on membership events
   email_addresses?: Array<{ email_address: string; id: string }>;
 }
 
@@ -82,7 +83,9 @@ export const clerkWebhookRouter: FastifyPluginAsync = async (fastify) => {
         const { organization, public_user_data, role } = event.data as ClerkMembership;
         const userId = public_user_data.user_id;
         const email =
-          public_user_data.email_addresses?.[0]?.email_address ?? "";
+          public_user_data.identifier ??
+          public_user_data.email_addresses?.[0]?.email_address ??
+          "";
         const fullName = [
           public_user_data.first_name,
           public_user_data.last_name,
