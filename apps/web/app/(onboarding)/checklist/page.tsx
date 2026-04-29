@@ -6,13 +6,15 @@ async function getOnboardingStatus(token: string): Promise<{
   wabaConnected: boolean;
   numberProvisioned: boolean;
   onboardingStep: string;
+  provisioned: boolean;
 }> {
   const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"] ?? ""}/v1/onboarding/status`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
-  if (!res.ok) return { wabaConnected: false, numberProvisioned: false, onboardingStep: "connect_waba" };
-  return res.json() as Promise<{ wabaConnected: boolean; numberProvisioned: boolean; onboardingStep: string }>;
+  if (!res.ok) return { wabaConnected: false, numberProvisioned: false, onboardingStep: "connect_waba", provisioned: false };
+  const data = await res.json() as { wabaConnected: boolean; numberProvisioned: boolean; onboardingStep: string };
+  return { ...data, provisioned: true };
 }
 
 export default async function ChecklistPage(): Promise<JSX.Element> {
@@ -59,7 +61,16 @@ export default async function ChecklistPage(): Promise<JSX.Element> {
           href="/"
           className="block w-full text-center bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 rounded-lg transition-colors"
         >
-          Go to Dashboard
+          Go to Dashboard →
+        </Link>
+      )}
+
+      {!allDone && status.provisioned && (
+        <Link
+          href="/"
+          className="block w-full text-center text-sm text-gray-400 hover:text-gray-600 mt-4"
+        >
+          Skip for now, go to dashboard →
         </Link>
       )}
     </div>
