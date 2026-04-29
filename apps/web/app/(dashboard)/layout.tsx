@@ -22,13 +22,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   // If user has no org in Clerk yet, send to onboarding
   if (!orgSlug) {
-    redirect("/onboarding/checklist");
+    redirect("/checklist");
   }
 
   // If user exists in Clerk org but not yet in our DB (webhook delay), send to onboarding
   const provisioned = await isUserProvisioned(token ?? "");
   if (!provisioned) {
-    redirect("/onboarding/checklist");
+    redirect("/checklist");
   }
 
   return (

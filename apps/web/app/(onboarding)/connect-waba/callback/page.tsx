@@ -29,7 +29,7 @@ export default function WabaCallbackPage(): JSX.Element {
           body: JSON.stringify({ code }),
         });
         if (res.ok) {
-          router.replace("/onboarding/provision-number");
+          router.replace("/provision-number");
         } else {
           setStatus("error");
         }
@@ -43,7 +43,7 @@ export default function WabaCallbackPage(): JSX.Element {
     return (
       <div className="text-center">
         <p className="text-red-600 font-medium mb-4">Connection failed. Please try again.</p>
-        <a href="/onboarding/connect-waba" className="text-green-600 hover:underline text-sm">
+        <a href="/connect-waba" className="text-green-600 hover:underline text-sm">
           Back
         </a>
       </div>

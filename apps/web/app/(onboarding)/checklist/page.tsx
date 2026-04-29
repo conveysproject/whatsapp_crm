@@ -23,9 +23,9 @@ export default async function ChecklistPage(): Promise<JSX.Element> {
   const status = await getOnboardingStatus(token);
 
   const steps = [
-    { label: "Connect WhatsApp Business Account", done: status.wabaConnected, href: "/onboarding/connect-waba" },
-    { label: "Provision phone number", done: status.numberProvisioned, href: "/onboarding/provision-number" },
-    { label: "Invite your team", done: true, href: "/onboarding/invite-team" },
+    { label: "Connect WhatsApp Business Account", done: status.wabaConnected, href: "/connect-waba" },
+    { label: "Provision phone number", done: status.numberProvisioned, href: "/provision-number" },
+    { label: "Invite your team", done: true, href: "/invite-team" },
   ];
 
   const allDone = steps.every((s) => s.done);
