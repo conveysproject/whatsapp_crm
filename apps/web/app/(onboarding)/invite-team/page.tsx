@@ -89,7 +89,7 @@ export default function InviteTeamPage(): JSX.Element {
       )}
 
       <button
-        onClick={() => router.push("/onboarding/checklist")}
+        onClick={() => router.push("/checklist")}
         className="w-full border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-sm"
       >
         {sent.length > 0 ? "Done — go to checklist" : "Skip for now"}
