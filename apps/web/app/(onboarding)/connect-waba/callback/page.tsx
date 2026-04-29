@@ -2,28 +2,42 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import type { JSX } from "react";
+
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 export default function WabaCallbackPage(): JSX.Element {
   const params = useSearchParams();
   const router = useRouter();
+  const { getToken } = useAuth();
   const [status, setStatus] = useState<"loading" | "error">("loading");
 
   useEffect(() => {
     const code = params.get("code");
     if (!code) { setStatus("error"); return; }
 
-    fetch("/api/onboarding/waba-callback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
-    })
-      .then((r) => {
-        if (r.ok) router.replace("/onboarding/provision-number");
-        else setStatus("error");
-      })
-      .catch(() => setStatus("error"));
-  }, [params, router]);
+    void (async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_URL}/v1/onboarding/waba-callback`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token ?? ""}`,
+          },
+          body: JSON.stringify({ code }),
+        });
+        if (res.ok) {
+          router.replace("/onboarding/provision-number");
+        } else {
+          setStatus("error");
+        }
+      } catch {
+        setStatus("error");
+      }
+    })();
+  }, [params, router, getToken]);
 
   if (status === "error") {
     return (

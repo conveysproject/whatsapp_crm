@@ -12,7 +12,7 @@ export class ApiRequestError extends Error {
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const { getToken } = await auth();
-  const token = await getToken({ template: "trustcrm" });
+  const token = await getToken();
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
