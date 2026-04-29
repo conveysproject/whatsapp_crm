@@ -8,16 +8,19 @@ interface NavItem {
   href: string;
   label: string;
   icon: string;
+  exact?: boolean;
 }
 
-const navItems: NavItem[] = [
-  { href: "/",         label: "Dashboard", icon: "◻" },
-  { href: "/inbox",    label: "Inbox",     icon: "✉" },
-  { href: "/contacts", label: "Contacts",  icon: "👤" },
+const NAV: NavItem[] = [
+  { href: "/",          label: "Dashboard", icon: "◻",  exact: true },
+  { href: "/inbox",     label: "Inbox",     icon: "✉" },
+  { href: "/contacts",  label: "Contacts",  icon: "👤" },
+  { href: "/companies", label: "Companies", icon: "🏢" },
   { href: "/campaigns", label: "Campaigns", icon: "📢" },
-  { href: "/settings/routing", label: "Routing",   icon: "→" },
-  { href: "/settings/billing", label: "Billing",   icon: "$" },
-  { href: "/settings", label: "Settings",  icon: "⚙" },
+  { href: "/templates", label: "Templates", icon: "📋" },
+  { href: "/flows",     label: "Flows",     icon: "⚡" },
+  { href: "/deals",     label: "Deals",     icon: "💼" },
+  { href: "/settings",  label: "Settings",  icon: "⚙" },
 ];
 
 export function Sidebar(): JSX.Element {
@@ -31,8 +34,8 @@ export function Sidebar(): JSX.Element {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {navItems.map(({ href, label, icon }) => {
-          const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
+        {NAV.map(({ href, label, icon, exact }) => {
+          const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(href + "/");
           return (
             <Link
               key={href}
