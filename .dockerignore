@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/.env
+**/.env.local
+**/coverage
+**/*.log
+.git
+.gitignore
+docs
+apps/mobile
+apps/web
