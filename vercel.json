@@ -1,0 +1,6 @@
+{
+  "buildCommand": "pnpm --filter @trustcrm/shared build && pnpm --filter @trustcrm/web build",
+  "installCommand": "pnpm install",
+  "outputDirectory": "apps/web/.next",
+  "framework": "nextjs"
+}

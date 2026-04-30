@@ -4,15 +4,30 @@ import { TopBar } from "@/components/layout/TopBar";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
-async function isUserProvisioned(token: string): Promise<boolean> {
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+
+async function getOrgStatus(token: string): Promise<{
+  provisioned: boolean;
+  wabaConnected: boolean;
+}> {
   try {
-    const res = await fetch(
-      `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/organizations/me`,
-      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-    );
-    return res.ok;
+    const [orgRes, statusRes] = await Promise.all([
+      fetch(`${API_URL}/v1/organizations/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      }),
+      fetch(`${API_URL}/v1/onboarding/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      }),
+    ]);
+    if (!orgRes.ok) return { provisioned: false, wabaConnected: false };
+    const status = statusRes.ok
+      ? (await statusRes.json() as { wabaConnected: boolean })
+      : { wabaConnected: false };
+    return { provisioned: true, wabaConnected: status.wabaConnected };
   } catch {
-    return false;
+    return { provisioned: false, wabaConnected: false };
   }
 }
 
@@ -20,14 +35,17 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const { getToken, orgSlug } = await auth.protect();
   const token = await getToken();
 
-  // If user has no org in Clerk yet, send to onboarding
   if (!orgSlug) {
     redirect("/checklist");
   }
 
-  // If user exists in Clerk org but not yet in our DB (webhook delay), send to onboarding
-  const provisioned = await isUserProvisioned(token ?? "");
+  const { provisioned, wabaConnected } = await getOrgStatus(token ?? "");
+
   if (!provisioned) {
+    redirect("/checklist");
+  }
+
+  if (!wabaConnected) {
     redirect("/checklist");
   }
 
