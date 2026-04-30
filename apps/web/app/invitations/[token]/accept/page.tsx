@@ -2,7 +2,8 @@
 
 import { useState, type FormEvent, type JSX } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useSignUp, useAuth } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
+import { useSignUp } from "@clerk/nextjs/legacy";
 import Link from "next/link";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";

@@ -3,10 +3,10 @@
 import { JSX, useState } from "react";
 import { Button } from "@/components/ui/Button";
 
-type FilterField = "lifecycleStage" | "tags" | "createdAt";
-type FilterOperator = "equals" | "contains" | "after" | "before";
+export type FilterField = "lifecycleStage" | "tags" | "createdAt";
+export type FilterOperator = "equals" | "contains" | "after" | "before";
 
-interface FilterRule {
+export interface FilterRule {
   field: FilterField;
   operator: FilterOperator;
   value: string;

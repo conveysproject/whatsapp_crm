@@ -4,13 +4,12 @@ import { JSX, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
-import { SegmentBuilder } from "@/components/segments/SegmentBuilder";
+import { SegmentBuilder, type FilterRule } from "@/components/segments/SegmentBuilder";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
-interface FilterRule { field: string; operator: string; value: string; }
 interface Contact { id: string; name: string | null; phoneNumber: string; lifecycleStage: string; }
 interface Segment { id: string; name: string; filters: FilterRule[]; }
 
