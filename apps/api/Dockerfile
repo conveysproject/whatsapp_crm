@@ -17,8 +17,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm --filter @trustcrm/shared build
-# prisma must be a root devDependency so pnpm hoists the binary to node_modules/.bin
-RUN cd /app/apps/api && /app/node_modules/.bin/prisma generate
+RUN pnpm --filter @trustcrm/api run generate
 RUN pnpm --filter @trustcrm/api build
 
 # ── Production image ──────────────────────────────────────────────────────────
