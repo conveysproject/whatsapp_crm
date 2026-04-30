@@ -17,7 +17,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm --filter @trustcrm/shared build
-RUN pnpm --filter @trustcrm/api exec prisma generate
+RUN cd /app/apps/api && /app/node_modules/.bin/prisma generate
 RUN pnpm --filter @trustcrm/api build
 
 # ── Production image ──────────────────────────────────────────────────────────
@@ -39,8 +39,12 @@ COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /app/apps/api/prisma.config.ts ./apps/api/
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 
+# Copy prisma CLI + engines so migrations run at startup without a network fetch
+COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
+
 WORKDIR /app/apps/api
 EXPOSE 4000
 
-# Run migrations then start
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "-c", "../../node_modules/.bin/prisma migrate deploy && node dist/index.js"]
