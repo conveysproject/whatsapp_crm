@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 
 export const healthRoute: FastifyPluginAsync = async (fastify) => {
-  fastify.get("/health", async (_request, reply) => {
+  fastify.get("/health", { config: { public: true } }, async (_request, reply) => {
     return reply.status(200).send({
       status: "ok",
       timestamp: new Date().toISOString(),
