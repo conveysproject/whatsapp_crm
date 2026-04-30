@@ -40,11 +40,6 @@ COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /app/apps/api/prisma.config.ts ./apps/api/
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 
-# Copy prisma CLI + engines so migrations run at startup without a network fetch
-COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
-
 WORKDIR /app/apps/api
 EXPOSE 4000
 
