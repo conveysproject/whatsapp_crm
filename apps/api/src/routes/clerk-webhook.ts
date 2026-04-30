@@ -91,7 +91,7 @@ export const clerkWebhookRouter: FastifyPluginAsync = async (fastify) => {
           public_user_data.last_name,
         ]
           .filter(Boolean)
-          .join(" ") || null;
+          .join(" ") || "";
         const dbRole =
           role === "org:admin" ? "admin" : "agent";
 
