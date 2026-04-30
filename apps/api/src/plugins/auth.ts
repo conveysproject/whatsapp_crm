@@ -8,13 +8,11 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     if (routeConfig?.["public"]) return;
 
     try {
-      const { userId, organizationId } = await verifyClerkToken(
-        request.headers.authorization
-      );
+      const { userId } = await verifyClerkToken(request.headers.authorization);
 
       const user = await fastify.prisma.user.findFirst({
-        where: { id: userId, organizationId, isActive: true },
-        select: { role: true },
+        where: { id: userId, isActive: true },
+        select: { role: true, organizationId: true },
       });
 
       if (!user) {
@@ -23,7 +21,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      request.auth = { userId, organizationId, role: user.role };
+      request.auth = { userId, organizationId: user.organizationId, role: user.role };
     } catch {
       return reply.status(401).send({
         error: { code: "UNAUTHORIZED", message: "Invalid or missing token" },
