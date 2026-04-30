@@ -18,7 +18,8 @@
   "pnpm": {
     "overrides": {
       "@types/react": "^18.3.0"
-    }
+    },
+    "onlyBuiltDependencies": ["@prisma/engines", "prisma", "esbuild", "sharp"]
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
