@@ -17,6 +17,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm --filter @trustcrm/shared build
+RUN pnpm --filter @trustcrm/api exec prisma generate
 RUN pnpm --filter @trustcrm/api build
 
 # ── Production image ──────────────────────────────────────────────────────────
