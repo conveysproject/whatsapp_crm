@@ -95,7 +95,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
           where: { id: organizationId },
           data: {
             planTier: planTier as PlanTier,
-            settings: { ...existing, stripeCustomerId: session.customer },
+            settings: { ...existing, stripeCustomerId: typeof session.customer === "string" ? session.customer : (session.customer as { id?: string } | null)?.id ?? null },
           },
         });
       }
