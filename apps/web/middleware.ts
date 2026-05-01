@@ -8,6 +8,12 @@ const isPublicRoute = createRouteMatcher([
   "/invitations/(.*)/accept",
 ]);
 
+// Routes that are part of the setup flow itself — don't redirect these to /business-details
+const isSetupRoute = createRouteMatcher(["/business-details(.*)"]);
+
+// API routes run server-side and manage their own auth — skip the cookie gate
+const isApiRoute = createRouteMatcher(["/api/(.*)"]);
+
 export default clerkMiddleware(async (auth, request) => {
   const { userId } = await auth();
 
@@ -18,6 +24,19 @@ export default clerkMiddleware(async (auth, request) => {
 
   if (!isPublicRoute(request)) {
     await auth.protect();
+  }
+
+  // Onboarding gate: authenticated user accessing the app but never completed Step 2
+  // → send them back to /business-details so their org/user row gets created.
+  // The cookie tc_registered is set by /api/register on successful submission.
+  if (
+    userId &&
+    !isPublicRoute(request) &&
+    !isSetupRoute(request) &&
+    !isApiRoute(request) &&
+    !request.cookies.get("tc_registered")
+  ) {
+    return NextResponse.redirect(new URL("/business-details", request.url));
   }
 });
 
