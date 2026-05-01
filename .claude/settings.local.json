@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pnpm --filter @trustcrm/api test)"
+      "Bash(pnpm --filter @trustcrm/api test)",
+      "Bash(railway deployment *)",
+      "Bash(railway logs *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true
   }
 }
