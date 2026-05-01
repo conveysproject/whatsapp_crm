@@ -43,7 +43,7 @@ export default function SignInPage(): JSX.Element {
           {/* Right: Clerk SignIn */}
           <div className="flex-1 flex flex-col justify-center items-center px-6 py-12">
             <div className="w-full max-w-md">
-              <SignIn afterSignInUrl="/dashboard" />
+              <SignIn redirectUrl="/dashboard" />
             </div>
           </div>
         </div>
