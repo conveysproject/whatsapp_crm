@@ -12,7 +12,9 @@ declare module "fastify" {
 export default fp(async (fastify: FastifyInstance) => {
   const io = new SocketIOServer(fastify.server, {
     cors: {
-      origin: process.env["NEXT_PUBLIC_APP_URL"] ?? "http://localhost:3000",
+      origin: (process.env["CORS_ORIGIN"] ?? "http://localhost:3000")
+        .split(",")
+        .map((o) => o.trim()),
       methods: ["GET", "POST"],
     },
   });
