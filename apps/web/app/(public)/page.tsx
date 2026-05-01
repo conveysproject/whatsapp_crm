@@ -469,8 +469,8 @@ export default function LandingPage(): JSX.Element {
                 <div className="ins-lbl" style={{color:"var(--g7)"}}>Suggested Reply</div>
                 <div className="ins-txt">&ldquo;Hi Priya! Growth plan is perfect for your 8-person team — ₹2,999/mo. Want a quick demo? 🗓️&rdquo;</div>
                 <div className="ins-acts">
-                  <a href="/sign-up" className="ins-btn-p">Send Now</a>
-                  <a href="/sign-up" className="ins-btn-o">Edit Reply</a>
+                  <Link href="/sign-up" className="ins-btn-p">Send Now</Link>
+                  <Link href="/sign-up" className="ins-btn-o">Edit Reply</Link>
                 </div>
               </div>
               <div className="ins" style={{background:"#FEF3C7",border:"1px solid #FDE68A",marginBottom:0}}>
