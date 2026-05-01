@@ -43,7 +43,7 @@ export default function SignUpPage(): JSX.Element {
           {/* Right: Clerk SignUp */}
           <div className="flex-1 flex flex-col justify-center items-center px-6 py-12">
             <div className="w-full max-w-md">
-              <SignUp afterSignUpUrl="/business-details" />
+              <SignUp forceRedirectUrl="/business-details" />
             </div>
           </div>
         </div>
