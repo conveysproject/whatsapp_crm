@@ -12,7 +12,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { href: "/",          label: "Dashboard", icon: "◻",  exact: true },
+  { href: "/dashboard", label: "Dashboard", icon: "◻",  exact: true },
   { href: "/inbox",     label: "Inbox",     icon: "✉" },
   { href: "/contacts",  label: "Contacts",  icon: "👤" },
   { href: "/companies", label: "Companies", icon: "🏢" },
