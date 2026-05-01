@@ -31,8 +31,11 @@ const server = Fastify({
 async function start() {
   await server.register(sentryPlugin);
   await server.register(helmet);
+  const corsOrigins = (process.env["CORS_ORIGIN"] ?? "http://localhost:3000")
+    .split(",")
+    .map((o) => o.trim());
   await server.register(cors, {
-    origin: process.env["CORS_ORIGIN"] ?? "http://localhost:3000",
+    origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
   });
   await server.register(prismaPlugin);
   await server.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
