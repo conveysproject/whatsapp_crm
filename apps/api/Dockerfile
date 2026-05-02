@@ -41,8 +41,10 @@ RUN pnpm --filter @trustcrm/api run generate
 
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY apps/api/start.sh ./apps/api/start.sh
+RUN chmod +x ./apps/api/start.sh
 
 WORKDIR /app/apps/api
 EXPOSE 4000
 
-CMD ["sh", "-c", "../../node_modules/.bin/prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "start.sh"]
