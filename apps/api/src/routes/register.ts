@@ -24,7 +24,7 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
       schema: {
         body: {
           type: "object",
-          required: ["companyName", "phone", "industry", "revenue"],
+          required: ["countryCode", "companyName", "phone", "industry", "revenue"],
           properties: {
             countryCode:     { type: "string" },
             phone:           { type: "string" },
@@ -80,6 +80,13 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
           where: { id: organizationId },
           data: {
             name: companyName,
+            phone: whatsappPhone,
+            website: companyWebsite,
+            location: companyLocation,
+            industry,
+            subCategory,
+            revenue,
+            whatsappUpdates,
             settings: {
               phone: whatsappPhone,
               website: companyWebsite,
@@ -88,7 +95,6 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
               subCategory,
               revenue,
               whatsappUpdates,
-              registeredAt: new Date().toISOString(),
             },
           },
         });
@@ -97,6 +103,14 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
         const org = await fastify.prisma.organization.create({
           data: {
             name: companyName,
+            phone: whatsappPhone,
+            website: companyWebsite,
+            location: companyLocation,
+            industry,
+            subCategory,
+            revenue,
+            whatsappUpdates,
+            registeredAt: new Date(),
             settings: {
               phone: whatsappPhone,
               website: companyWebsite,
