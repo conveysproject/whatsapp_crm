@@ -34,6 +34,14 @@ model Organization {
   phoneNumberId             String?  @map("phone_number_id")
   wabaAccessToken           String?  @map("waba_access_token")
   onboardingStep            String?  @map("onboarding_step")
+  phone                     String?
+  website                   String?
+  location                  String?
+  industry                  String?
+  subCategory               String?  @map("sub_category")
+  revenue                   String?
+  whatsappUpdates           Boolean? @map("whatsapp_updates")
+  registeredAt              DateTime? @map("registered_at")
   settings                  Json     @default("{}")
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")
