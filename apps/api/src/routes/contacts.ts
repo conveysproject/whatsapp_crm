@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import type { LifecycleStage } from "@prisma/client";
 import { paginate, parsePaginationParams } from "../lib/pagination.js";
 import { indexContact, removeContact, searchContacts } from "../lib/search.js";
-import { generateContactsCsv, parseContactsCsv } from "../lib/csv.js";
+import { generateContactsCsv } from "../lib/csv.js";
 import type { ContactId } from "@trustcrm/shared";
 
 interface ContactBody {
@@ -33,35 +33,6 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       .header("Content-Type", "text/csv")
       .header("Content-Disposition", "attachment; filename=contacts.csv")
       .send(csv);
-  });
-
-  fastify.post("/contacts/import", async (request, reply) => {
-    const { organizationId } = request.auth;
-    const data = await (request as unknown as { file: () => Promise<{ toBuffer: () => Promise<Buffer> }> }).file();
-    const buffer = await data.toBuffer();
-    const rows = parseContactsCsv(buffer.toString("utf-8"));
-
-    let created = 0;
-    let skipped = 0;
-    for (const row of rows) {
-      if (!row.phoneNumber) { skipped++; continue; }
-      try {
-        await fastify.prisma.contact.create({
-          data: {
-            organizationId,
-            phoneNumber: row.phoneNumber.trim(),
-            name: row.name || null,
-            email: row.email || null,
-            lifecycleStage: (row.lifecycleStage as LifecycleStage) || "lead",
-            tags: row.tags ? row.tags.split(";").map((t) => t.trim()).filter(Boolean) : [],
-          },
-        });
-        created++;
-      } catch {
-        skipped++;
-      }
-    }
-    return reply.send({ data: { created, skipped, total: rows.length } });
   });
 
   fastify.get<{ Querystring: { q?: string } }>("/contacts/search", async (request, reply) => {
