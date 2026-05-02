@@ -239,6 +239,11 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
 
       reply.hijack();
       reply.raw.socket?.setNoDelay(true);
+      // Set CORS headers for SSE
+      // Use env variable for allowed origin
+      const allowedOrigin = process.env["CORS_ORIGIN"] || "*";
+      reply.raw.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+      reply.raw.setHeader("Vary", "Origin");
       reply.raw.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
