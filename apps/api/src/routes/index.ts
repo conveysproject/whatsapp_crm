@@ -25,6 +25,7 @@ import { searchRouter } from "./search.js";
 import { billingRouter } from "./billing.js";
 import { clerkWebhookRouter } from "./clerk-webhook.js";
 import { registerRouter } from "./register.js";
+import { contactsImportRouter } from "./contacts-import.js";
 
 export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoute);
@@ -35,6 +36,7 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(conversationsRouter, { prefix: "/v1" });
   await fastify.register(messagesRouter, { prefix: "/v1" });
   await fastify.register(contactsRouter, { prefix: "/v1" });
+  await fastify.register(contactsImportRouter, { prefix: "/v1" });
   await fastify.register(companiesRouter, { prefix: "/v1" });
   await fastify.register(segmentsRouter, { prefix: "/v1" });
   await fastify.register(templatesRouter, { prefix: "/v1" });
