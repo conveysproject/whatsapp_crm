@@ -66,7 +66,7 @@ function streamParseCSV(csvText: string): Promise<Array<Record<string, string>>>
         rows.push(...chunk);
         resolve(rows);
       },
-      error: (err: Papa.ParseError) => reject(new Error(err.message)),
+      error: (err: Error) => reject(err),
     });
   });
 }
