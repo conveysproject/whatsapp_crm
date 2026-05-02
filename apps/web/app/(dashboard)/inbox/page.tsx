@@ -6,6 +6,7 @@ import { ConversationList } from "@/components/inbox/ConversationList";
 import { MessageThread } from "@/components/inbox/MessageThread";
 import { SendMessageForm } from "@/components/inbox/SendMessageForm";
 import { SmartReplies } from "@/components/inbox/SmartReplies";
+import { WhatsAppGate } from "@/components/WhatsAppGate";
 import { useSocket } from "@/hooks/useSocket";
 
 export default function InboxPage(): JSX.Element {
@@ -16,7 +17,7 @@ export default function InboxPage(): JSX.Element {
   useSocket(orgId ?? undefined);
 
   return (
-    <>
+    <WhatsAppGate feature="Inbox">
       <div className="w-72 border-r border-gray-200 bg-white flex flex-col overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200">
           <h2 className="text-sm font-semibold text-gray-900">Conversations</h2>
@@ -39,6 +40,6 @@ export default function InboxPage(): JSX.Element {
           onSent={() => setPrefillText("")}
         />
       </div>
-    </>
+    </WhatsAppGate>
   );
 }
