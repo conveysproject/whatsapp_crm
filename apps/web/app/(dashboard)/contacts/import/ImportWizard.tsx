@@ -27,6 +27,7 @@ interface WizardContextValue {
   state: WizardState;
   setState: (patch: Partial<WizardState>) => void;
   nextStep: () => void;
+  prevStep: () => void;
   reset: () => void;
 }
 
@@ -66,6 +67,10 @@ export function ImportWizard(): JSX.Element {
     setStateRaw((prev) => ({ ...prev, step: Math.min(prev.step + 1, 5) as WizardState["step"] }));
   }
 
+  function prevStep() {
+    setStateRaw((prev) => ({ ...prev, step: Math.max(prev.step - 1, 1) as WizardState["step"] }));
+  }
+
   function reset() {
     setStateRaw(INITIAL_STATE);
   }
@@ -79,7 +84,7 @@ export function ImportWizard(): JSX.Element {
   };
 
   return (
-    <WizardContext.Provider value={{ state, setState, nextStep, reset }}>
+    <WizardContext.Provider value={{ state, setState, nextStep, prevStep, reset }}>
       <div className="max-w-3xl space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Import Contacts</h1>

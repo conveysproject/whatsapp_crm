@@ -16,7 +16,7 @@ function StatCard({ label, value, highlight }: { label: string; value: number; h
 }
 
 export function Step3Preview(): JSX.Element {
-  const { state, setState, nextStep } = useWizard();
+  const { state, setState, nextStep, prevStep } = useWizard();
   const { getToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +93,8 @@ export function Step3Preview(): JSX.Element {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex justify-end">
+      <div className="flex justify-between">
+        <Button variant="secondary" onClick={prevStep} disabled={loading}>Back</Button>
         <Button onClick={() => { void handleConfirm(); }} disabled={loading}>
           {loading ? "Starting…" : "Confirm & Import"}
         </Button>
