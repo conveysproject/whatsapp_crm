@@ -36,7 +36,29 @@ export function Step4Progress(): JSX.Element {
           if (data.status === "failed") {
             setFailed(true);
           } else {
-            setState({ importSummary: { ...latestProgressRef.current, status: "completed" } });
+            setState({
+              importSummary: {
+                processed: (data.processed as number | undefined) ?? latestProgressRef.current.processed,
+                total: (data.total as number | undefined) ?? latestProgressRef.current.total,
+                created: (data.created as number | undefined) ?? latestProgressRef.current.created,
+                updated: (data.updated as number | undefined) ?? latestProgressRef.current.updated,
+                skipped: (data.skipped as number | undefined) ?? latestProgressRef.current.skipped,
+                status: "completed",
+              },
+            });
+            nextStep();
+          }
+          return;
+        }
+        // Fallback: plain progress message with a terminal status (e.g. backend version mismatch)
+        if (data.status === "completed" || data.status === "failed") {
+          done = true;
+          es?.close();
+          if (data.status === "failed") {
+            setFailed(true);
+          } else {
+            const next = { ...latestProgressRef.current, ...data } as ImportProgress;
+            setState({ importSummary: { ...next, status: "completed" } });
             nextStep();
           }
           return;
