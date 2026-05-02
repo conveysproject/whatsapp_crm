@@ -80,6 +80,9 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
+          <Link href="/contacts/import">
+            <Button>Import CSV</Button>
+          </Link>
           <Button onClick={() => setShowModal(true)}>Add Contact</Button>
         </div>
 
