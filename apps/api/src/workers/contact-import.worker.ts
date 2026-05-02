@@ -201,6 +201,16 @@ export const contactImportWorker = new Worker<ContactImportJob>(
   { connection: redisConnection, concurrency: 1 }
 );
 
+console.log("[contact-import] worker instance created");
+
+contactImportWorker.on("active", (job) => {
+  console.log(`[contact-import] job active id=${job.id} importId=${job.data.importId}`);
+});
+
+contactImportWorker.on("completed", (job) => {
+  console.log(`[contact-import] job completed id=${job.id} importId=${job.data.importId}`);
+});
+
 contactImportWorker.on("failed", async (job, err) => {
   console.error(`[contact-import] job failed importId=${job?.data?.importId} err=${err.message}`);
   if (!job) return;
