@@ -66,7 +66,7 @@ function streamParseCSV(csvText: string): Promise<Array<Record<string, string>>>
         rows.push(...chunk);
         resolve(rows);
       },
-      error: (err) => reject(new Error(err.message)),
+      error: (err: Papa.ParseError) => reject(new Error(err.message)),
     });
   });
 }
@@ -217,10 +217,12 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // SSE endpoint — EventSource cannot send auth headers, so we use a short-lived
-  // HMAC token issued by /start and passed as ?token= query param.
+  // SSE endpoint — EventSource cannot send auth headers, so Clerk auth is skipped
+  // via config.public and access is controlled by the short-lived HMAC token
+  // issued by /start and passed as ?token= query param.
   fastify.get<{ Params: { jobId: string }; Querystring: { token?: string } }>(
     "/contacts/import/:jobId/progress",
+    { config: { public: true } },
     (request, reply) => {
       const { jobId } = request.params;
       const { token } = request.query;
