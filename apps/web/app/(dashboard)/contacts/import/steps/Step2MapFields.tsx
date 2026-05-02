@@ -131,7 +131,7 @@ export function Step2MapFields(): JSX.Element {
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex justify-between">
-        <Button variant="secondary" onClick={prevStep} disabled={loading}>Back</Button>
+        <Button variant="secondary" onClick={() => { setState({ analysisResult: null }); prevStep(); }} disabled={loading}>Back</Button>
         <Button onClick={() => { void handleNext(); }} disabled={!!validationError || loading}>
           {loading ? "Analysing…" : "Next"}
         </Button>

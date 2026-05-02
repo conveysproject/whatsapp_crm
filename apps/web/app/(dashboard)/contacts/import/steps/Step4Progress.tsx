@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX, useEffect, useState } from "react";
+import { JSX, useEffect, useRef, useState } from "react";
 import { useWizard } from "../ImportWizard";
 import type { ImportProgress } from "@trustcrm/shared";
 
@@ -15,6 +15,7 @@ export function Step4Progress(): JSX.Element {
     status: "pending",
   });
   const [failed, setFailed] = useState(false);
+  const latestProgressRef = useRef(progress);
 
   useEffect(() => {
     if (!state.importJobId) return;
@@ -35,12 +36,16 @@ export function Step4Progress(): JSX.Element {
           if (data.status === "failed") {
             setFailed(true);
           } else {
-            setState({ importSummary: { ...progress, status: "completed" } });
+            setState({ importSummary: { ...latestProgressRef.current, status: "completed" } });
             nextStep();
           }
           return;
         }
-        setProgress((prev) => ({ ...prev, ...data }));
+        setProgress((prev) => {
+          const next = { ...prev, ...data } as ImportProgress;
+          latestProgressRef.current = next;
+          return next;
+        });
       };
 
       es.onerror = () => {

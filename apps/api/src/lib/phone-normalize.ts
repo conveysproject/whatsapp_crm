@@ -1,5 +1,5 @@
 export function isValidE164(value: string): boolean {
-  return /^\+[1-9]\d{6,14}$/.test(value);
+  return /^\+[1-9]\d{7,14}$/.test(value);
 }
 
 export function normalizeFullPhone(raw: string): string | null {
