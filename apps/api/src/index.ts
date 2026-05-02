@@ -14,6 +14,7 @@ import { rateLimitPlugin } from "./plugins/rate-limit.js";
 import "./workers/inbound-message.worker.js";
 import "./workers/campaign.worker.js";
 import "./workers/flow.worker.js";
+import "./workers/contact-import.worker.js";
 
 const PORT = Number(process.env["API_PORT"] ?? 4000);
 const HOST = process.env["API_HOST"] ?? "0.0.0.0";
@@ -38,7 +39,7 @@ async function start() {
     origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
   });
   await server.register(prismaPlugin);
-  await server.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+  await server.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
   await server.register(swaggerPlugin);
   await server.register(authPlugin);
   await server.register(rateLimitPlugin);
