@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { WhatsAppGate } from "@/components/WhatsAppGate";
 
 interface Option {
   id: string;
@@ -61,7 +62,8 @@ export default function NewCampaignPage(): JSX.Element {
   }
 
   return (
-    <div className="max-w-lg space-y-4">
+    <WhatsAppGate feature="Campaigns">
+      <div className="max-w-lg space-y-4">
       <h1 className="text-2xl font-semibold text-gray-900">New Campaign</h1>
       <Input
         label="Campaign Name"
@@ -110,6 +112,7 @@ export default function NewCampaignPage(): JSX.Element {
       >
         {saving ? "Scheduling…" : "Schedule Campaign"}
       </Button>
-    </div>
+      </div>
+    </WhatsAppGate>
   );
 }

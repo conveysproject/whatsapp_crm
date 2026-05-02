@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { WhatsAppGate } from "@/components/WhatsAppGate";
 
 interface Campaign {
   id: string;
@@ -35,7 +36,8 @@ export default async function CampaignsPage(): Promise<JSX.Element> {
   const campaigns = await getCampaigns(await getToken() ?? "");
 
   return (
-    <div className="space-y-4">
+    <WhatsAppGate feature="Campaigns">
+      <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Campaigns</h1>
         <Link href="/campaigns/new">
@@ -61,6 +63,7 @@ export default async function CampaignsPage(): Promise<JSX.Element> {
           ))
         )}
       </div>
-    </div>
+      </div>
+    </WhatsAppGate>
   );
 }
