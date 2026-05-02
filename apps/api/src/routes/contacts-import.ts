@@ -238,6 +238,7 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
       }
 
       reply.hijack();
+      reply.raw.socket?.setNoDelay(true);
       reply.raw.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -249,28 +250,48 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
       reply.raw.write(": connected\n\n");
 
       const send = (data: object) => {
-        if (reply.raw.writable) reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+        try {
+          if (reply.raw.writable) reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+        } catch { /* socket already closed */ }
+      };
+
+      let closed = false;
+      const finish = (progress: { status: string }) => {
+        if (closed) return;
+        closed = true;
+        clearInterval(interval);
+        clearInterval(heartbeat);
+        send(progress);
+        send({ event: "done", status: progress.status });
+        try { reply.raw.end(); } catch { /* ignore */ }
+        console.log(`[sse] sent done event for jobId=${jobId} status=${progress.status}`);
       };
 
       // Heartbeat keeps Railway's proxy from timing out the connection
       const heartbeat = setInterval(() => {
-        if (reply.raw.writable) reply.raw.write(": heartbeat\n\n");
-        else clearInterval(heartbeat);
+        try {
+          if (reply.raw.writable) reply.raw.write(": heartbeat\n\n");
+          else clearInterval(heartbeat);
+        } catch { clearInterval(heartbeat); }
       }, 15000);
 
+      const checkProgress = async () => {
+        const raw = await redis.get(`import:progress:${jobId}`);
+        if (!raw) return false;
+        const progress = JSON.parse(raw) as { status: string };
+        if (progress.status === "completed" || progress.status === "failed") {
+          finish(progress);
+          return true;
+        }
+        send(progress);
+        return false;
+      };
+
+      // Check immediately in case the job already completed before SSE opened
+      void checkProgress();
+
       const interval = setInterval(() => {
-        void (async () => {
-          const raw = await redis.get(`import:progress:${jobId}`);
-          if (!raw) return;
-          const progress = JSON.parse(raw) as { status: string };
-          send(progress);
-          if (progress.status === "completed" || progress.status === "failed") {
-            send({ event: "done", status: progress.status });
-            clearInterval(interval);
-            clearInterval(heartbeat);
-            reply.raw.end();
-          }
-        })();
+        void checkProgress();
       }, 1000);
 
       request.raw.on("close", () => {
