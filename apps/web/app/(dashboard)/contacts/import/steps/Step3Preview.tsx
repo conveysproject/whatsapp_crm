@@ -49,8 +49,8 @@ export function Step3Preview(): JSX.Element {
         setError("Could not start import. Please try again.");
         return;
       }
-      const body = await res.json() as { data: { importJobId: string } };
-      setState({ importJobId: body.data.importJobId });
+      const body = await res.json() as { data: { importJobId: string; importToken: string } };
+      setState({ importJobId: body.data.importJobId, importToken: body.data.importToken });
       nextStep();
     } catch {
       setError("An unexpected error occurred.");

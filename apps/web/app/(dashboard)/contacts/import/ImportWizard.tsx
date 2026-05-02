@@ -19,6 +19,7 @@ export interface WizardState {
   analysisResult: ImportAnalysisResult | null;
   updateExisting: boolean;
   importJobId: string | null;
+  importToken: string | null;
   totalRows: number;
   importSummary: ImportProgress | null;
 }
@@ -50,6 +51,7 @@ const INITIAL_STATE: WizardState = {
   analysisResult: null,
   updateExisting: true,
   importJobId: null,
+  importToken: null,
   totalRows: 0,
   importSummary: null,
 };
