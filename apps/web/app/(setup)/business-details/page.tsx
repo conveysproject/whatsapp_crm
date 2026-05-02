@@ -144,7 +144,7 @@ export default function BusinessDetailsPage(): JSX.Element {
         }),
       });
       if (res.ok) {
-        router.push("/checklist");
+        router.push("/dashboard");
       } else {
         const data = await res.json() as { error?: string };
         setApiError(data.error ?? "Something went wrong. Please try again.");
