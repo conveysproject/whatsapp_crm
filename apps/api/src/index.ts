@@ -38,7 +38,7 @@ async function start() {
     origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
   });
   await server.register(prismaPlugin);
-  await server.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+  await server.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
   await server.register(swaggerPlugin);
   await server.register(authPlugin);
   await server.register(rateLimitPlugin);

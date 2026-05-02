@@ -20,3 +20,8 @@ export const flowQueue = new Queue("flows", {
   connection: redisConnection,
   defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 2000 } },
 });
+
+export const contactImportQueue = new Queue("contact-import", {
+  connection: redisConnection,
+  defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 2000 } },
+});
