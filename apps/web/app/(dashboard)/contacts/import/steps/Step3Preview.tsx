@@ -2,7 +2,7 @@
 
 import { JSX, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { useWizard } from "../ImportWizard.js";
+import { useWizard } from "../ImportWizard";
 import { Button } from "@/components/ui/Button";
 
 function StatCard({ label, value, highlight }: { label: string; value: number; highlight?: string }): JSX.Element {

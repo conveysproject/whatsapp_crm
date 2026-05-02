@@ -2,11 +2,11 @@
 
 import { JSX, createContext, useContext, useState } from "react";
 import type { FieldMapping, ImportAnalysisResult, ImportProgress } from "@trustcrm/shared";
-import { Step1Upload } from "./steps/Step1Upload.js";
-import { Step2MapFields } from "./steps/Step2MapFields.js";
-import { Step3Preview } from "./steps/Step3Preview.js";
-import { Step4Progress } from "./steps/Step4Progress.js";
-import { Step5Summary } from "./steps/Step5Summary.js";
+import { Step1Upload } from "./steps/Step1Upload";
+import { Step2MapFields } from "./steps/Step2MapFields";
+import { Step3Preview } from "./steps/Step3Preview";
+import { Step4Progress } from "./steps/Step4Progress";
+import { Step5Summary } from "./steps/Step5Summary";
 
 export interface WizardState {
   step: 1 | 2 | 3 | 4 | 5;

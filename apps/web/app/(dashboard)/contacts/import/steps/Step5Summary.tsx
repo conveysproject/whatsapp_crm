@@ -2,7 +2,7 @@
 
 import { JSX } from "react";
 import { useRouter } from "next/navigation";
-import { useWizard } from "../ImportWizard.js";
+import { useWizard } from "../ImportWizard";
 import { Button } from "@/components/ui/Button";
 
 export function Step5Summary(): JSX.Element {

@@ -2,7 +2,7 @@
 
 import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { useWizard } from "../ImportWizard.js";
+import { useWizard } from "../ImportWizard";
 import { Button } from "@/components/ui/Button";
 import type { DbField, FieldMappingEntry } from "@trustcrm/shared";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useEffect, useState } from "react";
-import { useWizard } from "../ImportWizard.js";
+import { useWizard } from "../ImportWizard";
 import type { ImportProgress } from "@trustcrm/shared";
 
 export function Step4Progress(): JSX.Element {

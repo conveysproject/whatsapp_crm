@@ -2,7 +2,7 @@
 
 import { JSX, useRef, useState, DragEvent, ChangeEvent } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { useWizard } from "../ImportWizard.js";
+import { useWizard } from "../ImportWizard";
 import { TagInput } from "@/components/contacts/TagInput";
 import { Button } from "@/components/ui/Button";
 
