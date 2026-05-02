@@ -12,6 +12,40 @@ export type PipelineId = string & { readonly __brand: "PipelineId" };
 export type TemplateId = string & { readonly __brand: "TemplateId" };
 export type SegmentId = string & { readonly __brand: "SegmentId" };
 export type CampaignId = string & { readonly __brand: "CampaignId" };
+export type ContactImportId = string & { readonly __brand: "ContactImportId" };
+
+export type DbField =
+  | "fullPhoneNumber"
+  | "phoneNumber"
+  | "countryCode"
+  | "name"
+  | "email"
+  | "lifecycleStage"
+  | "tags"
+  | "skip";
+
+export interface FieldMappingEntry {
+  csvColumn: string;
+  dbField: DbField;
+}
+
+export type FieldMapping = FieldMappingEntry[];
+
+export interface ImportAnalysisResult {
+  totalRows: number;
+  newContacts: number;
+  duplicatesInCsv: number;
+  existingInDb: number;
+}
+
+export interface ImportProgress {
+  processed: number;
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  status: "pending" | "processing" | "completed" | "failed";
+}
 
 export type IntentType = "question" | "complaint" | "order" | "compliment" | "other";
 export type SentimentType = "positive" | "negative" | "neutral";
