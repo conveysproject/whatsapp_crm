@@ -10,16 +10,24 @@ export function Step5Summary(): JSX.Element {
   const router = useRouter();
 
   const summary = state.importSummary;
+  const totalActioned = (summary?.created ?? 0) + (summary?.updated ?? 0);
+  const allSkipped = totalActioned === 0;
 
   return (
     <div className="space-y-6 text-center py-2">
-      <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto">
-        <span className="text-green-600 text-2xl font-bold">✓</span>
+      <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto ${allSkipped ? "bg-amber-100" : "bg-green-100"}`}>
+        <span className={`text-2xl font-bold ${allSkipped ? "text-amber-600" : "text-green-600"}`}>
+          {allSkipped ? "!" : "✓"}
+        </span>
       </div>
 
       <div>
         <h2 className="text-xl font-semibold text-gray-900">Import complete</h2>
-        <p className="text-sm text-gray-500 mt-1">Your contacts have been imported successfully.</p>
+        <p className="text-sm text-gray-500 mt-1">
+          {allSkipped
+            ? "No contacts were imported — all rows were skipped or had invalid phone numbers."
+            : "Your contacts have been imported successfully."}
+        </p>
       </div>
 
       <div className="grid grid-cols-3 gap-3 text-center text-sm">
@@ -38,12 +46,8 @@ export function Step5Summary(): JSX.Element {
       </div>
 
       <div className="flex justify-center gap-3 pt-2">
-        <Button onClick={() => router.push("/contacts")}>
-          View Contacts
-        </Button>
-        <Button onClick={reset}>
-          Import Another File
-        </Button>
+        <Button onClick={() => router.push("/contacts")}>View Contacts</Button>
+        <Button variant="secondary" onClick={reset}>Import Another File</Button>
       </div>
     </div>
   );

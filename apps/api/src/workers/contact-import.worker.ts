@@ -1,4 +1,4 @@
-import { Worker } from "bullmq";
+import { Worker, UnrecoverableError } from "bullmq";
 import Papa from "papaparse";
 import { Meilisearch } from "meilisearch";
 import type { LifecycleStage, Prisma } from "@prisma/client";
@@ -70,7 +70,18 @@ export const contactImportWorker = new Worker<ContactImportJob>(
     await prisma.contactImport.update({ where: { id: importId }, data: { status: "processing" } });
 
     const csvText = await redis.get(`import:csv:${sessionId}`);
-    if (!csvText) throw new Error("CSV session data not found in Redis");
+    if (!csvText) {
+      await prisma.contactImport.update({
+        where: { id: importId },
+        data: { status: "failed", errorSummary: { message: "Upload session expired. Please re-upload the file." } as Prisma.InputJsonValue },
+      });
+      await redis.set(
+        `import:progress:${importId}`,
+        JSON.stringify({ status: "failed", processed: 0, total: 0, created: 0, updated: 0, skipped: 0 }),
+        "EX", 7200
+      );
+      throw new UnrecoverableError("CSV session expired — no retries");
+    }
     await redis.del(`import:csv:${sessionId}`);
 
     const parsed = Papa.parse<Record<string, string>>(csvText, {
