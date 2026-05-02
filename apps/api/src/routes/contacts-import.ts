@@ -256,14 +256,15 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
       };
 
       let closed = false;
-      const finish = (progress: { status: string }) => {
+      const finish = (progress: Record<string, unknown> & { status: string }) => {
         if (closed) return;
         closed = true;
         clearInterval(interval);
         clearInterval(heartbeat);
-        send(progress);
-        send({ event: "done", status: progress.status });
-        try { reply.raw.end(); } catch { /* ignore */ }
+        // Single message carries both progress data and done signal so the
+        // browser receives everything before the socket closes
+        send({ ...progress, event: "done" });
+        setTimeout(() => { try { reply.raw.end(); } catch { /* ignore */ } }, 250);
         console.log(`[sse] sent done event for jobId=${jobId} status=${progress.status}`);
       };
 
@@ -278,7 +279,7 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
       const checkProgress = async () => {
         const raw = await redis.get(`import:progress:${jobId}`);
         if (!raw) return false;
-        const progress = JSON.parse(raw) as { status: string };
+        const progress = JSON.parse(raw) as Record<string, unknown> & { status: string };
         if (progress.status === "completed" || progress.status === "failed") {
           finish(progress);
           return true;
