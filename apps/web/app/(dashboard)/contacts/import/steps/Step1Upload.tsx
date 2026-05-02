@@ -31,6 +31,12 @@ export function Step1Upload(): JSX.Element {
     setUploading(true);
     try {
       const token = await getToken();
+      if (state.sessionId) {
+        await fetch(`${process.env["NEXT_PUBLIC_API_URL"]}/v1/contacts/import/session/${state.sessionId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token ?? ""}` },
+        }).catch(() => undefined);
+      }
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"]}/v1/contacts/import/upload`, {

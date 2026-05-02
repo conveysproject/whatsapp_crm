@@ -34,8 +34,12 @@ function validateMapping(mapping: FieldMappingEntry[]): string | null {
   const hasPhone = mapping.some((e) => e.dbField === "phoneNumber");
   const hasCC = mapping.some((e) => e.dbField === "countryCode");
   if (!hasFull && !hasPhone) return "Map at least one phone column to continue.";
-  if (hasPhone && !hasCC) return "Country Code column is required when Phone Number is mapped.";
-  if (hasCC && !hasPhone) return "Phone Number column is required when Country Code is mapped.";
+  if (hasPhone && !hasCC) return hasFull
+    ? "Remove the Phone Number mapping (Full Phone Number covers it) or also map Country Code."
+    : "Country Code column is required when Phone Number is mapped.";
+  if (hasCC && !hasPhone) return hasFull
+    ? "Remove the Country Code mapping (Full Phone Number covers it) or also map Phone Number."
+    : "Phone Number column is required when Country Code is mapped.";
   return null;
 }
 

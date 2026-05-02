@@ -25,7 +25,7 @@ export function Step4Progress(): JSX.Element {
 
     function connect() {
       es = new EventSource(
-        `${process.env["NEXT_PUBLIC_API_URL"]}/v1/contacts/import/${state.importJobId}/progress`
+        `${process.env["NEXT_PUBLIC_API_URL"]}/v1/contacts/import/${state.importJobId}/progress?token=${encodeURIComponent(state.importToken ?? "")}`
       );
 
       es.onmessage = (event: MessageEvent<string>) => {
