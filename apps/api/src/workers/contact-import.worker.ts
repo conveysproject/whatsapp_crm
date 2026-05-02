@@ -27,7 +27,10 @@ function extractPhone(row: Record<string, string>, mapping: FieldMapping): strin
   const full = mapping.find((e) => e.dbField === "fullPhoneNumber");
   const phone = mapping.find((e) => e.dbField === "phoneNumber");
   const cc = mapping.find((e) => e.dbField === "countryCode");
-  if (full) return normalizeFullPhone(row[full.csvColumn] ?? "");
+  if (full) {
+    const normalized = normalizeFullPhone(row[full.csvColumn] ?? "");
+    if (normalized) return normalized;
+  }
   if (phone && cc) return normalizeSplitPhone(row[cc.csvColumn] ?? "", row[phone.csvColumn] ?? "");
   return null;
 }

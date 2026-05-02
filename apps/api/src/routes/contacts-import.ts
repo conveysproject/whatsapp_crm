@@ -71,7 +71,8 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
         let phone: string | null = null;
         if (fullPhoneEntry) {
           phone = normalizeFullPhone(row[fullPhoneEntry.csvColumn] ?? "");
-        } else if (phoneEntry && ccEntry) {
+        }
+        if (!phone && phoneEntry && ccEntry) {
           phone = normalizeSplitPhone(row[ccEntry.csvColumn] ?? "", row[phoneEntry.csvColumn] ?? "");
         }
         if (!phone) continue;

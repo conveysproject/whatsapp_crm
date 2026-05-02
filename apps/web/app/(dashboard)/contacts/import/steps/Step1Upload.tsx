@@ -14,10 +14,12 @@ export function Step1Upload(): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleFile(file: File) {
     setError(null);
+    setUploadedFileName(null);
     if (!file.name.toLowerCase().endsWith(".csv")) {
       setError("Only .csv files are accepted.");
       return;
@@ -42,7 +44,7 @@ export function Step1Upload(): JSX.Element {
       }
       const body = await res.json() as { data: { sessionId: string; columns: string[]; sampleRows: Record<string, string>[] } };
       setState({ sessionId: body.data.sessionId, columns: body.data.columns, sampleRows: body.data.sampleRows });
-      nextStep();
+      setUploadedFileName(file.name);
     } catch {
       setError("An unexpected error occurred.");
     } finally {
@@ -112,6 +114,15 @@ export function Step1Upload(): JSX.Element {
       </div>
 
       {uploading && <p className="text-sm text-gray-500 animate-pulse">Uploading and parsing file…</p>}
+
+      {uploadedFileName && (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 flex items-center justify-between gap-4">
+          <p className="text-sm text-green-800">
+            <span className="font-medium">{uploadedFileName}</span> uploaded successfully — {state.columns.length} columns detected.
+          </p>
+          <Button onClick={nextStep}>Next</Button>
+        </div>
+      )}
     </div>
   );
 }

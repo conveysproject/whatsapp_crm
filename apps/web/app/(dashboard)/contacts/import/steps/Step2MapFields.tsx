@@ -33,7 +33,6 @@ function validateMapping(mapping: FieldMappingEntry[]): string | null {
   const hasFull = mapping.some((e) => e.dbField === "fullPhoneNumber");
   const hasPhone = mapping.some((e) => e.dbField === "phoneNumber");
   const hasCC = mapping.some((e) => e.dbField === "countryCode");
-  if (hasFull && (hasPhone || hasCC)) return "Map either Full Phone Number OR Phone Number + Country Code — not both.";
   if (!hasFull && !hasPhone) return "Map at least one phone column to continue.";
   if (hasPhone && !hasCC) return "Country Code column is required when Phone Number is mapped.";
   if (hasCC && !hasPhone) return "Phone Number column is required when Country Code is mapped.";
@@ -41,7 +40,7 @@ function validateMapping(mapping: FieldMappingEntry[]): string | null {
 }
 
 export function Step2MapFields(): JSX.Element {
-  const { state, setState, nextStep } = useWizard();
+  const { state, setState, nextStep, prevStep } = useWizard();
   const { getToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,7 +130,8 @@ export function Step2MapFields(): JSX.Element {
       {validationError && <p className="text-sm text-amber-600">{validationError}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex justify-end">
+      <div className="flex justify-between">
+        <Button variant="secondary" onClick={prevStep} disabled={loading}>Back</Button>
         <Button onClick={() => { void handleNext(); }} disabled={!!validationError || loading}>
           {loading ? "Analysing…" : "Next"}
         </Button>
