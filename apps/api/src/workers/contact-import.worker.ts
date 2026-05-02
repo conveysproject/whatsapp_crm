@@ -66,6 +66,7 @@ export const contactImportWorker = new Worker<ContactImportJob>(
   "contact-import",
   async (job) => {
     const { importId, sessionId, organizationId, fieldMapping, batchTags, lifecycleStage, updateExisting } = job.data;
+    console.log(`[contact-import] job started importId=${importId}`);
 
     await prisma.contactImport.update({ where: { id: importId }, data: { status: "processing" } });
 
@@ -201,6 +202,7 @@ export const contactImportWorker = new Worker<ContactImportJob>(
 );
 
 contactImportWorker.on("failed", async (job, err) => {
+  console.error(`[contact-import] job failed importId=${job?.data?.importId} err=${err.message}`);
   if (!job) return;
   const { importId } = job.data;
   await prisma.contactImport
@@ -212,4 +214,8 @@ contactImportWorker.on("failed", async (job, err) => {
   await redis
     .set(`import:progress:${importId}`, JSON.stringify({ status: "failed" }), "EX", 7200)
     .catch(() => undefined);
+});
+
+contactImportWorker.on("error", (err) => {
+  console.error(`[contact-import] worker error: ${err.message}`);
 });

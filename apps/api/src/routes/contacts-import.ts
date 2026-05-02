@@ -241,14 +241,22 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
       reply.raw.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
         "X-Accel-Buffering": "no",
       });
       reply.raw.flushHeaders();
 
+      // Send an immediate comment so Railway's proxy doesn't close the idle connection
+      reply.raw.write(": connected\n\n");
+
       const send = (data: object) => {
-        reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+        if (reply.raw.writable) reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
       };
+
+      // Heartbeat keeps Railway's proxy from timing out the connection
+      const heartbeat = setInterval(() => {
+        if (reply.raw.writable) reply.raw.write(": heartbeat\n\n");
+        else clearInterval(heartbeat);
+      }, 15000);
 
       const interval = setInterval(() => {
         void (async () => {
@@ -259,12 +267,16 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
           if (progress.status === "completed" || progress.status === "failed") {
             send({ event: "done", status: progress.status });
             clearInterval(interval);
+            clearInterval(heartbeat);
             reply.raw.end();
           }
         })();
       }, 1000);
 
-      request.raw.on("close", () => clearInterval(interval));
+      request.raw.on("close", () => {
+        clearInterval(interval);
+        clearInterval(heartbeat);
+      });
     }
   );
 };
