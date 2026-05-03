@@ -1,4 +1,4 @@
-﻿import type { JSX } from "react";
+import type { JSX } from "react";
 import { auth } from "@clerk/nextjs/server";
 
 interface UsageData {

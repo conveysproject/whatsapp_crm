@@ -1,4 +1,4 @@
-﻿# RDS Aurora PostgreSQL 16
+# RDS Aurora PostgreSQL 16
 resource "aws_db_subnet_group" "main" {
   name       = "WBMSG-staging"
   subnet_ids = aws_subnet.private[*].id

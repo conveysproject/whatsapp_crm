@@ -1,4 +1,4 @@
-﻿import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
+import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
 import Link from "next/link";
 import Image from "next/image";
 import type { JSX } from "react";

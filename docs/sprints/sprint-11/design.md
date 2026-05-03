@@ -1,4 +1,4 @@
-﻿# Sprint 11 — Deals & Pipelines
+# Sprint 11 — Deals & Pipelines
 
 ## Sprint Goal
 Give sales teams a visual sales pipeline — drag cards between stages, track deal values, associate deals with contacts — turning WBMSG from a messaging tool into a full CRM with opportunity management.

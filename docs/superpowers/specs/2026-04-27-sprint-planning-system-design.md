@@ -1,4 +1,4 @@
-﻿---
+---
 title: WBMSG Sprint Planning System
 date: 2026-04-27
 status: approved

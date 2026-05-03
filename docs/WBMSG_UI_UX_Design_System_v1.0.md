@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # UI/UX Design System &amp; Style Guide
 Visual &amp; Interaction Standards — ISO 9241-210 Human-Centred Design
 Version 1.0  |  April 2026

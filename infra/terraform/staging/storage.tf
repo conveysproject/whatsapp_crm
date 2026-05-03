@@ -1,4 +1,4 @@
-﻿resource "aws_s3_bucket" "media" {
+resource "aws_s3_bucket" "media" {
   bucket = "WBMSG-staging-media"
 }
 

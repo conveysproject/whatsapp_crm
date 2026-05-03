@@ -1,4 +1,4 @@
-﻿import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import { paginate, parsePaginationParams } from "../lib/pagination.js";
 import type { CompanyId } from "@WBMSG/shared";
 

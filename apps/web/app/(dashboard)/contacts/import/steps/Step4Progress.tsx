@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { JSX, useEffect, useRef, useState } from "react";
 import { useWizard } from "../ImportWizard";

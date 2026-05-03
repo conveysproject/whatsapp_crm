@@ -1,4 +1,4 @@
-﻿| WBMSG Trust-First WhatsApp CRM for SMBs Product Requirements Document Version 2.0  /  April 2026  /  Confidential |
+| WBMSG Trust-First WhatsApp CRM for SMBs Product Requirements Document Version 2.0  /  April 2026  /  Confidential |
 | --- |
 
 | Field | Value |

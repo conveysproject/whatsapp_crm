@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Sprint Execution Plan
 ## 12-Month Delivery Roadmap
 Version 1.0 | April 2026

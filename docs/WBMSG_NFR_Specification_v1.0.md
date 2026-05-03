@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Non-Functional Requirements Specification
 Quality Attributes — ISO/IEC 25010:2011 Quality Model
 Version 1.0  |  April 2026

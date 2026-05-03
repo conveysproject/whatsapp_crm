@@ -1,4 +1,4 @@
-﻿import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import { randomUUID, createHmac, timingSafeEqual } from "crypto";
 import Papa from "papaparse";
 import type { LifecycleStage, Prisma } from "@prisma/client";

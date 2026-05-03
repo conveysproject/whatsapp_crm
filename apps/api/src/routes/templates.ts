@@ -1,4 +1,4 @@
-﻿import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import type { TemplateCategory, TemplateStatus } from "@prisma/client";
 import { submitTemplateToMeta } from "../lib/meta-templates.js";
 import type { TemplateId } from "@WBMSG/shared";

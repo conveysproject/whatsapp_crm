@@ -1,4 +1,4 @@
-﻿import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import type { PipelineId } from "@WBMSG/shared";
 
 interface PipelineBody {

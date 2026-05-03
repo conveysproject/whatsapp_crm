@@ -1,4 +1,4 @@
-﻿# Sprint 13 — Smart Replies (AI Suggestions)
+# Sprint 13 — Smart Replies (AI Suggestions)
 
 ## Sprint Goal
 Surface Claude-powered reply suggestions inside the inbox so agents can respond faster and more consistently, reducing average handle time without sacrificing the personal touch.

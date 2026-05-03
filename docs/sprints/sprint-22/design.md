@@ -1,4 +1,4 @@
-﻿# Sprint 22 — Performance & Scale
+# Sprint 22 — Performance & Scale
 
 ## Sprint Goal
 Make WBMSG fast at scale — add Redis caching to eliminate redundant DB reads, rate-limit the API to prevent abuse, and support per-org Anthropic API keys for enterprise customers who want cost isolation.

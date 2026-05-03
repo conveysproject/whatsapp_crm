@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # SLA / SLO / SLI Specification
 Service Level Agreements, Objectives &amp; Indicators (Google SRE Workbook)
 Version 1.0  |  April 2026

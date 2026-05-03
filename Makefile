@@ -1,4 +1,4 @@
-﻿.DEFAULT_GOAL := help
+.DEFAULT_GOAL := help
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
 setup: ## First-time local dev setup (checks prereqs, .env, Docker, Prisma)

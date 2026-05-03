@@ -1,4 +1,4 @@
-﻿# Sprint 22 — Implementation Plan
+# Sprint 22 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-28-sprint-planning-batch-5.md`
 > Tasks 6–7 cover Sprint 22.

@@ -1,4 +1,4 @@
-﻿# Sprint 10 — Campaign Scheduler
+# Sprint 10 — Campaign Scheduler
 
 ## Sprint Goal
 Let marketing teams schedule WhatsApp broadcast campaigns to a defined audience segment using an approved template — delivering messages at the right time without requiring engineers to run scripts.

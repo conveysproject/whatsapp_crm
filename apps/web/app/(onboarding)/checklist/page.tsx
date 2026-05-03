@@ -1,4 +1,4 @@
-﻿import type { JSX } from "react";
+import type { JSX } from "react";
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 

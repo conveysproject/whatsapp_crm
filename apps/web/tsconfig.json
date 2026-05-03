@@ -1,4 +1,4 @@
-﻿{
+{
   "extends": "@WBMSG/tsconfig/nextjs.json",
   "compilerOptions": {
     "baseUrl": ".",

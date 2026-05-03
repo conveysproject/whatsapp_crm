@@ -1,4 +1,4 @@
-﻿# Sprint 24 — GA Launch & Billing
+# Sprint 24 — GA Launch & Billing
 
 ## Sprint Goal
 Ship WBMSG to general availability: add Stripe subscription billing with usage enforcement, load-test the platform to verify SLOs, and complete the self-serve GA launch checklist.

@@ -1,4 +1,4 @@
-﻿import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import type { ContactId } from "@WBMSG/shared";
 
 const ML_URL = process.env["ML_SERVICE_URL"] ?? "http://localhost:8000";

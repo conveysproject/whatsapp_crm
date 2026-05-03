@@ -1,4 +1,4 @@
-﻿# Sprint 16 — Chatbot Engine
+# Sprint 16 — Chatbot Engine
 
 ## Sprint Goal
 Let teams deploy a WhatsApp chatbot that handles routine queries autonomously and escalates to a human agent exactly when needed — cutting after-hours ticket volume without hiring overnight staff.

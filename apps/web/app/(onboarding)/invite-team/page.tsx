@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, type FormEvent, type JSX } from "react";
 import { useAuth } from "@clerk/nextjs";

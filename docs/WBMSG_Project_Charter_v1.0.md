@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Project Charter
 Authorisation, Scope, Stakeholders &amp; Success Criteria
 Version 1.0  |  April 2026

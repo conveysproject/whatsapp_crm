@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Technical Architecture Document
 Version 1.0
 April 2026

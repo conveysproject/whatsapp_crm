@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Disaster Recovery &amp; Business Continuity Plan
 ISO 22301:2019 — Business Continuity Management System
 Version 1.0  |  April 2026

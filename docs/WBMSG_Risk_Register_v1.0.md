@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Risk Register
 Identification, Scoring &amp; Mitigation — ISO 31000 / PMBOK 11
 Version 1.0  |  April 2026

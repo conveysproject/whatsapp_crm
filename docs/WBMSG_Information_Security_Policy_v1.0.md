@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Information Security Policy
 ISO/IEC 27001:2022 + SOC 2 Common Criteria Aligned
 Version 1.0  |  April 2026

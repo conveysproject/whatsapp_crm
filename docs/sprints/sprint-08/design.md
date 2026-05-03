@@ -1,4 +1,4 @@
-﻿# Sprint 8 — Lifecycle Stages & Segments
+# Sprint 8 — Lifecycle Stages & Segments
 
 ## Sprint Goal
 Give sales and support teams the ability to organize contacts by where they are in the customer journey, and build dynamic audience segments that power campaigns and automation — turning a flat contact list into an actionable CRM.

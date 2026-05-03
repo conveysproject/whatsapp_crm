@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Test Strategy &amp; QA Plan
 ## Quality Engineering Framework
 Version 1.0 | April 2026

@@ -1,4 +1,4 @@
-﻿# Doc Compression Design — 2026-04-28
+# Doc Compression Design — 2026-04-28
 
 ## Goal
 Reduce tokens loaded by Claude each session by stripping non-coding-relevant and now-stale sections from PROJECT_REFERENCE.md and updating memory to reflect true project state (all 24 sprints complete).

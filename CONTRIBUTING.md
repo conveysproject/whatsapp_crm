@@ -1,4 +1,4 @@
-﻿# Contributing to WBMSG
+# Contributing to WBMSG
 
 ## Prerequisites
 

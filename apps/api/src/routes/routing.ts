@@ -1,4 +1,4 @@
-﻿import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import type { ConversationId } from "@WBMSG/shared";
 
 interface RoutingRuleBody {

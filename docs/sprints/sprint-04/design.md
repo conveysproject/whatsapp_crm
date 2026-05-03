@@ -1,4 +1,4 @@
-﻿# Sprint 4 — Core DB & API Skeleton
+# Sprint 4 — Core DB & API Skeleton
 
 ## Sprint Goal
 Complete the full 32-table PostgreSQL schema and build the canonical CRUD API skeleton — establishing the data model and API patterns every subsequent sprint builds on.

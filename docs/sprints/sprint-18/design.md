@@ -1,4 +1,4 @@
-﻿# Sprint 18 — Trust Score & ML Microservice
+# Sprint 18 — Trust Score & ML Microservice
 
 ## Sprint Goal
 Give sales and support teams a single 0–100 health score per contact that synthesises engagement, deal activity, and lifecycle stage — enabling prioritisation without manual data archaeology.
