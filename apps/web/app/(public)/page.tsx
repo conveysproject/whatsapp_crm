@@ -1,5 +1,6 @@
 import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
 import Link from "next/link";
+import Image from "next/image";
 import type { JSX } from "react";
 import type { Metadata } from "next";
 
@@ -7,8 +8,8 @@ const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-br
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm", weight: ["400", "500"] });
 
 export const metadata: Metadata = {
-  title: "TrustCRM — WhatsApp CRM Built for India's SMBs",
-  description: "AI-powered WhatsApp CRM with transparent pricing. Manage contacts, automate campaigns, close deals — all from WhatsApp.",
+  title: "WBMSG — WhatsApp Communication & Marketing Platform",
+  description: "AI-powered WhatsApp communication & marketing platform. Manage contacts, automate campaigns, close deals — all from WhatsApp.",
 };
 
 const FEATURES = [
@@ -25,13 +26,6 @@ const PRICING = [
   { name: "Growth", price: "₹2,999", period: "/mo", desc: "Growing teams & SMBs", agents: "10 agents", contacts: "10,000 contacts", popular: true, features: ["Everything in Starter", "AI Smart Replies (Claude)", "Unlimited broadcasts", "Automation flow builder", "Advanced analytics", "Priority support"] },
   { name: "Scale", price: "₹7,999", period: "/mo", desc: "Scale-ups & power users", agents: "Unlimited agents", contacts: "100,000 contacts", popular: false, features: ["Everything in Growth", "Agency sub-accounts", "White-label option", "Custom AI training", "Dedicated account manager", "SLA guarantee"] },
 ];
-
-const WA_ICON = (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z" fill="white"/>
-    <path d="M20.52 3.449C18.24 1.245 15.24 0 12.045 0 5.463 0 .104 5.334.101 11.893c0 2.096.549 4.14 1.595 5.945L0 24l6.335-1.652A11.94 11.94 0 0 0 12.045 24c6.585 0 11.946-5.336 11.949-11.896 0-3.176-1.24-6.165-3.48-8.447z" fill="white" fillOpacity=".25"/>
-  </svg>
-);
 
 export default function LandingPage(): JSX.Element {
   return (
@@ -261,8 +255,7 @@ export default function LandingPage(): JSX.Element {
       <nav className="nav">
         <div className="nav-in">
           <Link href="/" className="logo">
-            <div className="logo-ic">{WA_ICON}</div>
-            <span className="logo-tx">TrustCRM</span>
+            <Image src="/wbmsg_logo.png" alt="WBMSG" width={200} height={56} style={{ height: "36px", width: "auto" }} priority />
           </Link>
           <div className="nav-lnks">
             {["Features#features","How It Works#how-it-works","Pricing#pricing","For Agencies#agency"].map(s => {
@@ -583,8 +576,7 @@ export default function LandingPage(): JSX.Element {
           <div className="ft-g">
             <div>
               <div className="logo" style={{marginBottom:"1rem"}}>
-                <div className="logo-ic">{WA_ICON}</div>
-                <span className="logo-tx">TrustCRM</span>
+                <Image src="/wbmsg_logo.png" alt="WBMSG" width={200} height={56} style={{ height: "36px", width: "auto" }} />
               </div>
               <p className="ft-tag">WhatsApp-first CRM built for India&rsquo;s 64M+ SMBs. Transparent pricing, AI-powered, zero surprises.</p>
               <p className="ft-made">Made with ❤️ in India</p>

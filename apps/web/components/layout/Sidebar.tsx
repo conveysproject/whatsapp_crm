@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { JSX } from "react";
 
@@ -28,9 +29,8 @@ export function Sidebar(): JSX.Element {
 
   return (
     <aside className="flex flex-col w-60 min-h-screen bg-white border-r border-gray-200">
-      <div className="flex items-center gap-2 px-4 py-5 border-b border-gray-200">
-        <span className="text-wa-green font-bold text-xl">✓</span>
-        <span className="font-semibold text-gray-900">TrustCRM</span>
+      <div className="flex items-center px-4 py-5 border-b border-gray-200">
+        <Image src="/wbmsg_logo.png" alt="WBMSG" width={200} height={56} style={{ height: "36px", width: "auto" }} priority />
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1">
