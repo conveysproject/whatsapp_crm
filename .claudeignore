@@ -1,4 +1,4 @@
-dist/
+﻿dist/
 .next/
 out/
 build/
@@ -18,4 +18,4 @@ Thumbs.db
 .env
 .env.*
 !.env.example
-docs/TrustCRM_*.md
+docs/WBMSG_*.md
