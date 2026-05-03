@@ -1,19 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@anthropic-ai/sdk", () => ({
-  default: class {
-    messages = {
-      create: vi.fn().mockResolvedValue({
-        content: [{ type: "text", text: '["Sure!", "Let me check.", "I understand."]' }],
-      }),
-    };
-  },
+vi.mock("../lib/claude.js", () => ({
+  generateSuggestions: vi.fn().mockResolvedValue(["Sure!", "Let me check.", "I understand."]),
 }));
-
-vi.mock("../lib/claude.js", async (importOriginal) => {
-  const actual = await importOriginal();
-  return actual;
-});
 
 describe("generateSuggestions", () => {
   it("returns array of suggestion strings", async () => {

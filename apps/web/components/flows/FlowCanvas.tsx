@@ -33,7 +33,7 @@ export function FlowCanvas({ initialNodes, initialEdges, onChange, readOnly = fa
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   const onConnect = useCallback((params: Connection) => {
-    setEdges((eds) => {
+    setEdges((eds: Edge[]) => {
       const next = addEdge({ ...params, animated: true }, eds);
       onChange?.(nodes, next);
       return next;

@@ -4,6 +4,7 @@ import { JSX, useState } from "react";
 import {
   DndContext,
   type DragEndEvent,
+  type DragStartEvent,
   DragOverlay,
   PointerSensor,
   useSensor,
@@ -58,8 +59,8 @@ export function KanbanBoard({ initialDeals, stages }: KanbanBoardProps): JSX.Ele
   return (
     <DndContext
       sensors={sensors}
-      onDragEnd={(e) => { void handleDragEnd(e); }}
-      onDragStart={({ active }) => setActiveDeal(deals.find((d) => d.id === active.id) ?? null)}
+      onDragEnd={(e: DragEndEvent) => { void handleDragEnd(e); }}
+      onDragStart={({ active }: DragStartEvent) => setActiveDeal(deals.find((d) => d.id === active.id) ?? null)}
     >
       <div className="flex gap-4 overflow-x-auto pb-4">
         {stages.map((stage) => {

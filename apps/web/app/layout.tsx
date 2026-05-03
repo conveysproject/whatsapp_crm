@@ -5,8 +5,8 @@ import { QueryProvider } from "@/components/providers/QueryProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TrustCRM",
-  description: "WhatsApp-first CRM for SMBs",
+  title: "WBMSG",
+  description: "WhatsApp-first Communication & Marketing Platform",
 };
 
 export default function RootLayout({
@@ -15,6 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }): JSX.Element {
   return (
+    // @ts-expect-error -- Clerk 7 ClerkProvider is async RSC; @types/react 18 doesn't model Promise<ReactNode>
     <ClerkProvider>
       <html lang="en">
         <body>

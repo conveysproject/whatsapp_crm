@@ -2,6 +2,7 @@ import { SignIn } from "@clerk/nextjs";
 import type { JSX } from "react";
 import { DM_Sans, Bricolage_Grotesque } from "next/font/google";
 import Link from "next/link";
+import Image from "next/image";
 import { PublicNav } from "@/components/public/PublicNav";
 
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm", weight: ["400", "500"] });
@@ -17,11 +18,8 @@ export default function SignInPage(): JSX.Element {
         <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl flex overflow-hidden my-8 mx-4">
           {/* Left: Brand panel */}
           <div className="hidden md:flex flex-col justify-center items-start bg-[#F4F6FC] px-12 py-16 w-1/2 gap-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-[#0BBF77] flex items-center justify-center">
-                <span className="font-extrabold text-white text-xl">TC</span>
-              </div>
-              <span className="font-br text-2xl font-extrabold text-gray-900">TrustCRM</span>
+            <div className="mb-4">
+              <Image src="/wbmsg_logo.png" alt="WBMSG" width={240} height={67} style={{ height: "48px", width: "auto" }} />
             </div>
             <h2 className="font-br text-3xl font-extrabold text-gray-900 mb-2">
               Welcome back
@@ -33,7 +31,7 @@ export default function SignInPage(): JSX.Element {
               <li>AI-powered insights updated daily</li>
             </ul>
             <div className="mt-8 text-gray-400 text-xs">
-              New to TrustCRM?{" "}
+              New to WBMSG?{" "}
               <Link href="/sign-up" className="text-[#0BBF77] font-bold hover:underline">
                 Create a free account
               </Link>

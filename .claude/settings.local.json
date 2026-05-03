@@ -6,7 +6,12 @@
       "Bash(railway logs *)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(ls -d .worktrees)",
+      "Bash(ls -d worktrees)",
+      "Bash(pnpm --filter @trustcrm/web type-check)",
+      "Bash(git commit *)",
+      "Bash(pnpm --filter @trustcrm/api type-check)"
     ]
   },
   "enabledPlugins": {
