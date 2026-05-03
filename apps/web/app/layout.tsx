@@ -15,7 +15,6 @@ export default function RootLayout({
   children: React.ReactNode;
 }): JSX.Element {
   return (
-    // @ts-expect-error -- Clerk 7 ClerkProvider is async RSC; @types/react 18 doesn't model Promise<ReactNode>
     <ClerkProvider>
       <html lang="en">
         <body>

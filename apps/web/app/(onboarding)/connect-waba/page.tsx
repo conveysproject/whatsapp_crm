@@ -163,7 +163,6 @@ export default function ConnectWabaPage(): JSX.Element {
 
   return (
     <>
-      {/* @ts-expect-error -- next/script ScriptProps type mismatch with Next.js 15 */}
       <Script src="https://connect.facebook.net/en_US/sdk.js" strategy="afterInteractive" />
       <div>
         <h2 className="text-lg font-semibold text-gray-800 mb-2">Connect WhatsApp Business</h2>
