@@ -8,14 +8,14 @@ RUN npm install -g turbo
 COPY . .
 RUN turbo prune @WBMSG/api --docker
 
-# ── Install dependencies (pruned workspace only) ──────────────────────────────
+# ── Install all deps ──────────────────────────────────────────────────────────
 FROM base AS deps
 WORKDIR /app
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 RUN pnpm install --frozen-lockfile
 
-# ── Build shared + api ────────────────────────────────────────────────────────
+# ── Build + create workspace-free prod deployment ─────────────────────────────
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -24,28 +24,30 @@ COPY --from=pruner /app/out/full/ .
 RUN pnpm --filter @WBMSG/shared build
 RUN pnpm --filter @WBMSG/api run generate
 RUN pnpm --filter @WBMSG/api build
+# pnpm deploy produces a flat node_modules with no pnpm-workspace.yaml
+RUN pnpm --filter @WBMSG/api deploy --prod /prod
 
 # ── Production image ──────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
+# Flat node_modules — no workspace, no pnpm context at runtime
+COPY --from=builder /prod/node_modules ./node_modules
+COPY --from=builder /prod/package.json ./package.json
 
-COPY --from=pruner /app/out/json/ .
-COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-RUN pnpm install --frozen-lockfile --prod
+# Compiled output replaces source
+COPY --from=builder /app/apps/api/dist ./dist
 
-COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
-COPY --from=builder /app/apps/api/prisma.config.js ./apps/api/
-RUN pnpm --filter @WBMSG/api run generate
+# Prisma schema, migrations, and JS config (no tsx needed)
+COPY --from=builder /app/apps/api/prisma ./prisma
+COPY --from=builder /app/apps/api/prisma.config.js ./
 
-COPY --from=builder /app/apps/api/dist ./apps/api/dist
-COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-COPY --from=pruner /app/out/full/apps/api/start.sh ./apps/api/start.sh
-RUN chmod +x ./apps/api/start.sh
+# Regenerate Prisma client against the clean flat node_modules
+RUN node ./node_modules/.bin/prisma generate
 
-WORKDIR /app/apps/api
+COPY --from=pruner /app/out/full/apps/api/start.sh ./
+RUN chmod +x ./start.sh
+
 EXPOSE 4000
-
 CMD ["sh", "start.sh"]
