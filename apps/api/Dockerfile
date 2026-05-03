@@ -27,7 +27,7 @@ RUN pnpm --filter @WBMSG/api build
 # pnpm deploy produces a flat node_modules with no pnpm-workspace.yaml
 RUN pnpm --filter @WBMSG/api deploy --prod --legacy /prod
 
-# ── Production image ──────────────────────────────────────────────────────────
+# ── Production image (flat pnpm-deploy structure, no workspace) ───────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
