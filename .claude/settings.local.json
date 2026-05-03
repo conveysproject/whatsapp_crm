@@ -11,7 +11,9 @@
       "Bash(ls -d worktrees)",
       "Bash(pnpm --filter @WBMSG/web type-check)",
       "Bash(git commit *)",
-      "Bash(pnpm --filter @WBMSG/api type-check)"
+      "Bash(pnpm --filter @WBMSG/api type-check)",
+      "Bash(railway service *)",
+      "Bash(vercel ls *)"
     ]
   },
   "enabledPlugins": {

@@ -116,20 +116,60 @@ docker compose --profile observability up -d  # + Datadog agent
 
 ## Deployment
 
-**API → Railway** (Docker via `apps/api/Dockerfile`; `railway.toml` at root)
-**Web → Vercel** (`vercel.json` at root)
+**API → Railway** — Docker build via `apps/api/Dockerfile`; config in `railway.toml` (repo root)
+**Web → Vercel** — project root is `apps/web`; build config lives in `apps/web/vercel.json` (NOT repo-root `vercel.json`)
 
-### Railway CLI (effective commands only)
+### Production URLs & IDs
 
-Do NOT use `railway service`, `railway service status/list/logs` — these subcommands don't exist.
+| | Value |
+|--|-------|
+| API public URL | `https://trustcrmapi-production.up.railway.app` |
+| API internal URL | `trustcrmapi.railway.internal` |
+| Web URL | `https://trustcrm-web-conveysproject-7758s-projects.vercel.app` |
+| Railway project | `focused-forgiveness` · environment: `production` |
+| Railway service name | `@trustcrm/api` (ID: `421b2efd-ea6d-4eb3-9b37-f507d56a9ac2`) |
+| Vercel project | `trustcrm-web` (ID: `prj_g88r1mFO3xWc5BmjIfTRUXT0ZJ4z`) |
 
-| Goal | Command |
-|------|---------|
-| Check auth | `railway whoami` |
-| Project + environment info | `railway status` |
-| List running services | `railway ps` |
-| Stream logs | `railway logs \| tail -100` |
-| Deploy current dir | `railway up` |
-| Open project dashboard | `railway open` |
-| List env vars | `railway variables` |
-| Run command in Railway env | `railway run <cmd>` |
+Railway also runs: **Redis** · **Meilisearch** · **Postgres** (all on internal railway.internal hostnames).
+
+### Railway CLI — verified working commands
+
+> Start every session by linking the service — otherwise `service logs` / `variable` fail.
+
+```bash
+railway whoami                              # confirm auth (conveysproject@gmail.com)
+railway status                             # project + environment info
+railway service status --all               # list ALL services with status (BUILDING/SUCCESS/etc)
+railway service link "@trustcrm/api"       # link CLI to the API service (required once per session)
+railway variable                           # list env vars for linked service
+railway service logs --lines 100           # pull last 100 log lines (no streaming)
+railway service logs                       # stream live logs
+railway service logs --filter "@level:error" --lines 50   # errors only
+railway service logs --http --status ">=400" --lines 50   # HTTP 4xx/5xx only
+railway service logs --build               # build/deploy logs
+railway redeploy                           # redeploy latest build
+railway up                                 # build + deploy from local directory
+railway open                               # open dashboard in browser
+railway run <cmd>                          # run command with production env vars
+```
+
+**Dead commands — do NOT use:**
+- `railway ps` — unrecognized subcommand
+- `railway service list` — does not exist; use `railway service status --all`
+- `railway logs --service <name>` — use `railway service link` then `railway service logs`
+- `railway variables` — use `railway variable` (no s)
+
+### Vercel CLI — verified working commands
+
+```bash
+vercel whoami                              # confirm auth
+vercel ls                                  # list all deployments (most recent first)
+vercel project inspect trustcrm-web        # show project settings incl. build command
+vercel inspect --logs <deployment-id>      # full build logs for a specific deployment
+vercel env ls                              # list all env vars
+vercel env add <NAME>                      # add/update an env var
+vercel env pull .env.vercel.local          # pull env vars to local file
+vercel redeploy <deployment-url>           # redeploy a specific deployment
+```
+
+**Get deployment ID from `vercel ls`** — format is `dpl_xxxx`, shown in the `inspect` output.
