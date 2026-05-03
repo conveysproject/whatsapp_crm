@@ -2,6 +2,6 @@
 set -e
 
 echo "[startup] Running database migrations..."
-node /app/node_modules/.bin/prisma migrate deploy
+node ./node_modules/.bin/prisma migrate deploy
 echo "[startup] Migrations complete. Starting server..."
-exec node /app/dist/index.js
+exec node dist/index.js
