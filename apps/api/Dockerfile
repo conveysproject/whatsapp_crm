@@ -25,7 +25,7 @@ RUN pnpm --filter @WBMSG/shared build
 RUN pnpm --filter @WBMSG/api run generate
 RUN pnpm --filter @WBMSG/api build
 # pnpm deploy produces a flat node_modules with no pnpm-workspace.yaml
-RUN pnpm --filter @WBMSG/api deploy --prod /prod
+RUN pnpm --filter @WBMSG/api deploy --prod --legacy /prod
 
 # ── Production image ──────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
