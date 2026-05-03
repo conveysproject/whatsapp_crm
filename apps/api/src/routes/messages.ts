@@ -1,6 +1,6 @@
-import type { FastifyPluginAsync } from "fastify";
+﻿import type { FastifyPluginAsync } from "fastify";
 import { sendTextMessage } from "../lib/whatsapp.js";
-import type { ConversationId } from "@trustcrm/shared";
+import type { ConversationId } from "@WBMSG/shared";
 
 interface SendMessageBody {
   text: string;

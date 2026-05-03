@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { JSX, createContext, useContext, useState } from "react";
-import type { FieldMapping, ImportAnalysisResult, ImportProgress } from "@trustcrm/shared";
+import type { FieldMapping, ImportAnalysisResult, ImportProgress } from "@WBMSG/shared";
 import { Step1Upload } from "./steps/Step1Upload";
 import { Step2MapFields } from "./steps/Step2MapFields";
 import { Step3Preview } from "./steps/Step3Preview";

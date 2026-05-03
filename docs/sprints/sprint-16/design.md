@@ -1,4 +1,4 @@
-# Sprint 16 — Chatbot Engine
+﻿# Sprint 16 — Chatbot Engine
 
 ## Sprint Goal
 Let teams deploy a WhatsApp chatbot that handles routine queries autonomously and escalates to a human agent exactly when needed — cutting after-hours ticket volume without hiring overnight staff.
@@ -33,7 +33,7 @@ Let teams deploy a WhatsApp chatbot that handles routine queries autonomously an
 - [ ] `escalate` node → `BotSession.isEscalated = true` → subsequent messages routed to human
 - [ ] Socket.io `conversation:escalated` event fires when bot escalates
 - [ ] `/settings/chatbot` page shows active chatbot + toggle
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `chatbots.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `chatbots.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

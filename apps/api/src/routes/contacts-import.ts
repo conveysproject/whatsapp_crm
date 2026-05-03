@@ -1,11 +1,11 @@
-import type { FastifyPluginAsync } from "fastify";
+﻿import type { FastifyPluginAsync } from "fastify";
 import { randomUUID, createHmac, timingSafeEqual } from "crypto";
 import Papa from "papaparse";
 import type { LifecycleStage, Prisma } from "@prisma/client";
 import { redis } from "../lib/redis.js";
 import { contactImportQueue } from "../lib/queue.js";
 import { normalizeFullPhone, normalizeSplitPhone } from "../lib/phone-normalize.js";
-import type { FieldMapping, ContactImportId } from "@trustcrm/shared";
+import type { FieldMapping, ContactImportId } from "@WBMSG/shared";
 
 const CSV_SESSION_TTL_SECONDS = 1800; // 30 minutes
 

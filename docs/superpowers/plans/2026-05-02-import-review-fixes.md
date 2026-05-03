@@ -1,4 +1,4 @@
-# Import Feature Review Fixes Implementation Plan
+﻿# Import Feature Review Fixes Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -48,7 +48,7 @@ return /^\+[1-9]\d{7,14}$/.test(value);
 - [ ] **Step 2: Run existing tests to confirm they still pass**
 
 ```bash
-pnpm --filter @trustcrm/api test
+pnpm --filter @WBMSG/api test
 ```
 
 Expected: all tests pass (existing test uses `+919000000001` which has 12 digits — well above the new minimum).
@@ -111,7 +111,7 @@ if (!csvText) {
 - [ ] **Step 3: Run type-check**
 
 ```bash
-pnpm --filter @trustcrm/api type-check 2>&1 | grep "contact-import.worker"
+pnpm --filter @WBMSG/api type-check 2>&1 | grep "contact-import.worker"
 ```
 
 Expected: no errors on the worker file (pre-existing `contactImport` TS errors on other lines are unrelated).
@@ -264,8 +264,8 @@ es = new EventSource(
 - [ ] **Step 7: Run type-check on both apps**
 
 ```bash
-pnpm --filter @trustcrm/api type-check 2>&1 | grep -v "contactImport"
-pnpm --filter @trustcrm/web type-check 2>&1
+pnpm --filter @WBMSG/api type-check 2>&1 | grep -v "contactImport"
+pnpm --filter @WBMSG/web type-check 2>&1
 ```
 
 Expected: no new errors.
@@ -335,7 +335,7 @@ setState({ importSummary: { ...latestProgressRef.current, status: "completed" } 
 - [ ] **Step 4: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check 2>&1
+pnpm --filter @WBMSG/web type-check 2>&1
 ```
 
 Expected: passes.
@@ -428,7 +428,7 @@ totalRows: rows.length,
 - [ ] **Step 3: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/api type-check 2>&1 | grep "contacts-import"
+pnpm --filter @WBMSG/api type-check 2>&1 | grep "contacts-import"
 ```
 
 Expected: no new errors on this file.
@@ -464,7 +464,7 @@ Find the Back button in `Step2MapFields.tsx`:
 - [ ] **Step 2: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check 2>&1
+pnpm --filter @WBMSG/web type-check 2>&1
 ```
 
 Expected: passes.
@@ -519,8 +519,8 @@ if (state.sessionId) {
 - [ ] **Step 3: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/api type-check 2>&1 | grep "contacts-import"
-pnpm --filter @trustcrm/web type-check 2>&1
+pnpm --filter @WBMSG/api type-check 2>&1 | grep "contacts-import"
+pnpm --filter @WBMSG/web type-check 2>&1
 ```
 
 Expected: no new errors.
@@ -582,8 +582,8 @@ And remove the original `const buffer = await file.toBuffer();` line that follow
 - [ ] **Step 3: Type-check both apps**
 
 ```bash
-pnpm --filter @trustcrm/api type-check 2>&1 | grep "contacts-import"
-pnpm --filter @trustcrm/web type-check 2>&1
+pnpm --filter @WBMSG/api type-check 2>&1 | grep "contacts-import"
+pnpm --filter @WBMSG/web type-check 2>&1
 ```
 
 Expected: passes.
@@ -661,7 +661,7 @@ export function Step5Summary(): JSX.Element {
 - [ ] **Step 2: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check 2>&1
+pnpm --filter @WBMSG/web type-check 2>&1
 ```
 
 Expected: passes.
@@ -814,7 +814,7 @@ describe("POST /v1/contacts/import/start", () => {
 - [ ] **Step 2: Run tests**
 
 ```bash
-pnpm --filter @trustcrm/api test 2>&1
+pnpm --filter @WBMSG/api test 2>&1
 ```
 
 Expected: all tests pass including the 6 new ones.

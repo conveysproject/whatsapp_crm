@@ -1,4 +1,4 @@
-﻿| TrustCRM Trust-First WhatsApp CRM for SMBs Product Requirements Document Version 2.0  /  April 2026  /  Confidential |
+﻿| WBMSG Trust-First WhatsApp CRM for SMBs Product Requirements Document Version 2.0  /  April 2026  /  Confidential |
 | --- |
 
 | Field | Value |
@@ -11,11 +11,11 @@
 
 # 1. Executive Summary
 
-| TrustCRM is the first WhatsApp-native CRM built entirely around SMB trust — transparent pricing, zero onboarding friction, human-first support, and a CRM deep enough to replace spreadsheets forever. |
+| WBMSG is the first WhatsApp-native CRM built entirely around SMB trust — transparent pricing, zero onboarding friction, human-first support, and a CRM deep enough to replace spreadsheets forever. |
 | --- |
 
 The Indian and global SMB market is underserved by every existing WhatsApp tool. WATI, AiSensy, Gallabox and Interakt all solve the same narrow problem — sending messages — and fail on the three things SMBs actually care about: reliability, support, and understanding their customers.
-TrustCRM is not another broadcast tool. It is the operating system for a small business&apos;s customer relationships, delivered entirely through WhatsApp.
+WBMSG is not another broadcast tool. It is the operating system for a small business&apos;s customer relationships, delivered entirely through WhatsApp.
 ## 1.1  The Opportunity
 500 million+ WhatsApp Business users globally. 60 million SMBs in India alone. The Meta WhatsApp Cloud API is open, cheap, and growing. Yet every tool in the market is either too expensive, too weak in CRM, or impossible to use without an IT team.
 ## 1.2  Our Unfair Advantages
@@ -56,7 +56,7 @@ Most tools offer a basic keyword-reply chatbot. Building a real flow — lead ca
 No existing tool warns you before a customer churns, suggests the best time to follow up, or tells you which contact is most likely to buy again. Businesses operate reactively — they never see patterns in their own data.
 ## 2.3  Competitor Gap Analysis
 
-| Capability | WATI | AiSensy | Gallabox | TrustCRM |
+| Capability | WATI | AiSensy | Gallabox | WBMSG |
 | --- | --- | --- | --- | --- |
 | Deep CRM | ❌ None | ❌ None | ⚠️ Basic | ✅ Full |
 | Guided onboarding | ❌ No | ❌ No | ⚠️ Partial | ✅ Yes |
@@ -113,7 +113,7 @@ Real-time Trust Score that gamifies WhatsApp health
 Predictive analytics that surface insights no human could find manually
 Voice AI that transcribes, classifies, and routes audio messages automatically
 ## 3.3  Positioning
-TrustCRM is NOT positioned as the cheapest option or the most feature-rich option. It is positioned as the most trustworthy and intelligent option — the one a business owner recommends to another business owner because it actually works, never surprises you, and actively helps you grow.
+WBMSG is NOT positioned as the cheapest option or the most feature-rich option. It is positioned as the most trustworthy and intelligent option — the one a business owner recommends to another business owner because it actually works, never surprises you, and actively helps you grow.
 
 # 4. User Personas
 ## 4.1  Primary Persona: Rahul — The Growing Shop Owner
@@ -146,7 +146,7 @@ TrustCRM is NOT positioned as the cheapest option or the most feature-rich optio
 | --- | --- |
 | Age / Location | 28, Mumbai, Maharashtra |
 | Business | Digital marketing agency managing 15 SMB clients |
-| Goal | White-label TrustCRM, resell to clients, manage all from one dashboard |
+| Goal | White-label WBMSG, resell to clients, manage all from one dashboard |
 | Success for him | One agency account, sub-accounts per client, custom branding, bulk pricing. |
 
 # 5. Feature Specifications
@@ -155,7 +155,7 @@ TrustCRM is NOT positioned as the cheapest option or the most feature-rich optio
 | --- |
 
 ## 5.1  Trust-First Onboarding (P0)
-The onboarding experience is TrustCRM&apos;s first and most critical differentiator. Every competitor fails here. TrustCRM must get any SMB owner live in under 30 minutes with zero developer help.
+The onboarding experience is WBMSG&apos;s first and most critical differentiator. Every competitor fails here. WBMSG must get any SMB owner live in under 30 minutes with zero developer help.
 ### 5.1.1  Guided Setup Wizard
 8-step wizard with progress bar and estimated time remaining
 Step 1: Business profile (name, category, logo, description)
@@ -174,7 +174,7 @@ Video walkthrough (2-3 minutes) embedded at each step
 ### 5.1.3  Transparent Billing Setup
 Live billing calculator before payment: shows exactly what each plan costs based on estimated message volume
 WhatsApp message cost estimator: enter expected monthly broadcasts + conversations, see total cost
-Overage alerts: set a monthly spend cap; TrustCRM pauses campaigns and alerts before exceeding it
+Overage alerts: set a monthly spend cap; WBMSG pauses campaigns and alerts before exceeding it
 No annual lock-in on Starter plan — month-to-month with full data export anytime
 ## 5.2  Smart Shared Team Inbox (P0)
 The inbox is the daily operating surface for every team member. It must be fast, intelligent, and give full context at a glance.
@@ -201,7 +201,7 @@ Auto-route: Purchase Enquiries go to Sales queue; Complaints go to Support queue
 Priority flagging: messages with negative sentiment automatically marked urgent
 SLA timer: show how long a conversation has been waiting, with colour coding
 ## 5.3  Deep Custom CRM (P0)
-This is TrustCRM&apos;s biggest differentiation. No competitor offers a real CRM. TrustCRM provides one that can replace a separate CRM tool entirely.
+This is WBMSG&apos;s biggest differentiation. No competitor offers a real CRM. WBMSG provides one that can replace a separate CRM tool entirely.
 ### 5.3.1  Contact Management
 Unlimited contacts (subject to plan limits)
 Standard fields: name, phone, email, company, city, language, birthday
@@ -241,7 +241,7 @@ AI copy assistant: describe your offer, AI drafts the template
 Variable personalisation: {{name}}, {{order_id}}, {{amount}} — with preview
 Media support: image, video, document, location
 Call-to-action buttons: URL, phone call, quick reply
-Submit to Meta for approval directly from TrustCRM with status tracking
+Submit to Meta for approval directly from WBMSG with status tracking
 Template performance: open rate, reply rate, button click rate per template
 ### 5.4.2  Campaign Builder
 Audience: select a saved segment or build a new one inline
@@ -257,7 +257,7 @@ Opt-out rate with trend chart
 Revenue attribution: if Shopify connected, show orders placed within 24h of campaign
 Comparison view: side-by-side campaign performance
 ## 5.5  Visual Workflow Automation (P0)
-TrustCRM&apos;s flow builder is the most powerful in the SMB segment — more capable than WATI, as visual as Zapier, and designed for non-technical users.
+WBMSG&apos;s flow builder is the most powerful in the SMB segment — more capable than WATI, as visual as Zapier, and designed for non-technical users.
 ### 5.5.1  Flow Builder Canvas
 Drag-and-drop nodes on an infinite canvas
 Zoom in/out, minimap for large flows
@@ -351,7 +351,7 @@ Google Contacts: two-way sync
 Google Sheets: export contacts/deals on schedule
 Razorpay: payment links sent via WhatsApp, payment status in CRM
 ### 5.8.2  Integration Platform (P1)
-Zapier: 500+ app connections via TrustCRM Zapier app
+Zapier: 500+ app connections via WBMSG Zapier app
 Make (formerly Integromat): module available
 Pabbly Connect: module available (popular in India)
 ### 5.8.3  REST API &amp; Webhooks (P0)
@@ -360,11 +360,11 @@ API key management with scoped permissions
 Webhooks: send events to any endpoint on any action
 Developer documentation site with code examples in Node.js, Python, PHP
 ## 5.9  Billing Transparency Engine (P0)
-This is a core product feature, not a finance afterthought. Billing transparency is TrustCRM&apos;s trust mechanism.
+This is a core product feature, not a finance afterthought. Billing transparency is WBMSG&apos;s trust mechanism.
 Live billing calculator on pricing page: enter expected volume, see exact monthly cost
 In-app spend tracker: real-time view of current month&apos;s Meta API costs vs. platform subscription
 Overage alerts: push notification + WhatsApp message when 80% of limit reached
-Hard cap option: SMB can set a monthly cap; TrustCRM pauses campaigns before exceeding it
+Hard cap option: SMB can set a monthly cap; WBMSG pauses campaigns before exceeding it
 Invoice breakdown: every invoice shows line items (platform fee, API cost, add-ons)
 Cost per campaign: after each broadcast, show exact API cost incurred
 Annual savings calculator: show how much they save vs. WATI/AiSensy
@@ -379,7 +379,7 @@ Public status page: live uptime, incident history, planned maintenance
 
 # 6. Next-Generation Features (Exclusive Competitive Moat)
 
-| The features in this section do not exist in any current WhatsApp CRM product. They represent TrustCRM&apos;s long-term defensibility. All features below are fully specified and ready for development — zero pending work. |
+| The features in this section do not exist in any current WhatsApp CRM product. They represent WBMSG&apos;s long-term defensibility. All features below are fully specified and ready for development — zero pending work. |
 | --- |
 
 ## 6.1  Trust Score Dashboard (P1)
@@ -401,9 +401,9 @@ Weekly score history chart: 13-week trend line
 Per-dimension breakdown with individual score, benchmark vs. similar businesses, and top 3 actionable improvement tips
 Score change notification: WhatsApp message to account owner when score changes by more than 5 points in either direction
 Industry benchmark: compare your score to businesses in the same category (anonymised aggregate)
-Public Trust Badge: businesses scoring &gt;80 can display a TrustCRM Trust Badge on their website and marketing materials
+Public Trust Badge: businesses scoring &gt;80 can display a WBMSG Trust Badge on their website and marketing materials
 ### 6.1.3  Gamification Layer
-Monthly Trust Challenge: TrustCRM sends 3 improvement goals at the start of each month
+Monthly Trust Challenge: WBMSG sends 3 improvement goals at the start of each month
 Milestone badges: First 100, Streak 30 (30-day response streak), Gold Standard (score &gt;90 for 90 days)
 Leaderboard (opt-in): businesses in the same city/industry can see ranked leaderboard
 Referral bonus: sharing your Trust Score on LinkedIn/WhatsApp generates a referral code
@@ -428,7 +428,7 @@ Launch a campaign from your phone in 3 taps: pick a segment, pick a template, se
 Real-time campaign stats: live delivery ticker, reply notifications as they come in
 Quick-reply mode: swipe through all unanswered campaign replies and respond with AI suggestions
 ## 6.3  AI Relationship Intelligence (P2)
-After 90 days of conversation data, TrustCRM&apos;s AI surfaces insights no human would find manually. This feature runs as a background analytics job, processing conversation patterns at the account level to generate per-contact intelligence.
+After 90 days of conversation data, WBMSG&apos;s AI surfaces insights no human would find manually. This feature runs as a background analytics job, processing conversation patterns at the account level to generate per-contact intelligence.
 ### 6.3.1  Best Time to Contact
 Per-contact analysis: based on historical WhatsApp message open timestamps and reply times, calculate each customer&apos;s active window (e.g., 7pm-9pm weekdays)
 Campaign send-time optimisation: when launching a campaign, offer to schedule delivery based on per-contact optimal windows rather than a single send time
@@ -456,7 +456,7 @@ Every Monday morning, account owner receives a WhatsApp message: &apos;Your week
 In-app version: full report card with charts, comparisons to previous week, and recommended next steps
 Action buttons in the message: &apos;Start win-back campaign&apos;, &apos;View upsell list&apos;, &apos;See full report&apos;
 ## 6.4  WhatsApp Commerce Layer (P2)
-A lightweight product catalogue and order-taking system built directly into TrustCRM, powered by WhatsApp&apos;s native Catalogue and Payments features. Enables end-to-end commerce without the customer leaving WhatsApp.
+A lightweight product catalogue and order-taking system built directly into WBMSG, powered by WhatsApp&apos;s native Catalogue and Payments features. Enables end-to-end commerce without the customer leaving WhatsApp.
 ### 6.4.1  Product Catalogue
 Manual catalogue: add products with name, description, price, image, SKU, and stock status
 Shopify sync: pull products automatically; stock levels updated in real time
@@ -477,12 +477,12 @@ PhonePe / Paytm link support: generate payment links for other popular UPI apps
 Payment confirmation: automatic thank-you message + invoice PDF sent on payment success
 Failed payment retry: if payment link expires or fails, automated reminder sent after 2 hours
 ### 6.4.4  Order Management
-Automatic order creation in TrustCRM CRM on payment success
+Automatic order creation in WBMSG CRM on payment success
 Order synced to Shopify/WooCommerce automatically
 Order status workflow: Created → Confirmed → Shipped → Delivered → Closed
 Order update automation: at each status change, automated WhatsApp message sent to customer
-Shipping tracking: paste a tracking link; TrustCRM formats and sends a tracking message
-Refund handling: initiate Razorpay refund from within TrustCRM; customer notified automatically
+Shipping tracking: paste a tracking link; WBMSG formats and sends a tracking message
+Refund handling: initiate Razorpay refund from within WBMSG; customer notified automatically
 Order history: full order list on contact profile with total spend, last order date, product breakdown
 ### 6.4.5  Commerce Analytics
 GMV (Gross Merchandise Value) dashboard: total sales via WhatsApp this week/month
@@ -516,19 +516,19 @@ Business-type personalisation: different message flows for e-commerce (Shopify c
 Opt-out respect: if user replies STOP to any concierge message, all future concierge messages are paused
 Human escalation: if user replies to a concierge message with a question, a human support agent is immediately alerted
 ### 6.5.3  Concierge Delivery Mechanism
-Messages sent from the TrustCRM business WhatsApp number itself (same number the user contacts for support)
+Messages sent from the WBMSG business WhatsApp number itself (same number the user contacts for support)
 All messages use pre-approved utility templates (not marketing — so they can be sent even without active WhatsApp session)
 Delivery time: sent at 10am local time of the user (timezone auto-detected from signup location)
 In-app echo: all concierge messages also appear as a &apos;Getting Started&apos; notification feed in the dashboard
 ## 6.6  Agency &amp; White-Label Mode (P2)
-An agency can run TrustCRM with their own branding, their own domain, and manage all clients from a master dashboard. This unlocks a B2B2B distribution channel.
+An agency can run WBMSG with their own branding, their own domain, and manage all clients from a master dashboard. This unlocks a B2B2B distribution channel.
 ### 6.6.1  White-Label Infrastructure
 Custom domain: crm.agencyname.com — DNS CNAME setup with SSL auto-provisioned via Let&apos;s Encrypt
-Custom logo: replaces TrustCRM logo in all UI, emails, and PDF reports
+Custom logo: replaces WBMSG logo in all UI, emails, and PDF reports
 Custom brand colours: primary and secondary colour applied to sidebar, buttons, and headers
 Custom email sender: all system emails sent from agency@agencyname.com via verified domain
 Login page customisation: agency logo, background image, welcome message
-Remove &apos;Powered by TrustCRM&apos; branding: optional for Scale agencies (additional fee)
+Remove &apos;Powered by WBMSG&apos; branding: optional for Scale agencies (additional fee)
 ### 6.6.2  Agency Master Dashboard
 Client list: all sub-accounts with name, plan, contact count, last activity, Trust Score, and MRR
 Aggregate stats: total contacts across all clients, total messages sent this month, total revenue attributed
@@ -537,9 +537,9 @@ Activity feed: latest actions across all client accounts (new contact added, cam
 Switch account: one-click switch into any client account without re-login
 Impersonation mode: operate within a client account as yourself (shown in audit log)
 ### 6.6.3  Client Billing Passthrough
-Agency sets their own prices per client (independent of TrustCRM&apos;s published pricing)
-TrustCRM bills the agency at wholesale rates (20% discount on Growth/Scale)
-Agency bills their clients directly — TrustCRM does not invoice the end client
+Agency sets their own prices per client (independent of WBMSG&apos;s published pricing)
+WBMSG bills the agency at wholesale rates (20% discount on Growth/Scale)
+Agency bills their clients directly — WBMSG does not invoice the end client
 Usage-based reporting: agency receives a monthly breakdown of Meta API costs per client account
 Hard cap per client: agency can set a monthly spend cap on each client account
 ### 6.6.4  Bulk Template Management
@@ -553,7 +553,7 @@ Separate WhatsApp numbers per client account
 Separate billing meters per client account
 Client login URL: clients log in at agency&apos;s custom domain and only see their own account
 ## 6.7  Voice AI &amp; Audio Intelligence (P2)  [NEW]
-WhatsApp&apos;s most-used feature among Indian SMB customers is voice notes — yet no CRM does anything useful with them. TrustCRM converts every voice message into a structured CRM action automatically.
+WhatsApp&apos;s most-used feature among Indian SMB customers is voice notes — yet no CRM does anything useful with them. WBMSG converts every voice message into a structured CRM action automatically.
 ### 6.7.1  Voice Message Transcription
 Every inbound and outbound voice note automatically transcribed within 5 seconds of receipt
 Transcription language auto-detected: supports Hindi, English, Tamil, Telugu, Marathi, Kannada, Bengali, Gujarati
@@ -584,7 +584,7 @@ Confidence intervals: forecasts shown with low/mid/high scenario bands
 What-if modelling: &apos;If I launch a campaign to my Hot Lead segment, how much additional revenue could I expect?&apos; — modelled based on historical campaign conversion
 Displayed on: CRM analytics dashboard as a &apos;Revenue Forecast&apos; card with trend chart
 ### 6.8.2  Campaign Performance Prediction
-Before sending a campaign, TrustCRM predicts: estimated delivery rate, expected read rate, expected reply rate, estimated opt-out rate — based on segment characteristics and template history
+Before sending a campaign, WBMSG predicts: estimated delivery rate, expected read rate, expected reply rate, estimated opt-out rate — based on segment characteristics and template history
 Warnings: if predicted opt-out rate is high (&gt;3%), show a warning with suggestions to improve audience targeting
 Best segment recommendation: &apos;Based on your template, the segment most likely to respond is: High Value Customers in Mumbai&apos;
 Optimal send time prediction: per-segment best send time based on historical engagement patterns
@@ -599,7 +599,7 @@ Anomaly alert: if actual metrics deviate more than 2 standard deviations from ba
 Alert types: &apos;Unusual drop in read rate detected in your last 3 campaigns — possible audience fatigue&apos;, &apos;Response time spiked today — your team may be understaffed&apos;
 Recommended actions: each anomaly alert includes 1-2 suggested corrective actions
 ## 6.9  Multi-Channel Inbox Extension (P2)  [NEW]
-Extend TrustCRM&apos;s inbox beyond WhatsApp to capture conversations from all channels the SMB&apos;s customers use — in one unified view with the same CRM depth.
+Extend WBMSG&apos;s inbox beyond WhatsApp to capture conversations from all channels the SMB&apos;s customers use — in one unified view with the same CRM depth.
 ### 6.9.1  Supported Channels
 
 | Channel | Integration Method | CRM Sync | AI Features | Priority |
@@ -608,7 +608,7 @@ Extend TrustCRM&apos;s inbox beyond WhatsApp to capture conversations from all c
 | Instagram DMs | Meta Graph API | Contact matched by phone/email if available | Intent detection, smart replies | P2 |
 | Facebook Messenger | Meta Graph API | Contact matched or new record created | Intent detection, smart replies | P2 |
 | Email (IMAP/SMTP) | Custom SMTP + IMAP connector | Linked to contact by email address | AI summarisation | P2 |
-| Web Live Chat | TrustCRM JS widget | Full — visitor identified, chat history saved | Bot + handoff | P2 |
+| Web Live Chat | WBMSG JS widget | Full — visitor identified, chat history saved | Bot + handoff | P2 |
 | SMS (India) | MSG91 / Kaleyra API | Contact matched by phone number | Template-based only | P2 |
 
 ### 6.9.2  Unified Inbox UX
@@ -668,7 +668,7 @@ NPS Dashboard: current score, historical trend, Promoter/Passive/Detractor break
 | Multi-channel APIs | Meta Graph API (Instagram/Messenger), MSG91 (SMS) |
 
 ## 7.2  Multi-Tenancy Model
-TrustCRM uses a shared database with strict Row Level Security (RLS) enforced at the PostgreSQL level. Every query is automatically scoped to the authenticated organisation&apos;s ID. This provides cost efficiency, database-enforced isolation, instant tenant provisioning, and architectural impossibility of cross-tenant data access.
+WBMSG uses a shared database with strict Row Level Security (RLS) enforced at the PostgreSQL level. Every query is automatically scoped to the authenticated organisation&apos;s ID. This provides cost efficiency, database-enforced isolation, instant tenant provisioning, and architectural impossibility of cross-tenant data access.
 ## 7.3  Voice AI Architecture
 Voice note received via WhatsApp webhook → stored in S3 → transcription job queued in BullMQ
 Whisper API called asynchronously (P99 latency target: &lt;5 seconds for notes up to 60 seconds)
@@ -726,7 +726,7 @@ Transparent, predictable, SMB-friendly. One platform price + actual Meta API cos
 | Support | &lt;4h WhatsApp | &lt;2h WhatsApp | &lt;30m + CSM |
 
 ## 8.3  Meta API Cost Pass-Through
-TrustCRM charges businesses at Meta&apos;s published rates with zero markup. Current India rates (2026):
+WBMSG charges businesses at Meta&apos;s published rates with zero markup. Current India rates (2026):
 
 | Conversation type | Cost per conversation | Notes |
 | --- | --- | --- |
@@ -805,7 +805,7 @@ India first. Specifically targeting e-commerce brands (Shopify merchants), coach
 ## 10.2  Customer Acquisition
 ### Channel 1: Content-led SEO
 Target keywords: WATI alternative, AiSensy alternative, WhatsApp CRM India, WhatsApp automation for small business
-Long-form comparison content: TrustCRM vs WATI, TrustCRM vs AiSensy
+Long-form comparison content: WBMSG vs WATI, WBMSG vs AiSensy
 YouTube tutorials for non-technical SMB owners
 ### Channel 2: Community
 Active in Shopify India community groups, LinkedIn SMB groups, startup WhatsApp groups
@@ -815,11 +815,11 @@ Refer a business owner: get 1 month free. Referee gets 20% off first 3 months.
 Built directly into the product — share a referral link from the dashboard
 ### Channel 4: Agency Partnerships
 Onboard 10 digital marketing agencies as white-label partners in the first 6 months
-Agencies bring their existing SMB clients, TrustCRM provides the platform
+Agencies bring their existing SMB clients, WBMSG provides the platform
 ### Channel 5: Product-Led Growth (new)
 Free trial: 14-day full Growth plan trial, no credit card required
-Trust Score virality: businesses with Trust Score &gt;80 receive a shareable badge; clicking the badge shows a preview of TrustCRM
-CSAT badge: high-CSAT businesses can embed a &apos;Customer Rating&apos; widget on their website powered by TrustCRM data
+Trust Score virality: businesses with Trust Score &gt;80 receive a shareable badge; clicking the badge shows a preview of WBMSG
+CSAT badge: high-CSAT businesses can embed a &apos;Customer Rating&apos; widget on their website powered by WBMSG data
 ## 10.3  Retention Strategy
 Onboarding concierge: proactive WhatsApp check-ins in first 30 days
 Weekly product digest: what is new, tips based on their actual usage
@@ -916,7 +916,7 @@ AI Weekly Intelligence Report: every Monday, account owner gets personalised ins
 | BSP dependency risk | Medium | Direct Meta Cloud API integration — no BSP dependency by design |
 | Voice AI accuracy for regional languages | Medium | Start with English + Hindi; expand other languages only after &gt;90% accuracy benchmark met |
 | ML model cold-start (new accounts) | Low | Disable predictions for accounts with &lt;90 days data; show clear messaging |
-| Agency white-label brand confusion | Low | Clear sub-account isolation + contractual guidelines for agency use of TrustCRM brand |
+| Agency white-label brand confusion | Low | Clear sub-account isolation + contractual guidelines for agency use of WBMSG brand |
 | Multi-channel inbox Meta policy changes | Medium | Instagram/Messenger via official Meta Graph API — follow policy updates proactively |
 
 # 14. Appendix
@@ -937,9 +937,9 @@ AI Weekly Intelligence Report: every Monday, account owner gets personalised ins
 | RLS | Row Level Security — PostgreSQL feature that enforces data isolation at the database level |
 | SMB | Small and Medium Business — the core customer segment |
 | TTS | Text-to-Speech — AI-generated voice from typed text (used in Voice AI feature) |
-| Trust Score | TrustCRM&apos;s proprietary 0-100 health score for a business&apos;s WhatsApp presence |
+| Trust Score | WBMSG&apos;s proprietary 0-100 health score for a business&apos;s WhatsApp presence |
 | VAPT | Vulnerability Assessment and Penetration Testing |
-| WAB | Weekly Active Businesses — TrustCRM&apos;s North Star metric |
+| WAB | Weekly Active Businesses — WBMSG&apos;s North Star metric |
 
 ## 14.2  Next-Gen Feature Summary
 
@@ -966,5 +966,5 @@ AI Weekly Intelligence Report: every Monday, account owner gets personalised ins
 | 1.0 | April 2026 | Initial PRD — full product specification |
 | 2.0 | April 2026 | Added 4 new next-gen features (Voice AI, Predictive Analytics, Multi-Channel Inbox, CSAT Engine). Fully detailed all 6 existing next-gen features. No pending work. Complete end-to-end specification. |
 
-| End of Document TrustCRM PRD v2.0  /  April 2026  /  Strictly Confidential All features fully specified. Zero pending work. |
+| End of Document WBMSG PRD v2.0  /  April 2026  /  Strictly Confidential All features fully specified. Zero pending work. |
 | --- |

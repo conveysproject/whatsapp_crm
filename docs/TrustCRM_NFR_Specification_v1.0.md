@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Non-Functional Requirements Specification
 Quality Attributes — ISO/IEC 25010:2011 Quality Model
 Version 1.0  |  April 2026
@@ -6,7 +6,7 @@ Strictly Confidential
 Document Owner
 VP Engineering / QA Lead
 ## 1. Purpose
-This document specifies the Non-Functional Requirements (NFRs) for the TrustCRM platform v1.0. NFRs are defined against the eight ISO/IEC 25010 quality characteristics: Functional Suitability, Performance Efficiency, Compatibility, Usability, Reliability, Security, Maintainability, and Portability. Each NFR is testable, has a measurement method, and a target.
+This document specifies the Non-Functional Requirements (NFRs) for the WBMSG platform v1.0. NFRs are defined against the eight ISO/IEC 25010 quality characteristics: Functional Suitability, Performance Efficiency, Compatibility, Usability, Reliability, Security, Maintainability, and Portability. Each NFR is testable, has a measurement method, and a target.
 ### 1.1 Conventions
 - Each NFR has a unique ID: NFR-&lt;characteristic&gt;-&lt;n&gt;.
 - Targets are absolute or percentile (p50, p95, p99); steady-state unless noted otherwise.
@@ -98,7 +98,7 @@ This document specifies the Non-Functional Requirements (NFRs) for the TrustCRM 
 | Samsung Internet (Android) | 23+ | PWA install path |
 
 ### 6.2 Co-existence &amp; Interoperability
-- Customer can run TrustCRM alongside other WhatsApp inboxes — non-exclusive Meta token.
+- Customer can run WBMSG alongside other WhatsApp inboxes — non-exclusive Meta token.
 - CSV exports MUST be valid Excel and Google Sheets imports out-of-box.
 - Webhook payload MUST be valid JSON conforming to the published JSON-Schema.
 - iCal export of campaign schedule MUST be valid RFC 5545.
@@ -144,4 +144,4 @@ This document specifies the Non-Functional Requirements (NFRs) for the TrustCRM 
 - Security NFRs verified by annual third-party pentest and continuous SAST/DAST in CI.
 - Usability NFRs verified by quarterly user research panel (n ≥ 20) and continuous PostHog telemetry.
 - All NFRs reviewed at every quarterly Operational Review and re-baselined as needed.
-End of NFR Specification | TrustCRM v1.0 | April 2026 | ISO/IEC 25010 conformant
+End of NFR Specification | WBMSG v1.0 | April 2026 | ISO/IEC 25010 conformant

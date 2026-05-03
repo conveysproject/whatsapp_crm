@@ -1,4 +1,4 @@
-# Sprint 13 — Smart Replies (AI Suggestions)
+﻿# Sprint 13 — Smart Replies (AI Suggestions)
 
 ## Sprint Goal
 Surface Claude-powered reply suggestions inside the inbox so agents can respond faster and more consistently, reducing average handle time without sacrificing the personal touch.
@@ -29,7 +29,7 @@ Surface Claude-powered reply suggestions inside the inbox so agents can respond 
 - [ ] `POST /v1/messages/:id/analyze` returns `{ intent: IntentType; sentiment: SentimentType }`
 - [ ] SmartReplies component renders chips in the inbox; clicking populates send box
 - [ ] Intent/sentiment badges visible on messages in agent view
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `ai.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `ai.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

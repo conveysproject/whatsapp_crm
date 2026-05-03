@@ -1,4 +1,4 @@
-# Sprint 8 — Lifecycle Stages & Segments
+﻿# Sprint 8 — Lifecycle Stages & Segments
 
 ## Sprint Goal
 Give sales and support teams the ability to organize contacts by where they are in the customer journey, and build dynamic audience segments that power campaigns and automation — turning a flat contact list into an actionable CRM.
@@ -14,7 +14,7 @@ Give sales and support teams the ability to organize contacts by where they are 
 
 ## Key Technical Decisions
 
-- **JSONB filters over normalized filter rows** — A normalized `segment_filters` table would require joins to evaluate. JSONB is queried once, deserialized, and translated to a Prisma `where` clause in application code. For the filter complexity TrustCRM needs (≤10 conditions), this is significantly simpler.
+- **JSONB filters over normalized filter rows** — A normalized `segment_filters` table would require joins to evaluate. JSONB is queried once, deserialized, and translated to a Prisma `where` clause in application code. For the filter complexity WBMSG needs (≤10 conditions), this is significantly simpler.
 - **Evaluator in application code, not SQL** — Building a dynamic SQL query from JSONB filters risks injection if not done carefully. Application-layer evaluation with Prisma's typed query builder is safer and easier to test.
 - **Stateless evaluation (no pre-computed membership)** — Segment membership is computed fresh on each `POST /v1/segments/:id/evaluate` call. Pre-computing and caching membership (e.g., a `segment_contacts` join table) is added in Sprint 10 when campaign send volumes make it necessary.
 - **`tags contains` uses Postgres array `has` operator** — Prisma maps `{ tags: { has: "vip" } }` to `tags @> ARRAY['vip']`. This is index-friendly with a GIN index on `tags[]` — add the index in Sprint 23 optimization.
@@ -32,7 +32,7 @@ Give sales and support teams the ability to organize contacts by where they are 
 - [ ] Segment builder UI adds/removes filter rows and POSTs correctly
 - [ ] Filter by `lifecycleStage = lead` returns only lead contacts (verified against seeded data)
 - [ ] Filter by `tags contains vip` returns contacts tagged `vip`
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `segments.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `segments.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

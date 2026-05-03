@@ -1,21 +1,21 @@
-terraform {
+﻿terraform {
   required_version = ">= 1.7"
   required_providers {
     aws = { source = "hashicorp/aws", version = "~> 5.0" }
   }
   backend "s3" {
-    bucket         = "trustcrm-tfstate"
+    bucket         = "WBMSG-tfstate"
     key            = "staging/terraform.tfstate"
     region         = "ap-south-1"
     encrypt        = true
-    dynamodb_table = "trustcrm-tflock"
+    dynamodb_table = "WBMSG-tflock"
   }
 }
 
 provider "aws" {
   region = var.aws_region
   default_tags {
-    tags = { Project = "TrustCRM", Environment = "staging", ManagedBy = "Terraform" }
+    tags = { Project = "WBMSG", Environment = "staging", ManagedBy = "Terraform" }
   }
 }
 
@@ -55,26 +55,26 @@ resource "aws_route_table_association" "public" {
 
 # Security Groups
 resource "aws_security_group" "alb" {
-  name   = "trustcrm-staging-alb"
+  name   = "WBMSG-staging-alb"
   vpc_id = aws_vpc.main.id
   ingress { from_port = 80;  to_port = 80;  protocol = "tcp"; cidr_blocks = ["0.0.0.0/0"] }
   ingress { from_port = 443; to_port = 443; protocol = "tcp"; cidr_blocks = ["0.0.0.0/0"] }
   egress  { from_port = 0;   to_port = 0;   protocol = "-1";  cidr_blocks = ["0.0.0.0/0"] }
 }
 resource "aws_security_group" "api" {
-  name   = "trustcrm-staging-api"
+  name   = "WBMSG-staging-api"
   vpc_id = aws_vpc.main.id
   ingress { from_port = 4000; to_port = 4000; protocol = "tcp"; security_groups = [aws_security_group.alb.id] }
   egress  { from_port = 0;    to_port = 0;    protocol = "-1";  cidr_blocks = ["0.0.0.0/0"] }
 }
 resource "aws_security_group" "rds" {
-  name   = "trustcrm-staging-rds"
+  name   = "WBMSG-staging-rds"
   vpc_id = aws_vpc.main.id
   ingress { from_port = 5432; to_port = 5432; protocol = "tcp"; security_groups = [aws_security_group.api.id] }
   egress  { from_port = 0;    to_port = 0;    protocol = "-1";  cidr_blocks = ["0.0.0.0/0"] }
 }
 resource "aws_security_group" "redis" {
-  name   = "trustcrm-staging-redis"
+  name   = "WBMSG-staging-redis"
   vpc_id = aws_vpc.main.id
   ingress { from_port = 6379; to_port = 6379; protocol = "tcp"; security_groups = [aws_security_group.api.id] }
   egress  { from_port = 0;    to_port = 0;    protocol = "-1";  cidr_blocks = ["0.0.0.0/0"] }
@@ -82,14 +82,14 @@ resource "aws_security_group" "redis" {
 
 # ALB
 resource "aws_lb" "api" {
-  name               = "trustcrm-staging-api"
+  name               = "WBMSG-staging-api"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 }
 resource "aws_lb_target_group" "api" {
-  name        = "trustcrm-staging-api"
+  name        = "WBMSG-staging-api"
   port        = 4000
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id

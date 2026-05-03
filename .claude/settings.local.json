@@ -1,7 +1,7 @@
-{
+﻿{
   "permissions": {
     "allow": [
-      "Bash(pnpm --filter @trustcrm/api test)",
+      "Bash(pnpm --filter @WBMSG/api test)",
       "Bash(railway deployment *)",
       "Bash(railway logs *)",
       "Bash(git add *)",
@@ -9,9 +9,9 @@
       "Bash(git push *)",
       "Bash(ls -d .worktrees)",
       "Bash(ls -d worktrees)",
-      "Bash(pnpm --filter @trustcrm/web type-check)",
+      "Bash(pnpm --filter @WBMSG/web type-check)",
       "Bash(git commit *)",
-      "Bash(pnpm --filter @trustcrm/api type-check)"
+      "Bash(pnpm --filter @WBMSG/api type-check)"
     ]
   },
   "enabledPlugins": {

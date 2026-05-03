@@ -1,7 +1,7 @@
-# Sprint 24 — GA Launch & Billing
+﻿# Sprint 24 — GA Launch & Billing
 
 ## Sprint Goal
-Ship TrustCRM to general availability: add Stripe subscription billing with usage enforcement, load-test the platform to verify SLOs, and complete the self-serve GA launch checklist.
+Ship WBMSG to general availability: add Stripe subscription billing with usage enforcement, load-test the platform to verify SLOs, and complete the self-serve GA launch checklist.
 
 ## What We're Building
 
@@ -15,7 +15,7 @@ Ship TrustCRM to general availability: add Stripe subscription billing with usag
 ## Key Technical Decisions
 
 - **Stripe Checkout hosted page, not Elements** — Stripe Checkout handles PCI compliance, card form, 3D Secure, and international payment methods out of the box. Custom Elements (embedded card form) requires PCI SAQ-A compliance effort — deferred to Sprint 26 if needed.
-- **Webhook persists `stripeCustomerId` on `checkout.session.completed`** — The Stripe customer ID is the link between TrustCRM's org and Stripe's billing records. It's set exactly once (on first checkout), then used to look up subscription status. No subscription ID stored — always fetched live from Stripe.
+- **Webhook persists `stripeCustomerId` on `checkout.session.completed`** — The Stripe customer ID is the link between WBMSG's org and Stripe's billing records. It's set exactly once (on first checkout), then used to look up subscription status. No subscription ID stored — always fetched live from Stripe.
 - **Usage counted in Postgres, not Stripe** — Stripe metered billing is complex and adds latency. Counting `messages WHERE direction='outbound' AND createdAt >= startOfMonth` in Postgres is fast (indexed) and accurate. The 402 check runs before the message is sent — no retroactive enforcement.
 - **Plan limits: Free=500, Starter=5000, Growth=25000, Enterprise=∞** — Sized to match Indian SMB WhatsApp usage patterns: a 5-agent team handles ~100 conversations/day, each with ~10 messages = ~1000 messages/day on Starter. Growth covers orgs using campaigns heavily.
 - **k6 load tests as a gate, not CI** — Load tests run manually before GA and after major releases. Running them in CI would require a separate staging environment with realistic data — Sprint 26 infrastructure improvement.
@@ -33,7 +33,7 @@ Ship TrustCRM to general availability: add Stripe subscription billing with usag
 - [ ] `/settings/billing` page shows current plan + usage meter + Upgrade button
 - [ ] k6 smoke test passes: p95 <500 ms at 10 VUs, 0% error rate
 - [ ] k6 soak test passes: p95 <800 ms at 50 VUs sustained 6 minutes, <2% error rate
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `billing.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `billing.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 - [ ] GA Launch Checklist verified (see plan.md)

@@ -1,4 +1,4 @@
-# Sprint 12 — Implementation Plan
+﻿# Sprint 12 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-27-sprint-planning-batch-3.md`
 > Tasks 11–12 cover Sprint 12.
@@ -18,7 +18,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass (routing.test, deals.test, campaigns.test, segments.test, templates.test, webhooks.test, contacts.test, organizations.test, health.test)
+- [ ] `pnpm --filter @WBMSG/api test` — all pass (routing.test, deals.test, campaigns.test, segments.test, templates.test, webhooks.test, contacts.test, organizations.test, health.test)
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Create routing rule "All WhatsApp → Agent Alice" (channelType equals whatsapp → assignTo: alice-user-id)
@@ -46,4 +46,4 @@ No new env vars required.
 - [ ] Each beta account: org created in Clerk, WABA connected, phone number provisioned, webhook URL pointing to staging
 - [ ] Beta users can sign up, receive an inbound message, and reply — end-to-end in production
 - [ ] PagerDuty on-call rotation set up for P1/P2 alerts
-- [ ] Run `pnpm --filter @trustcrm/api test` on staging after deploy — all pass
+- [ ] Run `pnpm --filter @WBMSG/api test` on staging after deploy — all pass

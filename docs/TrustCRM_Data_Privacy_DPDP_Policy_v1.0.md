@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Data Privacy &amp; DPDP Compliance Policy
 DPDP Act 2023 (India) + GDPR-aligned Privacy Programme
 Version 1.0  |  April 2026
@@ -6,8 +6,8 @@ Strictly Confidential
 Document Owner
 Data Protection Officer
 ## 1. Purpose &amp; Scope
-This policy establishes how TrustCRM collects, processes, stores, transfers, and disposes of personal data in compliance with the Digital Personal Data Protection Act 2023 (India), the EU General Data Protection Regulation (GDPR), and other applicable privacy laws. It applies to all personal data of customers, end-users (data principals), employees, and third parties.
-TrustCRM acts as a Data Fiduciary (DPDP) / Data Controller (GDPR) for its own employee and prospect data, and as a Data Processor (GDPR) / Significant Data Fiduciary's processor (DPDP) for customer-uploaded contact and messaging data.
+This policy establishes how WBMSG collects, processes, stores, transfers, and disposes of personal data in compliance with the Digital Personal Data Protection Act 2023 (India), the EU General Data Protection Regulation (GDPR), and other applicable privacy laws. It applies to all personal data of customers, end-users (data principals), employees, and third parties.
+WBMSG acts as a Data Fiduciary (DPDP) / Data Controller (GDPR) for its own employee and prospect data, and as a Data Processor (GDPR) / Significant Data Fiduciary's processor (DPDP) for customer-uploaded contact and messaging data.
 ## 2. Definitions
 
 | Term | Meaning |
@@ -48,7 +48,7 @@ TrustCRM acts as a Data Fiduciary (DPDP) / Data Controller (GDPR) for its own em
 - Granular consent for: account use, marketing emails, in-product analytics, AI personalisation.
 - Consent log captured with timestamp, IP, version of notice shown, and method (web/API).
 - DPDP Consent Manager interoperability: ready to integrate when MeitY certifies CMs (Year 2 plan).
-- Children: TrustCRM is not directed to users under 18; verifiable parental consent required if collected.
+- Children: WBMSG is not directed to users under 18; verifiable parental consent required if collected.
 ## 6. Data Principal Rights
 ### 6.1 Rights We Honour
 - Right to access (DPDP §11, GDPR Art. 15) — full export within 30 days.
@@ -117,7 +117,7 @@ TrustCRM acts as a Data Fiduciary (DPDP) / Data Controller (GDPR) for its own em
 - Model providers contractually prohibited from training on customer data.
 - Output of AI is reviewed by human before being sent to a customer's end-user (no fully automated decisions with legal effect, per GDPR Art. 22).
 ## 13. Sub-processor Management
-- All sub-processors enumerated at trustcrm.in/security/subprocessors.
+- All sub-processors enumerated at WBMSG.in/security/subprocessors.
 - 30 calendar days advance notice for sub-processor additions; customer can object.
 - Contractual obligations equivalent to or stronger than ours (DPA, security, audit rights).
 - Annual review of each sub-processor's SOC 2/ISO 27001/equivalent attestation.
@@ -136,7 +136,7 @@ TrustCRM acts as a Data Fiduciary (DPDP) / Data Controller (GDPR) for its own em
 | Anthropic | AI inference (alt) | Pseudonymised prompts | US | SOC 2 Type II, no training default |
 
 ## 14. Privacy Notice
-- Public Privacy Notice maintained at trustcrm.in/privacy.
+- Public Privacy Notice maintained at WBMSG.in/privacy.
 - Layered: short summary + full notice; reading time displayed.
 - Versioned; material changes notified by email and in-app banner.
 - Localised: English (en-IN) at GA; Hindi + Marathi by Month 3 post-GA.
@@ -144,7 +144,7 @@ TrustCRM acts as a Data Fiduciary (DPDP) / Data Controller (GDPR) for its own em
 ## 15. DPO Office
 - DPO is appointed by the Board, reports to Legal, with direct line to CEO.
 - Independent — cannot be penalised for performing the role.
-- Reachable at dpo@trustcrm.in for principals, regulators, and staff.
+- Reachable at dpo@WBMSG.in for principals, regulators, and staff.
 - Maintains: RoPA, Consent log, DSAR log, Breach log, Sub-processor list, PIA records.
 - Annual report to Board summarising privacy posture and incidents.
 ## 16. Training &amp; Awareness
@@ -162,7 +162,7 @@ TrustCRM acts as a Data Fiduciary (DPDP) / Data Controller (GDPR) for its own em
 - Internal violations: investigation by HR + DPO + Legal; outcomes from training to termination.
 - Wilful unlawful processing: grounds for dismissal and referral to authorities.
 - Sub-processor breach: contractual remedies including audit, suspension, and termination.
-- Customer (Fiduciary-side) violations: TrustCRM may suspend service per the DPA breach clauses.
+- Customer (Fiduciary-side) violations: WBMSG may suspend service per the DPA breach clauses.
 ## 19. Review
 - Annual review by DPO; sign-off by Legal Counsel and CEO.
 - Triggered review on: regulatory change, material incident, technology change.
@@ -173,4 +173,4 @@ TrustCRM acts as a Data Fiduciary (DPDP) / Data Controller (GDPR) for its own em
 | --- | --- | --- | --- |
 | 1.0 | 26-Apr-2026 | DPO | Baseline DPDP + GDPR programme |
 
-End of Data Privacy &amp; DPDP Compliance Policy | TrustCRM v1.0 | April 2026
+End of Data Privacy &amp; DPDP Compliance Policy | WBMSG v1.0 | April 2026

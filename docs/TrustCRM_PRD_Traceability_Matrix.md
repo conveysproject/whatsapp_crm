@@ -1,17 +1,17 @@
-﻿| TrustCRM PRD Traceability Matrix Sprint Execution Plan v1.0  ←→  PRD v2.0 Appendix E  /  168 Tasks  /  24 Sprints  /  April 2026  /  Confidential |
+﻿| WBMSG PRD Traceability Matrix Sprint Execution Plan v1.0  ←→  PRD v2.0 Appendix E  /  168 Tasks  /  24 Sprints  /  April 2026  /  Confidential |
 | --- |
 
 | Field | Value |
 | --- | --- |
 | Document | PRD Traceability Matrix — Appendix E |
 | Sprint Plan Version | v1.0 — Sprint Execution Plan (April 2026) |
-| PRD Reference | TrustCRM PRD v2.0 — Complete Edition (April 2026) |
+| PRD Reference | WBMSG PRD v2.0 — Complete Edition (April 2026) |
 | Total Tasks Mapped | 168 tasks across 24 sprints |
 | PRD Sections Covered | Sections 5.1 – 5.10, 6.1 – 6.10, 7.1 – 7.6, 8, 9, 10, 11 |
 | Classification | Strictly Confidential |
 
 # How to Read This Matrix
-This document maps every task in the TrustCRM Sprint Execution Plan (v1.0) to its originating requirement in the TrustCRM Product Requirements Document (v2.0). It serves as the authoritative traceability record for the engineering team, QA, and product management.
+This document maps every task in the WBMSG Sprint Execution Plan (v1.0) to its originating requirement in the WBMSG Product Requirements Document (v2.0). It serves as the authoritative traceability record for the engineering team, QA, and product management.
 
 | Task ID | Sprint | Phase | PRD Section | Purpose |
 | --- | --- | --- | --- | --- |
@@ -62,7 +62,7 @@ This document maps every task in the TrustCRM Sprint Execution Plan (v1.0) to it
 | S2-T3 | S2 | Phase 1 | Conversations and messages database schema | 5.2 | Inbox architecture and message storage described in PRD Section 5.2.1 |
 | S2-T4 | S2 | Phase 1 | Real-time WebSocket layer using Socket.io + Redis | 5.2 | Real-time inbox updates specified in PRD Section 5.2; Redis Pub/Sub in Section 7.1 |
 | S2-T5 | S2 | Phase 1 | Inbox UI: conversation list, message thread, right panel | 5.2 | Inbox architecture (left/centre/right panels) specified in PRD Section 5.2.1 |
-| S2-T6 | S2 | Phase 1 | TrustCRM design system with Storybook documentation | N/A | Design system is a development prerequisite, not directly mapped to a PRD feature section |
+| S2-T6 | S2 | Phase 1 | WBMSG design system with Storybook documentation | N/A | Design system is a development prerequisite, not directly mapped to a PRD feature section |
 | S2-T7 | S2 | Phase 1 | Auto-create contact on new inbound number with deduplication | 5.3 | Contact deduplication via phone number specified in PRD Section 5.3.1 |
 | S2-T8 | S2 | Phase 1 | End-to-end test for all 8 message types | N/A | Quality assurance baseline for WhatsApp integration |
 
@@ -334,7 +334,7 @@ This document maps every task in the TrustCRM Sprint Execution Plan (v1.0) to it
 | S23-T2 | S23 | Phase 4 | Partner/reseller programme with referral tracking and commission payout | N/A | Partner/reseller programme specified in PRD Section 9.4 and 10.2 |
 | S23-T3 | S23 | Phase 4 | Third-party VAPT: penetration test, Critical/High findings fixed | 7.6 | VAPT every 6 months specified in PRD Section 7.6 |
 | S23-T4 | S23 | Phase 4 | Production hardening: DB partitioning, Redis Cluster, ECS autoscaling | 7.5 | Auto-scaling, read replicas, and queue management specified in PRD Section 7.5 |
-| S23-T5 | S23 | Phase 4 | Partner portal at partners.trustcrm.in with referral dashboard | N/A | Partner portal for referral and commission tracking |
+| S23-T5 | S23 | Phase 4 | Partner portal at partners.WBMSG.in with referral dashboard | N/A | Partner portal for referral and commission tracking |
 | S23-T6 | S23 | Phase 4 | Enterprise and partner QA, VAPT re-test of top 5 findings | N/A | Quality assurance for enterprise plan and security posture |
 
 | Sprint 24 — Final Stabilisation &amp; 1,000 Customers |
@@ -382,5 +382,5 @@ The table below shows how many sprint tasks implement each PRD section, providin
 | N/A | Dev/QA Foundation (cross-cutting) | 32 | ████████████████████ |
 | TOTAL | All PRD Sections | 157 | 168 tasks across 24 sprints — 100% PRD coverage |
 
-| End of Traceability Matrix TrustCRM PRD Traceability Matrix  /  Appendix E  /  Strictly Confidential 168 tasks mapped. 100% PRD coverage. Zero pending work. |
+| End of Traceability Matrix WBMSG PRD Traceability Matrix  /  Appendix E  /  Strictly Confidential 168 tasks mapped. 100% PRD coverage. Zero pending work. |
 | --- |

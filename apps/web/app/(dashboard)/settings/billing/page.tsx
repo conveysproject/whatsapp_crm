@@ -1,4 +1,4 @@
-import type { JSX } from "react";
+﻿import type { JSX } from "react";
 import { auth } from "@clerk/nextjs/server";
 
 interface UsageData {
@@ -100,7 +100,7 @@ export default async function BillingPage(): Promise<JSX.Element> {
                   </form>
                 )}
                 {p.tier === "enterprise" && (
-                  <a href="mailto:sales@trustcrm.io" className="text-xs text-green-600 hover:underline">
+                  <a href="mailto:sales@WBMSG.io" className="text-xs text-green-600 hover:underline">
                     Contact us
                   </a>
                 )}

@@ -1,7 +1,7 @@
-# Sprint 20 — Self-Serve Onboarding
+﻿# Sprint 20 — Self-Serve Onboarding
 
 ## Sprint Goal
-Remove the manual admin setup step from closed beta — let any business sign up, connect their WhatsApp Business Account, and start receiving messages without Anthropic/TrustCRM intervention.
+Remove the manual admin setup step from closed beta — let any business sign up, connect their WhatsApp Business Account, and start receiving messages without Anthropic/WBMSG intervention.
 
 ## What We're Building
 
@@ -32,7 +32,7 @@ Remove the manual admin setup step from closed beta — let any business sign up
 - [ ] Admin invites team members via Clerk org invitation → they receive email
 - [ ] Checklist page shows all steps complete → "Go to Inbox" button
 - [ ] `GET /v1/onboarding/status` returns correct `wabaConnected` and `numberProvisioned` state
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `onboarding.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `onboarding.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

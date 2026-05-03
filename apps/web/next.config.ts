@@ -1,8 +1,8 @@
-import type { NextConfig } from "next";
+﻿import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@trustcrm/shared"],
+  transpilePackages: ["@WBMSG/shared"],
 };
 
 export default withSentryConfig(nextConfig, {

@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Architecture Decision Records — Index &amp; Baseline
 Michael Nygard ADR Pattern — 8 Baseline Records
 Version 1.0  |  April 2026
@@ -6,7 +6,7 @@ Strictly Confidential
 Document Owner
 VP Engineering / Tech Leads
 ## 1. Purpose
-This document indexes every Architecture Decision Record (ADR) for the TrustCRM platform and contains the eight baseline ADRs taken at end of Sprint 0. ADRs document architecturally significant decisions: those that shape structure, dependencies, interfaces, or non-functional behaviour.
+This document indexes every Architecture Decision Record (ADR) for the WBMSG platform and contains the eight baseline ADRs taken at end of Sprint 0. ADRs document architecturally significant decisions: those that shape structure, dependencies, interfaces, or non-functional behaviour.
 Format follows Michael Nygard's lightweight pattern: Status / Context / Decision / Consequences. Each ADR is immutable once Accepted; superseding is captured by a new ADR that links back.
 ## 2. ADR Lifecycle
 - Proposed — author drafts; circulated for review.
@@ -103,7 +103,7 @@ Clerk for the platform. Provides hosted UI, SDKs, organisations, MFA, session ma
 ### Status
 Accepted — 16-Apr-2026
 ### Context
-Database mocks save test time but historically have produced false-green tests when the mock diverges from real Postgres semantics (NULL handling, transaction visibility, generated columns). Tenant isolation is the highest-stakes property in TrustCRM; we cannot afford false confidence.
+Database mocks save test time but historically have produced false-green tests when the mock diverges from real Postgres semantics (NULL handling, transaction visibility, generated columns). Tenant isolation is the highest-stakes property in WBMSG; we cannot afford false confidence.
 ### Decision
 Integration tests for any service touching the DB run against a real Postgres (testcontainers in CI; local Docker in dev). Unit tests can stub at the service-call layer but never at the DB-driver layer.
 ### Consequences
@@ -159,4 +159,4 @@ Build a thin abstraction (packages/ai-router) that exposes a model-agnostic Chat
 | --- | --- | --- | --- |
 | 1.0 | 26-Apr-2026 | Tech Leads + VPE | Baseline of 8 ADRs at end of Sprint 0 |
 
-End of ADR Index | TrustCRM v1.0 | April 2026 | Michael Nygard pattern
+End of ADR Index | WBMSG v1.0 | April 2026 | Michael Nygard pattern

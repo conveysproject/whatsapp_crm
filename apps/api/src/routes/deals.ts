@@ -1,5 +1,5 @@
-import type { FastifyPluginAsync } from "fastify";
-import type { DealId } from "@trustcrm/shared";
+﻿import type { FastifyPluginAsync } from "fastify";
+import type { DealId } from "@WBMSG/shared";
 
 interface DealBody {
   title: string;

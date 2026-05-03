@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Information Security Policy
 ISO/IEC 27001:2022 + SOC 2 Common Criteria Aligned
 Version 1.0  |  April 2026
@@ -6,8 +6,8 @@ Strictly Confidential
 Document Owner
 Security Lead / CISO-equivalent
 ## 1. Purpose &amp; Scope
-This policy establishes the principles, controls, and accountabilities that protect TrustCRM's information assets — customer data, source code, infrastructure, and business records — from unauthorised access, disclosure, alteration, or destruction. It applies to all employees, contractors, and third parties with access to TrustCRM systems.
-Scope: all production, staging, and corporate IT environments operated by TrustCRM. Aligned to ISO/IEC 27001:2022 and the SOC 2 Trust Services Criteria (Security, Availability, Confidentiality, Processing Integrity, Privacy).
+This policy establishes the principles, controls, and accountabilities that protect WBMSG's information assets — customer data, source code, infrastructure, and business records — from unauthorised access, disclosure, alteration, or destruction. It applies to all employees, contractors, and third parties with access to WBMSG systems.
+Scope: all production, staging, and corporate IT environments operated by WBMSG. Aligned to ISO/IEC 27001:2022 and the SOC 2 Trust Services Criteria (Security, Availability, Confidentiality, Processing Integrity, Privacy).
 ## 2. Governance
 ### 2.1 Information Security Steering Committee (ISSC)
 - Chair: CTO. Members: Security Lead, DPO, VP Engineering, Head of CS, Legal Counsel.
@@ -56,10 +56,10 @@ Scope: all production, staging, and corporate IT environments operated by TrustC
 - AES-256 GCM at rest (Postgres TDE, S3 SSE-KMS, snapshot encryption).
 - Keys managed by AWS KMS; CMKs rotated annually; audit log immutable.
 - Webhook payloads signed with HMAC-SHA256; signing key rotated on customer request.
-- Passwords managed by Clerk (Argon2id); TrustCRM never receives or stores raw credentials.
+- Passwords managed by Clerk (Argon2id); WBMSG never receives or stores raw credentials.
 ## 6. Physical &amp; Environmental Security
 - Production hosted at AWS ap-south-1 — physical security inherited from AWS SOC 2/ISO 27001 attestations (annually reviewed).
-- TrustCRM head office: badge-controlled access; CCTV at entry; visitor log; no production data printed.
+- WBMSG head office: badge-controlled access; CCTV at entry; visitor log; no production data printed.
 - Remote workers: company-issued laptops with full-disk encryption (FileVault / BitLocker), MDM (Kandji), screen-lock 5 min idle.
 ## 7. Operations Security
 ### 7.1 Change Management
@@ -101,9 +101,9 @@ Scope: all production, staging, and corporate IT environments operated by TrustC
 - Tier-1 vendors (data processors): SOC 2 Type II review on contract; annual re-attestation.
 - Tier-2 vendors: questionnaire + DPA; reviewed at renewal.
 - Tier-3 vendors: standard purchase order; lightweight check.
-- Sub-processor list published on trustcrm.in/security/subprocessors with 30-day change notice to customers.
+- Sub-processor list published on WBMSG.in/security/subprocessors with 30-day change notice to customers.
 ## 11. Incident Management (cross-ref Incident Mgmt Plan)
-- All employees report suspected security events to security@trustcrm.in or the #sec-alerts Slack within 1 hour of detection.
+- All employees report suspected security events to security@WBMSG.in or the #sec-alerts Slack within 1 hour of detection.
 - Severity classification: P1 (active breach / data exposure), P2 (credible threat), P3 (vulnerability), P4 (info).
 - P1: Incident Commander appointed within 30 min; customer notification within 24 h if data affected.
 - Post-mortem published within 5 BD; corrective actions tracked to closure.
@@ -145,4 +145,4 @@ Scope: all production, staging, and corporate IT environments operated by TrustC
 | --- | --- | --- | --- |
 | 1.0 | 26-Apr-2026 | Security Lead | Baseline |
 
-End of Information Security Policy | TrustCRM v1.0 | April 2026 | ISO 27001 / SOC 2 aligned
+End of Information Security Policy | WBMSG v1.0 | April 2026 | ISO 27001 / SOC 2 aligned

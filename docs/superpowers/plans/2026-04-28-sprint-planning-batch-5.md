@@ -1,8 +1,8 @@
-# TrustCRM — Sprint Planning Batch 5 (Sprints 19–24) Implementation Plan
+﻿# WBMSG — Sprint Planning Batch 5 (Sprints 19–24) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Complete the TrustCRM platform with mobile app, self-serve onboarding, advanced search, performance/caching, trained ML models, and Stripe billing — taking TrustCRM from closed beta to general availability.
+**Goal:** Complete the WBMSG platform with mobile app, self-serve onboarding, advanced search, performance/caching, trained ML models, and Stripe billing — taking WBMSG from closed beta to general availability.
 
 **Architecture:** Sprints 19–24 add the Expo mobile app (Expo 51 + Expo Router v3), layer Redis caching and rate limiting on the existing Fastify API, replace the heuristic ML models with trained scikit-learn classifiers, and introduce Stripe subscriptions with usage-based enforcement. Each sprint is independently deployable.
 
@@ -175,7 +175,7 @@ export default function SignInScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>TrustCRM</Text>
+      <Text style={styles.title}>WBMSG</Text>
       <TextInput
         style={styles.input}
         placeholder="Email"
@@ -820,7 +820,7 @@ if (conversation.assignedTo) {
 - [ ] **Step 8: Install Expo Server SDK in API**
 
 ```bash
-pnpm --filter @trustcrm/api add expo-server-sdk
+pnpm --filter @WBMSG/api add expo-server-sdk
 ```
 
 - [ ] **Step 9: Manual test**
@@ -889,7 +889,7 @@ describe("POST /v1/onboarding/waba-callback", () => {
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-pnpm --filter @trustcrm/api test onboarding
+pnpm --filter @WBMSG/api test onboarding
 ```
 
 Expected: FAIL — "Cannot find module './onboarding.js'"
@@ -943,7 +943,7 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
 - [ ] **Step 4: Run tests to verify they pass**
 
 ```bash
-pnpm --filter @trustcrm/api test onboarding
+pnpm --filter @WBMSG/api test onboarding
 ```
 
 Expected: PASS
@@ -988,7 +988,7 @@ export default function ConnectWABAPage(): JSX.Element {
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Connect WhatsApp Business</h1>
       <p className="text-gray-600 mb-8">
-        Connect your WhatsApp Business Account so TrustCRM can send and receive messages on your behalf.
+        Connect your WhatsApp Business Account so WBMSG can send and receive messages on your behalf.
       </p>
       <button
         onClick={handleConnect}
@@ -1141,7 +1141,7 @@ export default function OnboardingChecklistPage(): JSX.Element {
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-2">You're all set! 🎉</h1>
-      <p className="text-gray-600 mb-6">Your TrustCRM workspace is ready.</p>
+      <p className="text-gray-600 mb-6">Your WBMSG workspace is ready.</p>
       <ul className="space-y-3 mb-8">
         {[
           "WhatsApp Business Account connected",
@@ -1224,7 +1224,7 @@ describe("GET /v1/search", () => {
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-pnpm --filter @trustcrm/api test search
+pnpm --filter @WBMSG/api test search
 ```
 
 Expected: FAIL
@@ -1292,7 +1292,7 @@ export async function searchRoutes(fastify: FastifyInstance) {
 - [ ] **Step 5: Run tests to verify they pass**
 
 ```bash
-pnpm --filter @trustcrm/api test search
+pnpm --filter @WBMSG/api test search
 ```
 
 Expected: PASS
@@ -1413,7 +1413,7 @@ git commit -m "feat: add unified search across contacts and conversations (⌘K)
 - [ ] **Step 1: Install ioredis**
 
 ```bash
-pnpm --filter @trustcrm/api add ioredis
+pnpm --filter @WBMSG/api add ioredis
 ```
 
 - [ ] **Step 2: Write cache helpers**
@@ -1529,7 +1529,7 @@ git commit -m "perf(api): add Redis cache-aside layer for contacts and analytics
 - [ ] **Step 1: Install @fastify/rate-limit**
 
 ```bash
-pnpm --filter @trustcrm/api add @fastify/rate-limit
+pnpm --filter @WBMSG/api add @fastify/rate-limit
 ```
 
 - [ ] **Step 2: Write rate limit plugin**
@@ -1961,8 +1961,8 @@ git commit -m "feat(ml): add trained scikit-learn churn/LTV models with heuristi
 - [ ] **Step 1: Install Stripe SDK**
 
 ```bash
-pnpm --filter @trustcrm/api add stripe
-pnpm --filter @trustcrm/web add @stripe/stripe-js
+pnpm --filter @WBMSG/api add stripe
+pnpm --filter @WBMSG/web add @stripe/stripe-js
 ```
 
 - [ ] **Step 2: Write failing tests for billing**
@@ -2014,7 +2014,7 @@ describe("Billing routes", () => {
 - [ ] **Step 3: Run tests to verify they fail**
 
 ```bash
-pnpm --filter @trustcrm/api test billing
+pnpm --filter @WBMSG/api test billing
 ```
 
 Expected: FAIL
@@ -2152,7 +2152,7 @@ export async function billingRoutes(fastify: FastifyInstance) {
 - [ ] **Step 6: Run tests to verify they pass**
 
 ```bash
-pnpm --filter @trustcrm/api test billing
+pnpm --filter @WBMSG/api test billing
 ```
 
 Expected: PASS
@@ -2430,7 +2430,7 @@ git commit -m "feat: add k6 load tests and billing sidebar link for GA"
 - [ ] **Step 1: Run full test suite**
 
 ```bash
-pnpm --filter @trustcrm/api test
+pnpm --filter @WBMSG/api test
 ```
 
 Expected: all tests pass across all test files

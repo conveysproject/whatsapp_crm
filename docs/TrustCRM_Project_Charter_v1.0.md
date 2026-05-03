@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Project Charter
 Authorisation, Scope, Stakeholders &amp; Success Criteria
 Version 1.0  |  April 2026
@@ -9,7 +9,7 @@ Executive Sponsor / CEO
 
 | Field | Value |
 | --- | --- |
-| Project Name | TrustCRM — WhatsApp-First CRM for SMBs |
+| Project Name | WBMSG — WhatsApp-First CRM for SMBs |
 | Project Code | TRUST-2026 |
 | Charter Version | 1.0 |
 | Charter Date | 26 April 2026 |
@@ -21,7 +21,7 @@ Executive Sponsor / CEO
 | Product Owner | Chief Product Officer |
 
 ## 2. Business Case Summary
-India has 64M+ MSMEs and 535M WhatsApp users — yet existing CRM tools either ignore WhatsApp as a first-class channel (Salesforce, HubSpot, Zoho) or focus on chat alone with surprise pricing and shallow CRM features (WATI, AiSensy, Interakt). TrustCRM closes that gap with a transparent-pricing, AI-augmented, WhatsApp-first CRM purpose-built for the 1-50 employee segment, with white-label sub-account architecture for agencies.
+India has 64M+ MSMEs and 535M WhatsApp users — yet existing CRM tools either ignore WhatsApp as a first-class channel (Salesforce, HubSpot, Zoho) or focus on chat alone with surprise pricing and shallow CRM features (WATI, AiSensy, Interakt). WBMSG closes that gap with a transparent-pricing, AI-augmented, WhatsApp-first CRM purpose-built for the 1-50 employee segment, with white-label sub-account architecture for agencies.
 ### 2.1 Strategic Alignment
 - Aligns to India's Digital MSME initiative and DPDP Act 2023 readiness mandate.
 - Captures the SMB segment that hyperscaler CRMs cannot economically serve.
@@ -68,8 +68,8 @@ India has 64M+ MSMEs and 535M WhatsApp users — yet existing CRM tools either i
 | M9 | Marketplace &amp; Integrations | Platform Lead | S18-S24 |
 
 ### 4.2 Major Deliverables
-- GA-quality web application (Next.js PWA) on app.trustcrm.in.
-- Public REST + Webhook API on api.trustcrm.in/v1.
+- GA-quality web application (Next.js PWA) on app.WBMSG.in.
+- Public REST + Webhook API on api.WBMSG.in/v1.
 - Self-service signup, onboarding wizard, and live billing calculator.
 - SOC 2 Type II report (audit window opens Sprint 22).
 - DPDP Act 2023 compliance attestation.
@@ -182,4 +182,4 @@ Decisions exceeding the above thresholds escalate to the Executive Sponsor. All 
 | VP Engineering (Project Director) | _____________ | _____________ | ____ / 04 / 2026 |
 | Head of PMO | _____________ | _____________ | ____ / 04 / 2026 |
 
-End of Project Charter | TrustCRM v1.0 | April 2026 | Strictly Confidential
+End of Project Charter | WBMSG v1.0 | April 2026 | Strictly Confidential

@@ -1,5 +1,5 @@
-{
-  "extends": "@trustcrm/tsconfig/react-native.json",
+﻿{
+  "extends": "@WBMSG/tsconfig/react-native.json",
   "compilerOptions": {
     "strict": true
   },

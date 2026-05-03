@@ -1,4 +1,4 @@
-import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
+﻿import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
 import Link from "next/link";
 import Image from "next/image";
 import type { JSX } from "react";
@@ -333,7 +333,7 @@ export default function LandingPage(): JSX.Element {
                 <div className="m4" style={{display:"flex",flexDirection:"column",alignItems:"flex-end"}}>
                   <div className="ai-tag">🤖 AI Draft</div>
                   <div className="b-ai">
-                    Perfect! Book a 20-min demo: trustcrm.com/demo 🗓️ I&rsquo;ll walk your full team through it!
+                    Perfect! Book a 20-min demo: WBMSG.com/demo 🗓️ I&rsquo;ll walk your full team through it!
                     <div className="ai-acts">
                       <button className="ai-send">Send ✓</button>
                       <button className="ai-edit">Edit</button>
@@ -427,7 +427,7 @@ export default function LandingPage(): JSX.Element {
               <div className="ai-pill">Powered by Claude AI</div>
               <h2 className="h2">Your AI sales co-pilot, 24/7</h2>
               <p className="sec-sub" style={{margin:0,textAlign:"left"}}>
-                TrustCRM&rsquo;s AI engine — built on Anthropic Claude — reads every conversation, detects purchase intent, and suggests the perfect reply. Your team closes faster, responds smarter.
+                WBMSG&rsquo;s AI engine — built on Anthropic Claude — reads every conversation, detects purchase intent, and suggests the perfect reply. Your team closes faster, responds smarter.
               </p>
               <div className="ai-feats">
                 {[
@@ -481,11 +481,11 @@ export default function LandingPage(): JSX.Element {
           <div className="sec-hd">
             <div className="pill" style={{background:"#FEF3C7",color:"#92400E",borderColor:"#FDE68A",marginBottom:"1rem"}}>Agency & Reseller Program</div>
             <h2 className="h2">Manage 100+ clients.<br /><span style={{color:"#B45309"}}>One dashboard.</span></h2>
-            <p className="sec-sub">White-label TrustCRM under your brand. Create sub-accounts for every client, set your own pricing, and build a recurring SaaS revenue stream.</p>
+            <p className="sec-sub">White-label WBMSG under your brand. Create sub-accounts for every client, set your own pricing, and build a recurring SaaS revenue stream.</p>
           </div>
           <div className="g3" style={{marginBottom:"2.5rem"}}>
             {[
-              {ic:"🏷️",tt:"White-Label Ready",ds:"Your brand, your domain. Clients never see TrustCRM."},
+              {ic:"🏷️",tt:"White-Label Ready",ds:"Your brand, your domain. Clients never see WBMSG."},
               {ic:"🗂️",tt:"Sub-Account Management",ds:"Create and manage unlimited client workspaces from a single hub."},
               {ic:"💰",tt:"Recurring Revenue",ds:"Mark up seats and features. Build your own SaaS income stream."},
             ].map(a => (
@@ -560,7 +560,7 @@ export default function LandingPage(): JSX.Element {
             <span style={{color:"#6EE7B7"}}>Let&rsquo;s fix that.</span>
           </h2>
           <p style={{fontSize:"1.02rem",color:"rgba(255,255,255,.55)",marginBottom:"2rem",maxWidth:"460px",margin:"1rem auto 2rem",lineHeight:1.7}}>
-            Join 5,000+ Indian SMBs using TrustCRM to turn WhatsApp into their #1 revenue channel.
+            Join 5,000+ Indian SMBs using WBMSG to turn WhatsApp into their #1 revenue channel.
           </p>
           <div style={{display:"flex",flexWrap:"wrap",justifyContent:"center",gap:"12px"}}>
             <Link href="/sign-up" className="btn-wh">Start Free — 14 Days</Link>
@@ -595,7 +595,7 @@ export default function LandingPage(): JSX.Element {
             ))}
           </div>
           <div className="ft-bot">
-            <span>© 2026 TrustCRM. All rights reserved.</span>
+            <span>© 2026 WBMSG. All rights reserved.</span>
             <span>SOC 2 Type II · DPDP Act Compliant · Data hosted in India</span>
           </div>
         </div>

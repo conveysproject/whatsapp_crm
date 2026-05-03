@@ -1,4 +1,4 @@
-# Contributing to TrustCRM
+﻿# Contributing to WBMSG
 
 ## Prerequisites
 
@@ -10,8 +10,8 @@
 ## Quick Start
 
 ```bash
-git clone git@github.com:trustcrm/trustcrm.git
-cd trustcrm
+git clone git@github.com:WBMSG/WBMSG.git
+cd WBMSG
 cp .env.example .env          # fill in your values
 pnpm install
 docker compose up -d          # start Postgres, Redis, Meilisearch

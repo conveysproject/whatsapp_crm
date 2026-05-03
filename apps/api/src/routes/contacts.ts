@@ -1,10 +1,10 @@
-import type { FastifyPluginAsync } from "fastify";
+﻿import type { FastifyPluginAsync } from "fastify";
 import type { Prisma } from "@prisma/client";
 import type { LifecycleStage } from "@prisma/client";
 import { paginate, parsePaginationParams } from "../lib/pagination.js";
 import { indexContact, removeContact, searchContacts } from "../lib/search.js";
 import { generateContactsCsv } from "../lib/csv.js";
-import type { ContactId } from "@trustcrm/shared";
+import type { ContactId } from "@WBMSG/shared";
 
 interface ContactBody {
   phoneNumber: string;

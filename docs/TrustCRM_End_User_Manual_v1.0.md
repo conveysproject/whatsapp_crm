@@ -1,17 +1,17 @@
-﻿# TrustCRM
-# TrustCRM — End-User Manual
+﻿# WBMSG
+# WBMSG — End-User Manual
 User Documentation per IEEE 26511:2018
 Version 1.0  |  April 2026
 Public
 Document Owner
 Head of Customer Success / Documentation Lead
 ## 1. Welcome
-TrustCRM is a WhatsApp-first customer relationship platform built for Indian small and mid-sized businesses. This manual takes you from sign-up to your first revenue conversation. Read sections in order on your first day; later, jump to the specific section you need.
+WBMSG is a WhatsApp-first customer relationship platform built for Indian small and mid-sized businesses. This manual takes you from sign-up to your first revenue conversation. Read sections in order on your first day; later, jump to the specific section you need.
 ### 1.1 Who this manual is for
-- Owners and admins setting up TrustCRM for the first time.
+- Owners and admins setting up WBMSG for the first time.
 - Agents handling day-to-day WhatsApp conversations.
 - Marketers running campaigns and broadcasts.
-- Developers integrating TrustCRM into existing systems (see also the API Reference).
+- Developers integrating WBMSG into existing systems (see also the API Reference).
 ### 1.2 Conventions
 - Bold text refers to UI labels (Settings, Save).
 - Monospace refers to typed values, IDs, or code.
@@ -20,12 +20,12 @@ TrustCRM is a WhatsApp-first customer relationship platform built for Indian sma
 ## 2. System Requirements
 - Modern web browser: Chrome 120+, Edge 120+, Safari 17+, Firefox 120+.
 - Internet connection: 1 Mbps minimum; 5 Mbps recommended for the agent inbox.
-- Optional mobile: install TrustCRM as a Progressive Web App on Android (Chrome) or iOS (Safari).
+- Optional mobile: install WBMSG as a Progressive Web App on Android (Chrome) or iOS (Safari).
 - WhatsApp Business Account (or we'll help you create one during onboarding).
-- A registered business — TrustCRM is for businesses, not personal use.
+- A registered business — WBMSG is for businesses, not personal use.
 ## 3. Getting Started
 ### 3.1 Create your account (≈ 2 min)
-1. Visit trustcrm.in and click Sign up.
+1. Visit WBMSG.in and click Sign up.
 1. Enter your work email, set a password (or use Google sign-in).
 1. Verify the email link sent to your inbox.
 1. Provide your business name, registered address, and GST number (optional but enables tax invoices).
@@ -34,7 +34,7 @@ TrustCRM is a WhatsApp-first customer relationship platform built for Indian sma
 1. From the checklist, click Connect WhatsApp.
 1. Select 'I have a WhatsApp Business API account' or 'Help me create one'.
 1. Path A — already have one: paste your phone number ID and access token from Meta Business Manager. Click Validate.
-1. Path B — new account: TrustCRM walks you through Meta's verification (business documentation, phone number registration, display name approval). Approval typically takes 1–3 business days.
+1. Path B — new account: WBMSG walks you through Meta's verification (business documentation, phone number registration, display name approval). Approval typically takes 1–3 business days.
 1. Once connected, send a test message from your phone to your registered WhatsApp number — it appears in your Inbox within seconds.
 ### 3.3 Invite your team (≈ 3 min)
 1. Open Settings → Team.
@@ -44,7 +44,7 @@ TrustCRM is a WhatsApp-first customer relationship platform built for Indian sma
 ### 3.4 Import contacts (≈ 5 min)
 1. Open Contacts → Import.
 1. Download the CSV template; fill in name, phone (with country code), tags.
-1. Upload the CSV. TrustCRM validates phone numbers and shows a preview.
+1. Upload the CSV. WBMSG validates phone numbers and shows a preview.
 1. Click Import. Up to 50,000 contacts import in 90 s.
 1. Tip: tags such as 'lead', 'customer', 'churned' make later segmentation easy.
 ## 4. The Inbox — Your Daily Workhorse
@@ -55,7 +55,7 @@ TrustCRM is a WhatsApp-first customer relationship platform built for Indian sma
 ### 4.2 Replying to a message
 1. Click a conversation; the centre pane loads the history.
 1. Type your reply, attach files (image, PDF, video), and press Enter or click Send.
-1. Replies are tracked against the 24-hour customer-service window — TrustCRM warns you when it's about to close.
+1. Replies are tracked against the 24-hour customer-service window — WBMSG warns you when it's about to close.
 1. After the window closes, only approved Message Templates can be sent (use the Template picker).
 ### 4.3 Assigning conversations
 - Click the Assignee badge to assign to yourself or a teammate.
@@ -108,7 +108,7 @@ A Campaign sends an approved template to a defined list of recipients at a sched
 - Test the template against an internal list of 10 contacts first.
 - Send during 09:00–18:00 IST for highest open rates.
 - Provide a clear opt-out path (a quick-reply button labelled 'Stop').
-- Don't repeat the same campaign to the same person within 7 days — TrustCRM warns you if you try.
+- Don't repeat the same campaign to the same person within 7 days — WBMSG warns you if you try.
 ## 7. Contacts &amp; Segments
 - Each contact has profile fields, custom fields, tags, conversation history, and notes.
 - Custom fields are defined in Settings → Custom fields (text, number, date, dropdown).
@@ -133,7 +133,7 @@ A Campaign sends an approved template to a defined list of recipients at a sched
 - Export any report to CSV or schedule it to email.
 ## 10. Billing &amp; Plans
 - View your current plan, usage, and next bill in Settings → Billing.
-- Plans: Free, Starter, Pro, Enterprise. See trustcrm.in/pricing for current rates in INR.
+- Plans: Free, Starter, Pro, Enterprise. See WBMSG.in/pricing for current rates in INR.
 - Payments via UPI, card, NetBanking (Razorpay) or international card (Stripe).
 - Tax invoices issued automatically; download from Billing → Invoices.
 - Upgrade or downgrade anytime; pro-rated.
@@ -145,13 +145,13 @@ A Campaign sends an approved template to a defined list of recipients at a sched
 - Data export: full export of your data via Settings → Data → Export (within 24 h).
 - Data deletion: per-contact erasure honoured within 30 days; full account deletion 30 days after request.
 ## 12. Mobile &amp; Offline
-- Install TrustCRM as a PWA from your phone's browser menu.
+- Install WBMSG as a PWA from your phone's browser menu.
 - Push notifications for new messages (Android; iOS needs add-to-home-screen).
 - Offline mode: read recent inbox without connection; messages send when online.
 ## 13. Integrations
 - Native: Razorpay (payments), Stripe (international payments), Google Sheets, Zapier (1000+ apps), Make.com.
 - Webhooks: subscribe to events such as message.received, conversation.assigned, campaign.completed.
-- REST API: full programmatic access; OpenAPI spec at developers.trustcrm.in.
+- REST API: full programmatic access; OpenAPI spec at developers.WBMSG.in.
 - Coming soon: Salesforce, HubSpot, Shopify, WooCommerce.
 ## 14. Frequently Asked Questions
 ### 14.1 Why was my template rejected?
@@ -159,7 +159,7 @@ Meta rejects templates for: missing variables in marketing categories, promotion
 ### 14.2 Why didn't my campaign send to everyone?
 Common reasons: recipients have opted out, phone number invalid, recipient not on WhatsApp, or your template was paused by Meta. Review Failed in the campaign report; click any failure to see the cause.
 ### 14.3 Can I delete a message I sent?
-WhatsApp itself supports 'Delete for everyone' within ~2 days. TrustCRM exposes this from the message's three-dot menu. After the window, the message stays in the recipient's chat.
+WhatsApp itself supports 'Delete for everyone' within ~2 days. WBMSG exposes this from the message's three-dot menu. After the window, the message stays in the recipient's chat.
 ### 14.4 How do I move from another tool (WATI, AiSensy)?
 Export contacts and templates from your existing tool as CSV. Upload contacts via Contacts → Import; recreate (or have us migrate) templates. Your phone number ID can be moved without losing history; CS will guide you.
 ### 14.5 Is my customer data stored in India?
@@ -170,7 +170,7 @@ Maintenance windows are Saturday 02:00–04:00 IST with 7 days' notice. We desig
 
 | Term | Meaning |
 | --- | --- |
-| BSP | Business Solution Provider — Meta's term for partners like TrustCRM |
+| BSP | Business Solution Provider — Meta's term for partners like WBMSG |
 | 24-hour window | Period after a customer's last message during which you can reply freely |
 | Template | Pre-approved message content used outside the 24-hour window |
 | Segment | A saved filter over contacts, used in Campaigns and Automations |
@@ -179,12 +179,12 @@ Maintenance windows are Saturday 02:00–04:00 IST with 7 days' notice. We desig
 | RPA | Robotic Process Automation — out of scope; we are an interaction platform |
 
 ## 16. Getting Help
-- Help centre: trustcrm.in/help (searchable; &gt; 300 articles at GA).
+- Help centre: WBMSG.in/help (searchable; &gt; 300 articles at GA).
 - In-product chat: bottom-right of every page; live agent during business hours.
-- Email: support@trustcrm.in (24 h response Pro; 1 BD Starter).
+- Email: support@WBMSG.in (24 h response Pro; 1 BD Starter).
 - Phone (Enterprise only): printed on your contract.
-- Status: status.trustcrm.in (subscribe for updates).
-- Community: community.trustcrm.in (peer-to-peer; product team monitors).
+- Status: status.WBMSG.in (subscribe for updates).
+- Community: community.WBMSG.in (peer-to-peer; product team monitors).
 ## 17. Keyboard &amp; Touch Reference
 - All keyboard shortcuts: ? in any page.
 - Touch: long-press a conversation for context menu.
@@ -193,11 +193,11 @@ Maintenance windows are Saturday 02:00–04:00 IST with 7 days' notice. We desig
 - April 2026 — v1.0 GA: Inbox, Campaigns, Templates, AI Agent (beta).
 - Subscribe to the in-product Changelog for monthly updates.
 ## 19. Feedback
-We read every piece of feedback. Use the in-product feedback button (top-right) or write to feedback@trustcrm.in. Customer Advisory Board members have additional channels.
+We read every piece of feedback. Use the in-product feedback button (top-right) or write to feedback@WBMSG.in. Customer Advisory Board members have additional channels.
 ## 20. Version History
 
 | Version | Date | Author | Change |
 | --- | --- | --- | --- |
 | 1.0 | 26-Apr-2026 | Documentation Lead | Baseline at GA preparation |
 
-End of End-User Manual | TrustCRM v1.0 | April 2026 | IEEE 26511:2018
+End of End-User Manual | WBMSG v1.0 | April 2026 | IEEE 26511:2018

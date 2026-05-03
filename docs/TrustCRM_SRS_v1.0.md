@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Software Requirements Specification
 IEEE 29148-2018 Conformant Requirements Specification
 Version 1.0  |  April 2026
@@ -7,14 +7,14 @@ Document Owner
 Chief Product Officer / Lead Business Analyst
 ## 1. Introduction
 ### 1.1 Purpose
-This SRS specifies the functional and interface requirements of the TrustCRM platform release v1.0 (GA, March 2027). It is the authoritative requirements artefact derived from PRD v2.0 and is the contractual baseline for engineering, QA, and acceptance. Non-functional requirements are specified in the companion NFR Specification document.
+This SRS specifies the functional and interface requirements of the WBMSG platform release v1.0 (GA, March 2027). It is the authoritative requirements artefact derived from PRD v2.0 and is the contractual baseline for engineering, QA, and acceptance. Non-functional requirements are specified in the companion NFR Specification document.
 ### 1.2 Scope
-Software Product: TrustCRM — a multi-tenant SaaS CRM with WhatsApp as the primary engagement channel, AI-augmented automation, and white-label agency mode. The product is delivered as a Progressive Web App backed by a REST + Webhook API. Out of scope for v1.0: native mobile apps, voice/IVR, on-prem deployment.
+Software Product: WBMSG — a multi-tenant SaaS CRM with WhatsApp as the primary engagement channel, AI-augmented automation, and white-label agency mode. The product is delivered as a Progressive Web App backed by a REST + Webhook API. Out of scope for v1.0: native mobile apps, voice/IVR, on-prem deployment.
 ### 1.3 Definitions, Acronyms, Abbreviations
 
 | Term | Definition |
 | --- | --- |
-| Account / Tenant | An organisation paying for TrustCRM; isolated by organization_id |
+| Account / Tenant | An organisation paying for WBMSG; isolated by organization_id |
 | Sub-account | A child tenant under an Agency parent (M8) |
 | WAB | Weekly Active Business — the North Star metric |
 | BSP | Business Solution Provider — Meta-approved WhatsApp partner |
@@ -25,8 +25,8 @@ Software Product: TrustCRM — a multi-tenant SaaS CRM with WhatsApp as the prim
 | RBAC | Role-Based Access Control |
 
 ### 1.4 References
-- TrustCRM PRD v2.0 (April 2026) — product requirements baseline
-- TrustCRM Technical Architecture v1.0 — system design
+- WBMSG PRD v2.0 (April 2026) — product requirements baseline
+- WBMSG Technical Architecture v1.0 — system design
 - Meta WhatsApp Cloud API v22.0 — channel contract
 - IEEE 29148-2018 — Systems and software engineering — Life cycle processes — Requirements engineering
 - ISO/IEC 25010:2011 — Systems and software Quality Requirements and Evaluation
@@ -37,7 +37,7 @@ Software Product: TrustCRM — a multi-tenant SaaS CRM with WhatsApp as the prim
 - Each requirement is traceable to a PRD section and at least one test case (see PRD Traceability Matrix).
 ## 2. Overall Description
 ### 2.1 Product Perspective
-TrustCRM is a new, self-contained product. It depends on the following external systems via documented contracts: Meta WhatsApp Cloud API (messaging), Clerk (authentication), Stripe + Razorpay (billing), OpenAI/Anthropic (AI inference), Supabase Postgres (data), and AWS ap-south-1 (compute, storage, network).
+WBMSG is a new, self-contained product. It depends on the following external systems via documented contracts: Meta WhatsApp Cloud API (messaging), Clerk (authentication), Stripe + Razorpay (billing), OpenAI/Anthropic (AI inference), Supabase Postgres (data), and AWS ap-south-1 (compute, storage, network).
 ### 2.2 Product Functions (Module Map)
 - M1 Authentication &amp; Multi-Tenancy
 - M2 Contact &amp; Lead Management
@@ -187,7 +187,7 @@ GIVEN  a user signed in to org_A with JWT.org_id = "org_A"WHEN   the user issues
 ## 4. External Interface Requirements
 ### 4.1 User Interfaces
 - Web app (Next.js 15 App Router PWA) — installable on Android Home Screen and iOS Add-to-Home.
-- Conform to TrustCRM Design System v1.0 (separate document).
+- Conform to WBMSG Design System v1.0 (separate document).
 - WCAG 2.1 AA conformance MUST be measurable via Lighthouse and axe-core.
 - Mobile-first; minimum supported viewport 360 × 640.
 ### 4.2 Hardware Interfaces — N/A (browser-based).
@@ -215,4 +215,4 @@ GIVEN  a user signed in to org_A with JWT.org_id = "org_A"WHEN   the user issues
 - Requirements baseline frozen at end of Sprint 0; thereafter changes flow via Change &amp; Release Management Plan.
 - Each change request gets impact assessment (cost / schedule / risk) before approval.
 - Approved changes generate a new SRS minor version (v1.1, v1.2, …) and update the Traceability Matrix.
-End of SRS | TrustCRM v1.0 | April 2026 | Strictly Confidential | IEEE 29148-2018 conformant
+End of SRS | WBMSG v1.0 | April 2026 | Strictly Confidential | IEEE 29148-2018 conformant

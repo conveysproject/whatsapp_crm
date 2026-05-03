@@ -1,7 +1,7 @@
-/** @type {import("eslint").Linter.Config} */
+﻿/** @type {import("eslint").Linter.Config} */
 module.exports = {
   root: true,
-  extends: ["@trustcrm/eslint-config"],
+  extends: ["@WBMSG/eslint-config"],
   parserOptions: {
     project: "./tsconfig.json",
     tsconfigRootDir: __dirname,

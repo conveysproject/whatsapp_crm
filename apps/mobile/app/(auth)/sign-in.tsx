@@ -1,4 +1,4 @@
-import { useSignIn } from "@clerk/clerk-expo";
+﻿import { useSignIn } from "@clerk/clerk-expo";
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
 
@@ -21,7 +21,7 @@ export default function SignInScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>TrustCRM</Text>
+      <Text style={styles.title}>WBMSG</Text>
       <TextInput
         style={styles.input}
         placeholder="Email"

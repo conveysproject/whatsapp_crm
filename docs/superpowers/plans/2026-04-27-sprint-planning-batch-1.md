@@ -1,4 +1,4 @@
-# Sprint Planning Batch 1 — Implementation Plan
+﻿# Sprint Planning Batch 1 — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -90,18 +90,18 @@ terraform {
     aws = { source = "hashicorp/aws", version = "~> 5.0" }
   }
   backend "s3" {
-    bucket         = "trustcrm-tfstate"
+    bucket         = "WBMSG-tfstate"
     key            = "staging/terraform.tfstate"
     region         = "ap-south-1"
     encrypt        = true
-    dynamodb_table = "trustcrm-tflock"
+    dynamodb_table = "WBMSG-tflock"
   }
 }
 
 provider "aws" {
   region = var.aws_region
   default_tags {
-    tags = { Project = "TrustCRM", Environment = "staging", ManagedBy = "Terraform" }
+    tags = { Project = "WBMSG", Environment = "staging", ManagedBy = "Terraform" }
   }
 }
 
@@ -141,26 +141,26 @@ resource "aws_route_table_association" "public" {
 
 # Security Groups
 resource "aws_security_group" "alb" {
-  name   = "trustcrm-staging-alb"
+  name   = "WBMSG-staging-alb"
   vpc_id = aws_vpc.main.id
   ingress { from_port = 80;   to_port = 80;   protocol = "tcp"; cidr_blocks = ["0.0.0.0/0"] }
   ingress { from_port = 443;  to_port = 443;  protocol = "tcp"; cidr_blocks = ["0.0.0.0/0"] }
   egress  { from_port = 0;    to_port = 0;    protocol = "-1";  cidr_blocks = ["0.0.0.0/0"] }
 }
 resource "aws_security_group" "api" {
-  name   = "trustcrm-staging-api"
+  name   = "WBMSG-staging-api"
   vpc_id = aws_vpc.main.id
   ingress { from_port = 4000; to_port = 4000; protocol = "tcp"; security_groups = [aws_security_group.alb.id] }
   egress  { from_port = 0;    to_port = 0;    protocol = "-1";  cidr_blocks = ["0.0.0.0/0"] }
 }
 resource "aws_security_group" "rds" {
-  name   = "trustcrm-staging-rds"
+  name   = "WBMSG-staging-rds"
   vpc_id = aws_vpc.main.id
   ingress { from_port = 5432; to_port = 5432; protocol = "tcp"; security_groups = [aws_security_group.api.id] }
   egress  { from_port = 0;    to_port = 0;    protocol = "-1";  cidr_blocks = ["0.0.0.0/0"] }
 }
 resource "aws_security_group" "redis" {
-  name   = "trustcrm-staging-redis"
+  name   = "WBMSG-staging-redis"
   vpc_id = aws_vpc.main.id
   ingress { from_port = 6379; to_port = 6379; protocol = "tcp"; security_groups = [aws_security_group.api.id] }
   egress  { from_port = 0;    to_port = 0;    protocol = "-1";  cidr_blocks = ["0.0.0.0/0"] }
@@ -168,14 +168,14 @@ resource "aws_security_group" "redis" {
 
 # ALB
 resource "aws_lb" "api" {
-  name               = "trustcrm-staging-api"
+  name               = "WBMSG-staging-api"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 }
 resource "aws_lb_target_group" "api" {
-  name        = "trustcrm-staging-api"
+  name        = "WBMSG-staging-api"
   port        = 4000
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
@@ -219,14 +219,14 @@ git commit -m "infra(terraform): add staging VPC, subnets, SGs, and ALB"
 ```hcl
 # ECR
 resource "aws_ecr_repository" "api" {
-  name                 = "trustcrm/api"
+  name                 = "WBMSG/api"
   image_tag_mutability = "MUTABLE"
   image_scanning_configuration { scan_on_push = true }
 }
 
 # ECS Cluster
 resource "aws_ecs_cluster" "main" {
-  name = "trustcrm-staging"
+  name = "WBMSG-staging"
   setting { name = "containerInsights"; value = "enabled" }
 }
 
@@ -238,7 +238,7 @@ data "aws_iam_policy_document" "ecs_assume" {
   }
 }
 resource "aws_iam_role" "ecs_execution" {
-  name               = "trustcrm-staging-ecs-execution"
+  name               = "WBMSG-staging-ecs-execution"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
 }
 resource "aws_iam_role_policy_attachment" "ecs_execution" {
@@ -248,7 +248,7 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
 
 # ECS Task Definition
 resource "aws_ecs_task_definition" "api" {
-  family                   = "trustcrm-staging-api"
+  family                   = "WBMSG-staging-api"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = "512"
@@ -262,12 +262,12 @@ resource "aws_ecs_task_definition" "api" {
     environment = [
       { name = "NODE_ENV",     value = "staging" },
       { name = "API_PORT",     value = "4000" },
-      { name = "CORS_ORIGIN",  value = "https://staging.trustcrm.com" }
+      { name = "CORS_ORIGIN",  value = "https://staging.WBMSG.com" }
     ]
     logConfiguration = {
       logDriver = "awslogs"
       options = {
-        "awslogs-group"         = "/ecs/trustcrm-staging-api"
+        "awslogs-group"         = "/ecs/WBMSG-staging-api"
         "awslogs-region"        = var.aws_region
         "awslogs-stream-prefix" = "api"
       }
@@ -276,13 +276,13 @@ resource "aws_ecs_task_definition" "api" {
 }
 
 resource "aws_cloudwatch_log_group" "api" {
-  name              = "/ecs/trustcrm-staging-api"
+  name              = "/ecs/WBMSG-staging-api"
   retention_in_days = 7
 }
 
 # ECS Service
 resource "aws_ecs_service" "api" {
-  name            = "trustcrm-staging-api"
+  name            = "WBMSG-staging-api"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.api.arn
   desired_count   = 1
@@ -330,16 +330,16 @@ git commit -m "infra(terraform): add ECR, ECS cluster, task definition, and serv
 ```hcl
 # RDS Aurora PostgreSQL 16
 resource "aws_db_subnet_group" "main" {
-  name       = "trustcrm-staging"
+  name       = "WBMSG-staging"
   subnet_ids = aws_subnet.private[*].id
 }
 
 resource "aws_rds_cluster" "main" {
-  cluster_identifier      = "trustcrm-staging"
+  cluster_identifier      = "WBMSG-staging"
   engine                  = "aurora-postgresql"
   engine_version          = "16.1"
-  database_name           = "trustcrm"
-  master_username         = "trustcrm"
+  database_name           = "WBMSG"
+  master_username         = "WBMSG"
   master_password         = var.db_password
   db_subnet_group_name    = aws_db_subnet_group.main.name
   vpc_security_group_ids  = [aws_security_group.rds.id]
@@ -349,7 +349,7 @@ resource "aws_rds_cluster" "main" {
 
 resource "aws_rds_cluster_instance" "main" {
   count               = 1
-  identifier          = "trustcrm-staging-${count.index}"
+  identifier          = "WBMSG-staging-${count.index}"
   cluster_identifier  = aws_rds_cluster.main.id
   instance_class      = "db.t3.medium"
   engine              = aws_rds_cluster.main.engine
@@ -358,13 +358,13 @@ resource "aws_rds_cluster_instance" "main" {
 
 # ElastiCache Redis 7
 resource "aws_elasticache_subnet_group" "main" {
-  name       = "trustcrm-staging"
+  name       = "WBMSG-staging"
   subnet_ids = aws_subnet.private[*].id
 }
 
 resource "aws_elasticache_replication_group" "main" {
-  replication_group_id = "trustcrm-staging"
-  description          = "TrustCRM staging Redis"
+  replication_group_id = "WBMSG-staging"
+  description          = "WBMSG staging Redis"
   node_type            = "cache.t3.micro"
   num_cache_clusters   = 1
   engine_version       = "7.0"
@@ -379,7 +379,7 @@ resource "aws_elasticache_replication_group" "main" {
 
 ```hcl
 resource "aws_s3_bucket" "media" {
-  bucket = "trustcrm-staging-media"
+  bucket = "WBMSG-staging-media"
 }
 
 resource "aws_s3_bucket_versioning" "media" {
@@ -407,7 +407,7 @@ resource "aws_s3_bucket_public_access_block" "media" {
 
 ```hcl
 output "alb_dns_name" {
-  description = "Staging API ALB DNS — point staging.trustcrm.com CNAME here"
+  description = "Staging API ALB DNS — point staging.WBMSG.com CNAME here"
   value       = aws_lb.api.dns_name
 }
 output "ecr_api_url" {
@@ -457,7 +457,7 @@ git commit -m "infra(terraform): add RDS Aurora, ElastiCache Redis, S3, and outp
 - [ ] **Step 1: Install Sentry in API**
 
 ```bash
-pnpm --filter @trustcrm/api add @sentry/node
+pnpm --filter @WBMSG/api add @sentry/node
 ```
 
 - [ ] **Step 2: Write failing test for Sentry plugin registration**
@@ -497,7 +497,7 @@ describe("sentry plugin", () => {
 - [ ] **Step 3: Run test to confirm failure**
 
 ```bash
-pnpm --filter @trustcrm/api test src/plugins/sentry.test.ts
+pnpm --filter @WBMSG/api test src/plugins/sentry.test.ts
 ```
 
 Expected: FAIL — `Cannot find module './sentry.js'`
@@ -528,7 +528,7 @@ export const sentryPlugin: FastifyPluginAsync = async (fastify) => {
 - [ ] **Step 5: Run test to confirm pass**
 
 ```bash
-pnpm --filter @trustcrm/api test src/plugins/sentry.test.ts
+pnpm --filter @WBMSG/api test src/plugins/sentry.test.ts
 ```
 
 Expected: PASS
@@ -572,7 +572,7 @@ git commit -m "feat(api): add Sentry error tracking plugin"
 - [ ] **Step 1: Install Sentry in web**
 
 ```bash
-pnpm --filter @trustcrm/web add @sentry/nextjs
+pnpm --filter @WBMSG/web add @sentry/nextjs
 ```
 
 - [ ] **Step 2: Write `apps/web/sentry.client.config.ts`**
@@ -644,7 +644,7 @@ Use the `profiles` key so the agent only starts when explicitly requested (`dock
 - [ ] **Step 6: Type-check web**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
+pnpm --filter @WBMSG/web type-check
 ```
 
 Expected: no errors
@@ -708,43 +708,43 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build API
-        run: pnpm --filter @trustcrm/api build
+        run: pnpm --filter @WBMSG/api build
 
       - name: Build & push Docker image
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/trustcrm/api:$IMAGE_TAG -f apps/api/Dockerfile .
-          docker push $ECR_REGISTRY/trustcrm/api:$IMAGE_TAG
+          docker build -t $ECR_REGISTRY/WBMSG/api:$IMAGE_TAG -f apps/api/Dockerfile .
+          docker push $ECR_REGISTRY/WBMSG/api:$IMAGE_TAG
 
       - name: Deploy to ECS
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           aws ecs update-service \
-            --cluster trustcrm-staging \
-            --service trustcrm-staging-api \
+            --cluster WBMSG-staging \
+            --service WBMSG-staging-api \
             --force-new-deployment \
             --region ap-south-1
 
       - name: Wait for deployment
         run: |
           aws ecs wait services-stable \
-            --cluster trustcrm-staging \
-            --services trustcrm-staging-api \
+            --cluster WBMSG-staging \
+            --services WBMSG-staging-api \
             --region ap-south-1
 
       - name: Verify health endpoint
         run: |
           ALB_URL=$(aws elbv2 describe-load-balancers \
-            --names trustcrm-staging-api \
+            --names WBMSG-staging-api \
             --query 'LoadBalancers[0].DNSName' \
             --output text)
           curl --fail http://$ALB_URL/health
 ```
 
-> **Pre-requisite:** Create an IAM role `trustcrm-staging-deploy` with OIDC trust for `repo:TrustCRM/WhatsApp_CRM:ref:refs/heads/main` and permissions for ECR push + ECS update-service. Add its ARN as `AWS_STAGING_DEPLOY_ROLE_ARN` in GitHub Secrets. Also create `apps/api/Dockerfile` (see Step 2).
+> **Pre-requisite:** Create an IAM role `WBMSG-staging-deploy` with OIDC trust for `repo:WBMSG/WhatsApp_CRM:ref:refs/heads/main` and permissions for ECR push + ECS update-service. Add its ARN as `AWS_STAGING_DEPLOY_ROLE_ARN` in GitHub Secrets. Also create `apps/api/Dockerfile` (see Step 2).
 
 - [ ] **Step 2: Write `apps/api/Dockerfile`**
 
@@ -766,8 +766,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api ./apps/api
 COPY packages ./packages
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @trustcrm/shared build
-RUN pnpm --filter @trustcrm/api build
+RUN pnpm --filter @WBMSG/shared build
+RUN pnpm --filter @WBMSG/api build
 
 FROM node:20-slim AS runner
 WORKDIR /app
@@ -805,14 +805,14 @@ git commit -m "ci: add staging deploy pipeline with ECS and OIDC auth"
 - [ ] **Step 1: Install API dependencies**
 
 ```bash
-pnpm --filter @trustcrm/api add @prisma/client @clerk/backend
-pnpm --filter @trustcrm/api add -D prisma
+pnpm --filter @WBMSG/api add @prisma/client @clerk/backend
+pnpm --filter @WBMSG/api add -D prisma
 ```
 
 - [ ] **Step 2: Install web dependencies**
 
 ```bash
-pnpm --filter @trustcrm/web add @clerk/nextjs
+pnpm --filter @WBMSG/web add @clerk/nextjs
 ```
 
 - [ ] **Step 3: Initialise Prisma**
@@ -927,7 +927,7 @@ Ensure `docker compose up -d` is running, then:
 
 ```bash
 cd apps/api
-DATABASE_URL="postgresql://trustcrm:trustcrm@localhost:5432/trustcrm?schema=public" \
+DATABASE_URL="postgresql://WBMSG:WBMSG@localhost:5432/WBMSG?schema=public" \
   pnpm exec prisma migrate dev --name init_auth
 ```
 
@@ -952,7 +952,7 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 - [ ] **Step 4: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/api type-check
+pnpm --filter @WBMSG/api type-check
 ```
 
 Expected: no errors
@@ -1021,7 +1021,7 @@ describe("verifyClerkToken", () => {
 - [ ] **Step 3: Run test to confirm failure**
 
 ```bash
-pnpm --filter @trustcrm/api test src/lib/clerk.test.ts
+pnpm --filter @WBMSG/api test src/lib/clerk.test.ts
 ```
 
 Expected: FAIL — `Cannot find module './clerk.js'`
@@ -1055,7 +1055,7 @@ export async function verifyClerkToken(authHeader: string | undefined): Promise<
 - [ ] **Step 5: Run test to confirm pass**
 
 ```bash
-pnpm --filter @trustcrm/api test src/lib/clerk.test.ts
+pnpm --filter @WBMSG/api test src/lib/clerk.test.ts
 ```
 
 Expected: PASS
@@ -1085,7 +1085,7 @@ export default fp(prismaPlugin);
 Install `fastify-plugin`:
 
 ```bash
-pnpm --filter @trustcrm/api add fastify-plugin
+pnpm --filter @WBMSG/api add fastify-plugin
 ```
 
 - [ ] **Step 7: Write `apps/api/src/plugins/auth.ts`**
@@ -1179,7 +1179,7 @@ describe("auth plugin", () => {
 - [ ] **Step 9: Run tests**
 
 ```bash
-pnpm --filter @trustcrm/api test src/plugins/auth.test.ts
+pnpm --filter @WBMSG/api test src/plugins/auth.test.ts
 ```
 
 Expected: PASS
@@ -1264,7 +1264,7 @@ describe("organizations routes", () => {
 - [ ] **Step 2: Run to confirm failure**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/organizations.test.ts
+pnpm --filter @WBMSG/api test src/routes/organizations.test.ts
 ```
 
 Expected: FAIL — `Cannot find module './organizations.js'`
@@ -1509,7 +1509,7 @@ start().catch((err) => { console.error(err); process.exit(1); });
 - [ ] **Step 8: Run all API tests**
 
 ```bash
-pnpm --filter @trustcrm/api test
+pnpm --filter @WBMSG/api test
 ```
 
 Expected: All PASS (health + sentry + auth + organizations)
@@ -1531,7 +1531,7 @@ git commit -m "feat(api): add organizations, users, and invitations routes with 
 - [ ] **Step 1: Update `packages/shared/src/index.ts`**
 
 ```typescript
-// Shared domain types for TrustCRM
+// Shared domain types for WBMSG
 
 export type OrganizationId = string & { readonly __brand: "OrganizationId" };
 export type UserId = string & { readonly __brand: "UserId" };
@@ -1561,7 +1561,7 @@ export const API_VERSION = "v1" as const;
 - [ ] **Step 2: Build and type-check**
 
 ```bash
-pnpm --filter @trustcrm/shared build
+pnpm --filter @WBMSG/shared build
 pnpm type-check
 ```
 
@@ -1629,7 +1629,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TrustCRM",
+  title: "WBMSG",
   description: "WhatsApp-first CRM for growing businesses",
 };
 
@@ -1679,7 +1679,7 @@ export default function SignUpPage(): JSX.Element {
 - [ ] **Step 7: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
+pnpm --filter @WBMSG/web type-check
 ```
 
 Expected: no errors
@@ -1742,7 +1742,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-        <span className="font-semibold text-gray-900">TrustCRM</span>
+        <span className="font-semibold text-gray-900">WBMSG</span>
         <UserButton afterSignOutUrl="/sign-in" />
       </header>
       <main className="p-6">{children}</main>
@@ -1755,7 +1755,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 ```typescript
 import { apiClient } from "../../../lib/api";
-import type { ApiResponse } from "@trustcrm/shared";
+import type { ApiResponse } from "@WBMSG/shared";
 
 interface Organization {
   id: string;
@@ -1790,7 +1790,7 @@ export default async function SettingsPage(): Promise<JSX.Element> {
 
 ```typescript
 import { apiClient } from "../../../../lib/api";
-import type { ApiResponse, Role } from "@trustcrm/shared";
+import type { ApiResponse, Role } from "@WBMSG/shared";
 
 interface Member {
   id: string;
@@ -1840,7 +1840,7 @@ NEXT_PUBLIC_API_URL=http://localhost:4000
 - [ ] **Step 6: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
+pnpm --filter @WBMSG/web type-check
 ```
 
 Expected: no errors

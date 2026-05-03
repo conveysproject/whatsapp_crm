@@ -1,7 +1,7 @@
-import type { FastifyPluginAsync } from "fastify";
+﻿import type { FastifyPluginAsync } from "fastify";
 import type { CampaignStatus } from "@prisma/client";
 import { campaignQueue } from "../lib/queue.js";
-import type { CampaignId, SegmentId, TemplateId } from "@trustcrm/shared";
+import type { CampaignId, SegmentId, TemplateId } from "@WBMSG/shared";
 
 interface CampaignBody {
   name: string;

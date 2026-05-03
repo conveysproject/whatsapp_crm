@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Database Schema Specification
 ## Complete Data Model
 Version 1.0
@@ -14,7 +14,7 @@ Strictly Confidential
 # Table of Contents
 
 # 1. Schema Overview
-The TrustCRM database schema is organized into six logical domains, each representing a distinct area of functionality. All tables include organization_id for multi-tenant data isolation enforced through PostgreSQL Row Level Security (RLS).
+The WBMSG database schema is organized into six logical domains, each representing a distinct area of functionality. All tables include organization_id for multi-tenant data isolation enforced through PostgreSQL Row Level Security (RLS).
 ## 1.1 Schema Domains
 
 | Domain | Tables | Description |
@@ -28,7 +28,7 @@ The TrustCRM database schema is organized into six logical domains, each represe
 
 # 2. Core Domain Tables
 ## 2.1 organizations
-Description: Top-level tenant entity. Each organization represents a separate business using TrustCRM.
+Description: Top-level tenant entity. Each organization represents a separate business using WBMSG.
 
 | Column | Type | Constraints | Description |
 | --- | --- | --- | --- |
@@ -88,7 +88,7 @@ GIN INDEX on tags (for array containment queries)
 GIN INDEX on custom_fields (for JSONB queries)
 
 # 4. Complete Table List
-The following tables complete the TrustCRM schema. Full specifications for each table follow the same pattern as shown above.
+The following tables complete the WBMSG schema. Full specifications for each table follow the same pattern as shown above.
 ## 4.1 All Tables by Domain
 
 | Domain | Table Name | Purpose |
@@ -129,4 +129,4 @@ flow_executions.flow_id → flows.id (many-to-one)
 predictions.contact_id → contacts.id (many-to-one)
 
 End of Database Schema Document
-TrustCRM v1.0 | April 2026 | Strictly Confidential
+WBMSG v1.0 | April 2026 | Strictly Confidential

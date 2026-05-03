@@ -1,4 +1,4 @@
-# Sprint 10 — Campaign Scheduler
+﻿# Sprint 10 — Campaign Scheduler
 
 ## Sprint Goal
 Let marketing teams schedule WhatsApp broadcast campaigns to a defined audience segment using an approved template — delivering messages at the right time without requiring engineers to run scripts.
@@ -30,7 +30,7 @@ Let marketing teams schedule WhatsApp broadcast campaigns to a defined audience 
 - [ ] Campaign worker runs: contacts in segment receive the template message on WhatsApp; status → `completed`
 - [ ] `/campaigns/new` form submits with template + segment + optional schedule time
 - [ ] `/campaigns` list shows status badges updating in real-time (page refresh)
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `campaigns.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `campaigns.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

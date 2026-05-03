@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+﻿import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
@@ -35,17 +35,17 @@ describe("GET /v1/webhooks/whatsapp", () => {
   afterEach(async () => { await app.close(); });
 
   it("returns challenge when verify_token matches", async () => {
-    process.env["WA_VERIFY_TOKEN"] = "trustcrm_verify_2026";
+    process.env["WA_VERIFY_TOKEN"] = "WBMSG_verify_2026";
     const res = await app.inject({
       method: "GET",
-      url: "/v1/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=trustcrm_verify_2026&hub.challenge=testchallenge",
+      url: "/v1/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=WBMSG_verify_2026&hub.challenge=testchallenge",
     });
     expect(res.statusCode).toBe(200);
     expect(res.body).toBe("testchallenge");
   });
 
   it("returns 403 on wrong token", async () => {
-    process.env["WA_VERIFY_TOKEN"] = "trustcrm_verify_2026";
+    process.env["WA_VERIFY_TOKEN"] = "WBMSG_verify_2026";
     const res = await app.inject({
       method: "GET",
       url: "/v1/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=abc",
@@ -80,7 +80,7 @@ describe("POST /v1/webhooks/whatsapp", () => {
               from: "+919876543210",
               timestamp: "1714180800",
               type: "text",
-              text: { body: "Hello TrustCRM" },
+              text: { body: "Hello WBMSG" },
             }],
           },
         }],
@@ -100,7 +100,7 @@ describe("POST /v1/webhooks/whatsapp", () => {
       expect.objectContaining({
         organizationId: "org-1",
         whatsappContactPhone: "+919876543210",
-        body: "Hello TrustCRM",
+        body: "Hello WBMSG",
         whatsappMessageId: "wamid.abc",
       })
     );

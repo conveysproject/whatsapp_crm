@@ -1,5 +1,5 @@
-resource "aws_s3_bucket" "media" {
-  bucket = "trustcrm-staging-media"
+﻿resource "aws_s3_bucket" "media" {
+  bucket = "WBMSG-staging-media"
 }
 
 resource "aws_s3_bucket_versioning" "media" {

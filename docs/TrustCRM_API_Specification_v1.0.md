@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # API Specification
 ## REST API v1 Reference
 Version 1.0
@@ -7,7 +7,7 @@ Strictly Confidential
 
 | Document Owner | Backend Lead / API Architect |
 | --- | --- |
-| Base URL | https://api.trustcrm.com/v1 |
+| Base URL | https://api.WBMSG.com/v1 |
 | Protocol | HTTPS only (TLS 1.3) |
 | Format | JSON (application/json) |
 
@@ -15,7 +15,7 @@ Strictly Confidential
 
 # 1. Authentication
 ## 1.1 Overview
-TrustCRM API uses JWT (JSON Web Tokens) for authentication, managed by Clerk. All API requests must include a valid access token in the Authorization header.
+WBMSG API uses JWT (JSON Web Tokens) for authentication, managed by Clerk. All API requests must include a valid access token in the Authorization header.
 ## 1.2 Authentication Methods
 
 | Method | Use Case | Header Format |
@@ -106,7 +106,7 @@ Request Body:
 }
 
 # 5. Complete API Endpoint Reference
-The following table summarizes all TrustCRM API endpoints. Detailed specifications for each endpoint follow the patterns shown above.
+The following table summarizes all WBMSG API endpoints. Detailed specifications for each endpoint follow the patterns shown above.
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
@@ -126,7 +126,7 @@ The following table summarizes all TrustCRM API endpoints. Detailed specificatio
 | POST | /v1/flows | Create automation workflow |
 
 # 6. Webhooks
-TrustCRM delivers real-time events via HTTP POST webhooks. Organizations can register webhook URLs to receive notifications about messages, conversation updates, and system events.
+WBMSG delivers real-time events via HTTP POST webhooks. Organizations can register webhook URLs to receive notifications about messages, conversation updates, and system events.
 ## 6.1 Available Events
 
 | Event Type | Description |
@@ -138,4 +138,4 @@ TrustCRM delivers real-time events via HTTP POST webhooks. Organizations can reg
 | template.status_updated | WhatsApp template approval status changed (pending → approved/rejected) |
 
 End of API Specification Document
-TrustCRM v1.0 | April 2026 | Strictly Confidential
+WBMSG v1.0 | April 2026 | Strictly Confidential

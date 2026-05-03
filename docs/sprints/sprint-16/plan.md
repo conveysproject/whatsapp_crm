@@ -1,4 +1,4 @@
-# Sprint 16 — Implementation Plan
+﻿# Sprint 16 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-28-sprint-planning-batch-4.md`
 > Task 7 covers Sprint 16.
@@ -16,7 +16,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `chatbots.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `chatbots.test.ts`
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Create chatbot linked to a "FAQ" flow → activate

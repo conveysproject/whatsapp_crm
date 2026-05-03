@@ -1,4 +1,4 @@
-# Sprint 14 — Voice Transcription
+﻿# Sprint 14 — Voice Transcription
 
 ## Sprint Goal
 Automatically transcribe WhatsApp voice notes so agents can read them instead of playing audio, cutting review time for voice-heavy support queues.
@@ -28,7 +28,7 @@ Automatically transcribe WhatsApp voice notes so agents can read them instead of
 - [ ] Inbound WhatsApp voice note → `message.transcription` populated within 30 s
 - [ ] `POST /v1/messages/:id/transcribe` returns transcript on demand
 - [ ] VoiceMessage component renders audio controls + transcript in inbox
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `transcriptions.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `transcriptions.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

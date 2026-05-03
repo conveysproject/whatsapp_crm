@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+﻿import Anthropic from "@anthropic-ai/sdk";
 
 function getClient(): Anthropic {
   if (!process.env["ANTHROPIC_API_KEY"]) throw new Error("ANTHROPIC_API_KEY is not set");
@@ -13,7 +13,7 @@ interface Message {
   content: string;
 }
 
-const SYSTEM_PROMPT = `You are a helpful customer support assistant for TrustCRM, a WhatsApp-first CRM.
+const SYSTEM_PROMPT = `You are a helpful customer support assistant for WBMSG, a WhatsApp-first CRM.
 Your job is to help support agents respond to customer messages.
 Be concise, professional, and empathetic. Respond in the same language as the customer.`;
 

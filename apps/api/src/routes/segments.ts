@@ -1,6 +1,6 @@
-import type { FastifyPluginAsync } from "fastify";
+﻿import type { FastifyPluginAsync } from "fastify";
 import { evaluateSegment, type SegmentFilter } from "../lib/segment-evaluator.js";
-import type { SegmentId } from "@trustcrm/shared";
+import type { SegmentId } from "@WBMSG/shared";
 
 interface SegmentBody {
   name: string;

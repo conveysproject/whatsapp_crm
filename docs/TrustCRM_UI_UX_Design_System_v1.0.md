@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # UI/UX Design System &amp; Style Guide
 Visual &amp; Interaction Standards — ISO 9241-210 Human-Centred Design
 Version 1.0  |  April 2026
@@ -6,7 +6,7 @@ Strictly Confidential
 Document Owner
 Design Lead
 ## 1. Purpose &amp; Scope
-This guide defines the visual language, interaction patterns, and accessibility standards for every TrustCRM surface — web app, marketing site, transactional emails, in-product notifications, and customer-facing documentation. Designers and engineers consult this guide before shipping; deviations require Design-Lead sign-off and live in a Design Decision Record.
+This guide defines the visual language, interaction patterns, and accessibility standards for every WBMSG surface — web app, marketing site, transactional emails, in-product notifications, and customer-facing documentation. Designers and engineers consult this guide before shipping; deviations require Design-Lead sign-off and live in a Design Decision Record.
 ## 2. Brand Foundation
 ### 2.1 Brand Voice
 - Trustworthy: precise, accountable, never overpromising.
@@ -213,4 +213,4 @@ This guide defines the visual language, interaction patterns, and accessibility 
 | --- | --- | --- | --- |
 | 1.0 | 26-Apr-2026 | Design Lead | Baseline at end of Sprint 0; tokens + 6 component variants live in Storybook |
 
-End of UI/UX Design System &amp; Style Guide | TrustCRM v1.0 | April 2026 | ISO 9241-210
+End of UI/UX Design System &amp; Style Guide | WBMSG v1.0 | April 2026 | ISO 9241-210

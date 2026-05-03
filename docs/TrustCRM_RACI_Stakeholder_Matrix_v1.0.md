@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # RACI &amp; Stakeholder Matrix
 Roles, Accountability and Stakeholder Engagement Plan
 Version 1.0  |  April 2026
@@ -6,7 +6,7 @@ Strictly Confidential
 Document Owner
 Head of PMO
 ## 1. Purpose
-This matrix establishes who is Responsible, Accountable, Consulted, and Informed (RACI) for every cross-functional decision and deliverable in the TrustCRM programme. It is the source of truth for escalation paths, decision rights, and stakeholder engagement frequency.
+This matrix establishes who is Responsible, Accountable, Consulted, and Informed (RACI) for every cross-functional decision and deliverable in the WBMSG programme. It is the source of truth for escalation paths, decision rights, and stakeholder engagement frequency.
 ## 2. Legend
 - R — Responsible: does the work (can be more than one).
 - A — Accountable: signs off; only one per row.
@@ -168,4 +168,4 @@ This matrix establishes who is Responsible, Accountable, Consulted, and Informed
 - Quarterly review by PMO; sign-off by VPE.
 - Re-baselined at every phase exit and on org-chart changes.
 - All open decisions older than 30 days flagged for closure at the next Steering Committee.
-End of RACI &amp; Stakeholder Matrix | TrustCRM v1.0 | April 2026 | PMBOK 13
+End of RACI &amp; Stakeholder Matrix | WBMSG v1.0 | April 2026 | PMBOK 13

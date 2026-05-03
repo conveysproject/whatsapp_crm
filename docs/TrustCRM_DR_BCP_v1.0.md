@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Disaster Recovery &amp; Business Continuity Plan
 ISO 22301:2019 — Business Continuity Management System
 Version 1.0  |  April 2026
@@ -6,7 +6,7 @@ Strictly Confidential
 Document Owner
 Head of Platform / SRE Lead
 ## 1. Purpose &amp; Scope
-This plan describes how TrustCRM continues to deliver service and recovers from incidents that disrupt normal operations. It covers all production systems hosted in AWS ap-south-1, the corporate office, and all critical business processes. Conformance reference: ISO 22301:2019 §8.4 (Business Impact Analysis) and §8.5 (Recovery Strategies).
+This plan describes how WBMSG continues to deliver service and recovers from incidents that disrupt normal operations. It covers all production systems hosted in AWS ap-south-1, the corporate office, and all critical business processes. Conformance reference: ISO 22301:2019 §8.4 (Business Impact Analysis) and §8.5 (Recovery Strategies).
 ## 2. Definitions
 
 | Term | Meaning |
@@ -60,7 +60,7 @@ The BIA below identifies critical business processes, the systems that support t
 ### 5.2 Region Failover (Tier-1 Region Outage)
 1. Detection: &gt; 5 min total unavailability of ap-south-1 confirmed by status.aws.amazon.com and internal probes.
 1. Decision: Incident Commander invokes 'Region Switch' runbook; CTO sign-off.
-1. DNS cutover (Cloudflare): trustcrm.in routes to ap-south-2 endpoints (TTL 60 s).
+1. DNS cutover (Cloudflare): WBMSG.in routes to ap-south-2 endpoints (TTL 60 s).
 1. Database promotion: ap-south-2 read-replica promoted to primary; WAL position recorded.
 1. Verification: smoke test passes; PagerDuty cleared; status page updated.
 1. Communication: status page + email to all customers within 30 min of decision.
@@ -113,7 +113,7 @@ The BIA below identifies critical business processes, the systems that support t
 | Audience | Channel | Cadence | Owner |
 | --- | --- | --- | --- |
 | Affected customers | In-app banner + email | Within 30 min of decision; updates every 60 min | CS |
-| All customers | status.trustcrm.in | Real-time | Commander |
+| All customers | status.WBMSG.in | Real-time | Commander |
 | Media / public | Press statement | Only on Tier-1 with material impact | CEO + Marketing |
 | Regulators (DPDP Board) | Formal notification | Within 72 h of awareness, if data affected | DPO |
 | Insurance carrier | Notification | Within 24 h of declaration | Finance |
@@ -159,4 +159,4 @@ The BIA below identifies critical business processes, the systems that support t
 | --- | --- | --- | --- |
 | 1.0 | 26-Apr-2026 | Platform Lead | Baseline ISO 22301-conformant plan |
 
-End of DR &amp; BCP | TrustCRM v1.0 | April 2026 | ISO 22301:2019
+End of DR &amp; BCP | WBMSG v1.0 | April 2026 | ISO 22301:2019

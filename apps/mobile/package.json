@@ -1,5 +1,5 @@
-{
-  "name": "@trustcrm/mobile",
+﻿{
+  "name": "@WBMSG/mobile",
   "version": "0.0.1",
   "private": true,
   "main": "expo-router/entry",
@@ -13,7 +13,7 @@
   "dependencies": {
     "@clerk/clerk-expo": "^2.19.31",
     "@tanstack/react-query": "^5.100.5",
-    "@trustcrm/shared": "workspace:*",
+    "@WBMSG/shared": "workspace:*",
     "expo": "~51.0.0",
     "expo-constants": "^55.0.15",
     "expo-device": "^55.0.15",
@@ -28,7 +28,7 @@
     "react-native": "0.74.1"
   },
   "devDependencies": {
-    "@trustcrm/tsconfig": "workspace:*",
+    "@WBMSG/tsconfig": "workspace:*",
     "@types/react": "~18.2.45",
     "typescript": "^5.1.3"
   }

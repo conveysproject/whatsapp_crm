@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Operations Runbook &amp; SOPs
 ITIL 4 Service Operation — Standard Operating Procedures
 Version 1.0  |  April 2026
@@ -16,20 +16,20 @@ This runbook is the day-to-day operations manual for SRE and on-call engineers. 
 
 | Service | Repo | Runtime | Datastore | Owner Pod |
 | --- | --- | --- | --- | --- |
-| api-gateway | trustcrm/api-gateway | Node.js 22 / Vercel | Postgres + Redis | Platform |
-| inbox-svc | trustcrm/inbox | Node.js 22 / Vercel | Postgres + Redis | Backend |
-| meta-connector | trustcrm/meta-connector | Node.js 22 / Fly.io | Postgres + Kafka | Backend |
-| webhook-relay | trustcrm/webhook-relay | Node.js 22 / Vercel | Postgres outbox | Platform |
-| campaigns-svc | trustcrm/campaigns | Node.js 22 / Vercel | Postgres + Redis | Backend |
-| ai-orchestrator | trustcrm/ai-orch | Node.js 22 / Vercel | Postgres + Vector DB | AI |
-| analytics-svc | trustcrm/analytics | Python 3.12 / Lambda | ClickHouse | Data |
-| billing-svc | trustcrm/billing | Node.js 22 / Vercel | Postgres | Backend |
-| web-app | trustcrm/web | Next.js 15 / Vercel | — | Frontend |
+| api-gateway | WBMSG/api-gateway | Node.js 22 / Vercel | Postgres + Redis | Platform |
+| inbox-svc | WBMSG/inbox | Node.js 22 / Vercel | Postgres + Redis | Backend |
+| meta-connector | WBMSG/meta-connector | Node.js 22 / Fly.io | Postgres + Kafka | Backend |
+| webhook-relay | WBMSG/webhook-relay | Node.js 22 / Vercel | Postgres outbox | Platform |
+| campaigns-svc | WBMSG/campaigns | Node.js 22 / Vercel | Postgres + Redis | Backend |
+| ai-orchestrator | WBMSG/ai-orch | Node.js 22 / Vercel | Postgres + Vector DB | AI |
+| analytics-svc | WBMSG/analytics | Python 3.12 / Lambda | ClickHouse | Data |
+| billing-svc | WBMSG/billing | Node.js 22 / Vercel | Postgres | Backend |
+| web-app | WBMSG/web | Next.js 15 / Vercel | — | Frontend |
 
 ## 4. Daily Operational Checks
 ### 4.1 Morning Health Check (08:30 IST, Mon–Fri)
 1. Open Datadog overview dashboard. Confirm: error rate green, latency green, error budget burn within plan.
-1. Open status.trustcrm.in. Confirm all services 'Operational'.
+1. Open status.WBMSG.in. Confirm all services 'Operational'.
 1. Review overnight PagerDuty incidents. Acknowledge and triage any open.
 1. Check the Renovate dashboard for pending dependency PRs flagged 'security'.
 1. Skim #ops-alerts and #sec-alerts for unactioned alerts. Triage to JIRA.
@@ -93,7 +93,7 @@ This runbook is the day-to-day operations manual for SRE and on-call engineers. 
 1. First on-call shift: pair with senior for first 24 h.
 1. Remove from rotation if any P1 mishandled in first 30 d; re-onboard.
 ## 11. SOP-007 — Process a DSAR (Data Subject Access Request)
-1. Receive request via dpo@trustcrm.in or in-product form.
+1. Receive request via dpo@WBMSG.in or in-product form.
 1. DPO logs in DSAR Register with received-date and 30-day deadline.
 1. Verify identity: SSO session for account holders; 2-factor (email + phone or government ID) for third parties.
 1. Engineering on-call runs export script: scripts/dsar_export.py --user &lt;id&gt;.
@@ -121,7 +121,7 @@ This runbook is the day-to-day operations manual for SRE and on-call engineers. 
 1. Security Lead reviews: SOC 2 / ISO 27001 attestation, sub-processors of the vendor, data residency.
 1. DPO reviews: DPA in place, lawful basis, GDPR/DPDP compatibility, transfer mechanism.
 1. Legal reviews contract; CFO approves spend.
-1. Add to sub-processor list page (trustcrm.in/security/subprocessors); 30-day customer notice email.
+1. Add to sub-processor list page (WBMSG.in/security/subprocessors); 30-day customer notice email.
 1. Implement integration with feature flag default-off; ramp per Change &amp; Release plan.
 ## 15. SOP-011 — Recover from Webhook Outbound Storm
 1. Detection: outbound queue depth &gt; 50K OR receiver-error rate &gt; 20% for 5 min.
@@ -169,4 +169,4 @@ This runbook is the day-to-day operations manual for SRE and on-call engineers. 
 | --- | --- | --- | --- |
 | 1.0 | 26-Apr-2026 | SRE Lead | Initial set of 12 SOPs |
 
-End of Operations Runbook &amp; SOPs | TrustCRM v1.0 | April 2026 | ITIL 4
+End of Operations Runbook &amp; SOPs | WBMSG v1.0 | April 2026 | ITIL 4

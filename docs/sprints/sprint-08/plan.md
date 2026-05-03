@@ -1,4 +1,4 @@
-# Sprint 8 — Implementation Plan
+﻿# Sprint 8 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-27-sprint-planning-batch-3.md`
 > Tasks 3–4 cover Sprint 8.
@@ -16,7 +16,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `segments.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `segments.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Create segment "Hot Leads" with filter `lifecycleStage = lead` → evaluate → returns contacts in lead stage

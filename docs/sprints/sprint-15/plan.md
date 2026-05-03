@@ -1,4 +1,4 @@
-# Sprint 15 — Implementation Plan
+﻿# Sprint 15 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-28-sprint-planning-batch-4.md`
 > Tasks 5–6 cover Sprint 15.
@@ -16,7 +16,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `flows.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `flows.test.ts`
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Create a flow with trigger `inbound_message` → action `send_message` → `end`
@@ -36,7 +36,7 @@ pnpm exec prisma generate
 
 Install new dependency in web app:
 ```bash
-pnpm --filter @trustcrm/web add reactflow
+pnpm --filter @WBMSG/web add reactflow
 ```
 
 No new env vars required.

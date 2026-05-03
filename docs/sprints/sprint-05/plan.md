@@ -1,4 +1,4 @@
-# Sprint 5 — Implementation Plan
+﻿# Sprint 5 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-27-sprint-planning-batch-2.md`
 > Tasks 15–19 cover Sprint 5.
@@ -6,8 +6,8 @@
 ## Pre-conditions
 - Sprint 2 complete and merged (Clerk auth, dashboard layout skeleton)
 - Sprint 4 complete and merged (`GET /v1/contacts` works)
-- Local API running: `pnpm --filter @trustcrm/api dev` (port 4000)
-- Local web running: `pnpm --filter @trustcrm/web dev` (port 3000)
+- Local API running: `pnpm --filter @WBMSG/api dev` (port 4000)
+- Local web running: `pnpm --filter @WBMSG/web dev` (port 3000)
 
 ## Task Summary
 

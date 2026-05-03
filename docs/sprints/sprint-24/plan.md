@@ -1,4 +1,4 @@
-# Sprint 24 — Implementation Plan
+﻿# Sprint 24 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-28-sprint-planning-batch-5.md`
 > Tasks 9–11 cover Sprint 24.
@@ -19,7 +19,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `billing.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `billing.test.ts`
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] `pytest services/ml/tests/ -v` — all pass
@@ -39,13 +39,13 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_STARTER_PRICE_ID=price_...
 STRIPE_GROWTH_PRICE_ID=price_...
 STRIPE_ENTERPRISE_PRICE_ID=price_...
-WEB_BASE_URL=https://app.trustcrm.in
+WEB_BASE_URL=https://app.WBMSG.in
 ```
 
 Install Stripe SDK:
 ```bash
-pnpm --filter @trustcrm/api add stripe
-pnpm --filter @trustcrm/web add @stripe/stripe-js
+pnpm --filter @WBMSG/api add stripe
+pnpm --filter @WBMSG/web add @stripe/stripe-js
 ```
 
 Run migration:
@@ -56,7 +56,7 @@ pnpm exec prisma generate
 ```
 
 Configure Stripe webhook endpoint in Stripe Dashboard:
-- URL: `https://api.trustcrm.in/v1/billing/webhook`
+- URL: `https://api.WBMSG.in/v1/billing/webhook`
 - Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
 
 ## GA Launch Checklist
@@ -70,7 +70,7 @@ Configure Stripe webhook endpoint in Stripe Dashboard:
 - [ ] ECS auto-scaling: `minCount=2`, `maxCount=10`, scale-out at 70% CPU
 - [ ] Mobile app (iOS + Android) in public App Store / Play Store
 - [ ] Self-serve signup: new user → onboarding wizard → inbox receiving messages end-to-end
-- [ ] `GET https://api.trustcrm.in/health` → 200 on production
+- [ ] `GET https://api.WBMSG.in/health` → 200 on production
 - [ ] DNS, SSL certificate, and ALB health checks verified
 - [ ] PagerDuty on-call rotation active for P1/P2 alerts
 - [ ] Runbook reviewed by all engineers and SRE

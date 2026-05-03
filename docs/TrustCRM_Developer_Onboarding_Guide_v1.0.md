@@ -1,10 +1,10 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Developer Onboarding Guide
 ## Welcome to the Team
 Version 1.0 | April 2026
 For Internal Use
 ## Welcome aboard! 🎉
-We&apos;re thrilled to have you on the TrustCRM team. This guide will help you set up your environment, understand how we work, and ship your first feature. Most engineers ship their first commit on Day 1 and their first feature within Week 1. Let&apos;s make that happen for you too.
+We&apos;re thrilled to have you on the WBMSG team. This guide will help you set up your environment, understand how we work, and ship your first feature. Most engineers ship their first commit on Day 1 and their first feature within Week 1. Let&apos;s make that happen for you too.
 
 # Table of Contents
 
@@ -14,7 +14,7 @@ Your first day should focus on access, environment setup, and meeting your team.
 Confirm you have access to all of these. If anything is missing, ping #onboarding in Slack.
 Google Workspace (email, drive, calendar)
 Slack workspace and joined relevant channels
-GitHub: trustcrm organization, added to your pod&apos;s team
+GitHub: WBMSG organization, added to your pod&apos;s team
 Linear: workspace access, assigned to your pod&apos;s project
 AWS console (read-only by default; write access requires manager approval)
 1Password vault for shared credentials
@@ -53,8 +53,8 @@ Tailwind CSS IntelliSense
 GitLens
 Error Lens
 ## 2.2 Clone and Install
-git clone git@github.com:trustcrm/trustcrm.git
-cd trustcrm
+git clone git@github.com:WBMSG/WBMSG.git
+cd WBMSG
 pnpm install
 This installs dependencies for all apps and packages in the monorepo.
 ## 2.3 Environment Variables
@@ -72,10 +72,10 @@ pnpm db:seed
 This applies all Prisma migrations and seeds the database with sample data: 2 organizations, 5 users, 100 contacts, and a few sample conversations.
 ## 2.6 Run the Apps
 pnpm dev
-This starts the API on port 3001, the web app on port 3000, and the ML service on port 8000. Visit http://localhost:3000 and log in with the seeded test account: dev@trustcrm.test / password123.
+This starts the API on port 3001, the web app on port 3000, and the ML service on port 8000. Visit http://localhost:3000 and log in with the seeded test account: dev@WBMSG.test / password123.
 
 # 3. Repository Structure
-TrustCRM lives in a single monorepo managed by Turborepo and pnpm workspaces. This keeps all our code in one place while allowing independent deployment of each application.
+WBMSG lives in a single monorepo managed by Turborepo and pnpm workspaces. This keeps all our code in one place while allowing independent deployment of each application.
 ## 3.1 Top-Level Layout
 
 | Path | Purpose |
@@ -289,11 +289,11 @@ Your pod&apos;s channel: #pod-platform / #pod-messaging / #pod-crm / #pod-ai
 #random — non-work chitchat, pet pictures encouraged
 
 # 11. A Note from the Team
-Building TrustCRM is a long journey, and we&apos;re glad you&apos;re walking it with us. A few things to keep in mind as you settle in:
+Building WBMSG is a long journey, and we&apos;re glad you&apos;re walking it with us. A few things to keep in mind as you settle in:
 Ask questions. Nobody expects you to know how everything works. The faster you ask, the faster you ramp. Your fresh eyes also catch things we&apos;ve stopped seeing.
 Make small mistakes early. We have a strong safety net: tests, code review, staging, feature flags, easy rollbacks. Use it. We&apos;d rather you ship and learn than over-think and stall.
 Improve as you go. If something is confusing, document it. If a process is broken, raise it. If a runbook is wrong, fix it. The engineering culture is shaped by every commit you make to it.
-Remember why we&apos;re here. TrustCRM exists to give small businesses the same superpowers that big companies have. Every feature you ship makes someone&apos;s day a little easier. Don&apos;t lose sight of that.
+Remember why we&apos;re here. WBMSG exists to give small businesses the same superpowers that big companies have. Every feature you ship makes someone&apos;s day a little easier. Don&apos;t lose sight of that.
 ## Welcome aboard. We&apos;re glad you&apos;re here. ❤️
 End of Developer Onboarding Guide
-TrustCRM v1.0 | April 2026 | For Internal Use
+WBMSG v1.0 | April 2026 | For Internal Use

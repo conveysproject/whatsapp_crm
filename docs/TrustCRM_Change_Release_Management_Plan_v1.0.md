@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Change &amp; Release Management Plan
 ITIL 4 Change Enablement + SOC 2 CC8 (Change Management)
 Version 1.0  |  April 2026
@@ -6,7 +6,7 @@ Strictly Confidential
 Document Owner
 VP Engineering / SRE Lead
 ## 1. Purpose &amp; Scope
-This plan defines how every change to TrustCRM production is proposed, reviewed, approved, deployed, verified, and audited. It applies to application code, configuration, database schema, infrastructure, third-party integrations, and operational runbooks. It satisfies SOC 2 Common Criteria CC8.1 (change management).
+This plan defines how every change to WBMSG production is proposed, reviewed, approved, deployed, verified, and audited. It applies to application code, configuration, database schema, infrastructure, third-party integrations, and operational runbooks. It satisfies SOC 2 Common Criteria CC8.1 (change management).
 ## 2. Definitions
 
 | Term | Meaning |
@@ -142,4 +142,4 @@ This plan defines how every change to TrustCRM production is proposed, reviewed,
 | --- | --- | --- | --- |
 | 1.0 | 26-Apr-2026 | VP Engineering | Baseline at end of Sprint 0; SOC 2 CC8 mapping complete |
 
-End of Change &amp; Release Management Plan | TrustCRM v1.0 | April 2026 | ITIL 4 + SOC 2 CC8
+End of Change &amp; Release Management Plan | WBMSG v1.0 | April 2026 | ITIL 4 + SOC 2 CC8

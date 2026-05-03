@@ -1,4 +1,4 @@
-# Sprint 18 — Implementation Plan
+﻿# Sprint 18 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-28-sprint-planning-batch-4.md`
 > Task 10 covers Sprint 18.
@@ -16,7 +16,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `trust-score.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `trust-score.test.ts`
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: `docker compose up -d ml-service` → container healthy

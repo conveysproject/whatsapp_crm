@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Sprint Execution Plan
 ## 12-Month Delivery Roadmap
 Version 1.0 | April 2026
@@ -14,7 +14,7 @@ Strictly Confidential
 # Table of Contents
 
 # 1. Executive Summary
-This document defines the complete sprint-by-sprint execution plan to deliver TrustCRM from initial setup through general availability over a 12-month period. The plan is structured around 24 two-week sprints organized into four delivery phases, each producing shippable, testable increments aligned with our PRD requirements.
+This document defines the complete sprint-by-sprint execution plan to deliver WBMSG from initial setup through general availability over a 12-month period. The plan is structured around 24 two-week sprints organized into four delivery phases, each producing shippable, testable increments aligned with our PRD requirements.
 ## 1.1 Phase Structure
 
 | Phase | Sprints | Duration | Outcome |
@@ -25,7 +25,7 @@ This document defines the complete sprint-by-sprint execution plan to deliver Tr
 | Scale &amp; Polish | 19-24 | Months 9-12 | General Availability: mobile, integrations, compliance, launch |
 
 # 2. Team Structure
-TrustCRM development is organized into four cross-functional pods, each owning a specific product area and operating with full autonomy to ship features end-to-end.
+WBMSG development is organized into four cross-functional pods, each owning a specific product area and operating with full autonomy to ship features end-to-end.
 ## 2.1 Pod Structure
 
 | Pod | Members | Responsibilities |
@@ -135,7 +135,7 @@ All routes require authentication except public marketing pages
 ## Sprint 3: WhatsApp Cloud API Integration
 Sprint Goal: Connect to Meta&apos;s WhatsApp Cloud API so the system can send and receive real WhatsApp messages.
 Deliverables:
-Meta Business Manager + WhatsApp Business Account (WABA) for TrustCRM
+Meta Business Manager + WhatsApp Business Account (WABA) for WBMSG
 Embedded signup flow: org connects their own WABA via OAuth
 Webhook receiver endpoint with signature verification
 Outbound message API: text, image, document, template messages
@@ -154,7 +154,7 @@ Complete PostgreSQL schema for Core + CRM + Messaging domains (~20 tables)
 Prisma schema, migrations, and seed scripts
 REST API: CRUD for contacts, conversations, messages with full validation
 OpenAPI 3.0 spec auto-generated from Fastify schemas
-API documentation site (Stoplight) deployed at developers.trustcrm.com
+API documentation site (Stoplight) deployed at developers.WBMSG.com
 Postman collection for QA and partner testing
 
 ## Sprint 5: Web App Shell
@@ -179,13 +179,13 @@ Mark as read/unread, archive conversation
 Mobile-responsive layout (works on phone browser)
 
 Phase 1 Exit Criteria:
-Internal team uses TrustCRM to manage all customer support WhatsApp messages
+Internal team uses WBMSG to manage all customer support WhatsApp messages
 All Phase 1 features pass automated regression tests
 Staging environment is stable for 7 consecutive days
 Architecture review with engineering leadership: no blockers identified
 
 # 6. Phase 2: Core CRM (Sprints 7-12)
-Phase 2 transforms the inbox-only alpha into a full CRM platform. By the end of Phase 2, beta customers can run their entire WhatsApp customer lifecycle on TrustCRM: from lead capture to deal close.
+Phase 2 transforms the inbox-only alpha into a full CRM platform. By the end of Phase 2, beta customers can run their entire WhatsApp customer lifecycle on WBMSG: from lead capture to deal close.
 ## Phase 2 Highlights
 Sprint 7-8: Contact 360 view + custom fields + segments
 Sprint 9-10: Template builder + campaign engine (this is the revenue feature)
@@ -193,13 +193,13 @@ Sprint 11: Deal pipelines for sales-led WhatsApp businesses
 Sprint 12: SLA tracking and team routing for support use cases
 
 Phase 2 Exit Criteria:
-10 closed-beta customers using TrustCRM in production
+10 closed-beta customers using WBMSG in production
 WhatsApp Tech Provider audit passed
 Average campaign delivery rate ≥95%
 Average customer retention through beta period ≥80%
 
 # 7. Phase 3: AI &amp; Automation (Sprints 13-18)
-Phase 3 introduces our differentiated AI features. This phase moves TrustCRM from category-competitive to category-leading, making it the AI-first WhatsApp CRM.
+Phase 3 introduces our differentiated AI features. This phase moves WBMSG from category-competitive to category-leading, making it the AI-first WhatsApp CRM.
 ## Phase 3 Highlights
 Sprint 13: Voice notes + Whisper transcription (huge unlock for India market)
 Sprint 14: AI Smart Replies powered by Claude with tone matching
@@ -214,7 +214,7 @@ Average time-to-first-value &lt;15 minutes for new signups
 AI infrastructure cost &lt;30% of revenue per organization
 
 # 8. Phase 4: Scale &amp; Polish (Sprints 19-24)
-Phase 4 prepares TrustCRM for general availability. The focus shifts from feature breadth to depth, scale, security, and reliability.
+Phase 4 prepares WBMSG for general availability. The focus shifts from feature breadth to depth, scale, security, and reliability.
 ## Phase 4 Highlights
 Sprint 19: Trust Score system - our flagship differentiation feature
 Sprint 20: Native iOS and Android apps via React Native
@@ -295,4 +295,4 @@ Red: Velocity &lt;60% of historical average (escalate to leadership, consider sc
 | Customer Newsletter | Monthly | Product to customers: shipped features, upcoming roadmap, success stories |
 
 End of Sprint Execution Plan
-TrustCRM v1.0 | April 2026 | Strictly Confidential
+WBMSG v1.0 | April 2026 | Strictly Confidential
