@@ -1,4 +1,4 @@
-﻿# Sprint 2 — Authentication & Multi-tenancy
+# Sprint 2 — Authentication & Multi-tenancy
 
 ## Sprint Goal
 Implement secure, multi-tenant authentication that powers every subsequent feature — every API call, every data access, every UI route is gated by the identity established here.

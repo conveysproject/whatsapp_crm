@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 
 > WhatsApp-first CRM for Indian SMBs — transparent pricing, AI-augmented, built for 1–50 person teams.
 

@@ -1,4 +1,4 @@
-﻿# Sprint 11 — Implementation Plan
+# Sprint 11 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-27-sprint-planning-batch-3.md`
 > Tasks 9–10 cover Sprint 11.

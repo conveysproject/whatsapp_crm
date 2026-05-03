@@ -1,4 +1,4 @@
-﻿# WBMSG Infrastructure (Terraform)
+# WBMSG Infrastructure (Terraform)
 
 AWS staging environment provisioned via Terraform.
 

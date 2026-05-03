@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Coding Standards &amp; Best Practices
 Conventions for TypeScript, React, Node.js, SQL — SWEBOK-aligned
 Version 1.0  |  April 2026

@@ -1,4 +1,4 @@
-﻿# Sprint 5 — Implementation Plan
+# Sprint 5 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-27-sprint-planning-batch-2.md`
 > Tasks 15–19 cover Sprint 5.

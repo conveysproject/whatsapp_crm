@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Software Requirements Specification
 IEEE 29148-2018 Conformant Requirements Specification
 Version 1.0  |  April 2026

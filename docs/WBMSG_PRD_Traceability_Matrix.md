@@ -1,4 +1,4 @@
-﻿| WBMSG PRD Traceability Matrix Sprint Execution Plan v1.0  ←→  PRD v2.0 Appendix E  /  168 Tasks  /  24 Sprints  /  April 2026  /  Confidential |
+| WBMSG PRD Traceability Matrix Sprint Execution Plan v1.0  ←→  PRD v2.0 Appendix E  /  168 Tasks  /  24 Sprints  /  April 2026  /  Confidential |
 | --- |
 
 | Field | Value |

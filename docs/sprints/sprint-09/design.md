@@ -1,4 +1,4 @@
-﻿# Sprint 9 — Templates & Approvals
+# Sprint 9 — Templates & Approvals
 
 ## Sprint Goal
 Enable the team to build WhatsApp message templates, submit them to Meta for approval, and track their status — unlocking the ability to send broadcast messages to opted-in contacts via campaigns.

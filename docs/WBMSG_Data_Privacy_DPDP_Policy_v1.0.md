@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Data Privacy &amp; DPDP Compliance Policy
 DPDP Act 2023 (India) + GDPR-aligned Privacy Programme
 Version 1.0  |  April 2026

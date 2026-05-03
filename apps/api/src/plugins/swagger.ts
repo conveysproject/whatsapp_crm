@@ -1,4 +1,4 @@
-﻿import fp from "fastify-plugin";
+import fp from "fastify-plugin";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 

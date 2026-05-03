@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Incident Management Plan
 ITIL 4 Incident Management + SOC 2 CC7 (Operations &amp; Monitoring)
 Version 1.0  |  April 2026

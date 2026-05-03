@@ -1,4 +1,4 @@
-﻿# Sprint 17 — Implementation Plan
+# Sprint 17 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-28-sprint-planning-batch-4.md`
 > Tasks 8–9 cover Sprint 17.

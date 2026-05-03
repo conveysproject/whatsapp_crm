@@ -1,4 +1,4 @@
-﻿# Sprint 12 — Routing & Assignment + Closed Beta Launch
+# Sprint 12 — Routing & Assignment + Closed Beta Launch
 
 ## Sprint Goal
 Give team leads full control over how incoming conversations are handled — automatic assignment via routing rules, manual reassignment, SLA tracking — then ship the closed beta to the first 10 customer accounts.

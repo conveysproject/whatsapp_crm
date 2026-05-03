@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Change &amp; Release Management Plan
 ITIL 4 Change Enablement + SOC 2 CC8 (Change Management)
 Version 1.0  |  April 2026

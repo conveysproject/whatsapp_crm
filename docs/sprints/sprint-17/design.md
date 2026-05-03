@@ -1,4 +1,4 @@
-﻿# Sprint 17 — Analytics Dashboard
+# Sprint 17 — Analytics Dashboard
 
 ## Sprint Goal
 Give team leads a single dashboard to understand support load, agent performance, and SLA health — replacing ad-hoc Postgres queries with a purpose-built reporting view.

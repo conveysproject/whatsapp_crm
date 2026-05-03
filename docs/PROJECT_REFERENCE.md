@@ -1,4 +1,4 @@
-﻿# WBMSG — Project Reference
+# WBMSG — Project Reference
 
 > **For Claude:** Single consolidated reference. Read alongside `CLAUDE.md` (commands, ESM gotchas, testing rules).
 

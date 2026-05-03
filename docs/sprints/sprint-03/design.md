@@ -1,4 +1,4 @@
-﻿# Sprint 3 — WhatsApp Cloud API Integration
+# Sprint 3 — WhatsApp Cloud API Integration
 
 ## Sprint Goal
 Wire WBMSG to Meta's WhatsApp Cloud API so the platform can receive and send real WhatsApp messages, establishing the core messaging channel that every downstream feature depends on.

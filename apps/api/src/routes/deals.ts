@@ -1,4 +1,4 @@
-﻿import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import type { DealId } from "@WBMSG/shared";
 
 interface DealBody {

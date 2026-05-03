@@ -1,4 +1,4 @@
-﻿import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import type { Prisma } from "@prisma/client";
 import type { LifecycleStage } from "@prisma/client";
 import { paginate, parsePaginationParams } from "../lib/pagination.js";

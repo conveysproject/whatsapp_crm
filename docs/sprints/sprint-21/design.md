@@ -1,4 +1,4 @@
-﻿# Sprint 21 — Advanced Search
+# Sprint 21 — Advanced Search
 
 ## Sprint Goal
 Make finding any contact, conversation, or message instantaneous — replacing slow list-scroll UX with a keyboard-driven global search palette that surfaces results across all entity types in under 200 ms.

@@ -1,4 +1,4 @@
-﻿import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import { generateSuggestions, detectIntent, analyzeSentiment } from "../lib/claude.js";
 import type { ConversationId, MessageId } from "@WBMSG/shared";
 

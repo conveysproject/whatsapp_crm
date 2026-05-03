@@ -1,4 +1,4 @@
-﻿# WBMSG — Claude Code Instructions
+# WBMSG — Claude Code Instructions
 
 > Project context, tech stack, DB schema, sprint plan: `docs/PROJECT_REFERENCE.md`
 

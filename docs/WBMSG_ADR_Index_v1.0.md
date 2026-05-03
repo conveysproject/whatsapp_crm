@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Architecture Decision Records — Index &amp; Baseline
 Michael Nygard ADR Pattern — 8 Baseline Records
 Version 1.0  |  April 2026

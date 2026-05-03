@@ -1,4 +1,4 @@
-﻿# Sprint 14 — Voice Transcription
+# Sprint 14 — Voice Transcription
 
 ## Sprint Goal
 Automatically transcribe WhatsApp voice notes so agents can read them instead of playing audio, cutting review time for voice-heavy support queues.

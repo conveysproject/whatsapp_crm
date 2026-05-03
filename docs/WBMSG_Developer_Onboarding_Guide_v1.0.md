@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Developer Onboarding Guide
 ## Welcome to the Team
 Version 1.0 | April 2026

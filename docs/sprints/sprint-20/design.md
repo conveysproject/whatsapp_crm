@@ -1,4 +1,4 @@
-﻿# Sprint 20 — Self-Serve Onboarding
+# Sprint 20 — Self-Serve Onboarding
 
 ## Sprint Goal
 Remove the manual admin setup step from closed beta — let any business sign up, connect their WhatsApp Business Account, and start receiving messages without Anthropic/WBMSG intervention.

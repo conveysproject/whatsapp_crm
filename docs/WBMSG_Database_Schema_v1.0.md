@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Database Schema Specification
 ## Complete Data Model
 Version 1.0

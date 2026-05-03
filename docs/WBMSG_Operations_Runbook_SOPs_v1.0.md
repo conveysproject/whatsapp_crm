@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Operations Runbook &amp; SOPs
 ITIL 4 Service Operation — Standard Operating Procedures
 Version 1.0  |  April 2026

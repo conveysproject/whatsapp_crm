@@ -1,4 +1,4 @@
-﻿# ECR
+# ECR
 resource "aws_ecr_repository" "api" {
   name                 = "WBMSG/api"
   image_tag_mutability = "MUTABLE"

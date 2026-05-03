@@ -1,4 +1,4 @@
-﻿# Sprint 6 — Inbox MVP
+# Sprint 6 — Inbox MVP
 
 ## Sprint Goal
 Deliver a working real-time inbox where agents can read incoming WhatsApp messages and reply — the core interaction loop that defines WBMSG's value proposition.

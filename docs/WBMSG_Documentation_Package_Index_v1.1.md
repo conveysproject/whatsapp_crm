@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # Documentation Package — Index
 Master Index of all WBMSG Project Documentation
 Version 1.1  |  April 2026

@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # API Specification
 ## REST API v1 Reference
 Version 1.0

@@ -1,4 +1,4 @@
-﻿# WBMSG
+# WBMSG
 # WBMSG — End-User Manual
 User Documentation per IEEE 26511:2018
 Version 1.0  |  April 2026

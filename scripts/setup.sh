@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # One-command local dev setup for WBMSG.
 # Usage: bash scripts/setup.sh   OR   make setup
 

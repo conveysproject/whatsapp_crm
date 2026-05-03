@@ -1,4 +1,4 @@
-﻿import { Worker, UnrecoverableError } from "bullmq";
+import { Worker, UnrecoverableError } from "bullmq";
 import Papa from "papaparse";
 import { Meilisearch } from "meilisearch";
 import type { LifecycleStage, Prisma } from "@prisma/client";

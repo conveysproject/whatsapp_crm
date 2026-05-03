@@ -1,4 +1,4 @@
-﻿# Staging Deployment Guide
+# Staging Deployment Guide
 
 ## Architecture
 
