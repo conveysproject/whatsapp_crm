@@ -1,4 +1,4 @@
-# Sprint 6 — Implementation Plan
+﻿# Sprint 6 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-27-sprint-planning-batch-2.md`
 > Tasks 20–27 cover Sprint 6.
@@ -24,7 +24,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass (conversations.test, webhooks.test, contacts.test, health.test)
+- [ ] `pnpm --filter @WBMSG/api test` — all pass (conversations.test, webhooks.test, contacts.test, health.test)
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Open /inbox in browser → conversation list loads

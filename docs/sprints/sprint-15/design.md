@@ -1,4 +1,4 @@
-# Sprint 15 — Flow Builder
+﻿# Sprint 15 — Flow Builder
 
 ## Sprint Goal
 Let non-technical team leads automate multi-step conversation workflows on a visual canvas — trigger → action chains that run without agent involvement.
@@ -31,7 +31,7 @@ Let non-technical team leads automate multi-step conversation workflows on a vis
 - [ ] Inbound message matching a flow trigger → flow executes; `send_message` node sends WhatsApp message
 - [ ] `/flows` page lists flows; `/flows/[id]` opens canvas editor
 - [ ] Dragging a node type onto canvas adds a node; connecting nodes draws an edge; Save serializes to DB
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `flows.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `flows.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

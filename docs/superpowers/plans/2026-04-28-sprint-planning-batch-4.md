@@ -1,4 +1,4 @@
-# Sprint Planning Batch 4 — Implementation Plan
+﻿# Sprint Planning Batch 4 — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -97,7 +97,7 @@
 - [ ] **Step 1: Install Anthropic SDK**
 
 ```bash
-pnpm --filter @trustcrm/api add @anthropic-ai/sdk
+pnpm --filter @WBMSG/api add @anthropic-ai/sdk
 ```
 
 - [ ] **Step 2: Add env var to `.env.example`**
@@ -138,7 +138,7 @@ describe("generateSuggestions", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/routes/ai.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/routes/ai.test.ts`
 Expected: FAIL — Cannot find module `'../lib/claude.js'`
 
 - [ ] **Step 4: Create `apps/api/src/lib/claude.ts`**
@@ -156,7 +156,7 @@ interface Message {
   content: string;
 }
 
-const SYSTEM_PROMPT = `You are a helpful customer support assistant for TrustCRM, a WhatsApp-first CRM.
+const SYSTEM_PROMPT = `You are a helpful customer support assistant for WBMSG, a WhatsApp-first CRM.
 Your job is to help support agents respond to customer messages.
 Be concise, professional, and empathetic. Respond in the same language as the customer.`;
 
@@ -217,7 +217,7 @@ export async function analyzeSentiment(messageBody: string): Promise<SentimentTy
 - [ ] **Step 5: Run test — confirm pass**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/ai.test.ts
+pnpm --filter @WBMSG/api test src/routes/ai.test.ts
 ```
 
 Expected: PASS
@@ -249,7 +249,7 @@ export type SentimentType = "positive" | "negative" | "neutral";
 ```typescript
 import { FastifyPluginAsync } from "fastify";
 import { generateSuggestions, detectIntent, analyzeSentiment } from "../lib/claude.js";
-import type { ConversationId, MessageId } from "@trustcrm/shared";
+import type { ConversationId, MessageId } from "@WBMSG/shared";
 
 export const aiRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: ConversationId } }>(
@@ -440,7 +440,7 @@ git commit -m "feat(web): add smart reply suggestion chips in inbox"
 - [ ] **Step 1: Install OpenAI SDK**
 
 ```bash
-pnpm --filter @trustcrm/api add openai
+pnpm --filter @WBMSG/api add openai
 ```
 
 Add to `.env.example`:
@@ -509,7 +509,7 @@ describe("POST /v1/messages/:id/transcribe", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/routes/transcriptions.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/routes/transcriptions.test.ts`
 Expected: FAIL
 
 - [ ] **Step 3: Create `apps/api/src/lib/whisper.ts`**
@@ -559,7 +559,7 @@ export async function transcribeAudio(mediaId: string, accessToken: string): Pro
 ```typescript
 import { FastifyPluginAsync } from "fastify";
 import { transcribeAudio } from "../lib/whisper.js";
-import type { MessageId } from "@trustcrm/shared";
+import type { MessageId } from "@WBMSG/shared";
 
 export const transcriptionsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: MessageId } }>(
@@ -619,7 +619,7 @@ await fastify.register(transcriptionsRouter, { prefix: "/v1" });
 ```
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/transcriptions.test.ts
+pnpm --filter @WBMSG/api test src/routes/transcriptions.test.ts
 ```
 
 Expected: PASS
@@ -724,7 +724,7 @@ describe("POST /v1/flows", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/routes/flows.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/routes/flows.test.ts`
 Expected: FAIL
 
 - [ ] **Step 2: Add flowQueue to `apps/api/src/lib/queue.ts`**
@@ -980,7 +980,7 @@ import "./workers/flow.worker.js";
 ```
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/flows.test.ts
+pnpm --filter @WBMSG/api test src/routes/flows.test.ts
 ```
 
 Expected: PASS
@@ -1006,7 +1006,7 @@ git commit -m "feat(api): add flow builder — runner, worker, CRUD + test endpo
 - [ ] **Step 1: Install reactflow**
 
 ```bash
-pnpm --filter @trustcrm/web add reactflow
+pnpm --filter @WBMSG/web add reactflow
 ```
 
 - [ ] **Step 2: Create `apps/web/components/flows/nodes/TriggerNode.tsx`**
@@ -1428,7 +1428,7 @@ describe("POST /v1/chatbots", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/routes/chatbots.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/routes/chatbots.test.ts`
 Expected: FAIL
 
 - [ ] **Step 5: Create `apps/api/src/routes/chatbots.ts`**
@@ -1490,7 +1490,7 @@ await fastify.register(chatbotsRouter, { prefix: "/v1" });
 ```
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/chatbots.test.ts
+pnpm --filter @WBMSG/api test src/routes/chatbots.test.ts
 ```
 
 Expected: PASS
@@ -1549,7 +1549,7 @@ describe("GET /v1/analytics/overview", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/routes/analytics.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/routes/analytics.test.ts`
 Expected: FAIL
 
 - [ ] **Step 2: Create `apps/api/src/lib/analytics-queries.ts`**
@@ -1689,7 +1689,7 @@ await fastify.register(analyticsRouter, { prefix: "/v1" });
 ```
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/analytics.test.ts
+pnpm --filter @WBMSG/api test src/routes/analytics.test.ts
 ```
 
 Expected: PASS
@@ -1714,7 +1714,7 @@ git commit -m "feat(api): add analytics routes — overview, conversation volume
 - [ ] **Step 1: Install recharts**
 
 ```bash
-pnpm --filter @trustcrm/web add recharts
+pnpm --filter @WBMSG/web add recharts
 ```
 
 - [ ] **Step 2: Create `apps/web/components/analytics/MetricCard.tsx`**
@@ -2081,7 +2081,7 @@ def predict_ltv(req: LtvRequest) -> LtvResponse:
 from fastapi import FastAPI
 from .routers import trust_score, predictions
 
-app = FastAPI(title="TrustCRM ML Service", version="1.0.0")
+app = FastAPI(title="WBMSG ML Service", version="1.0.0")
 
 app.include_router(trust_score.router)
 app.include_router(predictions.router)
@@ -2144,7 +2144,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 ```typescript
 import { FastifyPluginAsync } from "fastify";
-import type { ContactId } from "@trustcrm/shared";
+import type { ContactId } from "@WBMSG/shared";
 
 const ML_URL = process.env["ML_SERVICE_URL"] ?? "http://localhost:8000";
 
@@ -2240,7 +2240,7 @@ git commit -m "feat(ml,api): add Python ML microservice — Trust Score + churn/
 - [ ] **Step 1: Run full test suite**
 
 ```bash
-pnpm --filter @trustcrm/api test
+pnpm --filter @WBMSG/api test
 ```
 
 Expected: all pass (ai.test, transcriptions.test, flows.test, chatbots.test, analytics.test, deals.test, campaigns.test, segments.test, templates.test, webhooks.test, contacts.test, organizations.test, health.test)
@@ -2297,7 +2297,7 @@ git add -A && git diff --cached --quiet || git commit -m "chore: type + lint fix
 | 18 | GET /v1/contacts/:id/trust-score | Task 10 |
 
 **Type consistency:**
-- `IntentType` / `SentimentType` exported from `@trustcrm/shared` ✓
+- `IntentType` / `SentimentType` exported from `@WBMSG/shared` ✓
 - `FlowDefinition` / `FlowNode` / `FlowTriggerPayload` types used consistently across flow-runner, flow worker, and route ✓
 - `ContactFeatures` dataclass fields match the JSON sent from `trust-score.ts` ✓
 

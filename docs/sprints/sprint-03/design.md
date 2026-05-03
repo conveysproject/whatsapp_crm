@@ -1,7 +1,7 @@
-# Sprint 3 — WhatsApp Cloud API Integration
+﻿# Sprint 3 — WhatsApp Cloud API Integration
 
 ## Sprint Goal
-Wire TrustCRM to Meta's WhatsApp Cloud API so the platform can receive and send real WhatsApp messages, establishing the core messaging channel that every downstream feature depends on.
+Wire WBMSG to Meta's WhatsApp Cloud API so the platform can receive and send real WhatsApp messages, establishing the core messaging channel that every downstream feature depends on.
 
 ## What We're Building
 
@@ -33,7 +33,7 @@ Wire TrustCRM to Meta's WhatsApp Cloud API so the platform can receive and send 
 - [ ] `POST /v1/webhooks/whatsapp` with invalid signature returns 403
 - [ ] Worker stores a `Conversation` row (auto-created if new) and a `Message` row with `direction: inbound`
 - [ ] `POST /v1/conversations/:id/messages` sends a real WhatsApp message and stores outbound record
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `webhooks.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `webhooks.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

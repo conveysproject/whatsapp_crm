@@ -111,7 +111,7 @@ export default function AcceptInvitationPage(): JSX.Element {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="bg-white rounded-xl border border-gray-200 shadow p-8 w-full max-w-md space-y-4">
         <h1 className="text-xl font-semibold text-gray-900">You&apos;ve been invited</h1>
-        <p className="text-sm text-gray-500">Create an account to join your team on TrustCRM.</p>
+        <p className="text-sm text-gray-500">Create an account to join your team on WBMSG.</p>
 
         <form onSubmit={(e) => { void handleSignUpAndAccept(e); }} className="space-y-3">
           <input

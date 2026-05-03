@@ -1,4 +1,4 @@
-# Sprint 22 — Implementation Plan
+﻿# Sprint 22 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-28-sprint-planning-batch-5.md`
 > Tasks 6–7 cover Sprint 22.
@@ -17,7 +17,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass
+- [ ] `pnpm --filter @WBMSG/api test` — all pass
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Two consecutive `GET /v1/contacts` → second is faster (Redis hit logged)
@@ -29,7 +29,7 @@
 
 Install new dependencies:
 ```bash
-pnpm --filter @trustcrm/api add ioredis @fastify/rate-limit
+pnpm --filter @WBMSG/api add ioredis @fastify/rate-limit
 ```
 
 Run migration for `aiApiKey` on Organization:

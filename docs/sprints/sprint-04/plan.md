@@ -1,4 +1,4 @@
-# Sprint 4 — Implementation Plan
+﻿# Sprint 4 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-27-sprint-planning-batch-2.md`
 > Tasks 8–14 cover Sprint 4.
@@ -22,7 +22,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass (contacts.test, pagination.test, webhooks.test, health.test)
+- [ ] `pnpm --filter @WBMSG/api test` — all pass (contacts.test, pagination.test, webhooks.test, health.test)
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: `GET /docs` returns Swagger UI

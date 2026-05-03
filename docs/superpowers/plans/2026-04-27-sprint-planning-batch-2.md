@@ -1,4 +1,4 @@
-# Sprint Planning Batch 2 — Implementation Plan
+﻿# Sprint Planning Batch 2 — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -90,7 +90,7 @@
 - [ ] **Step 1: Install dependencies in API**
 
 ```bash
-pnpm --filter @trustcrm/api add bullmq ioredis
+pnpm --filter @WBMSG/api add bullmq ioredis
 ```
 
 Expected output: `+ bullmq X.Y.Z  + ioredis X.Y.Z`
@@ -105,7 +105,7 @@ REDIS_URL=redis://localhost:6379
 # WhatsApp Cloud API
 WA_PHONE_NUMBER_ID=
 WA_ACCESS_TOKEN=
-WA_VERIFY_TOKEN=trustcrm_verify_2026
+WA_VERIFY_TOKEN=WBMSG_verify_2026
 WA_WEBHOOK_SECRET=
 ```
 
@@ -143,7 +143,7 @@ describe("Conversation model", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test`
+Run: `pnpm --filter @WBMSG/api test`
 Expected: FAIL — `prisma.conversation is undefined`
 
 - [ ] **Step 2: Modify `apps/api/prisma/schema.prisma`**
@@ -246,7 +246,7 @@ Expected: `Your database is now in sync with your schema.` and `Generated Prisma
 - [ ] **Step 4: Run the test — confirm it passes**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/webhooks.test.ts
+pnpm --filter @WBMSG/api test src/routes/webhooks.test.ts
 ```
 
 Expected: PASS
@@ -286,7 +286,7 @@ describe("verifyWebhookSignature", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test`
+Run: `pnpm --filter @WBMSG/api test`
 Expected: FAIL — `Cannot find module '../lib/whatsapp.js'`
 
 - [ ] **Step 2: Create `apps/api/src/lib/whatsapp.ts`**
@@ -348,7 +348,7 @@ export function verifyWebhookSignature(
 - [ ] **Step 3: Run the test — confirm it passes**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/webhooks.test.ts
+pnpm --filter @WBMSG/api test src/routes/webhooks.test.ts
 ```
 
 Expected: PASS
@@ -505,17 +505,17 @@ describe("GET /v1/webhooks/whatsapp", () => {
   afterEach(async () => { await app.close(); vi.clearAllMocks(); });
 
   it("returns challenge when verify_token matches", async () => {
-    process.env["WA_VERIFY_TOKEN"] = "trustcrm_verify_2026";
+    process.env["WA_VERIFY_TOKEN"] = "WBMSG_verify_2026";
     const res = await app.inject({
       method: "GET",
-      url: "/v1/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=trustcrm_verify_2026&hub.challenge=testchallenge",
+      url: "/v1/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=WBMSG_verify_2026&hub.challenge=testchallenge",
     });
     expect(res.statusCode).toBe(200);
     expect(res.body).toBe("testchallenge");
   });
 
   it("returns 403 on wrong token", async () => {
-    process.env["WA_VERIFY_TOKEN"] = "trustcrm_verify_2026";
+    process.env["WA_VERIFY_TOKEN"] = "WBMSG_verify_2026";
     const res = await app.inject({
       method: "GET",
       url: "/v1/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=abc",
@@ -548,7 +548,7 @@ describe("POST /v1/webhooks/whatsapp", () => {
               from: "+919876543210",
               timestamp: "1714180800",
               type: "text",
-              text: { body: "Hello TrustCRM" },
+              text: { body: "Hello WBMSG" },
             }],
           },
         }],
@@ -568,7 +568,7 @@ describe("POST /v1/webhooks/whatsapp", () => {
       expect.objectContaining({
         organizationId: "org-1",
         whatsappContactPhone: "+919876543210",
-        body: "Hello TrustCRM",
+        body: "Hello WBMSG",
         whatsappMessageId: "wamid.abc",
       })
     );
@@ -586,7 +586,7 @@ describe("POST /v1/webhooks/whatsapp", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test`
+Run: `pnpm --filter @WBMSG/api test`
 Expected: FAIL — `Cannot find module './webhooks.js'`
 
 - [ ] **Step 2: Create `apps/api/src/routes/webhooks.ts`**
@@ -686,7 +686,7 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
 - [ ] **Step 3: Run the tests — confirm they pass**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/webhooks.test.ts
+pnpm --filter @WBMSG/api test src/routes/webhooks.test.ts
 ```
 
 Expected: PASS (4 tests)
@@ -710,7 +710,7 @@ git commit -m "feat(api): add WhatsApp webhook routes (challenge + receive)"
 
 ```typescript
 import { FastifyPluginAsync } from "fastify";
-import type { ConversationId } from "@trustcrm/shared";
+import type { ConversationId } from "@WBMSG/shared";
 
 export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/conversations", async (request, reply) => {
@@ -749,7 +749,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
 ```typescript
 import { FastifyPluginAsync } from "fastify";
 import { sendTextMessage } from "../lib/whatsapp.js";
-import type { ConversationId } from "@trustcrm/shared";
+import type { ConversationId } from "@WBMSG/shared";
 
 interface SendMessageBody {
   text: string;
@@ -836,7 +836,7 @@ export type MessageId = string & { readonly __brand: "MessageId" };
 - [ ] **Step 6: Run full test suite**
 
 ```bash
-pnpm --filter @trustcrm/api test
+pnpm --filter @WBMSG/api test
 ```
 
 Expected: All pass
@@ -895,7 +895,7 @@ describe("Contact model", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/routes/contacts.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/routes/contacts.test.ts`
 Expected: FAIL
 
 - [ ] **Step 2: Add all remaining models to `apps/api/prisma/schema.prisma`**
@@ -1098,7 +1098,7 @@ Expected: `Your database is now in sync with your schema.`
 - [ ] **Step 4: Confirm test passes**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/contacts.test.ts
+pnpm --filter @WBMSG/api test src/routes/contacts.test.ts
 ```
 
 Expected: PASS
@@ -1120,7 +1120,7 @@ git commit -m "feat(api): complete Prisma schema — all 32 tables"
 - [ ] **Step 1: Install dependencies**
 
 ```bash
-pnpm --filter @trustcrm/api add @fastify/swagger @fastify/swagger-ui
+pnpm --filter @WBMSG/api add @fastify/swagger @fastify/swagger-ui
 ```
 
 - [ ] **Step 2: Create `apps/api/src/plugins/swagger.ts`**
@@ -1133,7 +1133,7 @@ import swaggerUi from "@fastify/swagger-ui";
 export default fp(async (fastify) => {
   await fastify.register(swagger, {
     openapi: {
-      info: { title: "TrustCRM API", version: "1.0.0", description: "WhatsApp-First CRM REST API" },
+      info: { title: "WBMSG API", version: "1.0.0", description: "WhatsApp-First CRM REST API" },
       servers: [{ url: "http://localhost:4000", description: "Local dev" }],
       components: {
         securitySchemes: {
@@ -1226,7 +1226,7 @@ describe("parsePaginationParams", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/lib/pagination.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/lib/pagination.test.ts`
 Expected: FAIL
 
 - [ ] **Step 2: Create `apps/api/src/lib/pagination.ts`**
@@ -1268,7 +1268,7 @@ export function parsePaginationParams(
 - [ ] **Step 3: Run the test — confirm it passes**
 
 ```bash
-pnpm --filter @trustcrm/api test src/lib/pagination.test.ts
+pnpm --filter @WBMSG/api test src/lib/pagination.test.ts
 ```
 
 Expected: PASS (5 tests)
@@ -1380,7 +1380,7 @@ describe("DELETE /v1/contacts/:id", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/routes/contacts.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/routes/contacts.test.ts`
 Expected: FAIL — `Cannot find module './contacts.js'`
 
 - [ ] **Step 2: Create `apps/api/src/routes/contacts.ts`**
@@ -1388,7 +1388,7 @@ Expected: FAIL — `Cannot find module './contacts.js'`
 ```typescript
 import { FastifyPluginAsync } from "fastify";
 import { paginate, parsePaginationParams } from "../lib/pagination.js";
-import type { ContactId } from "@trustcrm/shared";
+import type { ContactId } from "@WBMSG/shared";
 
 interface ContactBody {
   phoneNumber: string;
@@ -1482,7 +1482,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
 - [ ] **Step 3: Run tests — confirm they pass**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/contacts.test.ts
+pnpm --filter @WBMSG/api test src/routes/contacts.test.ts
 ```
 
 Expected: PASS (5 tests)
@@ -1508,7 +1508,7 @@ Same pattern as contacts. Key differences: no `phoneNumber` unique constraint, f
 ```typescript
 import { FastifyPluginAsync } from "fastify";
 import { paginate, parsePaginationParams } from "../lib/pagination.js";
-import type { CompanyId } from "@trustcrm/shared";
+import type { CompanyId } from "@WBMSG/shared";
 
 interface CompanyBody {
   name: string;
@@ -1616,7 +1616,7 @@ git commit -m "feat(api): add companies CRUD routes"
 - [ ] **Step 1: Install Meilisearch client**
 
 ```bash
-pnpm --filter @trustcrm/api add meilisearch
+pnpm --filter @WBMSG/api add meilisearch
 ```
 
 - [ ] **Step 2: Add env var to `.env.example`**
@@ -1724,7 +1724,7 @@ git commit -m "feat(api): add Meilisearch client + contacts search"
 - [ ] **Step 1: Run full test suite**
 
 ```bash
-pnpm --filter @trustcrm/api test
+pnpm --filter @WBMSG/api test
 ```
 
 Expected: all pass
@@ -1762,7 +1762,7 @@ git add -A && git diff --cached --quiet || git commit -m "chore: type + lint fix
 - [ ] **Step 1: Install Radix UI**
 
 ```bash
-pnpm --filter @trustcrm/web add @radix-ui/react-toast @radix-ui/react-dialog @radix-ui/react-dropdown-menu
+pnpm --filter @WBMSG/web add @radix-ui/react-toast @radix-ui/react-dialog @radix-ui/react-dropdown-menu
 ```
 
 - [ ] **Step 2: Modify `apps/web/tailwind.config.ts`**
@@ -2083,7 +2083,7 @@ export function Sidebar(): JSX.Element {
     <aside className="flex flex-col w-60 min-h-screen bg-white border-r border-gray-200">
       <div className="flex items-center gap-2 px-4 py-5 border-b border-gray-200">
         <span className="text-wa-green font-bold text-xl">✓</span>
-        <span className="font-semibold text-gray-900">TrustCRM</span>
+        <span className="font-semibold text-gray-900">WBMSG</span>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1">
@@ -2373,7 +2373,7 @@ git add -A && git diff --cached --quiet || git commit -m "chore: type + lint fix
 - [ ] **Step 1: Install Socket.io on API**
 
 ```bash
-pnpm --filter @trustcrm/api add socket.io
+pnpm --filter @WBMSG/api add socket.io
 ```
 
 - [ ] **Step 2: Create `apps/api/src/plugins/socketio.ts`**
@@ -2497,7 +2497,7 @@ git commit -m "feat(api): emit new-message Socket.io event after inbound message
 - [ ] **Step 1: Install Socket.io-client + React Query on web**
 
 ```bash
-pnpm --filter @trustcrm/web add socket.io-client @tanstack/react-query
+pnpm --filter @WBMSG/web add socket.io-client @tanstack/react-query
 ```
 
 - [ ] **Step 2: Create `apps/web/lib/socket.ts`**
@@ -3088,7 +3088,7 @@ describe("GET /v1/conversations/:id/messages", () => {
 - [ ] **Step 2: Run all tests**
 
 ```bash
-pnpm --filter @trustcrm/api test
+pnpm --filter @WBMSG/api test
 ```
 
 Expected: all pass
@@ -3157,7 +3157,7 @@ git add -A && git diff --cached --quiet || git commit -m "chore: type + lint fix
 | 6 | Inbox page | Task 25 |
 
 **Type consistency check:**
-- `ConversationId`, `MessageId` exported from `@trustcrm/shared` and used in routes ✓
+- `ConversationId`, `MessageId` exported from `@WBMSG/shared` and used in routes ✓
 - `ContactId`, `CompanyId` used in contacts + companies routes ✓
 - `InboundMessageJob` interface defined in worker and used by queue producer (webhooks route) — **fix needed**: import the interface in webhooks.ts or duplicate inline. Both files are in the same project so import is preferred.
 - `WaSendResult.messageId` used in messages.ts matches `sendTextMessage` return type ✓

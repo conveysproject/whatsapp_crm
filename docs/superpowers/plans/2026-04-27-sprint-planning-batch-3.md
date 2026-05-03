@@ -1,4 +1,4 @@
-# Sprint Planning Batch 3 — Implementation Plan
+﻿# Sprint Planning Batch 3 — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -100,8 +100,8 @@
 - [ ] **Step 1: Install dependencies**
 
 ```bash
-pnpm --filter @trustcrm/api add papaparse @fastify/multipart
-pnpm --filter @trustcrm/api add -D @types/papaparse
+pnpm --filter @WBMSG/api add papaparse @fastify/multipart
+pnpm --filter @WBMSG/api add -D @types/papaparse
 ```
 
 - [ ] **Step 2: Write the failing test**
@@ -122,7 +122,7 @@ describe("GET /v1/contacts/export", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/routes/contacts.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/routes/contacts.test.ts`
 Expected: FAIL
 
 - [ ] **Step 3: Create `apps/api/src/lib/csv.ts`**
@@ -228,7 +228,7 @@ await fastify.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } }); /
 - [ ] **Step 6: Run tests**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/contacts.test.ts
+pnpm --filter @WBMSG/api test src/routes/contacts.test.ts
 ```
 
 Expected: PASS
@@ -609,7 +609,7 @@ describe("POST /v1/segments/:id/evaluate", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/routes/segments.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/routes/segments.test.ts`
 Expected: FAIL
 
 - [ ] **Step 5: Create `apps/api/src/routes/segments.ts`**
@@ -617,7 +617,7 @@ Expected: FAIL
 ```typescript
 import { FastifyPluginAsync } from "fastify";
 import { evaluateSegment, SegmentFilter } from "../lib/segment-evaluator.js";
-import type { SegmentId } from "@trustcrm/shared";
+import type { SegmentId } from "@WBMSG/shared";
 
 interface SegmentBody {
   name: string;
@@ -703,7 +703,7 @@ export type SegmentId = string & { readonly __brand: "SegmentId" };
 - [ ] **Step 7: Run tests**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/segments.test.ts
+pnpm --filter @WBMSG/api test src/routes/segments.test.ts
 ```
 
 Expected: PASS
@@ -950,7 +950,7 @@ describe("POST /v1/templates", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/routes/templates.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/routes/templates.test.ts`
 Expected: FAIL
 
 - [ ] **Step 2: Create `apps/api/src/lib/meta-templates.ts`**
@@ -1005,7 +1005,7 @@ export async function submitTemplateToMeta(opts: {
 ```typescript
 import { FastifyPluginAsync } from "fastify";
 import { submitTemplateToMeta } from "../lib/meta-templates.js";
-import type { TemplateId } from "@trustcrm/shared";
+import type { TemplateId } from "@WBMSG/shared";
 
 interface TemplateBody {
   name: string;
@@ -1122,7 +1122,7 @@ await fastify.register(templatesRouter, { prefix: "/v1" });
 ```
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/templates.test.ts
+pnpm --filter @WBMSG/api test src/routes/templates.test.ts
 ```
 
 Expected: PASS
@@ -1394,7 +1394,7 @@ describe("POST /v1/campaigns", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/routes/campaigns.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/routes/campaigns.test.ts`
 Expected: FAIL
 
 - [ ] **Step 2: Add campaignQueue to `apps/api/src/lib/queue.ts`**
@@ -1411,7 +1411,7 @@ export const campaignQueue = new Queue("campaigns", {
 ```typescript
 import { FastifyPluginAsync } from "fastify";
 import { campaignQueue } from "../lib/queue.js";
-import type { CampaignId, SegmentId, TemplateId } from "@trustcrm/shared";
+import type { CampaignId, SegmentId, TemplateId } from "@WBMSG/shared";
 
 interface CampaignBody {
   name: string;
@@ -1559,7 +1559,7 @@ import "./workers/campaign.worker.js";
 ```
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/campaigns.test.ts
+pnpm --filter @WBMSG/api test src/routes/campaigns.test.ts
 ```
 
 Expected: PASS
@@ -1807,14 +1807,14 @@ describe("PATCH /v1/deals/:id/stage", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/routes/deals.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/routes/deals.test.ts`
 Expected: FAIL
 
 - [ ] **Step 2: Create `apps/api/src/routes/pipelines.ts`**
 
 ```typescript
 import { FastifyPluginAsync } from "fastify";
-import type { PipelineId } from "@trustcrm/shared";
+import type { PipelineId } from "@WBMSG/shared";
 
 interface PipelineBody {
   name: string;
@@ -1864,7 +1864,7 @@ export const pipelinesRouter: FastifyPluginAsync = async (fastify) => {
 
 ```typescript
 import { FastifyPluginAsync } from "fastify";
-import type { DealId } from "@trustcrm/shared";
+import type { DealId } from "@WBMSG/shared";
 
 interface DealBody {
   title: string;
@@ -1952,7 +1952,7 @@ await fastify.register(dealsRouter, { prefix: "/v1" });
 ```
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/deals.test.ts
+pnpm --filter @WBMSG/api test src/routes/deals.test.ts
 ```
 
 Expected: PASS
@@ -1976,7 +1976,7 @@ git commit -m "feat(api): add pipelines + deals CRUD + stage transition"
 - [ ] **Step 1: Install drag-and-drop**
 
 ```bash
-pnpm --filter @trustcrm/web add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
+pnpm --filter @WBMSG/web add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
 ```
 
 - [ ] **Step 2: Create `apps/web/components/deals/DealCard.tsx`**
@@ -2321,14 +2321,14 @@ describe("PATCH /v1/conversations/:id/assign", () => {
 });
 ```
 
-Run: `pnpm --filter @trustcrm/api test src/routes/routing.test.ts`
+Run: `pnpm --filter @WBMSG/api test src/routes/routing.test.ts`
 Expected: FAIL
 
 - [ ] **Step 5: Create `apps/api/src/routes/routing.ts`**
 
 ```typescript
 import { FastifyPluginAsync } from "fastify";
-import type { ConversationId } from "@trustcrm/shared";
+import type { ConversationId } from "@WBMSG/shared";
 
 interface RoutingRuleBody {
   name: string;
@@ -2424,7 +2424,7 @@ await fastify.register(routingRouter, { prefix: "/v1" });
 ```
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/routing.test.ts
+pnpm --filter @WBMSG/api test src/routes/routing.test.ts
 ```
 
 Expected: PASS
@@ -2512,7 +2512,7 @@ In `apps/web/components/layout/Sidebar.tsx`, add to `navItems`:
 - [ ] **Step 3: Run full test suite**
 
 ```bash
-pnpm --filter @trustcrm/api test
+pnpm --filter @WBMSG/api test
 ```
 
 Expected: all pass

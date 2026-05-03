@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useUser } from "@clerk/nextjs";
 import { useState, useEffect, type JSX, type ChangeEvent } from "react";
@@ -374,7 +374,7 @@ export default function BusinessDetailsPage(): JSX.Element {
                   <path d="M20.52 3.449C18.24 1.245 15.24 0 12.045 0 5.463 0 .104 5.334.101 11.893c0 2.096.549 4.14 1.595 5.945L0 24l6.335-1.652A11.94 11.94 0 0 0 12.045 24c6.585 0 11.946-5.336 11.949-11.896 0-3.176-1.24-6.165-3.48-8.447z" fill="white" fillOpacity=".25" />
                 </svg>
               </div>
-              <span className="bd2-logo-tx">TrustCRM</span>
+              <span className="bd2-logo-tx">WBMSG</span>
             </Link>
 
             {/* Step progress */}

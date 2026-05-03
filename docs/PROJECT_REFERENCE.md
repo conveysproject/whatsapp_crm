@@ -1,4 +1,4 @@
-# TrustCRM — Project Reference
+﻿# WBMSG — Project Reference
 
 > **For Claude:** Single consolidated reference. Read alongside `CLAUDE.md` (commands, ESM gotchas, testing rules).
 
@@ -8,14 +8,14 @@
 
 | Field | Value |
 | --- | --- |
-| Project Name | TrustCRM — WhatsApp-First CRM for SMBs |
+| Project Name | WBMSG — WhatsApp-First CRM for SMBs |
 | Project Code | TRUST-2026 |
 | Expected GA | Sprint 24 — April 2026 |
 | Executive Sponsor | CEO |
 
 **Status:** All 24 sprints delivered — GA ready (April 2026).
 
-**Mission:** India has 64M+ MSMEs and 535M WhatsApp users, yet existing CRM tools either ignore WhatsApp (Salesforce, HubSpot, Zoho) or focus on chat alone with surprise pricing (WATI, AiSensy, Interakt). TrustCRM closes that gap with a transparent-pricing, AI-augmented, WhatsApp-first CRM purpose-built for 1–50 employee SMBs, with white-label sub-account architecture for agencies.
+**Mission:** India has 64M+ MSMEs and 535M WhatsApp users, yet existing CRM tools either ignore WhatsApp (Salesforce, HubSpot, Zoho) or focus on chat alone with surprise pricing (WATI, AiSensy, Interakt). WBMSG closes that gap with a transparent-pricing, AI-augmented, WhatsApp-first CRM purpose-built for 1–50 employee SMBs, with white-label sub-account architecture for agencies.
 
 **Year 1 Targets (post-GA):**
 
@@ -109,13 +109,13 @@ Integration     → WhatsApp, Shopify, Clerk, Stripe, Claude, Whisper
 | flows | id, organization_id, name, trigger_type, is_active, flow_definition (JSONB) |
 | api_keys | id, organization_id, key_hash, name, scopes (TEXT[]), last_used_at |
 
-**Full document:** [TrustCRM_Database_Schema_v1.0.md](TrustCRM_Database_Schema_v1.0.md)
+**Full document:** [WBMSG_Database_Schema_v1.0.md](WBMSG_Database_Schema_v1.0.md)
 
 ---
 
 ## 5. API Specification
 
-**Base URL:** `https://api.trustcrm.com/v1`
+**Base URL:** `https://api.WBMSG.com/v1`
 **Protocol:** HTTPS only (TLS 1.3) · **Format:** `application/json`
 
 **Authentication:**
@@ -138,7 +138,7 @@ Integration     → WhatsApp, Shopify, Clerk, Stripe, Claude, Whisper
 
 **Key endpoint groups:** `/v1/contacts` · `/v1/conversations` · `/v1/messages` · `/v1/templates` · `/v1/campaigns` · `/v1/flows` · `/v1/organizations` · `/v1/webhooks`
 
-**Full document:** [TrustCRM_API_Specification_v1.0.md](TrustCRM_API_Specification_v1.0.md)
+**Full document:** [WBMSG_API_Specification_v1.0.md](WBMSG_API_Specification_v1.0.md)
 
 ---
 
@@ -170,7 +170,7 @@ Integration     → WhatsApp, Shopify, Clerk, Stripe, Claude, Whisper
 - **No `any` types.** Use `unknown` + type guards if necessary.
 - **Test with Vitest (API).** Always `Fastify({ logger: false })` in tests. Use `app.inject()` for route tests.
 
-**Full document:** [TrustCRM_Coding_Standards_Best_Practices_v1.0.md](TrustCRM_Coding_Standards_Best_Practices_v1.0.md)
+**Full document:** [WBMSG_Coding_Standards_Best_Practices_v1.0.md](WBMSG_Coding_Standards_Best_Practices_v1.0.md)
 
 ---
 

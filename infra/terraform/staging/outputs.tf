@@ -1,5 +1,5 @@
-output "alb_dns_name" {
-  description = "Staging API ALB DNS — point staging.trustcrm.com CNAME here"
+﻿output "alb_dns_name" {
+  description = "Staging API ALB DNS — point staging.WBMSG.com CNAME here"
   value       = aws_lb.api.dns_name
 }
 output "ecr_api_url" {

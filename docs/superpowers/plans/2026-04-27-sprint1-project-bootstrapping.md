@@ -1,4 +1,4 @@
-# TrustCRM Sprint 1: Project Bootstrapping Implementation Plan
+﻿# WBMSG Sprint 1: Project Bootstrapping Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -13,7 +13,7 @@
 ## File Structure
 
 ```
-trustcrm/
+WBMSG/
 ├── apps/
 │   ├── api/                        # Fastify REST API (Node 20 + TypeScript)
 │   │   ├── src/
@@ -77,8 +77,8 @@ trustcrm/
 - [ ] **Step 1: Initialize git repository**
 
 ```bash
-git init trustcrm
-cd trustcrm
+git init WBMSG
+cd WBMSG
 git checkout -b main
 ```
 
@@ -86,7 +86,7 @@ git checkout -b main
 
 ```json
 {
-  "name": "trustcrm",
+  "name": "WBMSG",
   "version": "0.0.1",
   "private": true,
   "engines": {
@@ -191,7 +191,7 @@ coverage/
 
 ```bash
 # PostgreSQL
-DATABASE_URL=postgresql://trustcrm:trustcrm@localhost:5432/trustcrm_dev
+DATABASE_URL=postgresql://WBMSG:WBMSG@localhost:5432/WBMSG_dev
 
 # Redis
 REDIS_URL=redis://localhost:6379
@@ -240,7 +240,7 @@ git commit -m "chore: initialize Turborepo monorepo"
 
 ```json
 {
-  "name": "@trustcrm/tsconfig",
+  "name": "@WBMSG/tsconfig",
   "version": "0.0.1",
   "private": true,
   "files": ["base.json", "nextjs.json", "react-native.json"]
@@ -327,7 +327,7 @@ git commit -m "chore: add shared tsconfig package"
 
 ```json
 {
-  "name": "@trustcrm/eslint-config",
+  "name": "@WBMSG/eslint-config",
   "version": "0.0.1",
   "private": true,
   "main": "index.js",
@@ -383,7 +383,7 @@ git commit -m "chore: add shared eslint-config package"
 
 ```json
 {
-  "name": "@trustcrm/shared",
+  "name": "@WBMSG/shared",
   "version": "0.0.1",
   "private": true,
   "main": "./dist/index.js",
@@ -400,7 +400,7 @@ git commit -m "chore: add shared eslint-config package"
     "clean": "rm -rf dist"
   },
   "devDependencies": {
-    "@trustcrm/tsconfig": "workspace:*",
+    "@WBMSG/tsconfig": "workspace:*",
     "typescript": "^5.4.0"
   }
 }
@@ -410,7 +410,7 @@ git commit -m "chore: add shared eslint-config package"
 
 ```json
 {
-  "extends": "@trustcrm/tsconfig/base.json",
+  "extends": "@WBMSG/tsconfig/base.json",
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src"
@@ -422,7 +422,7 @@ git commit -m "chore: add shared eslint-config package"
 - [ ] **Step 3: Create packages/shared/src/index.ts**
 
 ```typescript
-// Shared domain types for TrustCRM
+// Shared domain types for WBMSG
 // Expand these as features are built in Sprint 2+
 
 export type OrganizationId = string & { readonly __brand: "OrganizationId" };
@@ -475,7 +475,7 @@ git commit -m "feat(shared): add shared types package with branded ID types"
 
 ```json
 {
-  "name": "@trustcrm/api",
+  "name": "@WBMSG/api",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -488,15 +488,15 @@ git commit -m "feat(shared): add shared types package with branded ID types"
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@trustcrm/shared": "workspace:*",
+    "@WBMSG/shared": "workspace:*",
     "fastify": "^4.27.0",
     "@fastify/cors": "^9.0.1",
     "@fastify/helmet": "^11.1.1",
     "pino": "^9.0.0"
   },
   "devDependencies": {
-    "@trustcrm/eslint-config": "workspace:*",
-    "@trustcrm/tsconfig": "workspace:*",
+    "@WBMSG/eslint-config": "workspace:*",
+    "@WBMSG/tsconfig": "workspace:*",
     "@types/node": "^20.0.0",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0",
@@ -509,7 +509,7 @@ git commit -m "feat(shared): add shared types package with branded ID types"
 
 ```json
 {
-  "extends": "@trustcrm/tsconfig/base.json",
+  "extends": "@WBMSG/tsconfig/base.json",
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
@@ -659,7 +659,7 @@ git commit -m "feat(api): add Fastify app with /health endpoint and unit test"
 
 ```json
 {
-  "name": "@trustcrm/web",
+  "name": "@WBMSG/web",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -671,14 +671,14 @@ git commit -m "feat(api): add Fastify app with /health endpoint and unit test"
     "clean": "rm -rf .next"
   },
   "dependencies": {
-    "@trustcrm/shared": "workspace:*",
+    "@WBMSG/shared": "workspace:*",
     "next": "15.0.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
   },
   "devDependencies": {
-    "@trustcrm/eslint-config": "workspace:*",
-    "@trustcrm/tsconfig": "workspace:*",
+    "@WBMSG/eslint-config": "workspace:*",
+    "@WBMSG/tsconfig": "workspace:*",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
@@ -694,7 +694,7 @@ git commit -m "feat(api): add Fastify app with /health endpoint and unit test"
 
 ```json
 {
-  "extends": "@trustcrm/tsconfig/nextjs.json",
+  "extends": "@WBMSG/tsconfig/nextjs.json",
   "compilerOptions": {
     "outDir": "dist"
   },
@@ -709,7 +709,7 @@ git commit -m "feat(api): add Fastify app with /health endpoint and unit test"
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@trustcrm/shared"],
+  transpilePackages: ["@WBMSG/shared"],
 };
 
 export default nextConfig;
@@ -721,7 +721,7 @@ export default nextConfig;
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "TrustCRM",
+  title: "WBMSG",
   description: "WhatsApp-first CRM for SMBs",
 };
 
@@ -744,7 +744,7 @@ export default function RootLayout({
 export default function HomePage() {
   return (
     <main style={{ padding: "2rem", fontFamily: "sans-serif" }}>
-      <h1>TrustCRM</h1>
+      <h1>WBMSG</h1>
       <p>WhatsApp-first CRM for SMBs. Sprint 1 — monorepo bootstrapped.</p>
     </main>
   );
@@ -763,7 +763,7 @@ cd apps/web && pnpm install
 cd apps/web && pnpm dev
 ```
 
-Open `http://localhost:3000` — expect to see "TrustCRM" heading.
+Open `http://localhost:3000` — expect to see "WBMSG" heading.
 
 - [ ] **Step 8: Commit**
 
@@ -786,7 +786,7 @@ git commit -m "feat(web): add Next.js 15 App Router web shell"
 
 ```json
 {
-  "name": "@trustcrm/mobile",
+  "name": "@WBMSG/mobile",
   "version": "0.0.1",
   "private": true,
   "main": "expo-router/entry",
@@ -798,14 +798,14 @@ git commit -m "feat(web): add Next.js 15 App Router web shell"
     "lint": "eslint App.tsx --ext .tsx,.ts"
   },
   "dependencies": {
-    "@trustcrm/shared": "workspace:*",
+    "@WBMSG/shared": "workspace:*",
     "expo": "~51.0.0",
     "expo-status-bar": "~1.12.1",
     "react": "18.2.0",
     "react-native": "0.74.1"
   },
   "devDependencies": {
-    "@trustcrm/tsconfig": "workspace:*",
+    "@WBMSG/tsconfig": "workspace:*",
     "@types/react": "~18.2.45",
     "typescript": "^5.1.3"
   }
@@ -817,8 +817,8 @@ git commit -m "feat(web): add Next.js 15 App Router web shell"
 ```json
 {
   "expo": {
-    "name": "TrustCRM",
-    "slug": "trustcrm",
+    "name": "WBMSG",
+    "slug": "WBMSG",
     "version": "1.0.0",
     "orientation": "portrait",
     "platforms": ["ios", "android"],
@@ -832,7 +832,7 @@ git commit -m "feat(web): add Next.js 15 App Router web shell"
 
 ```json
 {
-  "extends": "@trustcrm/tsconfig/react-native.json",
+  "extends": "@WBMSG/tsconfig/react-native.json",
   "compilerOptions": {
     "strict": true
   },
@@ -845,12 +845,12 @@ git commit -m "feat(web): add Next.js 15 App Router web shell"
 ```tsx
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View } from "react-native";
-import { API_VERSION } from "@trustcrm/shared";
+import { API_VERSION } from "@WBMSG/shared";
 
 export default function App() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>TrustCRM</Text>
+      <Text style={styles.title}>WBMSG</Text>
       <Text>API {API_VERSION} — mobile stub</Text>
       <StatusBar style="auto" />
     </View>
@@ -894,25 +894,25 @@ version: "3.9"
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: trustcrm_postgres
+    container_name: WBMSG_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: trustcrm
-      POSTGRES_PASSWORD: trustcrm
-      POSTGRES_DB: trustcrm_dev
+      POSTGRES_USER: WBMSG
+      POSTGRES_PASSWORD: WBMSG
+      POSTGRES_DB: WBMSG_dev
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U trustcrm -d trustcrm_dev"]
+      test: ["CMD-SHELL", "pg_isready -U WBMSG -d WBMSG_dev"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: trustcrm_redis
+    container_name: WBMSG_redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -926,7 +926,7 @@ services:
 
   meilisearch:
     image: getmeili/meilisearch:v1.8
-    container_name: trustcrm_meilisearch
+    container_name: WBMSG_meilisearch
     restart: unless-stopped
     environment:
       MEILI_MASTER_KEY: dev-master-key
@@ -959,7 +959,7 @@ Expected: All 3 containers show status `Up` with health `healthy`.
 - [ ] **Step 3: Verify Postgres is reachable**
 
 ```bash
-docker compose exec postgres psql -U trustcrm -d trustcrm_dev -c "SELECT version();"
+docker compose exec postgres psql -U WBMSG -d WBMSG_dev -c "SELECT version();"
 ```
 
 Expected: Shows `PostgreSQL 16.x ...`
@@ -1056,7 +1056,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build shared packages
-        run: pnpm --filter @trustcrm/shared build
+        run: pnpm --filter @WBMSG/shared build
 
       - name: Run tests
         run: pnpm test
@@ -1140,7 +1140,7 @@ git commit -m "ci: add GitHub Actions pipeline (lint, type-check, test, build)"
 - [ ] **Step 1: Create CONTRIBUTING.md**
 
 ```markdown
-# Contributing to TrustCRM
+# Contributing to WBMSG
 
 ## Prerequisites
 
@@ -1152,8 +1152,8 @@ git commit -m "ci: add GitHub Actions pipeline (lint, type-check, test, build)"
 ## Quick Start
 
 ```bash
-git clone git@github.com:trustcrm/trustcrm.git
-cd trustcrm
+git clone git@github.com:WBMSG/WBMSG.git
+cd WBMSG
 cp .env.example .env          # fill in your values
 pnpm install
 docker compose up -d          # start Postgres, Redis, Meilisearch
@@ -1208,7 +1208,7 @@ chore(deps): bump next to 15.1.0
 - [ ] **Step 2: Create infra/terraform/README.md**
 
 ```markdown
-# TrustCRM Infrastructure (Terraform)
+# WBMSG Infrastructure (Terraform)
 
 AWS staging environment provisioned via Terraform.
 
@@ -1229,14 +1229,14 @@ AWS staging environment provisioned via Terraform.
 4. Plan: `terraform plan -var-file=staging.tfvars`
 5. Apply: `terraform apply -var-file=staging.tfvars`
 
-> **Note:** Terraform state is stored in S3 backend. Backend config in `backend.tf` (not committed). Get the config from 1Password vault: "TrustCRM Infra".
+> **Note:** Terraform state is stored in S3 backend. Backend config in `backend.tf` (not committed). Get the config from 1Password vault: "WBMSG Infra".
 
 ## Environments
 
 | Environment | Branch  | AWS Account |
 |-------------|---------|-------------|
-| Staging     | develop | trustcrm-staging |
-| Production  | main    | trustcrm-prod |
+| Staging     | develop | WBMSG-staging |
+| Production  | main    | WBMSG-prod |
 ```
 
 - [ ] **Step 3: Commit**
@@ -1255,8 +1255,8 @@ git commit -m "docs: add contributing guide and infra README"
 ```bash
 # In a temp directory
 cd /tmp
-git clone <your-repo-url> trustcrm-test
-cd trustcrm-test
+git clone <your-repo-url> WBMSG-test
+cd WBMSG-test
 pnpm install
 ```
 
@@ -1287,7 +1287,7 @@ pnpm dev
 ```
 
 Expected:
-- `http://localhost:3000` — TrustCRM web app loads
+- `http://localhost:3000` — WBMSG web app loads
 - `http://localhost:4000/health` — returns `{"status":"ok",...}`
 
 - [ ] **Step 5: Time the above from `git clone` to running apps**

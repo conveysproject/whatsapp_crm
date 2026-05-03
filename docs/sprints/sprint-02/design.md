@@ -1,4 +1,4 @@
-# Sprint 2 — Authentication & Multi-tenancy
+﻿# Sprint 2 — Authentication & Multi-tenancy
 
 ## Sprint Goal
 Implement secure, multi-tenant authentication that powers every subsequent feature — every API call, every data access, every UI route is gated by the identity established here.
@@ -14,7 +14,7 @@ Implement secure, multi-tenant authentication that powers every subsequent featu
 
 ## Key Technical Decisions
 
-- **Clerk over custom auth** — Clerk handles email verification, SSO, MFA, session management, and organization management out-of-box. Building this from scratch would cost 2+ sprints. Trade-off: vendor dependency, but auth is not a differentiator for TrustCRM.
+- **Clerk over custom auth** — Clerk handles email verification, SSO, MFA, session management, and organization management out-of-box. Building this from scratch would cost 2+ sprints. Trade-off: vendor dependency, but auth is not a differentiator for WBMSG.
 - **Prisma over raw SQL** — Type-safe queries, auto-generated client, migration tooling. The coding standards mandate Prisma for all DB access.
 - **Application-layer isolation over PostgreSQL RLS** — Full RLS (row-level security) policies are the long-term goal (Sprint 4), but for Sprint 2 we enforce isolation via `where: { organizationId: request.auth.organizationId }` on every query. This is auditable and catches bugs in tests. RLS is an additional safety net, not the primary enforcement.
 - **Soft-delete for users** — `isActive: false` rather than deleting the row. Preserves audit trail and foreign key integrity (messages, assignments referencing the user still resolve).

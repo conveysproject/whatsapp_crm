@@ -1,4 +1,4 @@
-# Sprint 17 — Implementation Plan
+﻿# Sprint 17 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-28-sprint-planning-batch-4.md`
 > Tasks 8–9 cover Sprint 17.
@@ -17,7 +17,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `analytics.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `analytics.test.ts`
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: `GET /v1/analytics/overview` → JSON with `openConversations`, `resolvedToday`, `avgFirstResponseSecs`, `breachedSla`
@@ -37,7 +37,7 @@ pnpm exec prisma generate
 
 Install new dependency in web app:
 ```bash
-pnpm --filter @trustcrm/web add recharts
+pnpm --filter @WBMSG/web add recharts
 ```
 
 No new env vars required.

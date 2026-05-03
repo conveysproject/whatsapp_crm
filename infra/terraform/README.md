@@ -1,4 +1,4 @@
-# TrustCRM Infrastructure (Terraform)
+﻿# WBMSG Infrastructure (Terraform)
 
 AWS staging environment provisioned via Terraform.
 
@@ -19,11 +19,11 @@ AWS staging environment provisioned via Terraform.
 4. Plan: `terraform plan -var-file=staging.tfvars`
 5. Apply: `terraform apply -var-file=staging.tfvars`
 
-> **Note:** Terraform state is stored in S3 backend. Backend config in `backend.tf` (not committed). Get the config from 1Password vault: "TrustCRM Infra".
+> **Note:** Terraform state is stored in S3 backend. Backend config in `backend.tf` (not committed). Get the config from 1Password vault: "WBMSG Infra".
 
 ## Environments
 
 | Environment | Branch  | AWS Account      |
 |-------------|---------|------------------|
-| Staging     | develop | trustcrm-staging |
-| Production  | main    | trustcrm-prod    |
+| Staging     | develop | WBMSG-staging |
+| Production  | main    | WBMSG-prod    |

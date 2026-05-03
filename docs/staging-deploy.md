@@ -1,4 +1,4 @@
-# Staging Deployment Guide
+﻿# Staging Deployment Guide
 
 ## Architecture
 
@@ -44,7 +44,7 @@ META_REDIRECT_URI=https://<your-vercel-app>.vercel.app/connect-waba/callback
 
 WA_PHONE_NUMBER_ID=
 WA_ACCESS_TOKEN=
-WA_VERIFY_TOKEN=trustcrm_verify_2026
+WA_VERIFY_TOKEN=WBMSG_verify_2026
 WA_WEBHOOK_SECRET=
 
 IMPORT_TOKEN_SECRET=<generate-random-32-char-string>

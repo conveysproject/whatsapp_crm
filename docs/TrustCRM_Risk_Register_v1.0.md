@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Risk Register
 Identification, Scoring &amp; Mitigation — ISO 31000 / PMBOK 11
 Version 1.0  |  April 2026
@@ -6,7 +6,7 @@ Strictly Confidential
 Document Owner
 Head of PMO / VP Engineering
 ## 1. Purpose
-The Risk Register is the authoritative log of identified risks to the TrustCRM programme. It captures likelihood, impact, current state, owner, mitigation, and target close-out for each risk. It is reviewed monthly by Engineering Leadership and re-scored at every phase exit.
+The Risk Register is the authoritative log of identified risks to the WBMSG programme. It captures likelihood, impact, current state, owner, mitigation, and target close-out for each risk. It is reviewed monthly by Engineering Leadership and re-scored at every phase exit.
 ## 2. Scoring Model
 ### 2.1 Likelihood (1-5)
 
@@ -39,7 +39,7 @@ The Risk Register is the authoritative log of identified risks to the TrustCRM p
 | --- | --- | --- | --- | --- | --- | --- |
 | RSK-001 | Meta WhatsApp pricing increases mid-build, eroding gross margin | 3 | 4 | 12 High | CFO | Open |
 | RSK-002 | Hyperscaler CRM (Salesforce/HubSpot) launches WhatsApp-first SMB tier | 2 | 5 | 10 High | CPO | Open |
-| RSK-003 | Competitor (WATI/AiSensy) cuts price below TrustCRM cost basis | 3 | 3 | 9 Medium | CPO | Open |
+| RSK-003 | Competitor (WATI/AiSensy) cuts price below WBMSG cost basis | 3 | 3 | 9 Medium | CPO | Open |
 | RSK-004 | Series A funding delayed beyond Sprint 18 | 2 | 5 | 10 High | CEO | Open |
 | RSK-005 | Design-partner cohort under-recruits (&lt; 60 of 100) | 2 | 3 | 6 Medium | Head of CS | Open |
 
@@ -124,4 +124,4 @@ None at v1.0 baseline.
 | --- | --- | --- | --- |
 | 1.0 | 26-Apr-2026 | PMO | Baseline at end of Sprint 0 |
 
-End of Risk Register | TrustCRM v1.0 | April 2026 | ISO 31000 / PMBOK 11
+End of Risk Register | WBMSG v1.0 | April 2026 | ISO 31000 / PMBOK 11

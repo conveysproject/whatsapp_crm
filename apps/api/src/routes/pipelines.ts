@@ -1,5 +1,5 @@
-import type { FastifyPluginAsync } from "fastify";
-import type { PipelineId } from "@trustcrm/shared";
+﻿import type { FastifyPluginAsync } from "fastify";
+import type { PipelineId } from "@WBMSG/shared";
 
 interface PipelineBody {
   name: string;

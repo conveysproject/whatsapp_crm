@@ -1,4 +1,4 @@
-# Sprint 2 — Implementation Plan
+﻿# Sprint 2 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-27-sprint-planning-batch-1.md`
 > Tasks 7–13 cover Sprint 2.
@@ -22,7 +22,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass (clerk.test, auth.test, organizations.test, health.test, sentry.test)
+- [ ] `pnpm --filter @WBMSG/api test` — all pass (clerk.test, auth.test, organizations.test, health.test, sentry.test)
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Sign up → create org → invite user → accept invite → sign in as invited user → `GET /v1/users` returns both members
@@ -31,7 +31,7 @@
 
 Add to `.env` (copy from `.env.example`):
 ```
-DATABASE_URL=postgresql://trustcrm:trustcrm@localhost:5432/trustcrm?schema=public
+DATABASE_URL=postgresql://WBMSG:WBMSG@localhost:5432/WBMSG?schema=public
 CLERK_SECRET_KEY=sk_test_...
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in

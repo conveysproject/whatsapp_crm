@@ -1,4 +1,4 @@
-# Sprint 12 — Routing & Assignment + Closed Beta Launch
+﻿# Sprint 12 — Routing & Assignment + Closed Beta Launch
 
 ## Sprint Goal
 Give team leads full control over how incoming conversations are handled — automatic assignment via routing rules, manual reassignment, SLA tracking — then ship the closed beta to the first 10 customer accounts.
@@ -34,7 +34,7 @@ Give team leads full control over how incoming conversations are handled — aut
 - [ ] `GET /v1/sla-policies` returns the default policy (stub)
 - [ ] All Sprints 1–11 DoD items verified green
 - [ ] Sentry shows no unhandled errors from beta accounts after 48-hour soak
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `routing.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `routing.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

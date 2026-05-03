@@ -1,4 +1,4 @@
-# Sprint 20 — Implementation Plan
+﻿# Sprint 20 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-28-sprint-planning-batch-5.md`
 > Task 4 covers Sprint 20.
@@ -16,7 +16,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `onboarding.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `onboarding.test.ts`
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: New org → redirected to `/onboarding/connect-waba`

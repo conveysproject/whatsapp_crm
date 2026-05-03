@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
-import type { ApiResponse, ApiError } from "@trustcrm/shared";
+﻿import { auth } from "@clerk/nextjs/server";
+import type { ApiResponse, ApiError } from "@WBMSG/shared";
 
 const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 

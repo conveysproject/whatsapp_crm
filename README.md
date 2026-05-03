@@ -1,8 +1,8 @@
-# TrustCRM
+﻿# WBMSG
 
 > WhatsApp-first CRM for Indian SMBs — transparent pricing, AI-augmented, built for 1–50 person teams.
 
-Indian MSMEs have 535M WhatsApp users and no CRM that treats WhatsApp as a first-class channel. TrustCRM closes that gap with a purpose-built platform that combines a real inbox, contact management, campaign automation, and AI-powered replies — with white-label sub-account support for agencies.
+Indian MSMEs have 535M WhatsApp users and no CRM that treats WhatsApp as a first-class channel. WBMSG closes that gap with a purpose-built platform that combines a real inbox, contact management, campaign automation, and AI-powered replies — with white-label sub-account support for agencies.
 
 **Project code:** TRUST-2026 · **GA target:** March 2027 · **Status:** Sprint 1 complete (bootstrapping)
 
@@ -86,8 +86,8 @@ pnpm test                # Run all tests (Vitest)
 pnpm build               # Build all packages
 
 # Scoped commands
-pnpm --filter @trustcrm/api test
-pnpm --filter @trustcrm/web dev
+pnpm --filter @WBMSG/api test
+pnpm --filter @WBMSG/web dev
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, commit conventions, and PR process.
@@ -118,4 +118,4 @@ All project specifications are in [`docs/`](docs/). Start with [`docs/PROJECT_RE
 
 ## License
 
-Proprietary — All rights reserved. © 2026 TrustCRM.
+Proprietary — All rights reserved. © 2026 WBMSG.

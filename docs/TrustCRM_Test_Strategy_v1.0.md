@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Test Strategy &amp; QA Plan
 ## Quality Engineering Framework
 Version 1.0 | April 2026
@@ -6,14 +6,14 @@ Strictly Confidential
 
 | Document Owner | QA Lead / Director of Quality Engineering |
 | --- | --- |
-| Scope | All TrustCRM products: web app, mobile app, API, ML services |
+| Scope | All WBMSG products: web app, mobile app, API, ML services |
 | Test Pyramid | 70% unit, 20% integration, 10% E2E |
 | Coverage Target | ≥80% line coverage, 100% on critical paths |
 
 # Table of Contents
 
 # 1. Quality Philosophy
-Quality at TrustCRM is everyone&apos;s responsibility, not the QA team&apos;s job alone. Every engineer owns the quality of their work, and the QA function exists to amplify that ownership through tooling, process, and expertise.
+Quality at WBMSG is everyone&apos;s responsibility, not the QA team&apos;s job alone. Every engineer owns the quality of their work, and the QA function exists to amplify that ownership through tooling, process, and expertise.
 ## 1.1 Core Principles
 Shift Left: Catch defects as early as possible — in design, code review, and unit tests, not in production.
 Test Like a Customer: Test from the user&apos;s perspective, not just the code&apos;s perspective.
@@ -22,7 +22,7 @@ Fast Feedback: Tests must run quickly. A 30-minute test suite is broken even if 
 Trust the Tests: A flaky test is worse than no test. Fix or delete flakes immediately.
 Production is the Ultimate Test Environment: Use feature flags, canary deploys, and observability to learn from production safely.
 ## 1.2 Definition of Quality
-Quality at TrustCRM means our software is:
+Quality at WBMSG means our software is:
 Functionally correct:
 Functionally correct: It does what we said it would do.
 Reliable: It works consistently, not just under happy-path conditions.
@@ -282,4 +282,4 @@ Beta testing via TestFlight (iOS) and Play Console internal track (Android)
 Phased rollout on store: 1% → 10% → 50% → 100% over 7 days
 
 End of Test Strategy &amp; QA Plan
-TrustCRM v1.0 | April 2026 | Strictly Confidential
+WBMSG v1.0 | April 2026 | Strictly Confidential

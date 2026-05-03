@@ -1,15 +1,15 @@
-# TrustCRM — Claude Code Instructions
+﻿# WBMSG — Claude Code Instructions
 
 > Project context, tech stack, DB schema, sprint plan: `docs/PROJECT_REFERENCE.md`
 
 **Apps:** `api` (Fastify 4 + ESM + Node 20) · `web` (Next.js 15 + Tailwind) · `mobile` (Expo 51)
 **Packages:** `shared` (branded types) · `tsconfig` · `eslint-config` (ESLint 8, NOT v9)
 
-**Commands:** `pnpm install|dev|build|type-check|lint|test|clean` · `pnpm --filter @trustcrm/api test`
+**Commands:** `pnpm install|dev|build|type-check|lint|test|clean` · `pnpm --filter @WBMSG/api test`
 
 ## Gotchas
 
-**ESM (apps/api)** — `"type":"module"`; imports need `.js` extension; `@trustcrm/shared` is ESM-only; tsconfig must use `"module":"Node16","moduleResolution":"node16"` — never `bundler` for Node servers
+**ESM (apps/api)** — `"type":"module"`; imports need `.js` extension; `@WBMSG/shared` is ESM-only; tsconfig must use `"module":"Node16","moduleResolution":"node16"` — never `bundler` for Node servers
 
 **TypeScript** — `strict:true` everywhere; API uses Node16 moduleResolution, others use bundler; never commit `*.tsbuildinfo`; add explicit `JSX.Element` return types in Next.js to avoid pnpm TS2742
 

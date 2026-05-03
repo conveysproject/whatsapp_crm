@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Technical Architecture Document
 Version 1.0
 April 2026
@@ -13,7 +13,7 @@ Strictly Confidential
 # Table of Contents
 
 # 1. Executive Summary
-This document provides the complete technical architecture specification for TrustCRM, a trust-first WhatsApp-native CRM platform designed for small and medium-sized businesses (SMBs). The architecture is designed to support high availability, scalability, and security while maintaining cost efficiency for an SMB-focused SaaS product.
+This document provides the complete technical architecture specification for WBMSG, a trust-first WhatsApp-native CRM platform designed for small and medium-sized businesses (SMBs). The architecture is designed to support high availability, scalability, and security while maintaining cost efficiency for an SMB-focused SaaS product.
 Key Architecture Principles:
 Multi-tenant architecture with database-level isolation using PostgreSQL Row Level Security
 Microservices-oriented design with clear separation of concerns
@@ -60,7 +60,7 @@ Cloud-native deployment on AWS with auto-scaling capabilities
 
 # 3. System Architecture
 ## 3.1 High-Level Architecture
-TrustCRM follows a modern cloud-native architecture pattern with the following key components:
+WBMSG follows a modern cloud-native architecture pattern with the following key components:
 Client Layer: Web application (Next.js), mobile apps (React Native), third-party API clients
 Edge Layer: Cloudflare CDN for static assets, DDoS protection, and global distribution
 API Gateway: AWS Application Load Balancer routing to Fastify API servers
@@ -70,7 +70,7 @@ Data Layer: PostgreSQL (primary), Redis (cache/queue/pubsub), Meilisearch (searc
 Integration Layer: External API connectors (WhatsApp, Shopify, Clerk, Stripe, Claude, Whisper)
 
 ## 3.2 Multi-Tenancy Architecture
-TrustCRM uses a shared database multi-tenancy model with Row Level Security (RLS) for data isolation:
+WBMSG uses a shared database multi-tenancy model with Row Level Security (RLS) for data isolation:
 Single shared PostgreSQL database: All tenants share the same physical database instance for cost efficiency
 Organization-scoped queries: Every query is automatically scoped to the authenticated organization via RLS policies
 Database-level enforcement: Data isolation enforced at the PostgreSQL level, not application code
@@ -85,7 +85,7 @@ UPDATE and DELETE operations only affect rows matching the organization_id
 
 # 4. Data Architecture
 ## 4.1 Database Schema Overview
-The TrustCRM database schema is organized into the following logical domains:
+The WBMSG database schema is organized into the following logical domains:
 Core Entities: organizations, users, teams, roles
 CRM Domain: contacts, companies, custom_fields, deals, pipelines, lifecycle_stages
 Messaging Domain: conversations, messages, templates, campaigns, broadcasts
@@ -110,7 +110,7 @@ Integration Domain: connected_accounts, webhooks, api_keys
 
 # 5. Infrastructure &amp; Deployment
 ## 5.1 AWS Infrastructure
-TrustCRM is deployed on AWS using a containerized, auto-scaling architecture:
+WBMSG is deployed on AWS using a containerized, auto-scaling architecture:
 Compute: AWS ECS Fargate (serverless containers) for stateless API and worker services
 Database: Amazon RDS Aurora PostgreSQL with multi-AZ deployment, automated backups, read replicas
 Cache: Amazon ElastiCache for Redis (cluster mode) with automatic failover
@@ -121,7 +121,7 @@ DNS: Route 53 for domain management, health checks, failover routing
 Secrets: AWS Secrets Manager for API keys, database credentials, encryption keys
 
 ## 5.2 Container Architecture
-TrustCRM runs the following containerized services on ECS:
+WBMSG runs the following containerized services on ECS:
 
 | Service | Container Image | Scaling Policy |
 | --- | --- | --- |
@@ -219,7 +219,7 @@ Logs: Centralized logging to Datadog Logs, structured JSON logs, retention 30 da
 Metrics: Custom business metrics (messages sent, campaigns launched, churn rate) in Datadog
 Synthetics: Datadog Synthetic Monitoring for API health checks every 1 min from 3 regions
 Alerts: PagerDuty integration for critical alerts, Slack for warnings
-Status Page: Public status.trustcrm.com showing real-time uptime, incident history
+Status Page: Public status.WBMSG.com showing real-time uptime, incident history
 
 ## 8.2 Key Metrics Dashboard
 Infrastructure Metrics:
@@ -269,4 +269,4 @@ Security Breach: Incident response playbook, rotate all secrets, audit logs, for
 | RPO | Recovery Point Objective - maximum acceptable data loss measured in time |
 
 End of Technical Architecture Document
-TrustCRM v1.0 | April 2026 | Strictly Confidential
+WBMSG v1.0 | April 2026 | Strictly Confidential

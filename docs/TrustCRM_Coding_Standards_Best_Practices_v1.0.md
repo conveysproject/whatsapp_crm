@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Coding Standards &amp; Best Practices
 Conventions for TypeScript, React, Node.js, SQL — SWEBOK-aligned
 Version 1.0  |  April 2026
@@ -6,7 +6,7 @@ Strictly Confidential
 Document Owner
 VP Engineering / Tech Leads
 ## 1. Purpose &amp; Audience
-This document defines the coding conventions, patterns, and quality bars that apply to every line of code in the TrustCRM monorepo. It exists to make code readable by any engineer, reduce review friction, and prevent classes of defects mechanically. It is enforced via lint rules, code owners, and PR review. Conformance reference: SWEBOK Guide v3 §3 (Software Construction) and §4 (Software Testing).
+This document defines the coding conventions, patterns, and quality bars that apply to every line of code in the WBMSG monorepo. It exists to make code readable by any engineer, reduce review friction, and prevent classes of defects mechanically. It is enforced via lint rules, code owners, and PR review. Conformance reference: SWEBOK Guide v3 §3 (Software Construction) and §4 (Software Testing).
 ## 2. General Principles
 1. Read more than you write. Optimise for the next reader, not the next writer.
 1. Make wrong code look wrong. If a misuse is possible, make it impossible at the type level.
@@ -182,4 +182,4 @@ This document defines the coding conventions, patterns, and quality bars that ap
 | --- | --- | --- | --- |
 | 1.0 | 26-Apr-2026 | Tech Leads + VPE | Baseline at end of Sprint 0 |
 
-End of Coding Standards &amp; Best Practices | TrustCRM v1.0 | April 2026 | SWEBOK
+End of Coding Standards &amp; Best Practices | WBMSG v1.0 | April 2026 | SWEBOK

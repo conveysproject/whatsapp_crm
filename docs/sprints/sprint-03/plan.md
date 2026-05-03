@@ -1,4 +1,4 @@
-# Sprint 3 — Implementation Plan
+﻿# Sprint 3 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-27-sprint-planning-batch-2.md`
 > Tasks 1–7 cover Sprint 3.
@@ -23,7 +23,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass (webhooks.test, health.test, sentry.test, auth.test, organizations.test)
+- [ ] `pnpm --filter @WBMSG/api test` — all pass (webhooks.test, health.test, sentry.test, auth.test, organizations.test)
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Send message from WhatsApp → webhook fires → conversation created → message appears in `GET /v1/conversations/:id/messages`
@@ -36,7 +36,7 @@ Add to `.env` (copy from `.env.example`):
 REDIS_URL=redis://localhost:6379
 WA_PHONE_NUMBER_ID=<from Meta Business dashboard>
 WA_ACCESS_TOKEN=<permanent system user token>
-WA_VERIFY_TOKEN=trustcrm_verify_2026
+WA_VERIFY_TOKEN=WBMSG_verify_2026
 WA_WEBHOOK_SECRET=<random 32-char hex string>
 ```
 

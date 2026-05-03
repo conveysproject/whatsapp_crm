@@ -1,4 +1,4 @@
-# Sprint 10 — Implementation Plan
+﻿# Sprint 10 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-27-sprint-planning-batch-3.md`
 > Tasks 7–8 cover Sprint 10.
@@ -17,7 +17,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `campaigns.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `campaigns.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Create campaign → schedule immediately → check BullMQ dashboard (or Redis) for job enqueued
@@ -31,7 +31,7 @@ No new env vars required (uses existing `WA_PHONE_NUMBER_ID`, `WA_ACCESS_TOKEN`,
 Monitor BullMQ jobs during testing:
 ```bash
 # Install bull-board locally for queue inspection
-pnpm --filter @trustcrm/api add bull-board
+pnpm --filter @WBMSG/api add bull-board
 # Or use Redis CLI to inspect queue
 redis-cli lrange "bull:campaigns:wait" 0 -1
 ```

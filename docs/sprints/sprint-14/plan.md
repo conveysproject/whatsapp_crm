@@ -1,4 +1,4 @@
-# Sprint 14 — Implementation Plan
+﻿# Sprint 14 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-28-sprint-planning-batch-4.md`
 > Task 4 covers Sprint 14.
@@ -16,7 +16,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `transcriptions.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `transcriptions.test.ts`
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Send a WhatsApp voice note → message appears in inbox with transcript below audio controls
@@ -39,5 +39,5 @@ pnpm exec prisma generate
 
 Install new dependency:
 ```bash
-pnpm --filter @trustcrm/api add openai
+pnpm --filter @WBMSG/api add openai
 ```

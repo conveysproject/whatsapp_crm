@@ -1,4 +1,4 @@
-// Shared domain types for TrustCRM
+﻿// Shared domain types for WBMSG
 
 export type OrganizationId = string & { readonly __brand: "OrganizationId" };
 export type UserId = string & { readonly __brand: "UserId" };

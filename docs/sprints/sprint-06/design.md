@@ -1,7 +1,7 @@
-# Sprint 6 — Inbox MVP
+﻿# Sprint 6 — Inbox MVP
 
 ## Sprint Goal
-Deliver a working real-time inbox where agents can read incoming WhatsApp messages and reply — the core interaction loop that defines TrustCRM's value proposition.
+Deliver a working real-time inbox where agents can read incoming WhatsApp messages and reply — the core interaction loop that defines WBMSG's value proposition.
 
 ## What We're Building
 
@@ -33,7 +33,7 @@ Deliver a working real-time inbox where agents can read incoming WhatsApp messag
 - [ ] Receive a new message while thread is open → thread updates without refresh
 - [ ] Type a reply and click Send → message appears in the thread; WhatsApp receives it
 - [ ] Socket disconnects on navigate away; reconnects on return (no duplicate events)
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `conversations.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `conversations.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

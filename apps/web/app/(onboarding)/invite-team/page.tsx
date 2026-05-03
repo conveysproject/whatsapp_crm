@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, type FormEvent, type JSX } from "react";
 import { useAuth } from "@clerk/nextjs";
@@ -47,7 +47,7 @@ export default function InviteTeamPage(): JSX.Element {
   return (
     <div>
       <h2 className="text-lg font-semibold text-gray-800 mb-2">Invite Your Team</h2>
-      <p className="text-sm text-gray-500 mb-6">Add colleagues who will use TrustCRM.</p>
+      <p className="text-sm text-gray-500 mb-6">Add colleagues who will use WBMSG.</p>
 
       <form onSubmit={(e) => { void handleInvite(e); }} className="flex gap-2 mb-4">
         <input

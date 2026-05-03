@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-# One-command local dev setup for TrustCRM.
+﻿#!/usr/bin/env bash
+# One-command local dev setup for WBMSG.
 # Usage: bash scripts/setup.sh   OR   make setup
 
 set -euo pipefail
@@ -119,8 +119,8 @@ wait_for() {
   success "$name is ready"
 }
 
-wait_for "Postgres"      "docker exec trustcrm_postgres pg_isready -U trustcrm -d trustcrm_dev -q"
-wait_for "Redis"         "docker exec trustcrm_redis redis-cli ping"
+wait_for "Postgres"      "docker exec WBMSG_postgres pg_isready -U WBMSG -d WBMSG_dev -q"
+wait_for "Redis"         "docker exec WBMSG_redis redis-cli ping"
 wait_for "Meilisearch"   "curl -sf http://localhost:7700/health"
 
 # ── 5. Prisma ─────────────────────────────────────────────────────────────────
@@ -128,11 +128,11 @@ header "5/6  Prisma — generate client + run migrations"
 # Load root .env so Prisma picks up DATABASE_URL (monorepo: .env lives at root)
 set -a && source .env && set +a
 info "Generating Prisma client..."
-pnpm --filter @trustcrm/api exec prisma generate
+pnpm --filter @WBMSG/api exec prisma generate
 success "Prisma client generated"
 
 info "Applying database migrations..."
-pnpm --filter @trustcrm/api exec prisma migrate deploy
+pnpm --filter @WBMSG/api exec prisma migrate deploy
 success "Migrations applied"
 
 # ── 6. Done ───────────────────────────────────────────────────────────────────
@@ -143,7 +143,7 @@ echo "  ║   Local environment is ready!                ║"
 echo "  ╚══════════════════════════════════════════════╝"
 echo -e "${RESET}"
 echo -e "  ${BOLD}Services running:${RESET}"
-echo -e "    Postgres     → localhost:5432  (trustcrm / trustcrm)"
+echo -e "    Postgres     → localhost:5432  (WBMSG / WBMSG)"
 echo -e "    Redis        → localhost:6379"
 echo -e "    Meilisearch  → http://localhost:7700  (key: dev-master-key)"
 echo ""

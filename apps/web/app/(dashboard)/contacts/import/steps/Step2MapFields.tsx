@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useWizard } from "../ImportWizard";
 import { Button } from "@/components/ui/Button";
-import type { DbField, FieldMappingEntry } from "@trustcrm/shared";
+import type { DbField, FieldMappingEntry } from "@WBMSG/shared";
 
 const DB_FIELD_OPTIONS: { value: DbField; label: string }[] = [
   { value: "fullPhoneNumber", label: "Full Phone Number" },

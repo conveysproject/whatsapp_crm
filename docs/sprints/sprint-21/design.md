@@ -1,4 +1,4 @@
-# Sprint 21 — Advanced Search
+﻿# Sprint 21 — Advanced Search
 
 ## Sprint Goal
 Make finding any contact, conversation, or message instantaneous — replacing slow list-scroll UX with a keyboard-driven global search palette that surfaces results across all entity types in under 200 ms.
@@ -30,7 +30,7 @@ Make finding any contact, conversation, or message instantaneous — replacing s
 - [ ] Clicking contact result → navigates to `/contacts/:id`; clicking conversation result → navigates to `/inbox/:id`
 - [ ] Contacts page filter panel: lifecycle stage + tag filter narrows list correctly
 - [ ] Conversations are indexed in Meilisearch after each inbound message
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `search.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `search.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

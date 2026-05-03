@@ -1,4 +1,4 @@
-# Sprint 9 — Implementation Plan
+﻿# Sprint 9 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-27-sprint-planning-batch-3.md`
 > Tasks 5–6 cover Sprint 9.
@@ -17,7 +17,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `templates.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `templates.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Create template via `/templates/new` → appears in `/templates` list with `pending` status
@@ -30,7 +30,7 @@ No new env vars (uses existing `WA_ACCESS_TOKEN` and `WA_PHONE_NUMBER_ID`).
 Update your test organization's `whatsappBusinessAccountId`:
 ```bash
 # Via Prisma Studio
-pnpm --filter @trustcrm/api exec prisma studio
+pnpm --filter @WBMSG/api exec prisma studio
 # Or direct SQL
 psql $DATABASE_URL -c "UPDATE organizations SET whatsapp_business_account_id = '<your_waba_id>' WHERE id = '<your_org_id>';"
 ```

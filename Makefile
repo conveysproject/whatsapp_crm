@@ -1,4 +1,4 @@
-.DEFAULT_GOAL := help
+﻿.DEFAULT_GOAL := help
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
 setup: ## First-time local dev setup (checks prereqs, .env, Docker, Prisma)
@@ -13,23 +13,23 @@ dev: ## Start all apps (web + api + mobile)
 	pnpm dev
 
 dev-api: ## Start API only (Fastify, port 4000)
-	pnpm --filter @trustcrm/api dev
+	pnpm --filter @WBMSG/api dev
 
 dev-web: ## Start web only (Next.js, port 3000)
-	pnpm --filter @trustcrm/web dev
+	pnpm --filter @WBMSG/web dev
 
 dev-mobile: ## Start Expo dev server
-	pnpm --filter @trustcrm/mobile dev
+	pnpm --filter @WBMSG/mobile dev
 
 # ── Build ──────────────────────────────────────────────────────────────────────
 build: ## Build all apps
 	pnpm build
 
 build-api: ## Build API only
-	pnpm --filter @trustcrm/api build
+	pnpm --filter @WBMSG/api build
 
 build-web: ## Build web only
-	pnpm --filter @trustcrm/web build
+	pnpm --filter @WBMSG/web build
 
 # ── Quality ────────────────────────────────────────────────────────────────────
 lint: ## Lint all packages
@@ -42,28 +42,28 @@ test: ## Run all tests
 	pnpm test
 
 test-api: ## Run API tests only
-	pnpm --filter @trustcrm/api test
+	pnpm --filter @WBMSG/api test
 
 test-watch: ## Run API tests in watch mode
-	pnpm --filter @trustcrm/api exec vitest
+	pnpm --filter @WBMSG/api exec vitest
 
 check: lint type-check test ## Lint + type-check + test
 
 # ── Database ───────────────────────────────────────────────────────────────────
 db-migrate: ## Run Prisma migrations (dev)
-	pnpm --filter @trustcrm/api exec prisma migrate dev
+	pnpm --filter @WBMSG/api exec prisma migrate dev
 
 db-migrate-prod: ## Deploy migrations (production)
-	pnpm --filter @trustcrm/api exec prisma migrate deploy
+	pnpm --filter @WBMSG/api exec prisma migrate deploy
 
 db-generate: ## Regenerate Prisma client
-	pnpm --filter @trustcrm/api exec prisma generate
+	pnpm --filter @WBMSG/api exec prisma generate
 
 db-studio: ## Open Prisma Studio
-	pnpm --filter @trustcrm/api exec prisma studio
+	pnpm --filter @WBMSG/api exec prisma studio
 
 db-reset: ## Reset dev database (destructive)
-	pnpm --filter @trustcrm/api exec prisma migrate reset
+	pnpm --filter @WBMSG/api exec prisma migrate reset
 
 # ── Docker ─────────────────────────────────────────────────────────────────────
 up: ## Start Postgres, Redis, Meilisearch

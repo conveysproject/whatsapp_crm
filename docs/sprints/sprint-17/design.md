@@ -1,4 +1,4 @@
-# Sprint 17 — Analytics Dashboard
+﻿# Sprint 17 — Analytics Dashboard
 
 ## Sprint Goal
 Give team leads a single dashboard to understand support load, agent performance, and SLA health — replacing ad-hoc Postgres queries with a purpose-built reporting view.
@@ -37,7 +37,7 @@ Give team leads a single dashboard to understand support load, agent performance
 - [ ] `GET /v1/analytics/team` returns per-agent rows
 - [ ] `/analytics` page renders MetricCards + BarChart + TeamTable
 - [ ] Dashboard visible only to admin/manager role (agent sees 403 or no link)
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `analytics.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `analytics.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

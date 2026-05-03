@@ -1,7 +1,7 @@
-# Sprint 11 — Deals & Pipelines
+﻿# Sprint 11 — Deals & Pipelines
 
 ## Sprint Goal
-Give sales teams a visual sales pipeline — drag cards between stages, track deal values, associate deals with contacts — turning TrustCRM from a messaging tool into a full CRM with opportunity management.
+Give sales teams a visual sales pipeline — drag cards between stages, track deal values, associate deals with contacts — turning WBMSG from a messaging tool into a full CRM with opportunity management.
 
 ## What We're Building
 
@@ -32,7 +32,7 @@ Give sales teams a visual sales pipeline — drag cards between stages, track de
 - [ ] Dragging a deal card to a different column calls `PATCH /v1/deals/:id/stage` and persists
 - [ ] Deal card shows title, value (formatted in INR), assigned user
 - [ ] Empty pipeline state (no pipelines) shows "Create Pipeline" prompt
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `deals.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `deals.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

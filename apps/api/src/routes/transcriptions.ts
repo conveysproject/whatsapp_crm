@@ -1,6 +1,6 @@
-import type { FastifyPluginAsync } from "fastify";
+﻿import type { FastifyPluginAsync } from "fastify";
 import { transcribeAudio } from "../lib/whisper.js";
-import type { MessageId } from "@trustcrm/shared";
+import type { MessageId } from "@WBMSG/shared";
 
 export const transcriptionsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: MessageId } }>(

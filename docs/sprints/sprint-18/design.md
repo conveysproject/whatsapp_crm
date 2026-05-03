@@ -1,4 +1,4 @@
-# Sprint 18 — Trust Score & ML Microservice
+﻿# Sprint 18 — Trust Score & ML Microservice
 
 ## Sprint Goal
 Give sales and support teams a single 0–100 health score per contact that synthesises engagement, deal activity, and lifecycle stage — enabling prioritisation without manual data archaeology.
@@ -40,7 +40,7 @@ Give sales and support teams a single 0–100 health score per contact that synt
 - [ ] `GET /v1/contacts/:id/trust-score` returns trust score from Node API (calls ML service internally)
 - [ ] TrustScoreBadge renders on ContactDetail page with correct color tier
 - [ ] `POST http://localhost:8000/predict/churn` and `POST /predict/ltv` return valid responses
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `trust-score.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `trust-score.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

@@ -1,6 +1,6 @@
-import type { FastifyPluginAsync } from "fastify";
+﻿import type { FastifyPluginAsync } from "fastify";
 import { generateSuggestions, detectIntent, analyzeSentiment } from "../lib/claude.js";
-import type { ConversationId, MessageId } from "@trustcrm/shared";
+import type { ConversationId, MessageId } from "@WBMSG/shared";
 
 export const aiRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: ConversationId } }>(

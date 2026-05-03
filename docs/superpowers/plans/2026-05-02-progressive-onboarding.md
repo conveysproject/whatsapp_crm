@@ -1,4 +1,4 @@
-# Progressive Onboarding Implementation Plan
+﻿# Progressive Onboarding Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -75,7 +75,7 @@ export function useOnboardingStatus(): OnboardingStatus {
 - [ ] **Step 2: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
+pnpm --filter @WBMSG/web type-check
 ```
 
 Expected: no errors related to `onboarding-context.tsx`
@@ -153,7 +153,7 @@ export function SetupBanner(): JSX.Element | null {
 - [ ] **Step 2: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
+pnpm --filter @WBMSG/web type-check
 ```
 
 Expected: no errors
@@ -239,7 +239,7 @@ export function WhatsAppGate({ feature, children }: WhatsAppGateProps): JSX.Elem
 - [ ] **Step 2: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
+pnpm --filter @WBMSG/web type-check
 ```
 
 Expected: no errors
@@ -340,7 +340,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 - [ ] **Step 2: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
+pnpm --filter @WBMSG/web type-check
 ```
 
 Expected: no errors
@@ -416,7 +416,7 @@ export default function InboxPage(): JSX.Element {
 - [ ] **Step 2: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
+pnpm --filter @WBMSG/web type-check
 ```
 
 Expected: no errors
@@ -642,7 +642,7 @@ export default function NewCampaignPage(): JSX.Element {
 - [ ] **Step 3: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
+pnpm --filter @WBMSG/web type-check
 ```
 
 Expected: no errors
@@ -680,7 +680,7 @@ Change to:
 - [ ] **Step 2: Type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
+pnpm --filter @WBMSG/web type-check
 ```
 
 Expected: no errors
@@ -688,7 +688,7 @@ Expected: no errors
 - [ ] **Step 3: Final build verification**
 
 ```bash
-pnpm --filter @trustcrm/web build
+pnpm --filter @WBMSG/web build
 ```
 
 Expected: build completes successfully with no TypeScript or lint errors

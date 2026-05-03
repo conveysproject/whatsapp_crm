@@ -1,12 +1,12 @@
-﻿# TrustCRM
+﻿# WBMSG
 # Documentation Package — Index
-Master Index of all TrustCRM Project Documentation
+Master Index of all WBMSG Project Documentation
 Version 1.1  |  April 2026
 Strictly Confidential
 Document Owner
 VP Engineering / PMO
 ## 1. About This Index
-This is the master index of every formally-controlled document in the TrustCRM project. It is the entry point for new team members, auditors, and stakeholders. v1.1 supersedes v1.0 and adds 16 documents authored at the close of Sprint 0 to align the project with PMBOK 7, IEEE 12207, ISO/IEC 25010, ISO/IEC 27001:2022, ISO 22301, ISO 31000, ITIL 4, SOC 2 Common Criteria, and SWEBOK.
+This is the master index of every formally-controlled document in the WBMSG project. It is the entry point for new team members, auditors, and stakeholders. v1.1 supersedes v1.0 and adds 16 documents authored at the close of Sprint 0 to align the project with PMBOK 7, IEEE 12207, ISO/IEC 25010, ISO/IEC 27001:2022, ISO 22301, ISO 31000, ITIL 4, SOC 2 Common Criteria, and SWEBOK.
 Each entry below lists the document title, owning role, version, and the industry standard it conforms to (where applicable). Files are stored in the project root at e:\Product\WhatsApp_CRM\.
 ## 2. Change from v1.0 to v1.1
 - Added 16 new documents covering governance, risk, security, privacy, operations, engineering standards, design, and end-user docs.
@@ -206,9 +206,9 @@ The following matrix shows the principal cross-references between documents. A c
 
 ## 11. Storage &amp; Distribution
 - Source of truth: /_tools/build_*.py scripts in the monorepo (version-controlled).
-- Rendered output: /TrustCRM_*_v*.docx in the project root.
+- Rendered output: /WBMSG_*_v*.docx in the project root.
 - Mirror: Confluence &gt; Documentation &gt; Approved (auto-sync nightly).
-- External-facing: relevant subset (Privacy Policy, End-User Manual) published to trustcrm.in.
+- External-facing: relevant subset (Privacy Policy, End-User Manual) published to WBMSG.in.
 - Customer due-diligence pack: subset shared via secure data room (Drata Trust).
 ## 12. Sign-Off
 
@@ -228,4 +228,4 @@ The following matrix shows the principal cross-references between documents. A c
 | 1.0 | 10-Apr-2026 | PMO | Baseline index of 9 starter documents |
 | 1.1 | 26-Apr-2026 | PMO + VPE | Added 16 documents authored at end of Sprint 0; re-clustered; cross-reference matrix; standards conformance map |
 
-End of Documentation Package Index | TrustCRM v1.1 | April 2026
+End of Documentation Package Index | WBMSG v1.1 | April 2026

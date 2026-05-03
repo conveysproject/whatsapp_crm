@@ -1,7 +1,7 @@
-# Sprint 22 — Performance & Scale
+﻿# Sprint 22 — Performance & Scale
 
 ## Sprint Goal
-Make TrustCRM fast at scale — add Redis caching to eliminate redundant DB reads, rate-limit the API to prevent abuse, and support per-org Anthropic API keys for enterprise customers who want cost isolation.
+Make WBMSG fast at scale — add Redis caching to eliminate redundant DB reads, rate-limit the API to prevent abuse, and support per-org Anthropic API keys for enterprise customers who want cost isolation.
 
 ## What We're Building
 
@@ -16,7 +16,7 @@ Make TrustCRM fast at scale — add Redis caching to eliminate redundant DB read
 - **Cache-aside (lazy loading), not write-through** — Write-through would require updating the cache on every mutation. Cache-aside is simpler: only popular reads get cached; cold data fetches from Postgres and warms the cache naturally.
 - **Org-scoped cache keys** — All cache keys include `organizationId` (`contacts:{orgId}:list`). This ensures cross-org data isolation and allows targeted invalidation without flushing the whole Redis keyspace.
 - **Rate limit backed by Redis, not in-memory** — In-memory rate limits reset on server restart and don't work across multiple API instances (ECS tasks). Redis persists counters across restarts and is shared across all API instances.
-- **`aiApiKey` null means "use env var"** — Orgs on the free/starter plan share the platform Anthropic API key (costs borne by TrustCRM). Enterprise orgs can bring their own key for cost isolation and higher rate limits.
+- **`aiApiKey` null means "use env var"** — Orgs on the free/starter plan share the platform Anthropic API key (costs borne by WBMSG). Enterprise orgs can bring their own key for cost isolation and higher rate limits.
 
 ## Dependencies
 
@@ -29,7 +29,7 @@ Make TrustCRM fast at scale — add Redis caching to eliminate redundant DB read
 - [ ] `POST /v1/contacts` invalidates the contacts cache (subsequent GET hits Postgres again)
 - [ ] 101st request within 1 minute from same org → 429 Too Many Requests
 - [ ] `PATCH /v1/organizations` with `aiApiKey` → stored on org; subsequent Claude calls use that key
-- [ ] `pnpm --filter @trustcrm/api test` — all pass
+- [ ] `pnpm --filter @WBMSG/api test` — all pass
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

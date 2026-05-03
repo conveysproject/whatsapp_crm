@@ -1,4 +1,4 @@
-# Sprint 7 — Implementation Plan
+﻿# Sprint 7 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-27-sprint-planning-batch-3.md`
 > Tasks 1–2 cover Sprint 7.
@@ -18,7 +18,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including updated `contacts.test.ts` (export + import tests)
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including updated `contacts.test.ts` (export + import tests)
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Upload `contacts.csv` → `/v1/contacts/import` → response shows `{ created: N, skipped: 0 }`

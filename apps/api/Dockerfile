@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+﻿FROM node:20-alpine AS base
 RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
 # ── Install all dependencies ───────────────────────────────────────────────────
@@ -17,9 +17,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY . .
-RUN pnpm --filter @trustcrm/shared build
-RUN pnpm --filter @trustcrm/api run generate
-RUN pnpm --filter @trustcrm/api build
+RUN pnpm --filter @WBMSG/shared build
+RUN pnpm --filter @WBMSG/api run generate
+RUN pnpm --filter @WBMSG/api build
 
 # ── Production image ──────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
@@ -37,7 +37,7 @@ RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /app/apps/api/prisma.config.ts ./apps/api/
-RUN pnpm --filter @trustcrm/api run generate
+RUN pnpm --filter @WBMSG/api run generate
 
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist

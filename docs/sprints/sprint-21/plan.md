@@ -1,4 +1,4 @@
-# Sprint 21 — Implementation Plan
+﻿# Sprint 21 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-28-sprint-planning-batch-5.md`
 > Task 5 covers Sprint 21.
@@ -16,7 +16,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `search.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `search.test.ts`
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Press ⌘K → search palette opens

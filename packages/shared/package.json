@@ -1,5 +1,5 @@
-{
-  "name": "@trustcrm/shared",
+﻿{
+  "name": "@WBMSG/shared",
   "version": "0.0.1",
   "private": true,
   "main": "./dist/index.js",
@@ -17,8 +17,8 @@
     "clean": "rm -rf dist"
   },
   "devDependencies": {
-    "@trustcrm/tsconfig": "workspace:*",
-    "@trustcrm/eslint-config": "workspace:*",
+    "@WBMSG/tsconfig": "workspace:*",
+    "@WBMSG/eslint-config": "workspace:*",
     "typescript": "^5.4.0"
   }
 }

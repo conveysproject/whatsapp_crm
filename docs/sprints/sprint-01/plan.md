@@ -1,4 +1,4 @@
-# Sprint 1 — Implementation Plan
+﻿# Sprint 1 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-27-sprint-planning-batch-1.md`
 > Tasks 1–6 cover Sprint 1 gap-fill.
@@ -21,7 +21,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass (including new Sentry plugin test)
+- [ ] `pnpm --filter @WBMSG/api test` — all pass (including new Sentry plugin test)
 - [ ] `pnpm type-check` — no errors
 - [ ] `cd infra/terraform/staging && terraform validate` — Success
 

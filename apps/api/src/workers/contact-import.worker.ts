@@ -1,4 +1,4 @@
-import { Worker, UnrecoverableError } from "bullmq";
+﻿import { Worker, UnrecoverableError } from "bullmq";
 import Papa from "papaparse";
 import { Meilisearch } from "meilisearch";
 import type { LifecycleStage, Prisma } from "@prisma/client";
@@ -6,7 +6,7 @@ import { redisConnection } from "../lib/queue.js";
 import { redis } from "../lib/redis.js";
 import { prisma } from "../lib/prisma.js";
 import { normalizeFullPhone, normalizeSplitPhone } from "../lib/phone-normalize.js";
-import type { FieldMapping } from "@trustcrm/shared";
+import type { FieldMapping } from "@WBMSG/shared";
 
 interface ContactImportJob {
   importId: string;

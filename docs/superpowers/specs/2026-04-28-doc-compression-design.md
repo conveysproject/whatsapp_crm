@@ -1,4 +1,4 @@
-# Doc Compression Design — 2026-04-28
+﻿# Doc Compression Design — 2026-04-28
 
 ## Goal
 Reduce tokens loaded by Claude each session by stripping non-coding-relevant and now-stale sections from PROJECT_REFERENCE.md and updating memory to reflect true project state (all 24 sprints complete).
@@ -22,7 +22,7 @@ Reduce tokens loaded by Claude each session by stripping non-coding-relevant and
 
 ## Changes to Memory
 
-### project_trustcrm.md
+### project_WBMSG.md
 Update status from: *"Sprint 1 complete. Sprint 2 next."*
 To: *"All 24 sprints complete. GA ready April 2026. Next work is post-launch iteration."*
 

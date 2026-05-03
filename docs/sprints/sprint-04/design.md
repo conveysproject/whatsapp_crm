@@ -1,4 +1,4 @@
-# Sprint 4 — Core DB & API Skeleton
+﻿# Sprint 4 — Core DB & API Skeleton
 
 ## Sprint Goal
 Complete the full 32-table PostgreSQL schema and build the canonical CRUD API skeleton — establishing the data model and API patterns every subsequent sprint builds on.
@@ -34,7 +34,7 @@ Complete the full 32-table PostgreSQL schema and build the canonical CRUD API sk
 - [ ] `GET /v1/contacts/search?q=alice` returns Meilisearch results filtered to org
 - [ ] `GET /v1/companies` returns paginated list
 - [ ] `GET /docs` returns Swagger UI HTML
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `contacts.test.ts`, `pagination.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `contacts.test.ts`, `pagination.test.ts`
 - [ ] `pnpm type-check` — no errors
 - [ ] `pnpm lint` — no errors
 

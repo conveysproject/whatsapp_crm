@@ -1,4 +1,4 @@
-# CSV Bulk Contact Import Implementation Plan
+﻿# CSV Bulk Contact Import Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -135,7 +135,7 @@ export interface ImportProgress {
 - [ ] **Step 5: Verify shared package builds**
 
 ```bash
-pnpm --filter @trustcrm/shared type-check
+pnpm --filter @WBMSG/shared type-check
 ```
 
 Expected: No errors.
@@ -225,7 +225,7 @@ describe("isValidE164", () => {
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-pnpm --filter @trustcrm/api test src/lib/phone-normalize.test.ts
+pnpm --filter @WBMSG/api test src/lib/phone-normalize.test.ts
 ```
 
 Expected: FAIL — module not found.
@@ -258,7 +258,7 @@ export function normalizeSplitPhone(countryCode: string, phone: string): string 
 - [ ] **Step 4: Run tests to verify they pass**
 
 ```bash
-pnpm --filter @trustcrm/api test src/lib/phone-normalize.test.ts
+pnpm --filter @WBMSG/api test src/lib/phone-normalize.test.ts
 ```
 
 Expected: All 10 tests PASS.
@@ -316,7 +316,7 @@ await server.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
 - [ ] **Step 4: Run type-check**
 
 ```bash
-pnpm --filter @trustcrm/api type-check
+pnpm --filter @WBMSG/api type-check
 ```
 
 Expected: No errors.
@@ -444,7 +444,7 @@ describe("POST /v1/contacts/import/upload", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/contacts-import.test.ts
+pnpm --filter @WBMSG/api test src/routes/contacts-import.test.ts
 ```
 
 Expected: FAIL — module not found.
@@ -462,7 +462,7 @@ import type { Prisma } from "@prisma/client";
 import { redis } from "../lib/redis.js";
 import { contactImportQueue } from "../lib/queue.js";
 import { normalizeFullPhone, normalizeSplitPhone } from "../lib/phone-normalize.js";
-import type { FieldMapping, ContactImportId } from "@trustcrm/shared";
+import type { FieldMapping, ContactImportId } from "@WBMSG/shared";
 
 const CSV_SESSION_TTL_SECONDS = 1800; // 30 minutes
 
@@ -504,7 +504,7 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
 - [ ] **Step 4: Run tests to verify they pass**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/contacts-import.test.ts
+pnpm --filter @WBMSG/api test src/routes/contacts-import.test.ts
 ```
 
 Expected: Both upload tests PASS.
@@ -530,7 +530,7 @@ await fastify.register(contactsImportRouter, { prefix: "/v1" });
 - [ ] **Step 7: Run all API tests**
 
 ```bash
-pnpm --filter @trustcrm/api test
+pnpm --filter @WBMSG/api test
 ```
 
 Expected: All tests PASS (contacts.test.ts still passes — the removed endpoint had no test).
@@ -605,7 +605,7 @@ describe("POST /v1/contacts/import/analyze", () => {
 - [ ] **Step 2: Run tests to verify new tests fail**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/contacts-import.test.ts
+pnpm --filter @WBMSG/api test src/routes/contacts-import.test.ts
 ```
 
 Expected: The two new analyze tests FAIL (route not found). Upload tests still PASS.
@@ -682,7 +682,7 @@ Inside `contactsImportRouter` in `apps/api/src/routes/contacts-import.ts`, after
 - [ ] **Step 4: Run tests to verify they pass**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/contacts-import.test.ts
+pnpm --filter @WBMSG/api test src/routes/contacts-import.test.ts
 ```
 
 Expected: All 4 tests PASS.
@@ -742,7 +742,7 @@ describe("POST /v1/contacts/import/start", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/contacts-import.test.ts
+pnpm --filter @WBMSG/api test src/routes/contacts-import.test.ts
 ```
 
 Expected: The new start test FAILS. All previous tests still PASS.
@@ -832,7 +832,7 @@ Inside `contactsImportRouter`, after the analyze handler, add:
 - [ ] **Step 4: Run all import tests**
 
 ```bash
-pnpm --filter @trustcrm/api test src/routes/contacts-import.test.ts
+pnpm --filter @WBMSG/api test src/routes/contacts-import.test.ts
 ```
 
 Expected: All 5 tests PASS.
@@ -865,7 +865,7 @@ import { redisConnection } from "../lib/queue.js";
 import { redis } from "../lib/redis.js";
 import { prisma } from "../lib/prisma.js";
 import { normalizeFullPhone, normalizeSplitPhone } from "../lib/phone-normalize.js";
-import type { FieldMapping } from "@trustcrm/shared";
+import type { FieldMapping } from "@WBMSG/shared";
 
 interface ContactImportJob {
   importId: string;
@@ -1059,7 +1059,7 @@ contactImportWorker.on("failed", async (job, err) => {
 - [ ] **Step 2: Run type-check on the API**
 
 ```bash
-pnpm --filter @trustcrm/api type-check
+pnpm --filter @WBMSG/api type-check
 ```
 
 Expected: No errors.
@@ -1067,7 +1067,7 @@ Expected: No errors.
 - [ ] **Step 3: Run all API tests**
 
 ```bash
-pnpm --filter @trustcrm/api test
+pnpm --filter @WBMSG/api test
 ```
 
 Expected: All tests PASS.
@@ -1083,8 +1083,8 @@ import "./workers/contact-import.worker.js";
 - [ ] **Step 3: Run type-check and all API tests**
 
 ```bash
-pnpm --filter @trustcrm/api type-check
-pnpm --filter @trustcrm/api test
+pnpm --filter @WBMSG/api type-check
+pnpm --filter @WBMSG/api test
 ```
 
 Expected: No type errors. All tests PASS.
@@ -1144,7 +1144,7 @@ Create `apps/web/app/(dashboard)/contacts/import/ImportWizard.tsx`:
 "use client";
 
 import { JSX, createContext, useContext, useState } from "react";
-import type { FieldMapping, ImportAnalysisResult, ImportProgress } from "@trustcrm/shared";
+import type { FieldMapping, ImportAnalysisResult, ImportProgress } from "@WBMSG/shared";
 import { Step1Upload } from "./steps/Step1Upload.js";
 import { Step2MapFields } from "./steps/Step2MapFields.js";
 import { Step3Preview } from "./steps/Step3Preview.js";
@@ -1394,7 +1394,7 @@ export default function ContactsImportPage(): JSX.Element {
 - [ ] **Step 5: Run type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
+pnpm --filter @WBMSG/web type-check
 ```
 
 Expected: No errors.
@@ -1424,7 +1424,7 @@ import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useWizard } from "../ImportWizard.js";
 import { Button } from "@/components/ui/Button";
-import type { DbField, FieldMappingEntry } from "@trustcrm/shared";
+import type { DbField, FieldMappingEntry } from "@WBMSG/shared";
 
 const DB_FIELD_OPTIONS: { value: DbField; label: string }[] = [
   { value: "fullPhoneNumber", label: "Full Phone Number" },
@@ -1564,7 +1564,7 @@ export function Step2MapFields(): JSX.Element {
 - [ ] **Step 2: Run type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
+pnpm --filter @WBMSG/web type-check
 ```
 
 Expected: No errors.
@@ -1696,7 +1696,7 @@ export function Step3Preview(): JSX.Element {
 - [ ] **Step 2: Run type-check**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
+pnpm --filter @WBMSG/web type-check
 ```
 
 Expected: No errors.
@@ -1725,7 +1725,7 @@ Replace `apps/web/app/(dashboard)/contacts/import/steps/Step4Progress.tsx` with:
 
 import { JSX, useEffect, useState } from "react";
 import { useWizard } from "../ImportWizard.js";
-import type { ImportProgress } from "@trustcrm/shared";
+import type { ImportProgress } from "@WBMSG/shared";
 
 export function Step4Progress(): JSX.Element {
   const { state, setState, nextStep } = useWizard();
@@ -1897,8 +1897,8 @@ export function Step5Summary(): JSX.Element {
 - [ ] **Step 3: Run type-check on both packages**
 
 ```bash
-pnpm --filter @trustcrm/web type-check
-pnpm --filter @trustcrm/api type-check
+pnpm --filter @WBMSG/web type-check
+pnpm --filter @WBMSG/api type-check
 ```
 
 Expected: No errors on either.
@@ -1906,7 +1906,7 @@ Expected: No errors on either.
 - [ ] **Step 4: Run all API tests**
 
 ```bash
-pnpm --filter @trustcrm/api test
+pnpm --filter @WBMSG/api test
 ```
 
 Expected: All tests PASS.

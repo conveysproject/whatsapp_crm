@@ -1,25 +1,25 @@
-services:
+﻿services:
   postgres:
     image: postgres:16-alpine
-    container_name: trustcrm_postgres
+    container_name: WBMSG_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: trustcrm
-      POSTGRES_PASSWORD: trustcrm
-      POSTGRES_DB: trustcrm_dev
+      POSTGRES_USER: WBMSG
+      POSTGRES_PASSWORD: WBMSG
+      POSTGRES_DB: WBMSG_dev
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U trustcrm -d trustcrm_dev"]
+      test: ["CMD-SHELL", "pg_isready -U WBMSG -d WBMSG_dev"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: trustcrm_redis
+    container_name: WBMSG_redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -33,7 +33,7 @@ services:
 
   meilisearch:
     image: getmeili/meilisearch:v1.8
-    container_name: trustcrm_meilisearch
+    container_name: WBMSG_meilisearch
     restart: unless-stopped
     environment:
       MEILI_MASTER_KEY: dev-master-key

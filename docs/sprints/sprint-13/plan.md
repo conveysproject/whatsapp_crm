@@ -1,4 +1,4 @@
-# Sprint 13 — Implementation Plan
+﻿# Sprint 13 — Implementation Plan
 
 > Full task details are in the batch plan: `docs/superpowers/plans/2026-04-28-sprint-planning-batch-4.md`
 > Tasks 1–3 cover Sprint 13.
@@ -18,7 +18,7 @@
 
 ## Test Checklist
 
-- [ ] `pnpm --filter @trustcrm/api test` — all pass including `ai.test.ts`
+- [ ] `pnpm --filter @WBMSG/api test` — all pass including `ai.test.ts`
 - [ ] `pnpm type-check` — no errors across all packages
 - [ ] `pnpm lint` — no errors
 - [ ] Manual: Open a conversation in the inbox → SmartReplies chips appear below thread
@@ -37,5 +37,5 @@ No new migrations required.
 
 Install new dependency:
 ```bash
-pnpm --filter @trustcrm/api add @anthropic-ai/sdk
+pnpm --filter @WBMSG/api add @anthropic-ai/sdk
 ```

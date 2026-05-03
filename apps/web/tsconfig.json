@@ -1,5 +1,5 @@
-{
-  "extends": "@trustcrm/tsconfig/nextjs.json",
+﻿{
+  "extends": "@WBMSG/tsconfig/nextjs.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {

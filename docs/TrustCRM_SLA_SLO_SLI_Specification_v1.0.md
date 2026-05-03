@@ -1,4 +1,4 @@
-﻿# TrustCRM
+﻿# WBMSG
 # SLA / SLO / SLI Specification
 Service Level Agreements, Objectives &amp; Indicators (Google SRE Workbook)
 Version 1.0  |  April 2026
@@ -6,7 +6,7 @@ Strictly Confidential
 Document Owner
 Head of Platform / SRE Lead
 ## 1. Purpose
-This specification defines the measurable commitments TrustCRM makes to customers (SLAs), the internal targets that engineering operates against (SLOs), and the underlying quantitative indicators (SLIs). It governs service credits, on-call alerting, error budgets, and the freeze policy when budgets are exhausted.
+This specification defines the measurable commitments WBMSG makes to customers (SLAs), the internal targets that engineering operates against (SLOs), and the underlying quantitative indicators (SLIs). It governs service credits, on-call alerting, error budgets, and the freeze policy when budgets are exhausted.
 ## 2. Definitions
 
 | Term | Meaning |
@@ -110,7 +110,7 @@ This specification defines the measurable commitments TrustCRM makes to customer
 - Beta features and Free tier services.
 - Issues caused by customer's own integrations or code.
 ## 9. Reporting &amp; Transparency
-- Public status page (status.trustcrm.in) shows real-time uptime per service.
+- Public status page (status.WBMSG.in) shows real-time uptime per service.
 - Monthly SLA report emailed to all paying customers by 10th of next month.
 - Quarterly Service Review with Enterprise customers covering SLO attainment, incidents, capacity.
 - Annual Trust Report published publicly summarising aggregate SLO attainment.
@@ -133,4 +133,4 @@ This specification defines the measurable commitments TrustCRM makes to customer
 | --- | --- | --- | --- |
 | 1.0 | 26-Apr-2026 | SRE Lead | Baseline at end of Sprint 0; pre-GA SLOs |
 
-End of SLA/SLO/SLI Specification | TrustCRM v1.0 | April 2026 | Google SRE Workbook
+End of SLA/SLO/SLI Specification | WBMSG v1.0 | April 2026 | Google SRE Workbook

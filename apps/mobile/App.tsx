@@ -1,11 +1,11 @@
-import { StatusBar } from "expo-status-bar";
+﻿import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View } from "react-native";
-import { API_VERSION } from "@trustcrm/shared";
+import { API_VERSION } from "@WBMSG/shared";
 
 export default function App() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>TrustCRM</Text>
+      <Text style={styles.title}>WBMSG</Text>
       <Text>API {API_VERSION} — mobile stub</Text>
       <StatusBar style="auto" />
     </View>
