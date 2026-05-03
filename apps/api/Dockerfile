@@ -44,7 +44,7 @@ COPY --from=builder /app/apps/api/prisma ./prisma
 COPY --from=builder /app/apps/api/prisma.config.js ./
 
 # Regenerate Prisma client against the clean flat node_modules
-RUN node ./node_modules/.bin/prisma generate
+RUN ./node_modules/.bin/prisma generate
 
 COPY --from=pruner /app/out/full/apps/api/start.sh ./
 RUN chmod +x ./start.sh
