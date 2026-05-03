@@ -60,7 +60,6 @@ export default async function CompanyDetailPage({
         <h1 className="text-2xl font-semibold text-gray-900">{company.name}</h1>
       </div>
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-card">
-        {/* @ts-expect-error -- Server Action as form action; @types/react 18 doesn't model this */}
         <form action={handleUpdate} className="space-y-4">
           <Input label="Name" name="name" defaultValue={company.name} placeholder="Company name" />
           <Input label="Domain" name="domain" defaultValue={company.domain ?? ""} placeholder="example.com" />
