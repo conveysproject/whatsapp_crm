@@ -1,16 +1,18 @@
 FROM node:20-alpine AS base
 RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
-# ── Install all dependencies ───────────────────────────────────────────────────
+# ── Prune to API-only workspace ───────────────────────────────────────────────
+FROM base AS pruner
+WORKDIR /app
+RUN npm install -g turbo
+COPY . .
+RUN turbo prune @WBMSG/api --docker
+
+# ── Install dependencies (pruned workspace only) ──────────────────────────────
 FROM base AS deps
 WORKDIR /app
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/api/package.json ./apps/api/
-COPY apps/web/package.json ./apps/web/
-COPY apps/mobile/package.json ./apps/mobile/
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/tsconfig/ ./packages/tsconfig/
-COPY packages/eslint-config/package.json ./packages/eslint-config/
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 RUN pnpm install --frozen-lockfile
 
 # ── Build shared + api ────────────────────────────────────────────────────────
@@ -18,7 +20,7 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
-COPY . .
+COPY --from=pruner /app/out/full/ .
 RUN pnpm --filter @WBMSG/shared build
 RUN pnpm --filter @WBMSG/api run generate
 RUN pnpm --filter @WBMSG/api build
@@ -30,13 +32,8 @@ ENV NODE_ENV=production
 
 RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/api/package.json ./apps/api/
-COPY apps/web/package.json ./apps/web/
-COPY apps/mobile/package.json ./apps/mobile/
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/tsconfig/package.json ./packages/tsconfig/
-COPY packages/eslint-config/package.json ./packages/eslint-config/
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
@@ -45,7 +42,7 @@ RUN pnpm --filter @WBMSG/api run generate
 
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-COPY apps/api/start.sh ./apps/api/start.sh
+COPY --from=pruner /app/out/full/apps/api/start.sh ./apps/api/start.sh
 RUN chmod +x ./apps/api/start.sh
 
 WORKDIR /app/apps/api

@@ -10,6 +10,4 @@ node_modules
 .gitignore
 docs
 apps/mobile
-!apps/mobile/package.json
 apps/web
-!apps/web/package.json
