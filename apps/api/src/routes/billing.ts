@@ -1,7 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import type Stripe from "stripe";
 import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS } from "../lib/stripe.js";
-import type { PlanTier } from "@prisma/client";
 
 export const billingRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/billing/usage", async (request) => {
@@ -68,39 +66,4 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     return { data: { url: session.url } };
   });
 
-  fastify.post("/billing/webhook", async (request, reply) => {
-    const sig = request.headers["stripe-signature"];
-    const webhookSecret = process.env["STRIPE_WEBHOOK_SECRET"] ?? "";
-    let event: Stripe.Event;
-    try {
-      event = getStripe().webhooks.constructEvent(
-        JSON.stringify(request.body),
-        sig as string,
-        webhookSecret
-      );
-    } catch {
-      return reply.status(400).send({ error: "invalid_signature" });
-    }
-
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      const { organizationId, planTier } = session.metadata ?? {};
-      if (organizationId && planTier) {
-        const org = await fastify.prisma.organization.findUnique({
-          where: { id: organizationId },
-          select: { settings: true },
-        });
-        const existing = (org?.settings as Record<string, unknown>) ?? {};
-        await fastify.prisma.organization.update({
-          where: { id: organizationId },
-          data: {
-            planTier: planTier as PlanTier,
-            settings: { ...existing, stripeCustomerId: typeof session.customer === "string" ? session.customer : (session.customer as { id?: string } | null)?.id ?? null },
-          },
-        });
-      }
-    }
-
-    return reply.status(200).send({ received: true });
-  });
 };

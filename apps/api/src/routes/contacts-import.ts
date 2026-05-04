@@ -9,8 +9,19 @@ import type { FieldMapping, ContactImportId } from "@WBMSG/shared";
 
 const CSV_SESSION_TTL_SECONDS = 1800; // 30 minutes
 
+function getImportTokenSecret(): string {
+  const s = process.env["IMPORT_TOKEN_SECRET"];
+  if (!s || s === "dev-import-secret-change-in-prod") {
+    if (process.env["NODE_ENV"] === "production") {
+      throw new Error("IMPORT_TOKEN_SECRET must be set to a strong random value in production");
+    }
+    return s ?? "dev-import-secret-change-in-prod";
+  }
+  return s;
+}
+
 function generateImportToken(importJobId: string, organizationId: string): string {
-  const secret = process.env["IMPORT_TOKEN_SECRET"] ?? "dev-import-secret-change-in-prod";
+  const secret = getImportTokenSecret();
   const exp = Math.floor(Date.now() / 1000) + CSV_SESSION_TTL_SECONDS;
   const payload = `${importJobId}:${organizationId}:${exp}`;
   const sig = createHmac("sha256", secret).update(payload).digest("hex");
@@ -31,7 +42,7 @@ function verifyImportToken(token: string, expectedJobId: string): string | null 
   const jobId = parts.slice(0, parts.length - 2).join(":");
   if (jobId !== expectedJobId) return null;
   if (isNaN(exp) || Math.floor(Date.now() / 1000) > exp) return null;
-  const secret = process.env["IMPORT_TOKEN_SECRET"] ?? "dev-import-secret-change-in-prod";
+  const secret = getImportTokenSecret();
   const expected = createHmac("sha256", secret).update(payload).digest("hex");
   try {
     const sigBuf = Buffer.from(sig, "hex");

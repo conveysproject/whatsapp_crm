@@ -23,6 +23,7 @@ import { trustScoreRouter } from "./trust-score.js";
 import { onboardingRouter } from "./onboarding.js";
 import { searchRouter } from "./search.js";
 import { billingRouter } from "./billing.js";
+import { billingWebhookRouter } from "./billing-webhook.js";
 import { clerkWebhookRouter } from "./clerk-webhook.js";
 import { registerRouter } from "./register.js";
 import { contactsImportRouter } from "./contacts-import.js";
@@ -53,6 +54,7 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(onboardingRouter, { prefix: "/v1/onboarding" });
   await fastify.register(searchRouter, { prefix: "/v1" });
   await fastify.register(billingRouter, { prefix: "/v1" });
+  await fastify.register(billingWebhookRouter, { prefix: "/v1" });
   await fastify.register(clerkWebhookRouter);
   await fastify.register(registerRouter, { prefix: "/v1" });
 };
