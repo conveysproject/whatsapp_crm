@@ -31,6 +31,7 @@ RUN pnpm --filter @WBMSG/api deploy --prod --legacy /prod
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ENV DEPLOY_DATE="2026-05-04"
 
 # Flat node_modules — no workspace, no pnpm context at runtime
 COPY --from=builder /prod/node_modules ./node_modules
