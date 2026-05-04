@@ -13,7 +13,10 @@
       "Bash(git commit *)",
       "Bash(pnpm --filter @WBMSG/api type-check)",
       "Bash(railway service *)",
-      "Bash(vercel ls *)"
+      "Bash(vercel ls *)",
+      "Bash(pnpm --filter @WBMSG/api generate)",
+      "Bash(railway status *)",
+      "Bash(railway up *)"
     ]
   },
   "enabledPlugins": {
