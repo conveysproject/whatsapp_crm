@@ -103,6 +103,12 @@ export default function BusinessDetailsPage(): JSX.Element {
   const [apiError, setApiError] = useState("");
 
   useEffect(() => {
+    if (isLoaded && !user) {
+      router.replace("/sign-in?redirect_url=/business-details");
+    }
+  }, [isLoaded, user, router]);
+
+  useEffect(() => {
     if (form.companyWebsite && !form.companyWebsite.startsWith("www.") && !form.companyWebsite.startsWith("http")) {
       setForm(f => ({ ...f, companyWebsite: "www." + f.companyWebsite }));
     }
