@@ -22,10 +22,7 @@ export default clerkMiddleware(async (auth, request) => {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Skip server-side auth guard for setup routes: Clerk sets cookies client-side
-  // right as the post-signup redirect fires, so the very first server request may
-  // arrive before the session cookie is committed. The page handles auth client-side.
-  if (!isPublicRoute(request) && !isSetupRoute(request)) {
+  if (!isPublicRoute(request)) {
     await auth.protect();
   }
 

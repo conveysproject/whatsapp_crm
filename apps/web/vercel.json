@@ -1,6 +1,1 @@
-{
-  "buildCommand": "cd ../.. && pnpm --filter @WBMSG/shared build && pnpm --filter @WBMSG/web build",
-  "installCommand": "cd ../.. && pnpm install",
-  "outputDirectory": ".next",
-  "framework": "nextjs"
-}
+{}
