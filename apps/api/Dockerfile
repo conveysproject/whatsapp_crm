@@ -1,54 +1,50 @@
 FROM node:20-alpine AS base
 RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
-# ── Prune to API-only workspace ───────────────────────────────────────────────
-FROM base AS pruner
-WORKDIR /app
-RUN npm install -g turbo
-COPY . .
-RUN turbo prune @WBMSG/api --docker
-
-# ── Install all deps ──────────────────────────────────────────────────────────
+# ── Install all dependencies ───────────────────────────────────────────────────
 FROM base AS deps
 WORKDIR /app
-COPY --from=pruner /app/out/json/ .
-COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/tsconfig/ ./packages/tsconfig/
+COPY packages/eslint-config/package.json ./packages/eslint-config/
 RUN pnpm install --frozen-lockfile
 
-# ── Build + create workspace-free prod deployment ─────────────────────────────
+# ── Build shared + api ────────────────────────────────────────────────────────
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
-COPY --from=pruner /app/out/full/ .
+COPY . .
 RUN pnpm --filter @WBMSG/shared build
 RUN pnpm --filter @WBMSG/api run generate
 RUN pnpm --filter @WBMSG/api build
-# pnpm deploy produces a flat node_modules with no pnpm-workspace.yaml
-RUN pnpm --filter @WBMSG/api deploy --prod --legacy /prod
 
-# ── Production image (flat pnpm-deploy structure, no workspace) ───────────────
+# ── Production image ──────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-ENV DEPLOY_DATE="2026-05-04"
 
-# Flat node_modules — no workspace, no pnpm context at runtime
-COPY --from=builder /prod/node_modules ./node_modules
-COPY --from=builder /prod/package.json ./package.json
+RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
-# Compiled output replaces source
-COPY --from=builder /app/apps/api/dist ./dist
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/tsconfig/package.json ./packages/tsconfig/
+COPY packages/eslint-config/package.json ./packages/eslint-config/
+RUN pnpm install --frozen-lockfile --prod
 
-# Prisma schema, migrations, and JS config (no tsx needed)
-COPY --from=builder /app/apps/api/prisma ./prisma
-COPY --from=builder /app/apps/api/prisma.config.js ./
+COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
+COPY --from=builder /app/apps/api/prisma.config.ts ./apps/api/
+RUN pnpm --filter @WBMSG/api run generate
 
-# Regenerate Prisma client against the clean flat node_modules
-RUN ./node_modules/.bin/prisma generate
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY apps/api/start.sh ./apps/api/start.sh
+RUN chmod +x ./apps/api/start.sh
 
-COPY --from=pruner /app/out/full/apps/api/start.sh ./
-RUN chmod +x ./start.sh
-
+WORKDIR /app/apps/api
 EXPOSE 4000
+
 CMD ["sh", "start.sh"]
