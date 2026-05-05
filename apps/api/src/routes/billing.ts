@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import type { PlanTier } from "@WBMSG/shared";
 import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS } from "../lib/stripe.js";
 
 export const billingRouter: FastifyPluginAsync = async (fastify) => {
