@@ -1,7 +1,9 @@
 #!/bin/sh
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 echo "[startup] Running database migrations..."
-node ../../node_modules/.bin/prisma migrate deploy
+"$SCRIPT_DIR/node_modules/.bin/prisma" migrate deploy
 echo "[startup] Migrations complete. Starting server..."
-exec node dist/index.js
+exec node "$SCRIPT_DIR/dist/index.js"
