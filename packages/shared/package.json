@@ -16,6 +16,9 @@
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist"
   },
+  "dependencies": {
+    "@prisma/client": "^7.8.0"
+  },
   "devDependencies": {
     "@WBMSG/tsconfig": "workspace:*",
     "@WBMSG/eslint-config": "workspace:*",

@@ -1,5 +1,7 @@
 // Shared domain types for WBMSG
 
+export type { ContactImportStatus, ContactImport } from "@prisma/client";
+
 export type OrganizationId = string & { readonly __brand: "OrganizationId" };
 export type UserId = string & { readonly __brand: "UserId" };
 export type InvitationId = string & { readonly __brand: "InvitationId" };
