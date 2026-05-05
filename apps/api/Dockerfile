@@ -36,7 +36,7 @@ COPY packages/eslint-config/package.json ./packages/eslint-config/
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
-COPY --from=builder /app/apps/api/prisma.config.ts ./apps/api/
+COPY --from=builder /app/apps/api/prisma.config.js ./apps/api/
 RUN pnpm --filter @WBMSG/api run generate
 
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
