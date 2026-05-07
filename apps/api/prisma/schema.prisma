@@ -46,9 +46,13 @@ model Organization {
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")
 
-  users         User[]
-  invitations   Invitation[]
-  conversations Conversation[]
+  users               User[]
+  invitations         Invitation[]
+  conversations       Conversation[]
+  members             OrganizationMember[]
+  manualSubscriptions ManualSubscription[]
+  transactions        Transaction[]
+  creditLedger        CreditLedger[]
 
   @@map("organizations")
 }
@@ -79,15 +83,22 @@ model Conversation {
   contactId         String?            @map("contact_id")
   channelType       String             @default("whatsapp") @map("channel_type")
   status            ConversationStatus @default(open)
-  assignedTo        String?            @map("assigned_to")
+  assignedTo        String?            @map("assigned_to") // userId
+  teamId            String?            @map("team_id")
+  team              Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  slaId             String?            @map("sla_id")
+  sla               SlaPolicy?         @relation(fields: [slaId], references: [id], onDelete: SetNull)
   whatsappContactId String?            @map("whatsapp_contact_id")
   lastMessageAt     DateTime?          @map("last_message_at")
+  closedAt          DateTime?          @map("closed_at")
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
   messages          Message[]
 
   @@index([organizationId])
   @@index([organizationId, status])
+  @@index([organizationId, assignedTo])
+  @@index([organizationId, teamId])
   @@map("conversations")
 }
 
@@ -98,15 +109,25 @@ model Message {
   organizationId    String           @map("organization_id")
   direction         MessageDirection
   contentType       String           @default("text") @map("content_type")
-  body              String?
+  body              String?          @db.Text
   mediaUrl          String?          @map("media_url")
   whatsappMessageId String?          @unique @map("whatsapp_message_id")
+  wabPhoneNumberId  String?          @map("wab_phone_number_id") // which business number sent/received
   status            MessageStatus    @default(sent)
-  sentAt            DateTime         @default(now()) @map("sent_at")
+  isSystemMessage   Boolean          @default(false) @map("is_system_message") // bot/SLA notifications, hidden in inbox
+  replyToId         String?          @map("reply_to_id")
+  replyTo           Message?         @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies           Message[]        @relation("MessageReplies")
+  sentAt            DateTime         @default(now()) @map("sent_at") // actual WA timestamp
   createdAt         DateTime         @default(now()) @map("created_at")
 
+  labels         MessageLabel[]
+
   @@index([conversationId])
+  @@index([conversationId, sentAt])            // paginated inbox queries
   @@index([organizationId])
+  @@index([organizationId, direction, status]) // analytics
+  @@index([organizationId, isSystemMessage])   // filter system messages from inbox
   @@map("messages")
 }
 
@@ -118,10 +139,12 @@ model User {
   role           Role     @default(agent)
   isActive       Boolean  @default(true) @map("is_active")
   pushToken      String?  @map("push_token")
+  settings       Json     @default("{}") // notification prefs, language, timezone, UI preferences
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships  OrganizationMember[]
 
   @@index([organizationId])
   @@map("users")
@@ -181,6 +204,89 @@ enum ContactImportStatus {
   failed
 }
 
+enum TicketStatus {
+  open
+  pending
+  resolved
+  closed
+}
+
+enum AutoReplyTriggerType {
+  contains
+  is
+  starts_with
+  ends_with
+  regex
+}
+
+enum CampaignRecipientStatus {
+  pending
+  sent
+  delivered
+  read
+  failed
+  cancelled
+}
+
+enum PaymentGateway {
+  stripe
+  razorpay
+  upi
+  bank_transfer
+  cash
+  other
+}
+
+enum ManualSubscriptionStatus {
+  active
+  trial
+  expired
+  cancelled
+}
+
+enum TransactionType {
+  subscription
+  credit_purchase
+  refund
+  adjustment
+}
+
+enum TransactionStatus {
+  pending
+  completed
+  failed
+  refunded
+}
+
+enum CreditType {
+  purchase
+  message_sent
+  call_made
+  refund
+  adjustment
+}
+
+enum TicketPriority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum CallDirection {
+  inbound
+  outbound
+}
+
+enum CallStatus {
+  initiated
+  ringing
+  answered
+  completed
+  missed
+  failed
+}
+
 // ─── Models ──────────────────────────────────────────────────────────────────
 
 model Contact {
@@ -188,18 +294,35 @@ model Contact {
   organizationId String         @map("organization_id")
   phoneNumber    String         @map("phone_number")
   name           String?
+  firstName      String?        @map("first_name")  // structured — used in template variables {{first_name}}
+  lastName       String?        @map("last_name")
   email          String?
+  languageCode   String?        @map("language_code") // drives template language selection
   companyId      String?        @map("company_id")
   company        Company?       @relation(fields: [companyId], references: [id])
   lifecycleStage LifecycleStage @default(lead) @map("lifecycle_stage")
   tags           String[]
   customFields   Json           @default("{}") @map("custom_fields")
+  externalId     String?        @map("external_id")  // external CRM/ERP reference (WhatsJet: bsuid)
+  whatsappOptOut Boolean        @default(false) @map("whatsapp_opt_out") // compliance: never message opted-out
+  waBlockedAt    DateTime?      @map("wa_blocked_at") // contact blocked your WA number
+  disableBot     Boolean        @default(false) @map("disable_bot") // force human-agent for this contact
+  deletedAt      DateTime?      @map("deleted_at")   // GDPR soft delete
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  labels             ContactLabel[]
+  customFieldValues  ContactCustomFieldValue[]
+  tickets            Ticket[]
+  calls              WhatsappCall[]
+  segmentContacts    SegmentContact[]
+  campaignRecipients CampaignRecipient[]
 
   @@unique([organizationId, phoneNumber])
   @@index([organizationId])
   @@index([organizationId, lifecycleStage])
+  @@index([organizationId, whatsappOptOut])
+  @@index([organizationId, deletedAt])
   @@map("contacts")
 }
 
@@ -240,12 +363,14 @@ model Company {
 }
 
 model Segment {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
+  id             String           @id @default(uuid())
+  organizationId String           @map("organization_id")
   name           String
-  filters        Json     @default("[]")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  filters        Json             @default("[]")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  contacts       SegmentContact[]
+  campaigns      CampaignSegment[]
 
   @@index([organizationId])
   @@map("segments")
@@ -300,17 +425,21 @@ model Template {
 }
 
 model Campaign {
-  id             String         @id @default(uuid())
-  organizationId String         @map("organization_id")
+  id             String              @id @default(uuid())
+  organizationId String              @map("organization_id")
   name           String
-  templateId     String?        @map("template_id")
-  status         CampaignStatus @default(draft)
-  scheduledAt    DateTime?      @map("scheduled_at")
-  sentAt         DateTime?      @map("sent_at")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
+  templateId     String?             @map("template_id")
+  status         CampaignStatus      @default(draft)
+  scheduledAt    DateTime?           @map("scheduled_at")
+  sentAt         DateTime?           @map("sent_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  segments       CampaignSegment[]
+  recipients     CampaignRecipient[]
 
   @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, status, scheduledAt]) // scheduler: find due campaigns
   @@map("campaigns")
 }
 
@@ -331,42 +460,46 @@ model RoutingRule {
 }
 
 model SlaPolicy {
-  id                String   @id @default(uuid())
+  id                String         @id @default(uuid())
   organizationId    String
   name              String
-  firstResponseSecs Int      @default(3600)
-  resolutionSecs    Int      @default(86400)
-  isDefault         Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  firstResponseSecs Int            @default(3600)
+  resolutionSecs    Int            @default(86400)
+  isDefault         Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  conversations     Conversation[]
 
   @@index([organizationId])
   @@map("sla_policies")
 }
 
 model Flow {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
+  id             String        @id @default(uuid())
+  organizationId String        @map("organization_id")
   name           String
-  triggerType    String   @map("trigger_type")
-  isActive       Boolean  @default(false) @map("is_active")
-  flowDefinition Json     @default("{}") @map("flow_definition")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  triggerType    String        @map("trigger_type")
+  isActive       Boolean       @default(false) @map("is_active")
+  flowDefinition Json          @default("{}") @map("flow_definition")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  autoReplies    AutoReply[]
 
   @@index([organizationId])
   @@map("flows")
 }
 
 model Chatbot {
-  id             String       @id @default(uuid())
-  organizationId String       @map("organization_id")
-  name           String
-  flowId         String       @map("flow_id")
-  isActive       Boolean      @default(false) @map("is_active")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
-  sessions       BotSession[]
+  id                    String       @id @default(uuid())
+  organizationId        String       @map("organization_id")
+  name                  String
+  flowId                String       @map("flow_id")
+  isActive              Boolean      @default(false) @map("is_active")
+  sessionTimeoutMinutes Int?         @map("session_timeout_minutes") // idle timeout before session expires
+  isStrictFlow          Boolean      @default(false) @map("is_strict_flow") // if true, bot only responds to expected inputs
+  createdAt             DateTime     @default(now()) @map("created_at")
+  updatedAt             DateTime     @updatedAt @map("updated_at")
+  sessions              BotSession[]
 
   @@index([organizationId])
   @@map("chatbots")
@@ -379,20 +512,24 @@ model BotSession {
   conversationId String   @unique @map("conversation_id")
   currentNodeId  String?  @map("current_node_id")
   isEscalated    Boolean  @default(false) @map("is_escalated")
+  timeoutAt      DateTime? @map("timeout_at") // when this session auto-expires
+  sessionData    Json?    @map("session_data") // collected variables during flow execution
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@index([conversationId])
+  @@index([timeoutAt])  // scheduler queries for expired sessions
   @@map("bot_sessions")
 }
 
 model Team {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
+  id             String         @id @default(uuid())
+  organizationId String         @map("organization_id")
   name           String
   description    String?
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  conversations  Conversation[]
 
   @@index([organizationId])
   @@map("teams")
@@ -412,15 +549,471 @@ model ApiKey {
 }
 
 model Webhook {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
+  id             String               @id @default(uuid())
+  organizationId String               @map("organization_id")
   url            String
   events         String[]
   secret         String
+  isActive       Boolean              @default(true) @map("is_active")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+  deliveries     WebhookDeliveryLog[]
+
+  @@index([organizationId])
+  @@map("webhooks")
+}
+
+// ─── Labels ───────────────────────────────────────────────────────────────────
+
+model Label {
+  id             String         @id @default(uuid())
+  organizationId String         @map("organization_id")
+  title          String
+  textColor      String?        @map("text_color")
+  bgColor        String?        @map("bg_color")
+  isActive       Boolean        @default(true) @map("is_active")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  contactLabels  ContactLabel[]
+  messageLabels  MessageLabel[]
+
+  @@index([organizationId])
+  @@map("labels")
+}
+
+model ContactLabel {
+  id        String   @id @default(uuid())
+  contactId String   @map("contact_id")
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  labelId   String   @map("label_id")
+  label     Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([contactId, labelId])
+  @@index([contactId])
+  @@index([labelId])
+  @@map("contact_labels")
+}
+
+model MessageLabel {
+  id        String   @id @default(uuid())
+  messageId String   @map("message_id")
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  labelId   String   @map("label_id")
+  label     Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([messageId, labelId])
+  @@index([messageId])
+  @@index([labelId])
+  @@map("message_labels")
+}
+
+// ─── Custom Fields ────────────────────────────────────────────────────────────
+
+model ContactCustomField {
+  id             String                    @id @default(uuid())
+  organizationId String                    @map("organization_id")
+  inputName      String                    @map("input_name")
+  inputType      String                    @default("text") @map("input_type")
+  isActive       Boolean                   @default(true) @map("is_active")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+  values         ContactCustomFieldValue[]
+
+  @@index([organizationId])
+  @@map("contact_custom_fields")
+}
+
+model ContactCustomFieldValue {
+  id         String             @id @default(uuid())
+  contactId  String             @map("contact_id")
+  contact    Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  fieldId    String             @map("field_id")
+  field      ContactCustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  fieldValue String?            @map("field_value")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+
+  @@unique([contactId, fieldId])
+  @@index([contactId])
+  @@map("contact_custom_field_values")
+}
+
+// ─── Segment & Campaign Junctions ─────────────────────────────────────────────
+
+model SegmentContact {
+  id        String   @id @default(uuid())
+  segmentId String   @map("segment_id")
+  segment   Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  contactId String   @map("contact_id")
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([segmentId, contactId])
+  @@index([segmentId])
+  @@index([contactId])
+  @@map("segment_contacts")
+}
+
+model CampaignSegment {
+  id         String   @id @default(uuid())
+  campaignId String   @map("campaign_id")
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  segmentId  String   @map("segment_id")
+  segment    Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, segmentId])
+  @@index([campaignId])
+  @@index([segmentId])
+  @@map("campaign_segments")
+}
+
+// ─── Tickets ──────────────────────────────────────────────────────────────────
+
+model Ticket {
+  id             String         @id @default(uuid())
+  organizationId String         @map("organization_id")
+  contactId      String         @map("contact_id")
+  contact        Contact        @relation(fields: [contactId], references: [id])
+  subject        String?
+  description    String?
+  status         TicketStatus   @default(open)
+  priority       TicketPriority @default(medium)
+  assignedTo     String?        @map("assigned_to")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([contactId])
+  @@map("tickets")
+}
+
+// ─── WhatsApp Calls ───────────────────────────────────────────────────────────
+
+model WhatsappCall {
+  id               String        @id @default(uuid())
+  organizationId   String        @map("organization_id")
+  contactId        String        @map("contact_id")
+  contact          Contact       @relation(fields: [contactId], references: [id])
+  status           CallStatus    @default(initiated)
+  callDirection    CallDirection @map("call_direction")
+  wacId            String?       @map("wac_id")
+  wabPhoneNumberId String?       @map("wab_phone_number_id")
+  contactWaId      String?       @map("contact_wa_id")
+  startedAt        DateTime?     @map("started_at")
+  endedAt          DateTime?     @map("ended_at")
+  durationSeconds  Int?          @map("duration_seconds")
+  initiatedBy      String?       @map("initiated_by")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([contactId])
+  @@map("whatsapp_calls")
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  userId         String?   @map("user_id")
+  type           String
+  message        String?
+  action         String?
+  data           Json?
+  readAt         DateTime? @map("read_at")
+  scheduledAt    DateTime? @map("scheduled_at")
+  expiresAt      DateTime? @map("expires_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@index([organizationId, userId])
+  @@map("notifications")
+}
+
+// ─── Activity Log ─────────────────────────────────────────────────────────────
+
+model ActivityLog {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  userId         String?  @map("user_id")
+  activity       String
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@index([organizationId, userId])
+  @@map("activity_logs")
+}
+
+// ─── User Devices ─────────────────────────────────────────────────────────────
+
+model UserDevice {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  deviceToken String?  @map("device_token")
+  deviceId    String?  @map("device_id")
+  deviceType  String?  @map("device_type")
+  fcmToken    String?  @map("fcm_token")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("user_devices")
+}
+
+// ─── Media Assets ─────────────────────────────────────────────────────────────
+// Agents attach these to WhatsApp messages: catalogs, brochures, price lists, etc.
+
+model MediaAsset {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  title          String
+  description    String?
+  type           String   // document | image | video | audio
+  fileUrl        String   @map("file_url")
+  mimeType       String?  @map("mime_type")
+  fileSizeBytes  Int?     @map("file_size_bytes")
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId])
-  @@map("webhooks")
+  @@index([organizationId, type])
+  @@map("media_assets")
+}
+
+// ─── Pages ────────────────────────────────────────────────────────────────────
+// White-label content per vendor: terms, privacy policy, help, custom landing pages.
+// organizationId null = platform-level page (global).
+
+model Page {
+  id             String   @id @default(uuid())
+  organizationId String?  @map("organization_id")
+  title          String
+  slug           String
+  content        String?  @db.Text
+  type           String   @default("custom") // terms | privacy | help | custom
+  isPublished    Boolean  @default(false) @map("is_published")
+  showInMenu     Boolean  @default(false) @map("show_in_menu")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@map("pages")
+}
+
+// ─── Webhook Logs ─────────────────────────────────────────────────────────────
+// Inbound webhook payloads received (WhatsApp, Meta, etc.).
+// Enterprise customers use this for audit and debugging.
+
+model WebhookLog {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  contactId      String?   @map("contact_id")
+  source         String    // whatsapp | meta | custom
+  payload        Json
+  processedAt    DateTime? @map("processed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  deliveries     WebhookDeliveryLog[]
+
+  @@index([organizationId])
+  @@index([organizationId, source])
+  @@map("webhook_logs")
+}
+
+// Outbound delivery attempts for each configured Webhook endpoint.
+
+enum WebhookDeliveryStatus {
+  pending
+  success
+  failed
+  retrying
+}
+
+model WebhookDeliveryLog {
+  id             String                @id @default(uuid())
+  webhookId      String                @map("webhook_id")
+  webhook        Webhook               @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  webhookLogId   String?               @map("webhook_log_id")
+  webhookLog     WebhookLog?           @relation(fields: [webhookLogId], references: [id], onDelete: SetNull)
+  messageId      String?               @map("message_id")
+  status         WebhookDeliveryStatus @default(pending)
+  responseCode   Int?                  @map("response_code")
+  responseBody   String?               @map("response_body")
+  attemptNumber  Int                   @default(1) @map("attempt_number")
+  attemptedAt    DateTime?             @map("attempted_at")
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  @@index([webhookId])
+  @@index([webhookLogId])
+  @@index([status])
+  @@map("webhook_delivery_logs")
+}
+
+// ─── Auto Replies ─────────────────────────────────────────────────────────────
+// Keyword-trigger instant replies. Different from Flows (visual builder).
+// Example: any message containing "price" → send price list text.
+// Can optionally hand off to a Flow for complex follow-up.
+
+model AutoReply {
+  id             String               @id @default(uuid())
+  organizationId String               @map("organization_id")
+  name           String
+  triggerType    AutoReplyTriggerType @map("trigger_type")
+  triggerKeyword String               @map("trigger_keyword")
+  replyText      String               @map("reply_text") @db.Text
+  replyData      Json?                @map("reply_data") // buttons, media, list message
+  flowId         String?              @map("flow_id")    // escalate to Flow after reply
+  flow           Flow?                @relation(fields: [flowId], references: [id], onDelete: SetNull)
+  parentId       String?              @map("parent_id")  // chain: reply triggers another reply
+  parent         AutoReply?           @relation("AutoReplyChain", fields: [parentId], references: [id], onDelete: SetNull)
+  children       AutoReply[]          @relation("AutoReplyChain")
+  priorityIndex  Int                  @default(0) @map("priority_index")
+  isActive       Boolean              @default(true) @map("is_active")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([organizationId, isActive, priorityIndex])
+  @@map("auto_replies")
+}
+
+// ─── Campaign Recipients ──────────────────────────────────────────────────────
+// One row per contact per campaign. Enables UI progress reporting:
+// "1,247 sent / 83 failed / 210 pending" without querying BullMQ/Redis.
+
+model CampaignRecipient {
+  id             String                  @id @default(uuid())
+  campaignId     String                  @map("campaign_id")
+  campaign       Campaign                @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  organizationId String                  @map("organization_id")
+  contactId      String?                 @map("contact_id")
+  contact        Contact?                @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  phoneNumber    String                  @map("phone_number")
+  fullName       String?                 @map("full_name")
+  status         CampaignRecipientStatus @default(pending)
+  messageType    String?                 @map("message_type")
+  scheduledAt    DateTime?               @map("scheduled_at")
+  sentAt         DateTime?               @map("sent_at")
+  retries        Int                     @default(0)
+  errorMessage   String?                 @map("error_message")
+  messageId      String?                 @map("message_id") // populated once WA confirms send
+  data           Json?
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+
+  @@index([campaignId])
+  @@index([campaignId, status])
+  @@index([organizationId, campaignId, status])
+  @@index([contactId])
+  @@map("campaign_recipients")
+}
+
+// ─── Manual Subscriptions ─────────────────────────────────────────────────────
+// Non-Stripe plans: Razorpay, UPI, bank transfer, cash.
+// Essential for India market where not all SMBs use Stripe.
+
+model ManualSubscription {
+  id               String                   @id @default(uuid())
+  organizationId   String                   @map("organization_id")
+  organization     Organization             @relation(fields: [organizationId], references: [id])
+  planTier         PlanTier                 @map("plan_tier")
+  status           ManualSubscriptionStatus @default(active)
+  charges          Decimal                  @db.Decimal(13, 4)
+  chargesFrequency String                   @map("charges_frequency") // monthly | yearly | one_time
+  gateway          PaymentGateway
+  gatewayPriceId   String?                  @map("gateway_price_id")
+  isAutoRecurring  Boolean                  @default(false) @map("is_auto_recurring")
+  startsAt         DateTime                 @default(now()) @map("starts_at")
+  endsAt           DateTime?                @map("ends_at")
+  trialEndsAt      DateTime?                @map("trial_ends_at")
+  remarks          String?
+  deletedAt        DateTime?                @map("deleted_at")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
+  transactions     Transaction[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("manual_subscriptions")
+}
+
+// ─── Transactions ─────────────────────────────────────────────────────────────
+// Unified payment ledger across all gateways (Stripe + manual).
+// Single source of truth for finance reporting.
+
+model Transaction {
+  id                   String              @id @default(uuid())
+  organizationId       String              @map("organization_id")
+  organization         Organization        @relation(fields: [organizationId], references: [id])
+  amount               Decimal             @db.Decimal(13, 4)
+  currency             String              @default("INR")
+  type                 TransactionType
+  status               TransactionStatus   @default(pending)
+  gateway              PaymentGateway
+  gatewayTransactionId String?             @unique @map("gateway_transaction_id")
+  referenceId          String              @unique @map("reference_id")
+  notes                String?
+  manualSubscriptionId String?             @map("manual_subscription_id")
+  manualSubscription   ManualSubscription? @relation(fields: [manualSubscriptionId], references: [id], onDelete: SetNull)
+  stripeSubscriptionId String?             @map("stripe_subscription_id")
+  metadata             Json?
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([organizationId, type, status])
+  @@index([organizationId, createdAt])
+  @@map("transactions")
+}
+
+// ─── Credit Ledger ────────────────────────────────────────────────────────────
+// Per-message/call credit deduction. Supports credit wallet pricing model
+// (buy 10,000 messages for ₹999) — standard in India SaaS market.
+// Positive credits = topup, negative = spend.
+
+model CreditLedger {
+  id             String       @id @default(uuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  credits        BigInt       // positive = credited, negative = debited
+  type           CreditType
+  notes          String?
+  messageId      String?      @map("message_id") // message that caused this debit
+  callId         String?      @map("call_id")    // call that caused this debit
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@index([organizationId])
+  @@index([organizationId, type])
+  @@index([organizationId, createdAt])
+  @@index([messageId])
+  @@map("credit_ledger")
+}
+
+// ─── Organization Members ─────────────────────────────────────────────────────
+// Many-to-many: one agent can belong to multiple organizations.
+// Critical for agencies managing multiple client WhatsApp accounts.
+// User.organizationId stays as the primary/home org for fast single-org queries.
+
+model OrganizationMember {
+  id             String       @id @default(uuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String       @map("user_id")
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           Role         @default(agent)
+  isPrimary      Boolean      @default(false) @map("is_primary")
+  isActive       Boolean      @default(true) @map("is_active")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("organization_members")
 }
