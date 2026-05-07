@@ -584,7 +584,6 @@ export default function LandingPage(): JSX.Element {
             {[
               {h:"Product",ls:["Features","Pricing","Automation","Analytics","Changelog"]},
               {h:"Company",ls:["About","Blog","Careers","Contact"]},
-              {h:"Legal",ls:["Privacy Policy","Terms of Service","DPDP Compliance","Security"]},
             ].map(col => (
               <div key={col.h}>
                 <div className="ft-ch">{col.h}</div>
@@ -596,7 +595,6 @@ export default function LandingPage(): JSX.Element {
           </div>
           <div className="ft-bot">
             <span>© 2026 WBMSG. All rights reserved.</span>
-            <span>SOC 2 Type II · DPDP Act Compliant · Data hosted in India</span>
           </div>
         </div>
       </footer>
