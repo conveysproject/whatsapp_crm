@@ -46,6 +46,22 @@ model Organization {
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")
 
+  slug               String?   @unique
+  domain             String?
+  logoImage          String?   @map("logo_image")
+  smallLogoImage     String?   @map("small_logo_image")
+  favicon            String?
+  darkLogoImage      String?   @map("dark_logo_image")
+  darkSmallLogoImage String?   @map("dark_small_logo_image")
+  darkFavicon        String?   @map("dark_favicon")
+  orgType            String?   @map("org_type")
+  status             String    @default("active")
+  banReason          String?   @map("ban_reason")
+  stripeId           String?   @map("stripe_id")
+  trialEndsAt        DateTime? @map("trial_ends_at")
+  vendorSettings     VendorSetting[]
+  cannedResponses    CannedResponse[]
+
   users               User[]
   invitations         Invitation[]
   conversations       Conversation[]
@@ -55,6 +71,36 @@ model Organization {
   creditLedger        CreditLedger[]
 
   @@map("organizations")
+}
+
+model VendorSetting {
+  id             String       @id @default(uuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  key            String
+  value          String?      @db.Text
+  dataType       String       @default("string") @map("data_type")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+  @@map("vendor_settings")
+}
+
+model CannedResponse {
+  id             String       @id @default(uuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  shortcut       String?
+  content        String       @db.Text
+  mediaData      Json?        @map("media_data")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@map("canned_responses")
 }
 
 enum ConversationStatus {
@@ -139,6 +185,8 @@ model User {
   role           Role     @default(agent)
   isActive       Boolean  @default(true) @map("is_active")
   pushToken      String?  @map("push_token")
+  username     String? @unique
+  mobileNumber String? @map("mobile_number")
   settings       Json     @default("{}") // notification prefs, language, timezone, UI preferences
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -307,6 +355,12 @@ model Contact {
   whatsappOptOut Boolean        @default(false) @map("whatsapp_opt_out") // compliance: never message opted-out
   waBlockedAt    DateTime?      @map("wa_blocked_at") // contact blocked your WA number
   disableBot     Boolean        @default(false) @map("disable_bot") // force human-agent for this contact
+  assignedUserId  String?   @map("assigned_user_id")
+  notes           String?   @db.Text
+  waId            String?   @map("wa_id")
+  username        String?
+  phoneVerifiedAt DateTime? @map("phone_verified_at")
+  countryCode     String?   @map("country_code")
   deletedAt      DateTime?      @map("deleted_at")   // GDPR soft delete
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
@@ -497,6 +551,7 @@ model Chatbot {
   isActive              Boolean      @default(false) @map("is_active")
   sessionTimeoutMinutes Int?         @map("session_timeout_minutes") // idle timeout before session expires
   isStrictFlow          Boolean      @default(false) @map("is_strict_flow") // if true, bot only responds to expected inputs
+  startTrigger String? @map("start_trigger")
   createdAt             DateTime     @default(now()) @map("created_at")
   updatedAt             DateTime     @updatedAt @map("updated_at")
   sessions              BotSession[]
@@ -1009,6 +1064,7 @@ model OrganizationMember {
   role           Role         @default(agent)
   isPrimary      Boolean      @default(false) @map("is_primary")
   isActive       Boolean      @default(true) @map("is_active")
+  permissions Json @default("{}")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
