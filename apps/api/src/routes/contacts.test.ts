@@ -16,6 +16,13 @@ const mockPrisma = {
     update: vi.fn(),
     delete: vi.fn(),
   },
+  contactGroup: {
+    findMany: vi.fn(),
+  },
+  groupContact: {
+    createMany: vi.fn(),
+    deleteMany: vi.fn(),
+  },
 };
 
 const mockAuth = {
@@ -186,7 +193,8 @@ describe("POST /v1/contacts/bulk/assign-groups", () => {
   afterEach(async () => { await app.close(); });
 
   it("bulk assigns contacts to groups", async () => {
-    mockPrisma.groupContact = { createMany: vi.fn().mockResolvedValue({ count: 6 }) };
+    mockPrisma.contactGroup.findMany.mockResolvedValue([{ id: "g-1" }, { id: "g-2" }, { id: "g-3" }]);
+    mockPrisma.groupContact.createMany.mockResolvedValue({ count: 6 });
     const res = await app.inject({
       method: "POST",
       url: "/v1/contacts/bulk/assign-groups",
@@ -203,7 +211,8 @@ describe("DELETE /v1/contacts/bulk/unassign-groups", () => {
   afterEach(async () => { await app.close(); });
 
   it("bulk removes contacts from groups", async () => {
-    mockPrisma.groupContact = { deleteMany: vi.fn().mockResolvedValue({ count: 4 }) };
+    mockPrisma.contactGroup.findMany.mockResolvedValue([{ id: "g-1" }, { id: "g-2" }]);
+    mockPrisma.groupContact.deleteMany.mockResolvedValue({ count: 4 });
     const res = await app.inject({
       method: "DELETE",
       url: "/v1/contacts/bulk/unassign-groups",
