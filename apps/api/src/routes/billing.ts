@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { PlanTier } from "@WBMSG/shared";
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS } from "../lib/stripe.js";
 import Razorpay from "razorpay";
 
