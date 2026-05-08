@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ContactForm } from "@/components/contacts/ContactForm";
+import { ContactTimeline } from "./ContactTimeline";
 
 interface Contact {
   id: string;
@@ -56,7 +57,7 @@ export default async function ContactDetailPage({
   }
 
   return (
-    <div className="max-w-xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/contacts" className="text-sm text-gray-500 hover:text-gray-700">
           ← Contacts
@@ -78,6 +79,7 @@ export default async function ContactDetailPage({
           submitLabel="Update Contact"
         />
       </div>
+      <ContactTimeline contactId={id} />
     </div>
   );
 }
