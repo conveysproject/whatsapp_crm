@@ -74,9 +74,9 @@ export const webhookActionsRouter: FastifyPluginAsync = async (fastify) => {
         where: { id: request.params.id, organizationId },
       });
       if (!existing) return reply.status(404).send({ error: "Not found" });
-      const page = parseInt(request.query.page ?? "1", 10);
+      const page = Math.max(1, parseInt(request.query.page ?? "1", 10));
       const data = await fastify.prisma.responseWebhookActionLog.findMany({
-        where: { actionId: request.params.id },
+        where: { actionId: existing.id },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * 50,
         take: 50,
