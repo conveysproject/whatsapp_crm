@@ -75,7 +75,7 @@ export const contactGroupsRouter: FastifyPluginAsync = async (fastify) => {
       const page = parseInt(request.query.page ?? "1", 10);
       const data = await fastify.prisma.groupContact.findMany({
         where: { contactGroupId: request.params.id },
-        include: { contact: { select: { id: true, firstName: true, lastName: true, phone: true, email: true } } },
+        include: { contact: { select: { id: true, firstName: true, lastName: true, phoneNumber: true, email: true } } },
         skip: (page - 1) * 50,
         take: 50,
       });

@@ -1,13 +1,14 @@
 import type { FastifyPluginAsync } from "fastify";
+import type { Prisma, AutoReplyTriggerType } from "@prisma/client";
 
 interface AutoReply {
   id: string;
   organizationId: string;
   name: string;
-  triggerType: string;
+  triggerType: AutoReplyTriggerType;
   triggerKeyword: string;
   replyText: string;
-  replyData: unknown;
+  replyData: Prisma.InputJsonValue | null;
   flowId: string | null;
   parentId: string | null;
   priorityIndex: number;

@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import type { InputJsonValue } from "@prisma/client/runtime/library";
+import type { Prisma } from "@prisma/client";
 
 interface CannedResponseBody {
   name: string;
@@ -22,7 +22,7 @@ export const cannedResponsesRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId } = request.auth;
     const { name, shortcut, content, mediaData } = request.body;
     const data = await fastify.prisma.cannedResponse.create({
-      data: { organizationId, name, shortcut: shortcut ?? null, content, mediaData: (mediaData ?? null) as InputJsonValue | null },
+      data: { organizationId, name, shortcut: shortcut ?? null, content, mediaData: (mediaData ?? null) as Prisma.InputJsonValue | null },
     });
     return reply.status(201).send({ data });
   });
@@ -42,7 +42,7 @@ export const cannedResponsesRouter: FastifyPluginAsync = async (fastify) => {
           ...(name !== undefined && { name }),
           ...(shortcut !== undefined && { shortcut }),
           ...(content !== undefined && { content }),
-          ...(mediaData !== undefined && { mediaData: mediaData as InputJsonValue }),
+          ...(mediaData !== undefined && { mediaData: mediaData as Prisma.InputJsonValue }),
         },
       });
       return reply.send({ data });

@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import type { InputJsonValue } from "@prisma/client/runtime/library";
+import type { Prisma } from "@prisma/client";
 
 interface SavedFilterBody {
   name: string;
@@ -22,7 +22,7 @@ export const savedFiltersRouter: FastifyPluginAsync = async (fastify) => {
       data: {
         organizationId,
         name: request.body.name,
-        filterData: request.body.filterData as InputJsonValue,
+        filterData: request.body.filterData as Prisma.InputJsonValue,
       },
     });
     return reply.status(201).send({ data });
@@ -38,7 +38,7 @@ export const savedFiltersRouter: FastifyPluginAsync = async (fastify) => {
         where: { id: request.params.id },
         data: {
           ...(request.body.name !== undefined && { name: request.body.name }),
-          ...(request.body.filterData !== undefined && { filterData: request.body.filterData as InputJsonValue }),
+          ...(request.body.filterData !== undefined && { filterData: request.body.filterData as Prisma.InputJsonValue }),
         },
       });
       return reply.send({ data });

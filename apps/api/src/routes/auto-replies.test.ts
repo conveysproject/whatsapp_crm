@@ -53,10 +53,8 @@ describe("POST /v1/auto-replies/:id/duplicate", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    mockPrisma.autoReply = {
-      findFirst: vi.fn().mockResolvedValue(original),
-      create: vi.fn().mockResolvedValue({ ...original, id: "ar-2", name: "Copy of Welcome Bot" }),
-    };
+    mockPrisma.autoReply.findFirst.mockResolvedValue(original);
+    mockPrisma.autoReply.create.mockResolvedValue({ ...original, id: "ar-2", name: "Copy of Welcome Bot" });
     const res = await app.inject({ method: "POST", url: "/v1/auto-replies/ar-1/duplicate" });
     expect(res.statusCode).toBe(201);
     expect(res.json<{ data: { name: string } }>().data.name).toBe("Copy of Welcome Bot");
@@ -68,7 +66,7 @@ describe("POST /v1/auto-replies/:id/duplicate", () => {
   });
 
   it("returns 404 when auto-reply not found in org", async () => {
-    mockPrisma.autoReply = { findFirst: vi.fn().mockResolvedValue(null) };
+    mockPrisma.autoReply.findFirst.mockResolvedValue(null);
     const res = await app.inject({ method: "POST", url: "/v1/auto-replies/bad-id/duplicate" });
     expect(res.statusCode).toBe(404);
   });
@@ -80,34 +78,28 @@ describe("GET /v1/auto-replies/:id/preview/:contactId", () => {
   afterEach(async () => { await app.close(); });
 
   it("returns the first message the bot would send to the contact", async () => {
-    mockPrisma.autoReply = {
-      findFirst: vi.fn().mockResolvedValue({
-        id: "ar-1",
-        organizationId: "org-1",
-        replyText: "Hello {{first_name}}!",
-        replyData: null,
-      }),
-    };
-    mockPrisma.contact = {
-      findFirst: vi.fn().mockResolvedValue({ id: "c-1", organizationId: "org-1", firstName: "Priya", lastName: "Shah", phone: "+91900000001" }),
-    };
+    mockPrisma.autoReply.findFirst.mockResolvedValue({
+      id: "ar-1",
+      organizationId: "org-1",
+      replyText: "Hello {{first_name}}!",
+      replyData: null,
+    });
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c-1", organizationId: "org-1", firstName: "Priya", lastName: "Shah", phone: "+91900000001" });
     const res = await app.inject({ method: "GET", url: "/v1/auto-replies/ar-1/preview/c-1" });
     expect(res.statusCode).toBe(200);
     expect(res.json<{ data: { preview: string } }>().data.preview).toBe("Hello Priya!");
   });
 
   it("returns 404 when auto-reply not found", async () => {
-    mockPrisma.autoReply = { findFirst: vi.fn().mockResolvedValue(null) };
-    mockPrisma.contact = { findFirst: vi.fn().mockResolvedValue({ id: "c-1" }) };
+    mockPrisma.autoReply.findFirst.mockResolvedValue(null);
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c-1" });
     const res = await app.inject({ method: "GET", url: "/v1/auto-replies/bad/preview/c-1" });
     expect(res.statusCode).toBe(404);
   });
 
   it("returns 404 when contact not found", async () => {
-    mockPrisma.autoReply = {
-      findFirst: vi.fn().mockResolvedValue({ id: "ar-1", organizationId: "org-1", replyText: "Hi!", replyData: null }),
-    };
-    mockPrisma.contact = { findFirst: vi.fn().mockResolvedValue(null) };
+    mockPrisma.autoReply.findFirst.mockResolvedValue({ id: "ar-1", organizationId: "org-1", replyText: "Hi!", replyData: null });
+    mockPrisma.contact.findFirst.mockResolvedValue(null);
     const res = await app.inject({ method: "GET", url: "/v1/auto-replies/ar-1/preview/bad-contact" });
     expect(res.statusCode).toBe(404);
   });

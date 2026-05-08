@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 type LogTab = "queue" | "executed" | "expired";
@@ -19,24 +20,25 @@ const STATUS_BADGE: Record<string, string> = {
   expired: "bg-gray-100 text-gray-600",
 };
 
-export default function CampaignLogsPage({ params }: { params: { id: string } }): JSX.Element {
+export default function CampaignLogsPage(): JSX.Element {
+  const { id } = useParams<{ id: string }>();
   const [tab, setTab] = useState<LogTab>("queue");
 
   const queueQuery = useQuery<{ data: Recipient[] }>({
-    queryKey: ["campaign-queue-log", params.id],
-    queryFn: () => fetch(`/api/v1/campaigns/${params.id}/queue-log`).then((r) => r.json()),
+    queryKey: ["campaign-queue-log", id],
+    queryFn: () => fetch(`/api/v1/campaigns/${id}/queue-log`).then((r) => r.json()),
     enabled: tab === "queue",
   });
 
   const executedQuery = useQuery<{ data: Recipient[] }>({
-    queryKey: ["campaign-recipients", params.id],
-    queryFn: () => fetch(`/api/v1/campaigns/${params.id}/recipients`).then((r) => r.json()),
+    queryKey: ["campaign-recipients", id],
+    queryFn: () => fetch(`/api/v1/campaigns/${id}/recipients`).then((r) => r.json()),
     enabled: tab === "executed",
   });
 
   const expiredQuery = useQuery<{ data: Recipient[] }>({
-    queryKey: ["campaign-expired-log", params.id],
-    queryFn: () => fetch(`/api/v1/campaigns/${params.id}/expired-log`).then((r) => r.json()),
+    queryKey: ["campaign-expired-log", id],
+    queryFn: () => fetch(`/api/v1/campaigns/${id}/expired-log`).then((r) => r.json()),
     enabled: tab === "expired",
   });
 
@@ -50,7 +52,7 @@ export default function CampaignLogsPage({ params }: { params: { id: string } })
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Campaign Logs</h1>
         <a
-          href={`/api/v1/campaigns/${params.id}/report`}
+          href={`/api/v1/campaigns/${id}/report`}
           className="px-4 py-2 border text-sm rounded hover:bg-gray-50"
           download
         >
