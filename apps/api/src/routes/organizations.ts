@@ -61,4 +61,26 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
       return { data: org };
     }
   );
+
+  const brandingFields: Record<string, string> = {
+    logo: "logoImage",
+    "small-logo": "smallLogoImage",
+    favicon: "favicon",
+    "dark-logo": "darkLogoImage",
+    "dark-favicon": "darkFavicon",
+  };
+
+  for (const [slug, field] of Object.entries(brandingFields)) {
+    fastify.post<{ Params: { slug: string }; Body: { url: string } }>(
+      `/organizations/branding/${slug}`,
+      async (request, reply) => {
+        const { organizationId } = request.auth;
+        const data = await prisma.organization.update({
+          where: { id: organizationId },
+          data: { [field]: request.body.url },
+        });
+        return reply.send({ data });
+      }
+    );
+  }
 };

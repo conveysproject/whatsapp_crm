@@ -52,3 +52,38 @@ describe("organizations routes", () => {
     expect((res.json() as { data: { name: string } }).data.name).toBe("Updated Corp");
   });
 });
+
+describe("POST /v1/organizations/branding/logo", () => {
+  const app = Fastify({ logger: false });
+
+  beforeAll(async () => {
+    const prismaPlugin = (await import("../plugins/prisma.js")).default;
+    const { organizationRoutes } = await import("./organizations.js");
+    await app.register(prismaPlugin);
+    app.addHook("preHandler", async (req) => {
+      req.auth = { userId: "user_123", organizationId: "org_123", role: "admin" };
+    });
+    await app.register(organizationRoutes, { prefix: "/v1" });
+    await app.ready();
+  });
+
+  afterAll(() => app.close());
+
+  it("updates org logoImage field with provided URL", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    vi.mocked(prisma.organization.update).mockResolvedValueOnce({
+      id: "org_123",
+      logoImage: "https://cdn.example.com/logo.png",
+    } as any);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/organizations/branding/logo",
+      payload: { url: "https://cdn.example.com/logo.png" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.organization.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { logoImage: "https://cdn.example.com/logo.png" } })
+    );
+  });
+});
