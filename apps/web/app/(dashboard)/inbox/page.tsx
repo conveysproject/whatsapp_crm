@@ -6,6 +6,7 @@ import { ConversationList } from "@/components/inbox/ConversationList";
 import { MessageThread } from "@/components/inbox/MessageThread";
 import { SendMessageForm } from "@/components/inbox/SendMessageForm";
 import { SmartReplies } from "@/components/inbox/SmartReplies";
+import { CannedResponsePicker } from "@/components/canned-response-picker";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
 import { useSocket } from "@/hooks/useSocket";
 
@@ -34,6 +35,9 @@ export default function InboxPage(): JSX.Element {
           conversationId={selectedConversationId}
           onSelect={(text) => setPrefillText(text)}
         />
+        <div className="relative px-2">
+          <CannedResponsePicker onSelect={(content) => setPrefillText(content)} />
+        </div>
         <SendMessageForm
           conversationId={selectedConversationId}
           prefillText={prefillText}
