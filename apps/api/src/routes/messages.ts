@@ -7,6 +7,47 @@ interface SendMessageBody {
 }
 
 export const messagesRouter: FastifyPluginAsync = async (fastify) => {
+  // ── Message log (all messages with date filter) ──────────────────────────
+  fastify.get<{
+    Querystring: {
+      from?: string;
+      to?: string;
+      direction?: string;
+      contactId?: string;
+      page?: string;
+    };
+  }>("/messages/log", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const { from, to, direction, contactId, page } = request.query;
+    const pageNum = Math.max(1, parseInt(page ?? "1", 10));
+    const pageSize = 50;
+
+    const where: Record<string, unknown> = { organizationId };
+    if (from || to) {
+      where.createdAt = {
+        ...(from ? { gte: new Date(from) } : {}),
+        ...(to ? { lte: new Date(to) } : {}),
+      };
+    }
+    if (direction) where.direction = direction;
+    if (contactId) where.contactId = contactId;
+
+    const [data, total] = await Promise.all([
+      fastify.prisma.message.findMany({
+        where,
+        include: {
+          contact: { select: { firstName: true, lastName: true, phone: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (pageNum - 1) * pageSize,
+        take: pageSize,
+      }),
+      fastify.prisma.message.count({ where }),
+    ]);
+
+    return reply.send({ data, total, page: pageNum, pageSize });
+  });
+
   fastify.post<{ Params: { id: ConversationId }; Body: SendMessageBody }>(
     "/conversations/:id/messages",
     {
