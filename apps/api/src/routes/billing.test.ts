@@ -15,10 +15,19 @@ vi.mock("../lib/stripe.js", () => ({
   },
 }));
 
+vi.mock("razorpay", () => ({
+  default: vi.fn().mockImplementation(() => ({
+    orders: {
+      create: vi.fn().mockResolvedValue({ id: "order_test123", amount: 99900, currency: "INR" }),
+    },
+  })),
+}));
+
 const mockPrisma = {
   organization: { findUnique: vi.fn(), update: vi.fn() },
   contact: { count: vi.fn() },
   message: { count: vi.fn() },
+  manualSubscription: { create: vi.fn(), updateMany: vi.fn() },
 };
 const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const };
 
@@ -46,5 +55,37 @@ describe("GET /v1/billing/usage", () => {
     const body = res.json<{ data: { plan: string; usage: { contacts: number } } }>();
     expect(body.data.plan).toBe("starter");
     expect(body.data.usage.contacts).toBe(100);
+  });
+});
+
+describe("POST /v1/billing/razorpay/create-order", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("creates a Razorpay order and returns order id", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/billing/razorpay/create-order",
+      payload: { planId: "plan-standard", amount: 99900 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { orderId: string } }>().data.orderId).toBe("order_test123");
+  });
+});
+
+describe("POST /v1/billing/manual/submit-proof", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("creates a manual subscription record with status pending", async () => {
+    mockPrisma.manualSubscription.create.mockResolvedValue({ id: "ms-1", status: "pending" });
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/billing/manual/submit-proof",
+      payload: { planId: "plan-standard", proofUrl: "https://cdn.example.com/proof.jpg", transactionRef: "TXN123" },
+    });
+    expect(res.statusCode).toBe(201);
   });
 });
