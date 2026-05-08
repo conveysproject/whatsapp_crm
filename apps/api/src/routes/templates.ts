@@ -1,13 +1,18 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { TemplateCategory, TemplateStatus } from "@prisma/client";
 import { submitTemplateToMeta } from "../lib/meta-templates.js";
-import type { TemplateId } from "@WBMSG/shared";
+import type { TemplateId, ContactId } from "@WBMSG/shared";
 
 interface TemplateBody {
   name: string;
   category: TemplateCategory;
   language: string;
   components: object[];
+}
+
+interface SendToContactBody {
+  contactId: ContactId;
+  variables: string[];
 }
 
 export const templatesRouter: FastifyPluginAsync = async (fastify) => {
@@ -97,6 +102,81 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
         },
       });
       return reply.send({ data: template });
+    }
+  );
+
+  fastify.get<{ Params: { id: TemplateId } }>("/templates/:id/analytics", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const template = await fastify.prisma.template.findFirst({
+      where: { id: request.params.id, organizationId },
+    });
+    if (!template) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Template not found" } });
+    }
+
+    const rows = await fastify.prisma.message.groupBy({
+      by: ["status"],
+      where: { organizationId, direction: "outbound" },
+      _count: { status: true },
+    });
+
+    const stats: Record<string, number> = { sent: 0, delivered: 0, read: 0, failed: 0 };
+    for (const row of rows) {
+      stats[row.status] = row._count.status;
+    }
+
+    return reply.send({
+      data: {
+        sent: stats["sent"] ?? 0,
+        delivered: stats["delivered"] ?? 0,
+        read: stats["read"] ?? 0,
+        failed: stats["failed"] ?? 0,
+      },
+    });
+  });
+
+  fastify.post<{ Params: { id: TemplateId }; Body: SendToContactBody }>(
+    "/templates/:id/send-to-contact",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+
+      const template = await fastify.prisma.template.findFirst({
+        where: { id: request.params.id, organizationId },
+      });
+      if (!template) {
+        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Template not found" } });
+      }
+
+      const contact = await fastify.prisma.contact.findFirst({
+        where: { id: request.body.contactId, organizationId },
+      });
+      if (!contact) {
+        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
+      }
+
+      let conversation = await fastify.prisma.conversation.findFirst({
+        where: { organizationId, contactId: contact.id },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (!conversation) {
+        conversation = await fastify.prisma.conversation.create({
+          data: { organizationId, contactId: contact.id },
+        });
+      }
+
+      const message = await fastify.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          organizationId,
+          direction: "outbound",
+          contentType: "template",
+          body: template.name,
+          status: "sent",
+        },
+      });
+
+      return reply.send({ data: { message } });
     }
   );
 };
