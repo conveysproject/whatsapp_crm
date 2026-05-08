@@ -5,11 +5,11 @@ import { useAuth } from "@clerk/nextjs";
 import { ConversationList } from "@/components/inbox/ConversationList";
 import { MessageThread } from "@/components/inbox/MessageThread";
 import { SendMessageForm } from "@/components/inbox/SendMessageForm";
-import { SmartReplies } from "@/components/inbox/SmartReplies";
 import { CannedResponsePicker } from "@/components/canned-response-picker";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
 import { useSocket } from "@/hooks/useSocket";
 import { BotPanel } from "@/components/bot-panel";
+import { SmartReplyPanel } from "@/components/smart-reply-panel";
 
 export default function InboxPage(): JSX.Element {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
@@ -32,12 +32,14 @@ export default function InboxPage(): JSX.Element {
 
       <div className="flex flex-col flex-1 bg-gray-50 overflow-hidden">
         <MessageThread conversationId={selectedConversationId} />
-        <SmartReplies
-          conversationId={selectedConversationId}
-          onSelect={(text) => setPrefillText(text)}
-        />
-        <div className="relative px-2">
+        <div className="relative px-2 flex items-center gap-2">
           <CannedResponsePicker onSelect={(content) => setPrefillText(content)} />
+          {selectedConversationId && (
+            <SmartReplyPanel
+              conversationId={selectedConversationId}
+              onSelect={(text) => setPrefillText(text)}
+            />
+          )}
         </div>
         <SendMessageForm
           conversationId={selectedConversationId}
