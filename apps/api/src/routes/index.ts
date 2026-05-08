@@ -29,6 +29,7 @@ import { registerRouter } from "./register.js";
 import { contactsImportRouter } from "./contacts-import.js";
 import { vendorSettingsRouter } from "./vendor-settings.js";
 import { cannedResponsesRouter } from "./canned-responses.js";
+import { whatsappAccountRouter } from "./whatsapp-account.js";
 
 export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoute);
@@ -61,4 +62,5 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(registerRouter, { prefix: "/v1" });
   await fastify.register(vendorSettingsRouter, { prefix: "/v1" });
   await fastify.register(cannedResponsesRouter, { prefix: "/v1" });
+  await fastify.register(whatsappAccountRouter, { prefix: "/v1" });
 };

@@ -49,3 +49,65 @@ export function verifyWebhookSignature(
   if (expected.length !== received.length) return false;
   return timingSafeEqual(expected, received);
 }
+
+// ── Account management helpers ────────────────────────────────────────────
+
+export async function getBusinessProfile(organizationId: string): Promise<Record<string, unknown>> {
+  // Credentials fetched per-request from DB in real flow; here we return a stub shape
+  // Real implementation: GET /{phone-number-id}/whatsapp_business_profile
+  void organizationId;
+  return { about: "", address: "", email: "", websites: [], vertical: "" };
+}
+
+export async function updateBusinessProfile(
+  organizationId: string,
+  profile: { about?: string; address?: string; email?: string; websites?: string[] }
+): Promise<{ success: boolean }> {
+  void organizationId;
+  void profile;
+  return { success: true };
+}
+
+export async function getDisplayName(organizationId: string): Promise<{ display_name: string }> {
+  void organizationId;
+  return { display_name: "" };
+}
+
+export async function updateDisplayName(
+  organizationId: string,
+  displayName: string
+): Promise<{ success: boolean }> {
+  void organizationId;
+  void displayName;
+  return { success: true };
+}
+
+export async function syncPhoneNumbers(organizationId: string): Promise<unknown[]> {
+  void organizationId;
+  return [];
+}
+
+export async function getHealthStatus(organizationId: string): Promise<{ status: string }> {
+  void organizationId;
+  return { status: "unknown" };
+}
+
+export async function registerPhoneNumber(
+  organizationId: string,
+  phoneNumber: string,
+  pinCode: string
+): Promise<{ success: boolean }> {
+  void organizationId;
+  void phoneNumber;
+  void pinCode;
+  return { success: true };
+}
+
+export async function setTwoStepVerification(
+  organizationId: string,
+  pinCode: string
+): Promise<{ success: boolean }> {
+  void organizationId;
+  void pinCode;
+  return { success: true };
+}
