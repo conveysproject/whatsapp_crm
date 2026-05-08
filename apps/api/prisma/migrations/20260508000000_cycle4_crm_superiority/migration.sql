@@ -1,0 +1,2 @@
+-- Migration applied via db push (prisma migrate dev hangs on Windows without TTY)
+-- Cycle 4: ResponseWebhookAction, ResponseWebhookActionLog, Message.senderName, Message.isForwarded

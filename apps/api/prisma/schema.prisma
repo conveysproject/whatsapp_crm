@@ -162,6 +162,36 @@ model SavedFilter {
   @@map("saved_filters")
 }
 
+model ResponseWebhookAction {
+  id             String                     @id @default(uuid())
+  organizationId String                     @map("organization_id")
+  title          String
+  conditionKey   String                     @map("condition_key")
+  conditionValue String                     @map("condition_value")
+  templateId     String?                    @map("template_id")
+  isActive       Boolean                    @default(true) @map("is_active")
+  data           Json?
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  updatedAt      DateTime                   @updatedAt @map("updated_at")
+  logs           ResponseWebhookActionLog[]
+
+  @@index([organizationId])
+  @@map("response_webhook_actions")
+}
+
+model ResponseWebhookActionLog {
+  id           String                 @id @default(uuid())
+  actionId     String?                @map("action_id")
+  action       ResponseWebhookAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
+  webhookLogId String                 @map("webhook_log_id")
+  messageId    String?                @map("message_id")
+  createdAt    DateTime               @default(now()) @map("created_at")
+
+  @@index([actionId])
+  @@index([webhookLogId])
+  @@map("response_webhook_action_logs")
+}
+
 enum ConversationStatus {
   open
   pending
@@ -220,6 +250,8 @@ model Message {
   wabPhoneNumberId  String?          @map("wab_phone_number_id") // which business number sent/received
   status            MessageStatus    @default(sent)
   isSystemMessage   Boolean          @default(false) @map("is_system_message") // bot/SLA notifications, hidden in inbox
+  senderName        String?          @map("sender_name")
+  isForwarded       Boolean          @default(false) @map("is_forwarded")
   replyToId         String?          @map("reply_to_id")
   replyTo           Message?         @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies           Message[]        @relation("MessageReplies")
