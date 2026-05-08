@@ -69,3 +69,64 @@ export async function analyzeSentiment(messageBody: string): Promise<SentimentTy
   const valid: SentimentType[] = ["positive", "negative", "neutral"];
   return valid.includes(text) ? text : "neutral";
 }
+
+export async function generateSmartReplies(
+  messages: { body: string | null; direction: string }[]
+): Promise<string[]> {
+  const conversation = messages
+    .filter((m) => m.body)
+    .map((m) => `${m.direction === "inbound" ? "Customer" : "Agent"}: ${m.body}`)
+    .join("\n");
+
+  const response = await getClient().messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 300,
+    messages: [
+      {
+        role: "user",
+        content: `Given this WhatsApp conversation, suggest 3 short, helpful reply options for the agent. Return ONLY a JSON array of 3 strings, nothing else.\n\nConversation:\n${conversation}`,
+      },
+    ],
+  });
+
+  try {
+    const text = response.content[0]?.type === "text" ? response.content[0].text : "[]";
+    const parsed = JSON.parse(text) as unknown;
+    if (Array.isArray(parsed)) return parsed.filter((s): s is string => typeof s === "string").slice(0, 3);
+  } catch {
+    // fallthrough
+  }
+  return ["Thank you for your message.", "Let me check on that for you.", "I'll get back to you shortly."];
+}
+
+export async function detectIntentWithConfidence(
+  text: string
+): Promise<{ intent: string; confidence: number }> {
+  const intents = ["purchase_inquiry", "support_request", "complaint", "general_inquiry", "pricing", "refund_request"];
+  const response = await getClient().messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 100,
+    messages: [
+      {
+        role: "user",
+        content: `Classify this message into one of these intents: ${intents.join(", ")}. Return ONLY a JSON object with "intent" and "confidence" (0-1). Message: "${text}"`,
+      },
+    ],
+  });
+
+  try {
+    const responseText = response.content[0]?.type === "text" ? response.content[0].text : "{}";
+    const parsed = JSON.parse(responseText) as unknown;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "intent" in parsed &&
+      "confidence" in parsed
+    ) {
+      return parsed as { intent: string; confidence: number };
+    }
+  } catch {
+    // fallthrough
+  }
+  return { intent: "general_inquiry", confidence: 0.5 };
+}

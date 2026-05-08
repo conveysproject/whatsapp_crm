@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { generateSuggestions, detectIntent, analyzeSentiment } from "../lib/claude.js";
+import { generateSuggestions, detectIntent, analyzeSentiment, generateSmartReplies, detectIntentWithConfidence } from "../lib/claude.js";
 import type { ConversationId, MessageId } from "@WBMSG/shared";
 
 export const aiRouter: FastifyPluginAsync = async (fastify) => {
@@ -57,4 +57,49 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
       return reply.send({ data: { intent, sentiment } });
     }
   );
+
+  // ── Smart replies ────────────────────────────────────────────────────────
+  fastify.post<{ Body: { conversationId: string } }>("/ai/smart-replies", async (request, reply) => {
+    if (!request.body.conversationId) {
+      return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "conversationId is required" } });
+    }
+    const { organizationId } = request.auth;
+    const messages = await fastify.prisma.message.findMany({
+      where: { conversationId: request.body.conversationId, organizationId },
+      orderBy: { sentAt: "desc" },
+      take: 10,
+      select: { body: true, direction: true },
+    });
+    const flowise = await fastify.prisma.vendorSetting.findFirst({
+      where: { organizationId, key: "flowise_url" },
+    });
+    let replies: string[];
+    if (flowise?.value) {
+      const flowiseSetting = await fastify.prisma.vendorSetting.findFirst({
+        where: { organizationId, key: "flowise_access_token" },
+      });
+      const flowiseRes = await fetch(`${flowise.value}/api/v1/prediction/smart-replies`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(flowiseSetting?.value ? { Authorization: `Bearer ${flowiseSetting.value}` } : {}),
+        },
+        body: JSON.stringify({ messages: messages.toReversed() }),
+      });
+      const flowiseData = await flowiseRes.json() as { replies?: string[] };
+      replies = flowiseData.replies ?? [];
+    } else {
+      replies = await generateSmartReplies(messages.toReversed());
+    }
+    return reply.send({ data: { replies } });
+  });
+
+  // ── Intent detection ─────────────────────────────────────────────────────
+  fastify.post<{ Body: { messageId: string; text: string } }>("/ai/intent", async (request, reply) => {
+    if (!request.body.text) {
+      return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "text is required" } });
+    }
+    const result = await detectIntentWithConfidence(request.body.text);
+    return reply.send({ data: result });
+  });
 };
