@@ -61,6 +61,8 @@ model Organization {
   trialEndsAt        DateTime? @map("trial_ends_at")
   vendorSettings     VendorSetting[]
   cannedResponses    CannedResponse[]
+  contactGroups      ContactGroup[]
+  savedFilters       SavedFilter[]
 
   users               User[]
   invitations         Invitation[]
@@ -106,6 +108,7 @@ model CannedResponse {
 model ContactGroup {
   id             String          @id @default(uuid())
   organizationId String          @map("organization_id")
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   title          String
   description    String?
   isArchived     Boolean         @default(false) @map("is_archived")
@@ -123,6 +126,7 @@ model GroupContact {
   contactGroupId String       @map("contact_group_id")
   contactGroup   ContactGroup @relation(fields: [contactGroupId], references: [id], onDelete: Cascade)
   contactId      String       @map("contact_id")
+  contact        Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now()) @map("created_at")
 
   @@unique([contactGroupId, contactId])
@@ -137,15 +141,18 @@ model CampaignGroup {
   campaign       Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   contactGroupId String       @map("contact_group_id")
   contactGroup   ContactGroup @relation(fields: [contactGroupId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now()) @map("created_at")
 
   @@unique([campaignId, contactGroupId])
   @@index([campaignId])
+  @@index([contactGroupId])
   @@map("campaign_groups")
 }
 
 model SavedFilter {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(uuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name           String
   filterData     Json     @map("filter_data")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -423,6 +430,7 @@ model Contact {
   calls              WhatsappCall[]
   segmentContacts    SegmentContact[]
   campaignRecipients CampaignRecipient[]
+  groupContacts      GroupContact[]
 
   @@unique([organizationId, phoneNumber])
   @@index([organizationId])
