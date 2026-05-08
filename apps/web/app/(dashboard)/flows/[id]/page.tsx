@@ -40,6 +40,10 @@ export default function FlowDetailPage(): JSX.Element {
   const { getToken } = useAuth();
   const [flow, setFlow] = useState<Flow | null>(null);
   const [toggling, setToggling] = useState(false);
+  const [previewAutoReplyId, setPreviewAutoReplyId] = useState("");
+  const [previewContactId, setPreviewContactId] = useState("");
+  const [previewText, setPreviewText] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -68,6 +72,25 @@ export default function FlowDetailPage(): JSX.Element {
     }
   }
 
+  async function handlePreview() {
+    if (!previewAutoReplyId || !previewContactId) return;
+    setPreviewing(true);
+    setPreviewText(null);
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/auto-replies/${previewAutoReplyId}/preview/${previewContactId}`,
+        { headers: { Authorization: `Bearer ${token ?? ""}` } }
+      );
+      if (res.ok) {
+        const body = await res.json() as { data: { preview: string } };
+        setPreviewText(body.data.preview);
+      }
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
   if (!flow) return <div className="animate-pulse h-96 bg-gray-100 rounded-xl" />;
 
   const { nodes, edges } = flowToReactFlow(flow);
@@ -82,6 +105,34 @@ export default function FlowDetailPage(): JSX.Element {
         <Button variant={flow.isActive ? "destructive" : "primary"} onClick={() => void toggleActive()} disabled={toggling}>
           {toggling ? "…" : flow.isActive ? "Deactivate" : "Activate"}
         </Button>
+      </div>
+      {/* Preview section */}
+      <div className="flex flex-wrap items-center gap-2 p-4 bg-gray-50 rounded-xl border border-gray-200">
+        <span className="text-sm font-medium text-gray-700">Preview:</span>
+        <input
+          className="border rounded px-2 py-1 text-sm w-40"
+          placeholder="Auto-Reply ID"
+          value={previewAutoReplyId}
+          onChange={(e) => { setPreviewAutoReplyId(e.target.value); setPreviewText(null); }}
+        />
+        <input
+          className="border rounded px-2 py-1 text-sm w-40"
+          placeholder="Contact ID"
+          value={previewContactId}
+          onChange={(e) => { setPreviewContactId(e.target.value); setPreviewText(null); }}
+        />
+        <button
+          onClick={() => void handlePreview()}
+          disabled={!previewAutoReplyId || !previewContactId || previewing}
+          className="px-3 py-1.5 text-sm border rounded hover:bg-white disabled:opacity-50"
+        >
+          {previewing ? "…" : "Preview"}
+        </button>
+        {previewText !== null && (
+          <div className="w-full mt-2 bg-green-50 border border-green-200 rounded p-3 text-sm">
+            {previewText || <span className="text-gray-400 italic">Empty message</span>}
+          </div>
+        )}
       </div>
       <FlowCanvas initialNodes={nodes} initialEdges={edges} readOnly />
     </div>
