@@ -112,6 +112,22 @@ describe("POST /v1/campaigns/:id/archive", () => {
   });
 });
 
+describe("POST /v1/campaigns/:id/unarchive", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("sets campaign isArchived to false", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({ id: "camp-1", organizationId: "org-1" });
+    mockPrisma.campaign.update.mockResolvedValue({ id: "camp-1", isArchived: false });
+    const res = await app.inject({ method: "POST", url: "/v1/campaigns/camp-1/unarchive" });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.campaign.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { isArchived: false } })
+    );
+  });
+});
+
 describe("POST /v1/campaigns/:id/requeue-failed", () => {
   let app: FastifyInstance;
   beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
