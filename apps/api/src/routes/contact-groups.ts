@@ -33,7 +33,10 @@ export const contactGroupsRouter: FastifyPluginAsync = async (fastify) => {
       if (!existing) return reply.status(404).send({ error: "Not found" });
       const data = await fastify.prisma.contactGroup.update({
         where: { id: request.params.id },
-        data: request.body,
+        data: {
+          ...(request.body.title !== undefined && { title: request.body.title }),
+          ...(request.body.description !== undefined && { description: request.body.description }),
+        },
       });
       return reply.send({ data });
     }
@@ -72,6 +75,7 @@ export const contactGroupsRouter: FastifyPluginAsync = async (fastify) => {
       const page = parseInt(request.query.page ?? "1", 10);
       const data = await fastify.prisma.groupContact.findMany({
         where: { contactGroupId: request.params.id },
+        include: { contact: { select: { id: true, firstName: true, lastName: true, phone: true, email: true } } },
         skip: (page - 1) * 50,
         take: 50,
       });

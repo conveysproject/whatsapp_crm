@@ -114,3 +114,47 @@ describe("POST /v1/contact-groups/:id/contacts", () => {
     });
   });
 });
+
+describe("PUT /v1/contact-groups/:id", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("updates title and returns the updated group", async () => {
+    mockPrisma.contactGroup.findFirst.mockResolvedValue({ id: "g-1", organizationId: "org-1" });
+    mockPrisma.contactGroup.update.mockResolvedValue({ id: "g-1", title: "Updated Name" });
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/contact-groups/g-1",
+      payload: { title: "Updated Name" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { title: string } }>().data.title).toBe("Updated Name");
+  });
+
+  it("returns 404 when group not found in org", async () => {
+    mockPrisma.contactGroup.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "PUT", url: "/v1/contact-groups/bad", payload: { title: "x" } });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("DELETE /v1/contact-groups/:id/contacts", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("bulk-removes contacts from group", async () => {
+    mockPrisma.contactGroup.findFirst.mockResolvedValue({ id: "g-1", organizationId: "org-1" });
+    mockPrisma.groupContact.deleteMany.mockResolvedValue({ count: 2 });
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/v1/contact-groups/g-1/contacts",
+      payload: { contactIds: ["c-1", "c-2"] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.groupContact.deleteMany).toHaveBeenCalledWith({
+      where: { contactGroupId: "g-1", contactId: { in: ["c-1", "c-2"] } },
+    });
+  });
+});
