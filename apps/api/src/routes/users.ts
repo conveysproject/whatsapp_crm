@@ -64,4 +64,20 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     });
     return reply.status(204).send();
   });
+
+  fastify.put<{ Params: { id: string }; Body: { permissions: Record<string, string> } }>(
+    "/users/:id/permissions",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const member = await fastify.prisma.organizationMember.findFirst({
+        where: { userId: request.params.id, organizationId },
+      });
+      if (!member) return reply.status(404).send({ error: "Team member not found" });
+      const data = await fastify.prisma.organizationMember.update({
+        where: { id: member.id },
+        data: { permissions: request.body.permissions },
+      });
+      return reply.send({ data });
+    }
+  );
 };
