@@ -2,6 +2,7 @@
 
 import { JSX, useEffect, useRef } from "react";
 import { useMessages } from "@/hooks/useMessages";
+import { IntentBadge } from "@/components/intent-badge";
 
 interface Props {
   conversationId: string | null;
@@ -53,6 +54,13 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
             ].join(" ")}
           >
             <p>{msg.body ?? "[media]"}</p>
+            {msg.direction === "inbound" && msg.body && (
+              <IntentBadge
+                messageId={msg.id}
+                text={msg.body}
+                direction={msg.direction}
+              />
+            )}
             <p className="text-xs text-gray-400 mt-1 text-right">{formatTime(msg.sentAt)}</p>
           </div>
         </div>
