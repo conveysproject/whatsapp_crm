@@ -42,7 +42,7 @@ describe("GET /v1/messages/log", () => {
 
   it("returns paginated messages filtered by date range", async () => {
     mockPrisma.message.findMany.mockResolvedValue([
-      { id: "m-1", body: "Hello", direction: "inbound", status: "delivered", createdAt: new Date("2026-05-01"), contact: null },
+      { id: "m-1", body: "Hello", direction: "inbound", status: "delivered", createdAt: new Date("2026-05-01"), conversation: { contact: { firstName: "Ravi", lastName: null, phoneNumber: "+91900000001" } } },
     ]);
     mockPrisma.message.count.mockResolvedValue(1);
     const res = await app.inject({

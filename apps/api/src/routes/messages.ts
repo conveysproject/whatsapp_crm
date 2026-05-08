@@ -30,13 +30,17 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
       };
     }
     if (direction) where.direction = direction;
-    if (contactId) where.contactId = contactId;
+    if (contactId) where.conversation = { contactId };
 
     const [data, total] = await Promise.all([
       fastify.prisma.message.findMany({
         where,
         include: {
-          contact: { select: { firstName: true, lastName: true, phone: true } },
+          conversation: {
+            include: {
+              contact: { select: { firstName: true, lastName: true, phoneNumber: true } },
+            },
+          },
         },
         orderBy: { createdAt: "desc" },
         skip: (pageNum - 1) * pageSize,
