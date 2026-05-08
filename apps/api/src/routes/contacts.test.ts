@@ -179,3 +179,61 @@ describe("PUT /v1/contacts/:id/notes", () => {
     );
   });
 });
+
+describe("POST /v1/contacts/bulk/assign-groups", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("bulk assigns contacts to groups", async () => {
+    mockPrisma.groupContact = { createMany: vi.fn().mockResolvedValue({ count: 6 }) };
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/contacts/bulk/assign-groups",
+      payload: { contactIds: ["c-1", "c-2"], groupIds: ["g-1", "g-2", "g-3"] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.groupContact.createMany).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("DELETE /v1/contacts/bulk/unassign-groups", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("bulk removes contacts from groups", async () => {
+    mockPrisma.groupContact = { deleteMany: vi.fn().mockResolvedValue({ count: 4 }) };
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/v1/contacts/bulk/unassign-groups",
+      payload: { contactIds: ["c-1", "c-2"], groupIds: ["g-1", "g-2"] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.groupContact.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { contactGroupId: { in: ["g-1", "g-2"] }, contactId: { in: ["c-1", "c-2"] } } })
+    );
+  });
+});
+
+describe("GET /v1/contacts/export (format param)", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns CSV content type", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([
+      { id: "c-1", firstName: "Priya", lastName: "Shah", phoneNumber: "+919000000001", email: "priya@example.com", countryCode: "IN", createdAt: new Date("2025-01-01") },
+    ]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/export?format=csv" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/csv");
+  });
+
+  it("returns JSON when format=json", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/export?format=json" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: unknown[] }>().data).toEqual([]);
+  });
+});

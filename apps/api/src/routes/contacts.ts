@@ -22,8 +22,34 @@ interface ContactPatchBody {
 }
 
 export const contactsRouter: FastifyPluginAsync = async (fastify) => {
-  fastify.get("/contacts/export", async (request, reply) => {
+  fastify.get<{ Querystring: { format?: string } }>("/contacts/export", async (request, reply) => {
     const { organizationId } = request.auth;
+    const format = request.query.format;
+
+    if (format === "json") {
+      const contacts = await fastify.prisma.contact.findMany({
+        where: { organizationId },
+        select: { id: true, firstName: true, lastName: true, phoneNumber: true, email: true, countryCode: true, createdAt: true },
+      });
+      return reply.send({ data: contacts });
+    }
+
+    if (format === "csv") {
+      const contacts = await fastify.prisma.contact.findMany({
+        where: { organizationId },
+        select: { id: true, firstName: true, lastName: true, phoneNumber: true, email: true, countryCode: true, createdAt: true },
+      });
+      const header = "id,first_name,last_name,phone,email,country_code,created_at\n";
+      const rows = contacts.map((c) =>
+        [c.id, c.firstName ?? "", c.lastName ?? "", c.phoneNumber, c.email ?? "", c.countryCode ?? "", c.createdAt.toISOString()].join(",")
+      );
+      return reply
+        .header("Content-Type", "text/csv")
+        .header("Content-Disposition", "attachment; filename=contacts.csv")
+        .send(header + rows.join("\n"));
+    }
+
+    // Default: full export using generateContactsCsv (legacy format)
     const contacts = await fastify.prisma.contact.findMany({
       where: { organizationId },
       orderBy: { createdAt: "asc" },
@@ -34,6 +60,33 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       .header("Content-Disposition", "attachment; filename=contacts.csv")
       .send(csv);
   });
+
+  // ── Bulk group assignment ────────────────────────────────────────────────
+  fastify.post<{ Body: { contactIds: string[]; groupIds: string[] } }>(
+    "/contacts/bulk/assign-groups",
+    async (request, reply) => {
+      const { contactIds, groupIds } = request.body;
+      const pairs: { contactGroupId: string; contactId: string }[] = [];
+      for (const groupId of groupIds) {
+        for (const contactId of contactIds) {
+          pairs.push({ contactGroupId: groupId, contactId });
+        }
+      }
+      await fastify.prisma.groupContact.createMany({ data: pairs, skipDuplicates: true });
+      return reply.send({ success: true });
+    }
+  );
+
+  fastify.delete<{ Body: { contactIds: string[]; groupIds: string[] } }>(
+    "/contacts/bulk/unassign-groups",
+    async (request, reply) => {
+      const { contactIds, groupIds } = request.body;
+      await fastify.prisma.groupContact.deleteMany({
+        where: { contactGroupId: { in: groupIds }, contactId: { in: contactIds } },
+      });
+      return reply.send({ success: true });
+    }
+  );
 
   fastify.get<{ Querystring: { q?: string } }>("/contacts/search", async (request, reply) => {
     const { organizationId } = request.auth;
