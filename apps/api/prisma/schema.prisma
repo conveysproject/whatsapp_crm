@@ -302,6 +302,7 @@ enum CampaignStatus {
   running
   completed
   cancelled
+  aborted
 }
 
 enum ContactImportStatus {
@@ -333,6 +334,7 @@ enum CampaignRecipientStatus {
   read
   failed
   cancelled
+  expired
 }
 
 enum PaymentGateway {

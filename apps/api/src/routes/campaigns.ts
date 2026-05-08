@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import type { CampaignStatus, CampaignRecipientStatus } from "@prisma/client";
+import type { CampaignStatus } from "@prisma/client";
 import { campaignQueue } from "../lib/queue.js";
 import type { CampaignId, SegmentId, TemplateId } from "@WBMSG/shared";
 
@@ -105,7 +105,7 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId } = request.auth;
     const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
     if (!campaign) return reply.status(404).send({ error: "Not found" });
-    const data = await fastify.prisma.campaign.update({ where: { id: request.params.id }, data: { status: "aborted" as unknown as CampaignStatus } });
+    const data = await fastify.prisma.campaign.update({ where: { id: request.params.id }, data: { status: "aborted" } });
     return reply.send({ data });
   });
 
@@ -165,7 +165,7 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
       if (!campaign) return reply.status(404).send({ error: "Not found" });
       const page = parseInt(request.query.page ?? "1", 10);
       const data = await fastify.prisma.campaignRecipient.findMany({
-        where: { campaignId: request.params.id, status: "expired" as unknown as CampaignRecipientStatus },
+        where: { campaignId: request.params.id, status: "expired" },
         include: { contact: { select: { firstName: true, lastName: true, phoneNumber: true } } },
         skip: (page - 1) * 50,
         take: 50,
