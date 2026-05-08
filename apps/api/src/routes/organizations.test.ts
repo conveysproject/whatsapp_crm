@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import Fastify from "fastify";
+import type { Organization } from "@prisma/client";
 
 const mockOrg = {
   id: "org_123",
@@ -74,7 +75,7 @@ describe("POST /v1/organizations/branding/logo", () => {
     vi.mocked(prisma.organization.update).mockResolvedValueOnce({
       id: "org_123",
       logoImage: "https://cdn.example.com/logo.png",
-    } as any);
+    } as unknown as Organization);
 
     const res = await app.inject({
       method: "POST",

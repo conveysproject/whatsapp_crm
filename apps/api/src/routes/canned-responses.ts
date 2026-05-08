@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import type { InputJsonValue } from "@prisma/client/runtime/library";
 
 interface CannedResponseBody {
   name: string;
@@ -21,7 +22,7 @@ export const cannedResponsesRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId } = request.auth;
     const { name, shortcut, content, mediaData } = request.body;
     const data = await fastify.prisma.cannedResponse.create({
-      data: { organizationId, name, shortcut: shortcut ?? null, content, mediaData: mediaData ?? null },
+      data: { organizationId, name, shortcut: shortcut ?? null, content, mediaData: (mediaData ?? null) as InputJsonValue | null },
     });
     return reply.status(201).send({ data });
   });
@@ -34,9 +35,15 @@ export const cannedResponsesRouter: FastifyPluginAsync = async (fastify) => {
         where: { id: request.params.id, organizationId },
       });
       if (!existing) return reply.status(404).send({ error: "Not found" });
+      const { name, shortcut, content, mediaData } = request.body;
       const data = await fastify.prisma.cannedResponse.update({
         where: { id: request.params.id },
-        data: request.body,
+        data: {
+          ...(name !== undefined && { name }),
+          ...(shortcut !== undefined && { shortcut }),
+          ...(content !== undefined && { content }),
+          ...(mediaData !== undefined && { mediaData: mediaData as InputJsonValue }),
+        },
       });
       return reply.send({ data });
     }
