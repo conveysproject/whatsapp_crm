@@ -9,6 +9,7 @@ const mockPrisma = {
   },
   message: {
     findMany: vi.fn(),
+    deleteMany: vi.fn(),
   },
 };
 
@@ -71,5 +72,22 @@ describe("GET /v1/conversations/:id/messages", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ data: unknown[] }>();
     expect(body.data).toHaveLength(1);
+  });
+});
+
+describe("DELETE /v1/conversations/:id/history", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("deletes all messages in the conversation and returns count", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1" });
+    mockPrisma.message.deleteMany.mockResolvedValue({ count: 15 });
+    const res = await app.inject({ method: "DELETE", url: "/v1/conversations/conv-1/history" });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.message.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { conversationId: "conv-1" } })
+    );
+    expect(res.json<{ data: { deleted: number } }>().data.deleted).toBe(15);
   });
 });

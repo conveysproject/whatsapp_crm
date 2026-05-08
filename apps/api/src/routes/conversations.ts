@@ -30,4 +30,21 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       return reply.send({ data: messages });
     }
   );
+
+  fastify.delete<{ Params: { id: ConversationId } }>(
+    "/conversations/:id/history",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const conversation = await fastify.prisma.conversation.findFirst({
+        where: { id: request.params.id, organizationId },
+      });
+      if (!conversation) {
+        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
+      }
+      const result = await fastify.prisma.message.deleteMany({
+        where: { conversationId: request.params.id },
+      });
+      return reply.send({ data: { deleted: result.count } });
+    }
+  );
 };
