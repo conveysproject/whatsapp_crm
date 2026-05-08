@@ -9,6 +9,7 @@ import { SmartReplies } from "@/components/inbox/SmartReplies";
 import { CannedResponsePicker } from "@/components/canned-response-picker";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
 import { useSocket } from "@/hooks/useSocket";
+import { BotPanel } from "@/components/bot-panel";
 
 export default function InboxPage(): JSX.Element {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
@@ -43,6 +44,9 @@ export default function InboxPage(): JSX.Element {
           prefillText={prefillText}
           onSent={() => setPrefillText("")}
         />
+        {selectedConversationId && (
+          <BotPanel conversationId={selectedConversationId} />
+        )}
       </div>
     </WhatsAppGate>
   );
