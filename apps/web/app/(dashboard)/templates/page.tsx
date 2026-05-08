@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { TemplateActions } from "./TemplateActions";
 
 interface Template {
   id: string;
@@ -54,7 +55,10 @@ export default async function TemplatesPage(): Promise<JSX.Element> {
                   {t.category} · {t.language}
                 </p>
               </div>
-              <Badge variant={statusVariant[t.status] ?? "gray"}>{t.status}</Badge>
+              <div className="flex items-center gap-3">
+                <Badge variant={statusVariant[t.status] ?? "gray"}>{t.status}</Badge>
+                <TemplateActions templateId={t.id} templateName={t.name} />
+              </div>
             </div>
           ))
         )}
