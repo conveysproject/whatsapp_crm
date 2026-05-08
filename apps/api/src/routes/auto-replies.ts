@@ -47,9 +47,18 @@ export const autoRepliesRouter: FastifyPluginAsync = async (fastify) => {
     if (!original) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Auto-reply not found" } });
     }
-    const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, parentId: _parentId, ...rest } = original;
     const copy = await fastify.prisma.autoReply.create({
-      data: { ...rest, name: `Copy of ${original.name}`, isActive: false },
+      data: {
+        organizationId: original.organizationId,
+        name: `Copy of ${original.name}`,
+        triggerType: original.triggerType,
+        triggerKeyword: original.triggerKeyword,
+        replyText: original.replyText,
+        replyData: original.replyData as Prisma.InputJsonValue,
+        flowId: original.flowId,
+        priorityIndex: original.priorityIndex,
+        isActive: false,
+      },
     });
     return reply.status(201).send({ data: copy });
   });
