@@ -107,3 +107,75 @@ describe("GET /v1/contacts/export", () => {
     expect(res.body).toContain("+919000000001");
   });
 });
+
+describe("POST /v1/contacts/:id/block", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("sets waBlockedAt on the contact", async () => {
+    mockPrisma.contact.findFirst = vi.fn().mockResolvedValue({ id: "c-1", organizationId: "org-1" });
+    mockPrisma.contact.update = vi.fn().mockResolvedValue({ id: "c-1", waBlockedAt: new Date() });
+    const res = await app.inject({ method: "POST", url: "/v1/contacts/c-1/block" });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.contact.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ waBlockedAt: expect.any(Date) }) })
+    );
+  });
+});
+
+describe("POST /v1/contacts/:id/unblock", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("clears waBlockedAt on the contact", async () => {
+    mockPrisma.contact.findFirst = vi.fn().mockResolvedValue({ id: "c-1", organizationId: "org-1" });
+    mockPrisma.contact.update = vi.fn().mockResolvedValue({ id: "c-1", waBlockedAt: null });
+    const res = await app.inject({ method: "POST", url: "/v1/contacts/c-1/unblock" });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.contact.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { waBlockedAt: null } })
+    );
+  });
+});
+
+describe("POST /v1/contacts/:id/toggle-bot", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("sets disableBot to true", async () => {
+    mockPrisma.contact.findFirst = vi.fn().mockResolvedValue({ id: "c-1", organizationId: "org-1" });
+    mockPrisma.contact.update = vi.fn().mockResolvedValue({ id: "c-1", disableBot: true });
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/contacts/c-1/toggle-bot",
+      payload: { disabled: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.contact.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { disableBot: true } })
+    );
+  });
+});
+
+describe("PUT /v1/contacts/:id/notes", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("updates the contact notes", async () => {
+    mockPrisma.contact.findFirst = vi.fn().mockResolvedValue({ id: "c-1", organizationId: "org-1" });
+    mockPrisma.contact.update = vi.fn().mockResolvedValue({ id: "c-1", notes: "VIP customer" });
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/contacts/c-1/notes",
+      payload: { notes: "VIP customer" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.contact.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { notes: "VIP customer" } })
+    );
+  });
+});

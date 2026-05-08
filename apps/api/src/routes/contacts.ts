@@ -135,4 +135,57 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     await removeContact(request.params.id);
     return reply.status(204).send();
   });
+
+  // ── Contact block / unblock ──────────────────────────────────────────────
+  fastify.post<{ Params: { id: string } }>("/contacts/:id/block", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const contact = await fastify.prisma.contact.findFirst({ where: { id: request.params.id, organizationId } });
+    if (!contact) return reply.status(404).send({ error: "Not found" });
+    const data = await fastify.prisma.contact.update({ where: { id: request.params.id }, data: { waBlockedAt: new Date() } });
+    return reply.send({ data });
+  });
+
+  fastify.post<{ Params: { id: string } }>("/contacts/:id/unblock", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const contact = await fastify.prisma.contact.findFirst({ where: { id: request.params.id, organizationId } });
+    if (!contact) return reply.status(404).send({ error: "Not found" });
+    const data = await fastify.prisma.contact.update({ where: { id: request.params.id }, data: { waBlockedAt: null } });
+    return reply.send({ data });
+  });
+
+  // ── AI bot toggle ────────────────────────────────────────────────────────
+  fastify.post<{ Params: { id: string }; Body: { disabled: boolean } }>(
+    "/contacts/:id/toggle-bot",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const contact = await fastify.prisma.contact.findFirst({ where: { id: request.params.id, organizationId } });
+      if (!contact) return reply.status(404).send({ error: "Not found" });
+      const data = await fastify.prisma.contact.update({ where: { id: request.params.id }, data: { disableBot: request.body.disabled } });
+      return reply.send({ data });
+    }
+  );
+
+  // ── Notes ────────────────────────────────────────────────────────────────
+  fastify.put<{ Params: { id: string }; Body: { notes: string } }>(
+    "/contacts/:id/notes",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const contact = await fastify.prisma.contact.findFirst({ where: { id: request.params.id, organizationId } });
+      if (!contact) return reply.status(404).send({ error: "Not found" });
+      const data = await fastify.prisma.contact.update({ where: { id: request.params.id }, data: { notes: request.body.notes } });
+      return reply.send({ data });
+    }
+  );
+
+  // ── Assign user ──────────────────────────────────────────────────────────
+  fastify.put<{ Params: { id: string }; Body: { userId: string | null } }>(
+    "/contacts/:id/assign",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const contact = await fastify.prisma.contact.findFirst({ where: { id: request.params.id, organizationId } });
+      if (!contact) return reply.status(404).send({ error: "Not found" });
+      const data = await fastify.prisma.contact.update({ where: { id: request.params.id }, data: { assignedUserId: request.body.userId } });
+      return reply.send({ data });
+    }
+  );
 };
