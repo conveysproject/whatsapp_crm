@@ -4,6 +4,9 @@ import type { PrismaClient } from "@prisma/client";
 
 const mockPrisma = {
   chatbot: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+  contact: { findFirst: vi.fn() },
+  conversation: { findFirst: vi.fn() },
+  botSession: { upsert: vi.fn() },
 };
 const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const };
 
@@ -32,5 +35,58 @@ describe("POST /v1/chatbots", () => {
     });
     expect(res.statusCode).toBe(201);
     expect(res.json<{ data: { isActive: boolean } }>().data.isActive).toBe(false);
+  });
+});
+
+describe("GET /v1/chatbots/active-for/:contactId", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns active chatbots when contact has bot enabled", async () => {
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c-1", organizationId: "org-1", disableBot: false });
+    mockPrisma.chatbot.findMany.mockResolvedValue([
+      { id: "cb-1", name: "Product FAQ", isActive: true, startTrigger: "product", description: null },
+    ]);
+    const res = await app.inject({ method: "GET", url: "/v1/chatbots/active-for/c-1" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: unknown[] }>().data).toHaveLength(1);
+  });
+
+  it("returns empty array when contact has bot disabled", async () => {
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c-1", organizationId: "org-1", disableBot: true });
+    const res = await app.inject({ method: "GET", url: "/v1/chatbots/active-for/c-1" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: unknown[] }>().data).toHaveLength(0);
+  });
+
+  it("returns 404 when contact not found", async () => {
+    mockPrisma.contact.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "GET", url: "/v1/chatbots/active-for/bad" });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("POST /v1/chatbots/:id/quick-send/:contactId", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("upserts bot session for contact's latest conversation", async () => {
+    mockPrisma.chatbot.findFirst.mockResolvedValue({ id: "cb-1", organizationId: "org-1" });
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c-1", organizationId: "org-1" });
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1" });
+    mockPrisma.botSession.upsert.mockResolvedValue({ id: "bs-1" });
+    const res = await app.inject({ method: "POST", url: "/v1/chatbots/cb-1/quick-send/c-1" });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.botSession.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 400 when no conversation exists for contact", async () => {
+    mockPrisma.chatbot.findFirst.mockResolvedValue({ id: "cb-1", organizationId: "org-1" });
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c-1", organizationId: "org-1" });
+    mockPrisma.conversation.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "POST", url: "/v1/chatbots/cb-1/quick-send/c-1" });
+    expect(res.statusCode).toBe(400);
   });
 });
