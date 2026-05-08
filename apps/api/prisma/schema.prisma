@@ -103,6 +103,58 @@ model CannedResponse {
   @@map("canned_responses")
 }
 
+model ContactGroup {
+  id             String          @id @default(uuid())
+  organizationId String          @map("organization_id")
+  title          String
+  description    String?
+  isArchived     Boolean         @default(false) @map("is_archived")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  contacts       GroupContact[]
+  campaignGroups CampaignGroup[]
+
+  @@index([organizationId])
+  @@map("contact_groups")
+}
+
+model GroupContact {
+  id             String       @id @default(uuid())
+  contactGroupId String       @map("contact_group_id")
+  contactGroup   ContactGroup @relation(fields: [contactGroupId], references: [id], onDelete: Cascade)
+  contactId      String       @map("contact_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@unique([contactGroupId, contactId])
+  @@index([contactGroupId])
+  @@index([contactId])
+  @@map("group_contacts")
+}
+
+model CampaignGroup {
+  id             String       @id @default(uuid())
+  campaignId     String       @map("campaign_id")
+  campaign       Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactGroupId String       @map("contact_group_id")
+  contactGroup   ContactGroup @relation(fields: [contactGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, contactGroupId])
+  @@index([campaignId])
+  @@map("campaign_groups")
+}
+
+model SavedFilter {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  filterData     Json     @map("filter_data")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@map("saved_filters")
+}
+
 enum ConversationStatus {
   open
   pending
@@ -483,6 +535,10 @@ model Campaign {
   organizationId String              @map("organization_id")
   name           String
   templateId     String?             @map("template_id")
+  timezone       String?
+  expiresAt      DateTime?           @map("expires_at")
+  campaignType   String              @default("template") @map("campaign_type")
+  isArchived     Boolean             @default(false) @map("is_archived")
   status         CampaignStatus      @default(draft)
   scheduledAt    DateTime?           @map("scheduled_at")
   sentAt         DateTime?           @map("sent_at")
@@ -490,6 +546,7 @@ model Campaign {
   updatedAt      DateTime            @updatedAt @map("updated_at")
   segments       CampaignSegment[]
   recipients     CampaignRecipient[]
+  campaignGroups CampaignGroup[]
 
   @@index([organizationId])
   @@index([organizationId, status])
