@@ -9,10 +9,9 @@ interface Message {
   id: string;
   conversationId: string;
   direction: "inbound" | "outbound";
-  contentType: string;
+  contentType?: string | null;
   body: string | null;
   sentAt: string;
-  contentType?: string | null;
   mediaUrl?: string | null;
 }
 
