@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Toast, useToast } from "@/components/ui/Toast";
+import { LabelBadge, type LabelItem } from "@/components/ui/LabelBadge";
 import { AddContactModal, type Contact } from "./AddContactModal";
 
 const stageVariant: Record<string, "green" | "blue" | "yellow" | "red" | "gray"> = {

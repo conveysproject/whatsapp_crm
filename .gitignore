@@ -10,7 +10,15 @@ dist/
 # Environment
 .env
 .env.local
+.env.local1
 .env.production
+
+# Local reference / scratch files
+data-schema.sql
+vercel-env-list.txt
+
+# Claude Code
+.claude/settings.json
 
 # Turbo
 .turbo/

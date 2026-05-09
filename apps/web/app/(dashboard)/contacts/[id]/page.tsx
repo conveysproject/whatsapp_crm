@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ContactForm } from "@/components/contacts/ContactForm";
 import { ContactTimeline } from "./ContactTimeline";
+import { ContactLabelManager } from "@/components/contacts/ContactLabelManager";
 
 interface Contact {
   id: string;
@@ -66,7 +67,9 @@ export default async function ContactDetailPage({
           {contact.name ?? contact.phoneNumber}
         </h1>
       </div>
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-card">
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-card space-y-6">
+        <ContactLabelManager contactId={id} />
+        <hr className="border-gray-100" />
         <ContactForm
           phoneNumber={contact.phoneNumber}
           initial={{

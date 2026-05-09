@@ -128,13 +128,17 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.get("/contacts", async (request, reply) => {
     const { organizationId } = request.auth;
-    const { cursor, limit } = parsePaginationParams(request.query as Record<string, string>);
+    const query = request.query as Record<string, string>;
+    const { cursor, limit } = parsePaginationParams(query);
+    const labelId = query["labelId"];
 
     const contacts = await fastify.prisma.contact.findMany({
       where: {
         organizationId,
         ...(cursor ? { id: { gt: cursor } } : {}),
+        ...(labelId ? { contactLabels: { some: { labelId } } } : {}),
       },
+      include: { contactLabels: { include: { label: true } } },
       take: limit + 1,
       orderBy: { id: "asc" },
     });
@@ -146,6 +150,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId } = request.auth;
     const contact = await fastify.prisma.contact.findFirst({
       where: { id: request.params.id, organizationId },
+      include: { contactLabels: { include: { label: true } } },
     });
     if (!contact) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
