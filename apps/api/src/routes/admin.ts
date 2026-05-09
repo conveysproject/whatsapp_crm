@@ -12,12 +12,12 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
   // ── Organizations list ───────────────────────────────────────────────────
   fastify.get<{ Querystring: { status?: string; page?: string } }>("/admin/organizations", async (request, reply) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
-    const page = parseInt(request.query.page ?? "1", 10);
+    const page = Math.max(1, parseInt(request.query.page ?? "1", 10) || 1);
     const where = request.query.status ? { status: request.query.status } : {};
     const [data, total] = await Promise.all([
       fastify.prisma.organization.findMany({
         where,
-        include: { _count: { select: { members: true, contacts: true } } },
+        include: { _count: { select: { members: true } } },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * 50,
         take: 50,
@@ -41,6 +41,8 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     "/admin/organizations/:id/ban",
     async (request, reply) => {
       if (!requireSuperAdmin(request.auth.role, reply)) return;
+      const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
+      if (!org) return reply.status(404).send({ error: "Organization not found" });
       const data = await fastify.prisma.organization.update({
         where: { id: request.params.id },
         data: { status: "banned", banReason: request.body.reason },
@@ -51,6 +53,8 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Params: { id: string } }>("/admin/organizations/:id/unban", async (request, reply) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
+    const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
+    if (!org) return reply.status(404).send({ error: "Organization not found" });
     const data = await fastify.prisma.organization.update({
       where: { id: request.params.id },
       data: { status: "active", banReason: null },
@@ -62,10 +66,10 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Body: {
       organizationId: string;
-      planTier: string;
+      planTier: "starter" | "growth" | "scale" | "enterprise";
       charges: number;
       chargesFrequency: string;
-      gateway: string;
+      gateway: "stripe" | "razorpay" | "upi" | "bank_transfer" | "cash" | "other";
       durationDays?: number;
     };
   }>(
@@ -78,10 +82,10 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       const data = await fastify.prisma.manualSubscription.create({
         data: {
           organizationId: request.body.organizationId,
-          planTier: request.body.planTier as "starter" | "growth" | "pro" | "enterprise",
+          planTier: request.body.planTier,
           charges: request.body.charges,
           chargesFrequency: request.body.chargesFrequency,
-          gateway: request.body.gateway as "stripe" | "razorpay" | "cashfree" | "payu" | "manual",
+          gateway: request.body.gateway,
           status: "active",
           endsAt,
         },

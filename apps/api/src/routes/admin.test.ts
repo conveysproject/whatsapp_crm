@@ -56,6 +56,7 @@ describe("POST /v1/admin/organizations/:id/ban", () => {
   afterEach(async () => { await app.close(); });
 
   it("sets org status to banned with reason", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ id: "org-1", name: "Acme Corp", status: "active" });
     mockPrisma.organization.update.mockResolvedValue({ id: "org-1", status: "banned", banReason: "TOS violation" });
     const res = await app.inject({
       method: "POST",
@@ -75,12 +76,34 @@ describe("POST /v1/admin/organizations/:id/unban", () => {
   afterEach(async () => { await app.close(); });
 
   it("clears org ban status", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ id: "org-1", name: "Acme Corp", status: "banned" });
     mockPrisma.organization.update.mockResolvedValue({ id: "org-1", status: "active", banReason: null });
     const res = await app.inject({ method: "POST", url: "/v1/admin/organizations/org-1/unban" });
     expect(res.statusCode).toBe(200);
     expect(mockPrisma.organization.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: "active", banReason: null } })
     );
+  });
+});
+
+describe("SuperAdmin guard", () => {
+  let appAsAdmin: FastifyInstance;
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    appAsAdmin = Fastify({ logger: false });
+    appAsAdmin.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    appAsAdmin.addHook("onRequest", async (req) => {
+      req.auth = { userId: "u-1", organizationId: "org-1", role: "admin" as const };
+    });
+    const { adminRouter } = await import("./admin.js");
+    await appAsAdmin.register(adminRouter, { prefix: "/v1" });
+  });
+  afterEach(async () => { await appAsAdmin.close(); });
+
+  it("returns 403 for non-superAdmin", async () => {
+    const res = await appAsAdmin.inject({ method: "GET", url: "/v1/admin/organizations" });
+    expect(res.statusCode).toBe(403);
   });
 });
 
