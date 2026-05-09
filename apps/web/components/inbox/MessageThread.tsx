@@ -3,6 +3,7 @@
 import { JSX, useEffect, useRef } from "react";
 import { useMessages } from "@/hooks/useMessages";
 import { IntentBadge } from "@/components/intent-badge";
+import { VoicePlayer } from "@/components/voice-player";
 
 interface Props {
   conversationId: string | null;
@@ -53,13 +54,22 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
                 : "bg-white border border-gray-200 text-gray-900 rounded-bl-none shadow-card",
             ].join(" ")}
           >
-            <p>{msg.body ?? "[media]"}</p>
-            {msg.direction === "inbound" && msg.body && (
-              <IntentBadge
+            {msg.contentType === "audio" && msg.mediaUrl ? (
+              <VoicePlayer
+                mediaUrl={msg.mediaUrl}
                 messageId={msg.id}
-                text={msg.body}
-                direction={msg.direction}
               />
+            ) : (
+              <>
+                {msg.contentType !== "audio" && <p>{msg.body ?? "[media]"}</p>}
+                {msg.direction === "inbound" && msg.body && (
+                  <IntentBadge
+                    messageId={msg.id}
+                    text={msg.body}
+                    direction={msg.direction}
+                  />
+                )}
+              </>
             )}
             <p className="text-xs text-gray-400 mt-1 text-right">{formatTime(msg.sentAt)}</p>
           </div>

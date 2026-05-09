@@ -12,6 +12,8 @@ interface Message {
   contentType: string;
   body: string | null;
   sentAt: string;
+  contentType?: string | null;
+  mediaUrl?: string | null;
 }
 
 interface MessagesResponse {
