@@ -1,4 +1,5 @@
 "use client";
+import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 interface Stats {
@@ -8,10 +9,11 @@ interface Stats {
   failed: number;
 }
 
-export default function TemplateAnalyticsPage({ params }: { params: { id: string } }): JSX.Element {
+export default function TemplateAnalyticsPage({ params }: { params: Promise<{ id: string }> }): JSX.Element {
+  const { id } = use(params);
   const { data, isLoading } = useQuery<{ data: Stats }>({
-    queryKey: ["template-analytics", params.id],
-    queryFn: () => fetch(`/api/v1/templates/${params.id}/analytics`).then((r) => r.json()),
+    queryKey: ["template-analytics", id],
+    queryFn: () => fetch(`/api/v1/templates/${id}/analytics`).then((r) => r.json()),
   });
 
   const stats = data?.data ?? { sent: 0, delivered: 0, read: 0, failed: 0 };
