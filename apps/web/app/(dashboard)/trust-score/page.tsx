@@ -4,7 +4,6 @@ import { useAuth } from "@clerk/nextjs";
 
 interface TrustScoreData {
   score: number;
-  grade: string;
   breakdown: { category: string; score: number; maxScore: number; description: string }[];
   recommendations: string[];
 }
@@ -75,7 +74,7 @@ function ScoreGauge({ score }: { score: number }): JSX.Element {
       </svg>
       <div className="flex flex-col items-center">
         <span className={`text-4xl font-bold leading-none ${getScoreColor(score)}`}>
-          {clampedScore}
+          {Math.round(clampedScore)}
         </span>
         <span className="text-xs text-gray-400 mt-1">out of 100</span>
       </div>
@@ -120,6 +119,7 @@ export default function TrustScorePage(): JSX.Element {
   const { getToken } = useAuth();
   const [data, setData] = useState<TrustScoreData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,7 +132,10 @@ export default function TrustScorePage(): JSX.Element {
           headers: { Authorization: `Bearer ${token ?? ""}` },
         });
         if (!res.ok) {
-          if (!cancelled) setLoading(false);
+          if (!cancelled) {
+            setError("Trust score data is not available yet.");
+            setLoading(false);
+          }
           return;
         }
         const json = (await res.json()) as TrustScoreData;
@@ -141,7 +144,10 @@ export default function TrustScorePage(): JSX.Element {
           setLoading(false);
         }
       } catch {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setError("Network error loading trust score.");
+          setLoading(false);
+        }
       }
     })();
     return () => {
@@ -157,70 +163,73 @@ export default function TrustScorePage(): JSX.Element {
     );
   }
 
-  const score = data?.score ?? 0;
-  const gradeText = getGradeText(score);
-  const breakdown = data?.breakdown ?? [];
-  const recommendations = data?.recommendations ?? [];
-
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-8">
       {/* Header */}
       <h1 className="text-2xl font-semibold">Trust Score</h1>
 
-      {/* Score gauge card */}
-      <div className="bg-white border rounded-xl p-8 flex flex-col items-center gap-3 shadow-sm">
-        <ScoreGauge score={score} />
-        <p className={`text-lg font-semibold ${getScoreColor(score)}`}>
-          {gradeText}
-        </p>
-        <p className="text-sm text-gray-500 text-center">
-          Your organisation&apos;s trust score reflects messaging quality,
-          engagement, and compliance.
-        </p>
-      </div>
-
-      {/* Score Breakdown */}
-      {breakdown.length > 0 && (
-        <div className="bg-white border rounded-xl p-6 shadow-sm space-y-5">
-          <h2 className="text-base font-semibold text-gray-800">
-            Score Breakdown
-          </h2>
-          {breakdown.map((item) => (
-            <BreakdownRow
-              key={item.category}
-              category={item.category}
-              score={item.score}
-              maxScore={item.maxScore}
-              description={item.description}
-            />
-          ))}
+      {/* Error banner */}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
         </div>
       )}
 
-      {/* Recommendations */}
-      {recommendations.length > 0 && (
-        <div className="bg-white border rounded-xl p-6 shadow-sm">
-          <h2 className="text-base font-semibold text-gray-800 mb-4">
-            Recommendations
-          </h2>
-          <ul className="space-y-2">
-            {recommendations.map((rec) => (
-              <li key={rec} className="flex items-start gap-2 text-sm text-gray-700">
-                <span className="text-blue-500 font-bold shrink-0">&rarr;</span>
-                <span>{rec}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {/* Empty state — no error, no data */}
+      {!loading && !error && !data && (
+        <p className="text-sm text-gray-400">No trust score data is available yet.</p>
       )}
 
-      {/* Empty state when no data returned */}
-      {!data && (
-        <div className="bg-white border rounded-xl p-8 flex flex-col items-center gap-2 shadow-sm">
-          <p className="text-sm text-gray-400">
-            No trust score data is available yet.
-          </p>
-        </div>
+      {/* Gauge + breakdown + recommendations — only when data is present */}
+      {!loading && !error && data && (
+        <>
+          {/* Score gauge card */}
+          <div className="bg-white border rounded-xl p-8 flex flex-col items-center gap-3 shadow-sm">
+            <ScoreGauge score={data.score} />
+            <p className={`text-lg font-semibold ${getScoreColor(data.score)}`}>
+              {getGradeText(data.score)}
+            </p>
+            <p className="text-sm text-gray-500 text-center">
+              Your organisation&apos;s trust score reflects messaging quality,
+              engagement, and compliance.
+            </p>
+          </div>
+
+          {/* Score Breakdown */}
+          {data.breakdown.length > 0 && (
+            <div className="bg-white border rounded-xl p-6 shadow-sm space-y-5">
+              <h2 className="text-base font-semibold text-gray-800">
+                Score Breakdown
+              </h2>
+              {data.breakdown.map((item) => (
+                <BreakdownRow
+                  key={item.category}
+                  category={item.category}
+                  score={item.score}
+                  maxScore={item.maxScore}
+                  description={item.description}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Recommendations */}
+          {data.recommendations.length > 0 && (
+            <div className="bg-white border rounded-xl p-6 shadow-sm">
+              <h2 className="text-base font-semibold text-gray-800 mb-4">
+                Recommendations
+              </h2>
+              <ul className="space-y-2">
+                {data.recommendations.map((rec, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                    <span className="text-blue-500 font-bold shrink-0">&rarr;</span>
+                    <span>{rec}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
