@@ -15,6 +15,7 @@ import "./workers/inbound-message.worker.js";
 import "./workers/campaign.worker.js";
 import "./workers/flow.worker.js";
 import "./workers/contact-import.worker.js";
+import { startMessageCleanupWorker, scheduleMessageCleanupCron } from "./workers/message-cleanup.js";
 console.log("[startup] all workers ready");
 
 const PORT = Number(process.env["API_PORT"] ?? 4000);
@@ -50,6 +51,8 @@ async function start() {
   await server.listen({ port: PORT, host: HOST });
   server.log.info(`API running on http://${HOST}:${PORT}`);
   setupSearchIndexes().catch((err) => server.log.warn({ err }, "Meilisearch setup failed"));
+  startMessageCleanupWorker();
+  scheduleMessageCleanupCron().catch((err) => server.log.warn({ err }, "Message cleanup cron schedule failed"));
 }
 
 start().catch((err) => {
