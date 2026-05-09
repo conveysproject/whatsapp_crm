@@ -3,12 +3,12 @@ import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
 
 export const messageCleanupQueue = new Queue("message-cleanup", { connection: redisConnection });
+messageCleanupQueue.on("error", (err) => console.error(`[message-cleanup] queue error: ${err.message}`));
 
 export function startMessageCleanupWorker() {
   const worker = new Worker(
     "message-cleanup",
     async () => {
-      // Find all orgs with auto-deletion enabled
       const settings = await prisma.vendorSetting.findMany({
         where: { key: "enable_automatic_message_deletion", value: "true" },
       });
@@ -35,6 +35,7 @@ export function startMessageCleanupWorker() {
     { connection: redisConnection }
   );
 
+  worker.on("error", (err) => console.error(`[message-cleanup] worker error: ${err.message}`));
   return worker;
 }
 
