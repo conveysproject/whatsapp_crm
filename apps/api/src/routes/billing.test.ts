@@ -89,3 +89,18 @@ describe("POST /v1/billing/manual/submit-proof", () => {
     expect(res.statusCode).toBe(201);
   });
 });
+
+describe("GET /v1/billing/upi-qr", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns a PNG image buffer for UPI QR", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/billing/upi-qr?amount=99900&planId=plan-standard",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("image/png");
+  });
+});

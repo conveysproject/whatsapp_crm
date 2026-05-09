@@ -196,4 +196,17 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true });
   });
 
+  // ── UPI QR code generation ────────────────────────────────────────────────
+  fastify.get<{ Querystring: { amount?: string; planId?: string } }>("/billing/upi-qr", async (request, reply) => {
+    const QRCode = await import("qrcode");
+    const upiId = process.env.UPI_ID ?? "";
+    const amount = ((parseInt(request.query.amount ?? "0", 10)) / 100).toFixed(2);
+    const label = `TrustCRM ${request.query.planId ?? "Subscription"}`;
+    const upiUrl = `upi://pay?pa=${upiId}&pn=TrustCRM&am=${amount}&cu=INR&tn=${encodeURIComponent(label)}`;
+    const buffer = await QRCode.toBuffer(upiUrl, { type: "png", width: 300, margin: 2 });
+    reply.header("Content-Type", "image/png");
+    reply.header("Content-Disposition", "inline; filename=upi-qr.png");
+    return reply.send(buffer);
+  });
+
 };

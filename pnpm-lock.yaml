@@ -101,6 +101,9 @@ importers:
       prisma:
         specifier: ^7.8.0
         version: 7.8.0(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
       razorpay:
         specifier: ^2.9.6
         version: 2.9.6
@@ -126,6 +129,9 @@ importers:
       '@types/papaparse':
         specifier: ^5.5.2
         version: 5.5.2
+      '@types/qrcode':
+        specifier: ^1.5.6
+        version: 1.5.6
       pino-pretty:
         specifier: ^11.0.0
         version: 11.3.0
@@ -3658,6 +3664,9 @@ packages:
 
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
+
+  '@types/qrcode@1.5.6':
+    resolution: {integrity: sha512-te7NQcV2BOvdj2b1hCAHzAoMNuj65kNBMz0KBaxM6c3VGBOhU0dURQKOtH8CFNI/dsKkwlv32p26qYQTWoB5bw==}
 
   '@types/react-dom@18.3.7':
     resolution: {integrity: sha512-MEe3UeoENYVFXzoXEWsvcpg6ZvlrFNlOQ7EOsvhI3CfAXwzPfO8Qwuxd40nepsYKqyyVQnTdEfv68q91yLcKrQ==}
@@ -13464,6 +13473,10 @@ snapshots:
       pg-types: 2.2.0
 
   '@types/prop-types@15.7.15': {}
+
+  '@types/qrcode@1.5.6':
+    dependencies:
+      '@types/node': 20.19.39
 
   '@types/react-dom@18.3.7(@types/react@18.3.28)':
     dependencies:
