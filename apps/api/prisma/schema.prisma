@@ -216,6 +216,7 @@ model Conversation {
   organizationId    String             @map("organization_id")
   organization      Organization       @relation(fields: [organizationId], references: [id])
   contactId         String?            @map("contact_id")
+  contact           Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
   channelType       String             @default("whatsapp") @map("channel_type")
   status            ConversationStatus @default(open)
   assignedTo        String?            @map("assigned_to") // userId
@@ -465,6 +466,7 @@ model Contact {
   segmentContacts    SegmentContact[]
   campaignRecipients CampaignRecipient[]
   groupContacts      GroupContact[]
+  conversations      Conversation[]
 
   @@unique([organizationId, phoneNumber])
   @@index([organizationId])

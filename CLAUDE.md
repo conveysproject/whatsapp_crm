@@ -56,10 +56,19 @@ index.ts          server entry
 lib/              claude, whatsapp, prisma, redis, queue, search, stripe, clerk, …
 plugins/          auth, prisma, rate-limit, sentry, socketio, swagger
 routes/           ai, analytics, billing, campaigns, chatbots, contacts, conversations,
-                  deals, flows, messages, segments, templates, webhooks, …
+                  deals, flows, messages, segments, templates, webhooks,
+                  vendor-settings, canned-responses, whatsapp-account, …
 workers/          campaign, contact-import, flow, inbound-message
 types/            fastify.d.ts (type augmentation)
 ```
+
+**Cycle 1 routes (prefix `/v1`):**
+- `vendor-settings` — org key-value store; GET returns flat map, PUT bulk-upserts; `/sound-notification` shortcut
+- `canned-responses` — CRUD for saved reply templates (name, shortcut, content, mediaData)
+- `whatsapp-account` — health-status, business-profile, display-name, sync-phone-numbers, register-phone, two-step-verification, connect/disconnect-webhook, disconnect-account (whatsapp.ts functions are currently stubs — real Meta API calls not yet wired)
+- `contacts` (extended) — POST `:id/block`, `:id/unblock`, `:id/toggle-bot`; PUT `:id/notes`, `:id/assign`
+- `users` (extended) — PUT `:id/permissions` (updates OrganizationMember.permissions Json)
+- `organizations` (extended) — POST `branding/:slug` (logo, small-logo, favicon, dark-logo, dark-favicon)
 
 ## Web Structure (`apps/web/`)
 
@@ -67,9 +76,11 @@ types/            fastify.d.ts (type augmentation)
 app/
   (auth)/         sign-in, sign-up
   (dashboard)/    campaigns, contacts, companies, deals, flows, inbox, …
+    settings/     page.tsx, members/, whatsapp-account/, branding/, notifications/, team/
   (onboarding)/   onboarding flow
   api/            Next.js route handlers
-components/       analytics, contacts, deals, flows, inbox, ui, …
+components/       analytics, contacts, deals, flows, inbox, ui,
+                  canned-response-picker.tsx, permissions-grid.tsx, …
 hooks/            custom React hooks
 lib/              utilities
 middleware.ts     Clerk auth middleware
@@ -96,6 +107,12 @@ middleware.ts     Clerk auth middleware
 **Git** — Conventional Commits: `feat(api): add endpoint` · branch: `feat/TRUST-123-description`.
 
 **Prisma** — run `pnpm --filter @WBMSG/api generate` after any schema change; client lives in `apps/api/src/lib/prisma.ts`.
+
+**Prisma Json fields** — `Record<string, unknown>` is not directly assignable to `InputJsonValue`; cast explicitly: `import type { InputJsonValue } from "@prisma/client/runtime/library"` then `value as InputJsonValue`. In tests, mock return values with `as unknown as ConcreteType` (not `as any` — triggers lint error).
+
+**Prisma migrations** — `prisma migrate dev` requires interactive TTY and hangs on this Windows machine. Use instead: `prisma db push --accept-data-loss` to sync the schema, then manually create the migration file and run `prisma migrate resolve --applied <name>` to track it.
+
+**Known pre-existing failures** — `apps/api/src/routes/analytics.test.ts` times out (ECONNRESET — makes a real HTTP call, not mocked). `apps/mobile/lib/notifications.ts` has a type error (`NotificationBehavior` missing Expo SDK fields). Both predate Cycle 1 and are not introduced by our changes.
 
 **Socket.io** — real-time via `apps/api/src/plugins/socketio.ts`; client in `apps/web/` uses `socket.io-client`.
 
