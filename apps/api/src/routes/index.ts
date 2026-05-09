@@ -34,6 +34,7 @@ import { contactGroupsRouter } from "./contact-groups.js";
 import { savedFiltersRouter } from "./saved-filters.js";
 import { autoRepliesRouter } from "./auto-replies.js";
 import { webhookActionsRouter } from "./webhook-actions.js";
+import { adminRouter } from "./admin.js";
 
 export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoute);
@@ -71,4 +72,5 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(savedFiltersRouter, { prefix: "/v1" });
   await fastify.register(autoRepliesRouter, { prefix: "/v1" });
   await fastify.register(webhookActionsRouter, { prefix: "/v1" });
+  await fastify.register(adminRouter, { prefix: "/v1" });
 };
