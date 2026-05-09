@@ -9,7 +9,6 @@ interface PredictiveContact {
   phone: string;
   trustScore: number | null;
   riskLevel: "high" | "medium" | "low";
-  prediction: string;
 }
 
 interface PredictiveData {
@@ -87,7 +86,9 @@ function Section({
           <SectionDot color={dotColor} />
           {title}
         </h2>
-        <span className="text-sm text-gray-500">{contacts.length} contacts</span>
+        <span className="text-sm text-gray-500">
+          {contacts.length > 10 ? `${contacts.length} (showing 10)` : `${contacts.length}`} contacts
+        </span>
       </div>
       {visible.length === 0 ? (
         <p className="text-sm text-gray-400">{emptyMessage}</p>
@@ -115,6 +116,7 @@ export default function PredictiveAnalyticsPage(): JSX.Element {
     reorderCandidates: [],
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,7 +129,10 @@ export default function PredictiveAnalyticsPage(): JSX.Element {
           headers: { Authorization: `Bearer ${token ?? ""}` },
         });
         if (!res.ok) {
-          if (!cancelled) setLoading(false);
+          if (!cancelled) {
+            setError("Failed to load predictive data.");
+            setLoading(false);
+          }
           return;
         }
         const json = (await res.json()) as PredictiveData;
@@ -136,13 +141,18 @@ export default function PredictiveAnalyticsPage(): JSX.Element {
           setLoading(false);
         }
       } catch {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setError("Network error. Please try again.");
+          setLoading(false);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [getToken]);
+    // getToken is stable across renders — omit from deps to avoid infinite refetch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (loading) {
     return (
@@ -155,6 +165,7 @@ export default function PredictiveAnalyticsPage(): JSX.Element {
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Predictive Analytics</h1>
+      {error && <p className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{error}</p>}
       <Section
         title="Churn Risk"
         dotColor="bg-red-500"
