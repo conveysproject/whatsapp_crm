@@ -1174,3 +1174,14 @@ model OrganizationMember {
   @@index([userId])
   @@map("organization_members")
 }
+
+model PlatformConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String?  @db.Text
+  dataType  String   @default("string") @map("data_type")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_configs")
+}
