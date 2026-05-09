@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { MessageSquare, Users, Settings } from "lucide-react-native";
+import { MessageSquare, Users, Settings, Megaphone } from "lucide-react-native";
 
 export default function TabLayout() {
   return (
@@ -11,6 +11,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="contacts"
         options={{ title: "Contacts", tabBarIcon: ({ color }) => <Users size={22} color={color} /> }}
+      />
+      <Tabs.Screen
+        name="campaigns"
+        options={{ title: "Campaigns", tabBarIcon: ({ color }) => <Megaphone size={22} color={color} /> }}
       />
       <Tabs.Screen
         name="settings"
