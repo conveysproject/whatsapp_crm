@@ -4,7 +4,8 @@
     "outDir": "dist",
     "rootDir": "src",
     "module": "Node16",
-    "moduleResolution": "node16"
+    "moduleResolution": "node16",
+    "lib": ["ES2023"]
   },
   "include": ["src"]
 }
