@@ -1,0 +1,27 @@
+name: Deploy Conveys
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/conveys/**"
+      - ".github/workflows/deploy-conveys.yml"
+
+jobs:
+  deploy:
+    name: Deploy to Vercel
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: team_57sasK65iiYwBDqP67wvTC5N
+          VERCEL_PROJECT_ID: prj_lUbwsUXe4bvBvmW9LDMtAuAAkyhf
+        run: |
+          npm install -g vercel
+          vercel deploy --prod --token=$VERCEL_TOKEN --yes
+        working-directory: apps/conveys
