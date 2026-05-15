@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ContactForm } from "@/components/contacts/ContactForm";
 import { ContactTimeline } from "./ContactTimeline";
 import { ContactLabelManager } from "@/components/contacts/ContactLabelManager";
+import { AiSummaryCard } from "./AiSummaryCard";
 
 interface Contact {
   id: string;
@@ -13,6 +14,7 @@ interface Contact {
   email: string | null;
   lifecycleStage: string;
   tags: string[];
+  pastAiSummary: string | null;
 }
 
 async function getContact(id: string, token: string): Promise<Contact | null> {
@@ -82,6 +84,7 @@ export default async function ContactDetailPage({
           submitLabel="Update Contact"
         />
       </div>
+      <AiSummaryCard contactId={id} initialSummary={contact.pastAiSummary} />
       <ContactTimeline contactId={id} />
     </div>
   );

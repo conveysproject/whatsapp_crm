@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ConversationStatus } from "@prisma/client";
 import type { ConversationId } from "@WBMSG/shared";
 import { getIo } from "../lib/io-ref.js";
+import { summarizeConversation } from "../lib/claude.js";
 
 export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
   // ── List with status / assignee filters ────────────────────────────────
@@ -145,4 +146,30 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(204).send();
     }
   );
+
+  // ── AI conversation summary ────────────────────────────────────────────
+  fastify.post<{ Params: { id: ConversationId } }>("/conversations/:id/summarize", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const conversation = await fastify.prisma.conversation.findFirst({
+      where: { id: request.params.id, organizationId },
+      include: { contact: { select: { id: true, pastAiSummary: true } } },
+    });
+    if (!conversation) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
+    }
+    const messages = await fastify.prisma.message.findMany({
+      where: { conversationId: conversation.id },
+      orderBy: { sentAt: "asc" },
+      take: 100,
+      select: { body: true, direction: true, sentAt: true },
+    });
+    const summary = await summarizeConversation(messages, conversation.contact?.pastAiSummary);
+    if (conversation.contact) {
+      await fastify.prisma.contact.update({
+        where: { id: conversation.contact.id },
+        data: { pastAiSummary: summary },
+      });
+    }
+    return reply.send({ data: { summary } });
+  });
 };

@@ -117,6 +117,9 @@ export default function WhatsAppAccountPage(): JSX.Element {
         </button>
       </section>
 
+      {/* Marketing Messages */}
+      <MarketingMessagesSection />
+
       {/* Danger Zone */}
       <section className="border border-red-200 rounded-lg p-4 space-y-2">
         <h2 className="font-medium text-red-600">Danger Zone</h2>
@@ -133,5 +136,47 @@ export default function WhatsAppAccountPage(): JSX.Element {
         </button>
       </section>
     </div>
+  );
+}
+
+function MarketingMessagesSection(): JSX.Element {
+  const qc = useQueryClient();
+  const { data: statusData } = useQuery({
+    queryKey: ["marketing-messages-status"],
+    queryFn: () => fetchJson("/api/v1/vendor-settings/marketing-messages/status"),
+  });
+  const status = statusData as { data?: { enabled: boolean } } | undefined;
+  const enabled = status?.data?.enabled ?? false;
+
+  const enable = useMutation({
+    mutationFn: () =>
+      fetch("/api/v1/vendor-settings/marketing-messages/enable", { method: "POST" }).then((r) => r.json()),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["marketing-messages-status"] }),
+  });
+
+  return (
+    <section className="border rounded-lg p-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-medium">Marketing Messages</h2>
+          <p className="text-sm text-gray-500">Enable Meta template analytics and smart delivery for marketing campaigns.</p>
+        </div>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${enabled ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+          {enabled ? "Enabled" : "Not enabled"}
+        </span>
+      </div>
+      {!enabled && (
+        <button
+          onClick={() => enable.mutate()}
+          disabled={enable.isPending}
+          className="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
+        >
+          {enable.isPending ? "Enabling…" : "Enable Marketing Messages"}
+        </button>
+      )}
+      {enable.isError && (
+        <p className="text-xs text-red-500">Failed to enable. Check your WhatsApp connection.</p>
+      )}
+    </section>
   );
 }

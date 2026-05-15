@@ -99,6 +99,29 @@ export async function generateSmartReplies(
   return ["Thank you for your message.", "Let me check on that for you.", "I'll get back to you shortly."];
 }
 
+export async function summarizeConversation(
+  messages: { body: string | null; direction: string; sentAt: Date }[],
+  existingSummary?: string | null
+): Promise<string> {
+  const transcript = messages
+    .filter((m) => m.body)
+    .map((m) => `[${m.sentAt.toISOString().slice(0, 10)}] ${m.direction === "inbound" ? "Customer" : "Agent"}: ${m.body}`)
+    .join("\n");
+
+  const context = existingSummary
+    ? `Previous summary:\n${existingSummary}\n\nNew messages:\n${transcript}`
+    : transcript;
+
+  const response = await getClient().messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 300,
+    system: "You are a CRM assistant. Summarize customer conversations concisely for agents. Focus on: what the customer needed, what was resolved, any follow-up actions. Max 3 sentences.",
+    messages: [{ role: "user", content: context }],
+  });
+
+  return response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
+}
+
 export async function detectIntentWithConfidence(
   text: string
 ): Promise<{ intent: string; confidence: number }> {

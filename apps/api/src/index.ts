@@ -15,6 +15,7 @@ import "./workers/inbound-message.worker.js";
 import "./workers/campaign.worker.js";
 import "./workers/flow.worker.js";
 import "./workers/contact-import.worker.js";
+import "./workers/conversation-summary.worker.js";
 import { startMessageCleanupWorker, scheduleMessageCleanupCron } from "./workers/message-cleanup.js";
 console.log("[startup] all workers ready");
 

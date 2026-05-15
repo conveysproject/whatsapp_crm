@@ -457,6 +457,7 @@ model Contact {
   username        String?
   phoneVerifiedAt DateTime? @map("phone_verified_at")
   countryCode     String?   @map("country_code")
+  pastAiSummary  String?        @map("past_ai_summary") @db.Text
   deletedAt      DateTime?      @map("deleted_at")   // GDPR soft delete
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")

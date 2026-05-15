@@ -5,6 +5,108 @@ import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS } from "../lib/stripe.js";
 import Razorpay from "razorpay";
 
 export const billingRouter: FastifyPluginAsync = async (fastify) => {
+  // ── Plan catalogue ────────────────────────────────────────────────────────
+  fastify.get("/billing/plans", async () => {
+    return {
+      data: [
+        { tier: "starter", name: "Starter", priceInr: 999, priceUsd: 12, limits: PLAN_LIMITS["starter"] },
+        { tier: "growth", name: "Growth", priceInr: 2999, priceUsd: 36, limits: PLAN_LIMITS["growth"] },
+        { tier: "scale", name: "Scale", priceInr: 7999, priceUsd: 96, limits: PLAN_LIMITS["scale"] },
+        { tier: "enterprise", name: "Enterprise", priceInr: null, priceUsd: null, limits: { contacts: null, messages: null } },
+      ],
+    };
+  });
+
+  // ── Current subscription ──────────────────────────────────────────────────
+  fastify.get("/billing/subscriptions", async (request) => {
+    const { organizationId } = request.auth;
+    const [org, manualSub] = await Promise.all([
+      fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { planTier: true, settings: true } }),
+      fastify.prisma.manualSubscription.findFirst({
+        where: { organizationId, status: "active" },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+    const settings = org?.settings as Record<string, string> | null;
+    const stripeCustomerId = settings?.["stripeCustomerId"];
+
+    let stripeSubscription: { id: string; status: string; currentPeriodEnd: string } | null = null;
+    if (stripeCustomerId) {
+      try {
+        const subs = await getStripe().subscriptions.list({ customer: stripeCustomerId, status: "active", limit: 1 });
+        const sub = subs.data[0];
+        if (sub) {
+          stripeSubscription = {
+            id: sub.id,
+            status: sub.status,
+            currentPeriodEnd: new Date(sub.billing_cycle_anchor * 1000).toISOString(),
+          };
+        }
+      } catch { /* Stripe not configured */ }
+    }
+
+    return {
+      data: {
+        planTier: org?.planTier ?? "starter",
+        stripe: stripeSubscription,
+        manual: manualSub
+          ? {
+              id: manualSub.id,
+              status: manualSub.status,
+              charges: manualSub.charges,
+              chargesFrequency: manualSub.chargesFrequency,
+              expiresAt: manualSub.endsAt,
+            }
+          : null,
+      },
+    };
+  });
+
+  // ── Switch plan via Stripe ────────────────────────────────────────────────
+  fastify.post<{ Body: { planTier: PlanTier } }>("/billing/switch-plan", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const { planTier } = request.body;
+    const priceId = PLAN_PRICE_IDS[planTier];
+    if (!priceId) return reply.status(400).send({ error: { code: "INVALID_PLAN", message: "Unknown plan tier" } });
+
+    const org = await fastify.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { settings: true },
+    });
+    const settings = org?.settings as Record<string, string> | null;
+    const stripeCustomerId = settings?.["stripeCustomerId"];
+    if (!stripeCustomerId) return reply.status(400).send({ error: { code: "NO_BILLING_ACCOUNT", message: "No Stripe customer found" } });
+
+    const subs = await getStripe().subscriptions.list({ customer: stripeCustomerId, status: "active", limit: 1 });
+    const sub = subs.data[0];
+    if (!sub) return reply.status(400).send({ error: { code: "NO_ACTIVE_SUBSCRIPTION", message: "No active subscription to switch" } });
+
+    await getStripe().subscriptions.update(sub.id, {
+      items: [{ id: sub.items.data[0]?.id, price: priceId }],
+      proration_behavior: "always_invoice",
+      metadata: { planTier },
+    });
+    await fastify.prisma.organization.update({
+      where: { id: organizationId },
+      data: { planTier },
+    });
+    return { data: { success: true, planTier } };
+  });
+
+  // ── Transaction history ───────────────────────────────────────────────────
+  fastify.get<{ Querystring: { page?: string } }>("/billing/transactions", async (request) => {
+    const { organizationId } = request.auth;
+    const page = Math.max(1, parseInt(request.query.page ?? "1", 10));
+    const pageSize = 20;
+    const transactions = await fastify.prisma.transaction.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    });
+    return { data: transactions, page, pageSize };
+  });
+
   fastify.get("/billing/usage", async (request) => {
     const { organizationId } = request.auth;
     const org = await fastify.prisma.organization.findUnique({

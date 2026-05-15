@@ -25,3 +25,8 @@ export const contactImportQueue = new Queue("contact-import", {
   connection: redisConnection,
   defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 2000 } },
 });
+
+export const conversationSummaryQueue = new Queue("conversation-summary", {
+  connection: redisConnection,
+  defaultJobOptions: { attempts: 2, backoff: { type: "exponential", delay: 5000 } },
+});
