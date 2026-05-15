@@ -122,7 +122,7 @@ export const inboundWorker = new Worker<InboundMessageJob>(
 
     await prisma.conversation.update({
       where: { id: conversation.id },
-      data: { lastMessageAt: messageDate },
+      data: { lastMessageAt: messageDate, unreadCount: { increment: 1 } },
     });
 
     const refreshed = await prisma.conversation.findFirst({ where: { id: conversation.id } });

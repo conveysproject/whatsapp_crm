@@ -2,10 +2,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
+vi.mock("../lib/io-ref.js", () => ({
+  getIo: vi.fn().mockReturnValue({ to: vi.fn().mockReturnValue({ emit: vi.fn() }) }),
+}));
+
 const mockPrisma = {
   conversation: {
     findMany: vi.fn(),
     findFirst: vi.fn(),
+    update: vi.fn(),
   },
   message: {
     findMany: vi.fn(),
@@ -89,5 +94,84 @@ describe("DELETE /v1/conversations/:id/history", () => {
       expect.objectContaining({ where: { conversationId: "conv-1" } })
     );
     expect(res.json<{ data: { deleted: number } }>().data.deleted).toBe(15);
+  });
+});
+
+describe("POST /v1/conversations/:id/status", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns 400 for invalid status", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/conversations/conv-1/status",
+      headers: { "content-type": "application/json" },
+      payload: { status: "invalid" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_STATUS");
+  });
+
+  it("closes a conversation and sets closedAt", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1" });
+    mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", status: "closed" });
+    const res = await app.inject({
+      method: "POST", url: "/v1/conversations/conv-1/status",
+      headers: { "content-type": "application/json" },
+      payload: { status: "closed" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "closed" }) })
+    );
+  });
+});
+
+describe("POST /v1/conversations/:id/assign", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("assigns conversation to agent", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1" });
+    mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", assignedTo: "user-2" });
+    const res = await app.inject({
+      method: "POST", url: "/v1/conversations/conv-1/assign",
+      headers: { "content-type": "application/json" },
+      payload: { assignedTo: "user-2" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { assignedTo: string } }>().data.assignedTo).toBe("user-2");
+  });
+});
+
+describe("POST /v1/conversations/:id/read", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("resets unreadCount to 0 and returns 204", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1", unreadCount: 5 });
+    mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", unreadCount: 0 });
+    const res = await app.inject({ method: "POST", url: "/v1/conversations/conv-1/read" });
+    expect(res.statusCode).toBe(204);
+    expect(mockPrisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { unreadCount: 0 } })
+    );
+  });
+});
+
+describe("POST /v1/conversations/:id/typing", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("emits typing event and returns 204", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/conversations/conv-1/typing",
+      headers: { "content-type": "application/json" },
+      payload: { isTyping: true },
+    });
+    expect(res.statusCode).toBe(204);
   });
 });
