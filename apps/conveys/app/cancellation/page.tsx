@@ -5,8 +5,10 @@ import { ConveysFooter } from "@/components/conveys-footer";
 import { ConveysHeader } from "@/components/conveys-header";
 
 export const metadata: Metadata = {
-  title: "Cancellation & Refund Policy — Conveys Information Technology",
+  title: "Cancellation & Refund Policy",
   description: "Understand Conveys Information Technology's cancellation and refund policy before subscribing.",
+  alternates: { canonical: "https://conveys.in/cancellation" },
+  openGraph: { url: "https://conveys.in/cancellation" },
 };
 
 export default function CancellationPage(): JSX.Element {

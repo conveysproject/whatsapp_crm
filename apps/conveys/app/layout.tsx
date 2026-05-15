@@ -13,11 +13,11 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   metadataBase: new URL("https://conveys.in"),
   title: {
-    default: "Conveys Information Technology — Website Development & Design Company in Mumbai",
-    template: "%s | Conveys Information Technology",
+    default: "Conveys IT — Web Development, Mobile Apps & AI Solutions",
+    template: "%s | Conveys IT",
   },
   description:
-    "Conveys Information Technology — professional website development, web design, mobile app development, and WhatsApp CRM solutions for businesses across India. Based in Mumbai.",
+    "Professional website development, mobile apps, WhatsApp CRM, and AI solutions for businesses across India. In-house team, fixed pricing. Based in Mumbai.",
   keywords: [
     "website development company",
     "web design company",
@@ -28,10 +28,10 @@ export const metadata: Metadata = {
     "mobile app development",
     "WhatsApp CRM",
     "WhatsApp Business API",
+    "AI solutions India",
     "IT company Mumbai",
     "software development company India",
     "custom website development",
-    "professional web design",
     "ecommerce website development",
   ],
   authors: [{ name: "Conveys Information Technology", url: "https://conveys.in" }],
@@ -43,9 +43,9 @@ export const metadata: Metadata = {
     googleBot: { index: true, follow: true, "max-snippet": -1, "max-image-preview": "large" },
   },
   openGraph: {
-    title: "Conveys Information Technology — Website Development & Design Company",
+    title: "Conveys IT — Web Development, Mobile Apps & AI Solutions",
     description:
-      "Professional website development, web design, and mobile app solutions for businesses across India. Get a free quote today.",
+      "Professional website development, mobile apps, WhatsApp CRM, and AI solutions for businesses across India. Get a free quote today.",
     url: "https://conveys.in",
     siteName: "Conveys Information Technology",
     locale: "en_IN",
@@ -53,9 +53,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Conveys Information Technology — Website Development & Design",
+    title: "Conveys IT — Web Development, Mobile Apps & AI Solutions",
     description:
-      "Professional website development, web design, and mobile app solutions for businesses across India.",
+      "Professional website development, mobile apps, WhatsApp CRM, and AI solutions for businesses across India.",
   },
   alternates: {
     canonical: "https://conveys.in",
@@ -64,7 +64,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }): JSX.Element {
   return (
-    <html lang="en">
+    <html lang="en-IN">
       <body
         id="top"
         className={`${poppins.variable} bg-white font-sans text-slate-900`}

@@ -6,9 +6,9 @@ import { ConveysHeader } from "@/components/conveys-header";
 import { ConveysHome } from "@/components/conveys-home";
 
 export const metadata: Metadata = {
-  title: "Website Development & Web Design Company in Mumbai | Conveys IT",
+  title: "Web Development & Design Company in Mumbai",
   description:
-    "Conveys Information Technology builds high-performance websites, web apps, and mobile applications for businesses across India. Expert web design and development company based in Mumbai. Get a free quote.",
+    "High-performance web development, mobile apps, WhatsApp CRM, and AI solutions for Indian businesses. In-house team in Mumbai. Fixed pricing. Get a free quote.",
   alternates: {
     canonical: "https://conveys.in",
   },
@@ -46,6 +46,7 @@ const jsonLd = {
       { "@type": "Offer", itemOffered: { "@type": "Service", name: "Web Design" } },
       { "@type": "Offer", itemOffered: { "@type": "Service", name: "Mobile App Development" } },
       { "@type": "Offer", itemOffered: { "@type": "Service", name: "WhatsApp CRM & Business API" } },
+      { "@type": "Offer", itemOffered: { "@type": "Service", name: "AI Solutions & LLM Integration" } },
     ],
   },
 };

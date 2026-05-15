@@ -13,6 +13,7 @@ Multi-tenant SaaS (shared PostgreSQL + RLS). Monorepo: Turborepo + pnpm workspac
 |------|------|-------|
 | `@WBMSG/api` | `apps/api` | Fastify 4, ESM, Node 20, Prisma, BullMQ |
 | `@WBMSG/web` | `apps/web` | Next.js 15 App Router, Tailwind, React Query |
+| `@WBMSG/conveys` | `apps/conveys` | Next.js 15 — conveys.in marketing site (port 3001) |
 | `@WBMSG/mobile` | `apps/mobile` | Expo 51, React Native 0.74 |
 | `@WBMSG/shared` | `packages/shared` | Branded types, constants (ESM-only) |
 | `@WBMSG/tsconfig` | `packages/tsconfig` | Shared TS base configs |
@@ -32,6 +33,7 @@ pnpm clean                          # clean all
 
 pnpm --filter @WBMSG/api dev        # run api only
 pnpm --filter @WBMSG/web dev        # run web only (port 3000)
+pnpm --filter @WBMSG/conveys dev    # run conveys marketing only (port 3001)
 pnpm --filter @WBMSG/api test       # test api only
 pnpm --filter @WBMSG/api generate   # prisma generate
 ```
