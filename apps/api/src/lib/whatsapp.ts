@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-const WA_BASE = "https://graph.facebook.com/v20.0";
+const WA_BASE = "https://graph.facebook.com/v25.0";
 
 interface WaSendResult {
   messageId: string;
@@ -110,4 +110,126 @@ export async function setTwoStepVerification(
   void organizationId;
   void pinCode;
   return { success: true };
+}
+
+// ── Media helpers ─────────────────────────────────────────────────────────────
+
+interface WaMediaUploadResponse {
+  id: string;
+}
+
+interface WaMediaUrlResponse {
+  url: string;
+  mime_type: string;
+  sha256: string;
+  file_size: number;
+  id: string;
+  messaging_product: string;
+}
+
+export async function uploadMedia(
+  phoneNumberId: string,
+  file: Buffer,
+  mimeType: string,
+  accessToken: string
+): Promise<{ mediaId: string }> {
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("file", new Blob([new Uint8Array(file)], { type: mimeType }), "upload");
+
+  const res = await fetch(`${WA_BASE}/${phoneNumberId}/media`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`WA media upload failed: ${err}`);
+  }
+  const data = await res.json() as WaMediaUploadResponse;
+  return { mediaId: data.id };
+}
+
+export async function getMediaUrl(
+  mediaId: string,
+  accessToken: string
+): Promise<{ url: string; mimeType: string }> {
+  const res = await fetch(`${WA_BASE}/${mediaId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`WA getMediaUrl failed: ${err}`);
+  }
+  const data = await res.json() as WaMediaUrlResponse;
+  return { url: data.url, mimeType: data.mime_type };
+}
+
+export async function downloadMediaBytes(
+  url: string,
+  accessToken: string
+): Promise<Buffer> {
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error(`WA media download failed: ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+// Resumable upload for files >50MB — returns same mediaId shape
+export async function uploadResumableMedia(
+  phoneNumberId: string,
+  file: Buffer,
+  mimeType: string,
+  accessToken: string
+): Promise<{ mediaId: string }> {
+  // Step 1: create upload session
+  const sessionRes = await fetch(`${WA_BASE}/${phoneNumberId}/uploads`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      file_length: file.byteLength,
+      file_type: mimeType,
+      messaging_product: "whatsapp",
+    }),
+  });
+  if (!sessionRes.ok) throw new Error(`WA resumable session failed: ${await sessionRes.text()}`);
+  const { id: uploadId } = await sessionRes.json() as { id: string };
+
+  // Step 2: upload the file bytes
+  const uploadRes = await fetch(`${WA_BASE}/${uploadId}`, {
+    method: "POST",
+    headers: {
+      Authorization: `OAuth ${accessToken}`,
+      "Content-Type": mimeType,
+      file_offset: "0",
+    },
+    body: new Uint8Array(file),
+  });
+  if (!uploadRes.ok) throw new Error(`WA resumable upload failed: ${await uploadRes.text()}`);
+  const { h: mediaId } = await uploadRes.json() as { h: string };
+  return { mediaId };
+}
+
+export async function markAsRead(
+  phoneNumberId: string,
+  messageId: string,
+  accessToken: string
+): Promise<void> {
+  await fetch(`${WA_BASE}/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      status: "read",
+      message_id: messageId,
+    }),
+  });
+  // Fire-and-forget — mark-as-read failures are non-critical
 }

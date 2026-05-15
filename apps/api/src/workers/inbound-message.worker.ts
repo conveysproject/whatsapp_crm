@@ -6,6 +6,7 @@ import { evaluateRoutingRules } from "../lib/router.js";
 import { transcribeAudio } from "../lib/whisper.js";
 import { flowQueue } from "../lib/queue.js";
 import { handleBotMessage } from "../lib/bot-runner.js";
+import { getMediaUrl, downloadMediaBytes, markAsRead } from "../lib/whatsapp.js";
 import Expo from "expo-server-sdk";
 
 const expo = new Expo();
@@ -29,8 +30,14 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       whatsappMessageId,
       contentType,
       body,
+      mediaId,
       timestamp,
     } = job.data;
+
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { phoneNumberId: true, wabaAccessToken: true },
+    });
 
     const messageDate = new Date(timestamp * 1000);
 
@@ -88,6 +95,17 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       },
     });
 
+    // Download media from Meta and store the URL on the message
+    if (mediaId && org?.wabaAccessToken) {
+      try {
+        const { url: metaUrl } = await getMediaUrl(mediaId, org.wabaAccessToken);
+        // Store the Meta URL (short-lived); replace with S3/R2 upload when storage is configured
+        await prisma.message.update({ where: { id: storedMessage.id }, data: { mediaUrl: metaUrl } });
+      } catch {
+        // Media download failure is non-critical — message still stored
+      }
+    }
+
     if (contentType === "audio" && whatsappMessageId) {
       try {
         const transcript = await transcribeAudio(whatsappMessageId, process.env["WA_ACCESS_TOKEN"] ?? "");
@@ -95,6 +113,11 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       } catch {
         // Transcription failure is non-critical
       }
+    }
+
+    // Mark the message as read in WhatsApp
+    if (whatsappMessageId && org?.phoneNumberId && org?.wabaAccessToken) {
+      void markAsRead(org.phoneNumberId, whatsappMessageId, org.wabaAccessToken);
     }
 
     await prisma.conversation.update({
