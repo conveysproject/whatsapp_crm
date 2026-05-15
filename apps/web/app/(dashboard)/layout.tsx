@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { SetupBanner } from "@/components/SetupBanner";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
+import { BreadcrumbNav } from "@/components/layout/BreadcrumbNav";
 import { OnboardingProvider } from "@/app/(dashboard)/onboarding-context";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -58,6 +59,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <TopBar orgName={orgSlug ?? undefined} />
           <SetupBanner />
           <main className="flex-1 p-6 overflow-auto">
+            <BreadcrumbNav />
             {children}
           </main>
         </div>

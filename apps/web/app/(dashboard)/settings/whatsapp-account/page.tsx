@@ -120,6 +120,9 @@ export default function WhatsAppAccountPage(): JSX.Element {
       {/* Marketing Messages */}
       <MarketingMessagesSection />
 
+      {/* QR Code */}
+      <QrCodeSection />
+
       {/* Danger Zone */}
       <section className="border border-red-200 rounded-lg p-4 space-y-2">
         <h2 className="font-medium text-red-600">Danger Zone</h2>
@@ -136,6 +139,44 @@ export default function WhatsAppAccountPage(): JSX.Element {
         </button>
       </section>
     </div>
+  );
+}
+
+function QrCodeSection(): JSX.Element {
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+    queryKey: ["wa-qr-code"],
+    queryFn: () => fetchJson("/api/v1/whatsapp-account/qr-code"),
+    enabled: false,
+  });
+  const qrData = data as { data?: { data?: { url?: string }[] } } | undefined;
+  const qrUrl = qrData?.data?.data?.[0]?.url;
+
+  return (
+    <section className="border rounded-lg p-4 space-y-3">
+      <div>
+        <h2 className="font-medium">WhatsApp QR Code</h2>
+        <p className="text-sm text-gray-500">Your business QR code for customers to start a conversation.</p>
+      </div>
+      <button
+        onClick={() => void refetch()}
+        disabled={isFetching}
+        className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+      >
+        {isFetching ? "Loading…" : isLoading && !data ? "Load QR Code" : "Refresh QR Code"}
+      </button>
+      {isError && <p className="text-xs text-red-500">Failed to load QR code. Ensure WhatsApp is connected.</p>}
+      {qrUrl && (
+        <div className="flex flex-col items-start gap-2">
+          <img src={qrUrl} alt="WhatsApp QR Code" className="w-48 h-48 border rounded" />
+          <a href={qrUrl} download="whatsapp-qr.png" className="text-xs text-blue-600 hover:underline">
+            Download QR Code
+          </a>
+        </div>
+      )}
+      {data !== undefined && !qrUrl && !isError && (
+        <p className="text-xs text-gray-400">No QR code available for this account.</p>
+      )}
+    </section>
   );
 }
 

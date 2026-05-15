@@ -135,6 +135,72 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
     });
   });
 
+  fastify.delete<{ Params: { id: TemplateId } }>("/templates/:id", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const template = await fastify.prisma.template.findFirst({
+      where: { id: request.params.id, organizationId },
+    });
+    if (!template) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Template not found" } });
+    }
+    if (template.metaTemplateId) {
+      const org = await fastify.prisma.organization.findFirst({ where: { id: organizationId } });
+      const accessToken = org?.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
+      try {
+        await fetch(`https://graph.facebook.com/v25.0/${template.metaTemplateId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+      } catch { /* non-critical */ }
+    }
+    await fastify.prisma.template.delete({ where: { id: template.id } });
+    return reply.status(204).send();
+  });
+
+  fastify.post("/templates/sync", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const org = await fastify.prisma.organization.findFirst({ where: { id: organizationId } });
+    if (!org?.whatsappBusinessAccountId) {
+      return reply.status(400).send({ error: { code: "NO_WABA", message: "No WhatsApp Business Account configured" } });
+    }
+    const accessToken = org.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
+    const res = await fetch(
+      `https://graph.facebook.com/v25.0/${org.whatsappBusinessAccountId}/message_templates?limit=100`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!res.ok) return reply.status(400).send({ error: { code: "META_ERROR", message: "Failed to fetch templates from Meta" } });
+    const json = await res.json() as { data: { id: string; name: string; status: string; category: string; language: string; components: unknown[] }[] };
+    let synced = 0;
+    for (const t of json.data ?? []) {
+      const lang = t.language ?? "en";
+      const existing = await fastify.prisma.template.findFirst({
+        where: { organizationId, name: t.name, language: lang },
+      });
+      const statusVal = (t.status?.toLowerCase() ?? "pending") as "approved" | "pending" | "rejected";
+      const componentsVal = (t.components ?? []) as object[];
+      if (existing) {
+        await fastify.prisma.template.update({
+          where: { id: existing.id },
+          data: { status: statusVal, components: componentsVal, metaTemplateId: t.id },
+        });
+      } else {
+        await fastify.prisma.template.create({
+          data: {
+            organizationId,
+            name: t.name,
+            category: ((t.category?.toLowerCase() ?? "utility") as "utility" | "marketing" | "authentication"),
+            language: lang,
+            status: statusVal,
+            components: componentsVal,
+            metaTemplateId: t.id,
+          },
+        });
+      }
+      synced++;
+    }
+    return reply.send({ data: { synced } });
+  });
+
   fastify.post<{ Params: { id: TemplateId }; Body: SendToContactBody }>(
     "/templates/:id/send-to-contact",
     async (request, reply) => {

@@ -18,6 +18,8 @@ const stageVariant: Record<string, "green" | "blue" | "yellow" | "red" | "gray">
   loyal:    "green",
 };
 
+const LIFECYCLE_STAGES = ["lead", "prospect", "customer", "loyal", "churned"];
+
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 interface ContactWithLabels extends Contact {
@@ -34,8 +36,13 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [labels, setLabels] = useState<LabelItem[]>([]);
   const [selectedLabelId, setSelectedLabelId] = useState<string>("");
+  const [selectedStage, setSelectedStage] = useState<string>("");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+  const [exporting, setExporting] = useState(false);
   const { toast, toastState, setToastOpen } = useToast();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -54,9 +61,12 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
     if (!token) return;
     setSearching(true);
     try {
-      const url = labelId
-        ? `${API_URL}/v1/contacts?labelId=${encodeURIComponent(labelId)}`
-        : `${API_URL}/v1/contacts`;
+      const params = new URLSearchParams();
+      if (labelId) params.set("labelId", labelId);
+      if (selectedStage) params.set("lifecycleStage", selectedStage);
+      if (dateFrom) params.set("createdFrom", dateFrom);
+      if (dateTo) params.set("createdTo", dateTo);
+      const url = `${API_URL}/v1/contacts${params.toString() ? `?${params.toString()}` : ""}`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const json = await res.json() as { data: ContactWithLabels[] };
@@ -65,7 +75,28 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
     } finally {
       setSearching(false);
     }
-  }, [getToken]);
+  }, [getToken, selectedStage, dateFrom, dateTo]);
+
+  const handleExportCsv = useCallback(async () => {
+    const token = await getToken();
+    if (!token) return;
+    setExporting(true);
+    try {
+      const res = await fetch(`${API_URL}/v1/contacts/export`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { toast("Export failed", { variant: "error" }); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "contacts.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }, [getToken, toast]);
 
   const search = useCallback(async (q: string) => {
     const token = await getToken();
@@ -89,20 +120,20 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!query.trim()) {
-      if (!selectedLabelId) setContacts(initialContacts);
+      if (!selectedLabelId && !selectedStage && !dateFrom && !dateTo) setContacts(initialContacts);
       else void fetchByLabel(selectedLabelId);
       return;
     }
     setSelectedLabelId("");
     debounceRef.current = setTimeout(() => { void search(query); }, 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, search, initialContacts, selectedLabelId, fetchByLabel]);
+  }, [query, search, initialContacts, selectedLabelId, selectedStage, dateFrom, dateTo, fetchByLabel]);
 
-  // Re-fetch when label filter changes
+  // Re-fetch when any filter changes
   useEffect(() => {
     if (query.trim()) return;
     void fetchByLabel(selectedLabelId);
-  }, [selectedLabelId, fetchByLabel, query]);
+  }, [selectedLabelId, selectedStage, dateFrom, dateTo, fetchByLabel, query]);
 
   function handleCreated(contact: Contact) {
     setContacts((prev) => [contact, ...prev]);
@@ -110,30 +141,13 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
     toast("Contact created", { variant: "success" });
   }
 
-  const activeLabel = labels.find((l) => l.id === selectedLabelId);
+  const activeFiltersCount = [selectedLabelId, selectedStage, dateFrom, dateTo].filter(Boolean).length;
 
   return (
     <>
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold text-gray-900 flex-1">Contacts</h1>
-
-          {/* Label filter */}
-          <div className="relative">
-            <select
-              value={selectedLabelId}
-              onChange={(e) => { setSelectedLabelId(e.target.value); setQuery(""); }}
-              className="h-9 pl-3 pr-8 text-sm border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500 appearance-none cursor-pointer"
-            >
-              <option value="">All labels</option>
-              {labels.map((l) => (
-                <option key={l.id} value={l.id}>{l.title}</option>
-              ))}
-            </select>
-            <svg className="pointer-events-none absolute right-2.5 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
 
           <div className="w-56">
             <Input
@@ -142,22 +156,112 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
+
+          {/* Advanced filter toggle */}
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className={`flex items-center gap-1.5 h-9 px-3 text-sm border rounded-lg transition-colors ${showFilters || activeFiltersCount > 0 ? "border-brand-500 bg-brand-50 text-brand-700" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+            </svg>
+            Filters
+            {activeFiltersCount > 0 && (
+              <span className="ml-1 inline-flex items-center justify-center w-4 h-4 text-xs bg-brand-600 text-white rounded-full">{activeFiltersCount}</span>
+            )}
+          </button>
+
           <Link href="/contacts/import">
             <Button variant="secondary">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
-              Import CSV
+              Import
             </Button>
           </Link>
+
+          <Button variant="secondary" onClick={() => void handleExportCsv()} disabled={exporting}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            {exporting ? "Exporting…" : "Export CSV"}
+          </Button>
+
           <Button onClick={() => setShowModal(true)}>Add Contact</Button>
         </div>
 
-        {/* Active filter pill */}
-        {activeLabel && (
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+        {/* Advanced filter panel */}
+        {showFilters && (
+          <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-wrap gap-4 items-end">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-600">Lifecycle Stage</label>
+              <select
+                value={selectedStage}
+                onChange={(e) => { setSelectedStage(e.target.value); setQuery(""); }}
+                className="h-9 pl-3 pr-8 text-sm border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500 appearance-none"
+              >
+                <option value="">All stages</option>
+                {LIFECYCLE_STAGES.map((s) => (
+                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-600">Label</label>
+              <select
+                value={selectedLabelId}
+                onChange={(e) => { setSelectedLabelId(e.target.value); setQuery(""); }}
+                className="h-9 pl-3 pr-8 text-sm border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500 appearance-none"
+              >
+                <option value="">All labels</option>
+                {labels.map((l) => (
+                  <option key={l.id} value={l.id}>{l.title}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-600">Created from</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-9 px-3 text-sm border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-600">Created to</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-9 px-3 text-sm border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+
+            {activeFiltersCount > 0 && (
+              <button
+                onClick={() => { setSelectedLabelId(""); setSelectedStage(""); setDateFrom(""); setDateTo(""); }}
+                className="h-9 px-3 text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Active filter pills */}
+        {!showFilters && activeFiltersCount > 0 && (
+          <div className="flex items-center gap-2 text-sm text-gray-600 flex-wrap">
             <span>Filtered by:</span>
-            <LabelBadge label={activeLabel} onRemove={() => setSelectedLabelId("")} />
+            {selectedStage && <span className="px-2 py-0.5 bg-gray-100 rounded-full capitalize">{selectedStage}</span>}
+            {selectedLabelId && labels.find((l) => l.id === selectedLabelId) && (
+              <LabelBadge label={labels.find((l) => l.id === selectedLabelId)!} onRemove={() => setSelectedLabelId("")} />
+            )}
+            {dateFrom && <span className="px-2 py-0.5 bg-gray-100 rounded-full">From {dateFrom}</span>}
+            {dateTo && <span className="px-2 py-0.5 bg-gray-100 rounded-full">To {dateTo}</span>}
           </div>
         )}
 
@@ -184,8 +288,8 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                   <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
                     {query
                       ? "No contacts match your search."
-                      : activeLabel
-                      ? `No contacts with label "${activeLabel.title}".`
+                      : activeFiltersCount > 0
+                      ? "No contacts match the active filters."
                       : "No contacts yet. Add your first contact."}
                   </td>
                 </tr>

@@ -106,6 +106,24 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true });
   });
 
+  // ── QR Code ───────────────────────────────────────────────────────────────
+  fastify.get("/whatsapp-account/qr-code", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const org = await fastify.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { phoneNumberId: true, wabaAccessToken: true },
+    });
+    if (!org?.phoneNumberId || !org.wabaAccessToken) {
+      return reply.status(400).send({ error: { code: "WA_NOT_CONNECTED", message: "WhatsApp not connected" } });
+    }
+    const res = await fetch(
+      `https://graph.facebook.com/v25.0/${org.phoneNumberId}/whatsapp_business_profile_media`,
+      { headers: { Authorization: `Bearer ${org.wabaAccessToken}` } }
+    );
+    const json = await res.json() as Record<string, unknown>;
+    return reply.send({ data: json });
+  });
+
   fastify.post("/whatsapp-account/disconnect-account", async (request, reply) => {
     const { organizationId } = request.auth;
     const waKeys = ["whatsapp_access_token", "whatsapp_business_account_id", "current_phone_number_id", "webhook_verified_at"];

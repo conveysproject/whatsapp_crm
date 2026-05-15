@@ -91,6 +91,11 @@ export const inboundWorker = new Worker<InboundMessageJob>(
           where: { id: conversation.id },
           data: { assignedTo: assignment.assignTo },
         });
+        const ioEarly = getIo();
+        ioEarly?.to(`org:${organizationId}`).emit("conversation:assigned", {
+          conversationId: conversation.id,
+          assignedTo: assignment.assignTo,
+        });
         const profile = await prisma.user.findUnique({
           where: { id: assignment.assignTo },
           select: { pushToken: true },
@@ -159,7 +164,13 @@ export const inboundWorker = new Worker<InboundMessageJob>(
     const botInWindow = !botRestricted || isBotInWindow(botSettingMap["bot_start_timing"], botSettingMap["bot_end_timing"], botSettingMap["bot_timing_timezone"]);
 
     if (refreshed?.status === "bot" && botInWindow) {
-      await handleBotMessage(prisma, conversation.id, organizationId, body);
+      const io = getIo();
+      io?.to(`org:${organizationId}`).emit("bot:triggered", { conversationId: conversation.id });
+      try {
+        await handleBotMessage(prisma, conversation.id, organizationId, body);
+      } finally {
+        io?.to(`org:${organizationId}`).emit("bot:completed", { conversationId: conversation.id });
+      }
     }
 
     const activeFlows = await prisma.flow.findMany({

@@ -52,10 +52,12 @@ export function useConversations(status?: string) {
     socket.on("new-message", handler);
     socket.on("conversation:status", handler);
     socket.on("conversation:assign", handler);
+    socket.on("conversation:assigned", handler);
     return () => {
       socket.off("new-message", handler);
       socket.off("conversation:status", handler);
       socket.off("conversation:assign", handler);
+      socket.off("conversation:assigned", handler);
     };
   }, [queryClient]);
 

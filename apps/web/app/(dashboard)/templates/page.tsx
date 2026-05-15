@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { TemplateActions } from "./TemplateActions";
+import { TemplateSyncButton } from "./TemplateSyncButton";
 
 interface Template {
   id: string;
@@ -39,9 +40,12 @@ export default async function TemplatesPage(): Promise<JSX.Element> {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Templates</h1>
-        <Link href="/templates/new">
-          <Button>New Template</Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <TemplateSyncButton />
+          <Link href="/templates/new">
+            <Button>New Template</Button>
+          </Link>
+        </div>
       </div>
       <div className="bg-white rounded-xl border border-gray-200 shadow-card divide-y divide-gray-100">
         {templates.length === 0 ? (

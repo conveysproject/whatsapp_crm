@@ -8,6 +8,7 @@ import { SendMessageForm } from "@/components/inbox/SendMessageForm";
 import { CannedResponsePicker } from "@/components/canned-response-picker";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
 import { useSocket } from "@/hooks/useSocket";
+import { useBotStatus } from "@/hooks/useBotStatus";
 import { BotPanel } from "@/components/bot-panel";
 import { SmartReplyPanel } from "@/components/smart-reply-panel";
 
@@ -17,6 +18,7 @@ export default function InboxPage(): JSX.Element {
   const { orgId } = useAuth();
 
   useSocket(orgId ?? undefined);
+  const botActive = useBotStatus(selectedConversationId);
 
   return (
     <WhatsAppGate feature="Inbox">
@@ -32,6 +34,18 @@ export default function InboxPage(): JSX.Element {
 
       <div className="flex flex-col flex-1 bg-gray-50 overflow-hidden">
         <MessageThread conversationId={selectedConversationId} />
+
+        {/* Bot responding indicator */}
+        {botActive && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-t border-amber-200 text-amber-700 text-xs">
+            <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            Bot is responding…
+          </div>
+        )}
+
         <div className="relative px-2 flex items-center gap-2">
           <CannedResponsePicker onSelect={(content) => setPrefillText(content)} />
           {selectedConversationId && (
