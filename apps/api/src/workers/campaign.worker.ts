@@ -10,18 +10,35 @@ interface CampaignJob {
   segmentId: string;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function resolveTemplateVars(
+  template: string,
+  contact: { firstName: string | null; lastName: string | null; phoneNumber: string; email: string | null }
+): string {
+  const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.phoneNumber;
+  return template
+    .replace(/\{\{name\}\}/gi, fullName)
+    .replace(/\{\{phone\}\}/gi, contact.phoneNumber)
+    .replace(/\{\{email\}\}/gi, contact.email ?? "");
+}
+
 export const campaignWorker = new Worker<CampaignJob>(
   "campaigns",
   async (job) => {
     const { campaignId, organizationId, segmentId } = job.data;
 
-    await prisma.campaign.update({ where: { id: campaignId }, data: { status: "running" } });
-
-    const segment = await prisma.segment.findFirst({ where: { id: segmentId, organizationId } });
+    const [campaign, segment, org] = await Promise.all([
+      prisma.campaign.findFirst({ where: { id: campaignId } }),
+      prisma.segment.findFirst({ where: { id: segmentId, organizationId } }),
+      prisma.organization.findUnique({ where: { id: organizationId }, select: { phoneNumberId: true, wabaAccessToken: true } }),
+    ]);
+    if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
     if (!segment) throw new Error(`Segment ${segmentId} not found`);
 
-    const campaign = await prisma.campaign.findFirst({ where: { id: campaignId } });
-    const templateName = campaign?.templateId ?? campaignId;
+    await prisma.campaign.update({ where: { id: campaignId }, data: { status: "running" } });
 
     const phones = await evaluateSegment(
       prisma,
@@ -29,21 +46,54 @@ export const campaignWorker = new Worker<CampaignJob>(
       segment.filters as unknown as SegmentFilter[]
     );
 
-    const phoneNumberId = process.env["WA_PHONE_NUMBER_ID"] ?? "";
-    const accessToken = process.env["WA_ACCESS_TOKEN"] ?? "";
+    const phoneNumberId = org?.phoneNumberId ?? process.env["WA_PHONE_NUMBER_ID"] ?? "";
+    const accessToken = org?.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
+    const templateBody = campaign.templateId ?? "";
+    const intervalMs = (campaign.messageInterval ?? 1) * 1000;
 
     for (const phone of phones) {
-      try {
-        await sendTextMessage(phoneNumberId, phone, templateName, accessToken);
-      } catch {
-        // continue on per-contact failure
+      const current = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+      if (current?.status === "paused" || current?.status === "aborted") break;
+
+      let recipient = await prisma.campaignRecipient.findFirst({ where: { campaignId, phoneNumber: phone } });
+      if (!recipient) {
+        recipient = await prisma.campaignRecipient.create({
+          data: { campaignId, organizationId, phoneNumber: phone, status: "pending" },
+        });
       }
+      if (recipient.status === "sent" || recipient.status === "delivered") continue;
+
+      const contact = await prisma.contact.findFirst({
+        where: { organizationId, phoneNumber: phone },
+        select: { firstName: true, lastName: true, phoneNumber: true, email: true },
+      });
+
+      const body = contact ? resolveTemplateVars(templateBody, contact) : templateBody;
+
+      try {
+        const { messageId } = await sendTextMessage(phoneNumberId, phone, body, accessToken);
+        await prisma.campaignRecipient.update({
+          where: { id: recipient.id },
+          data: { status: "sent", sentAt: new Date(), messageId },
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        await prisma.campaignRecipient.update({
+          where: { id: recipient.id },
+          data: { status: "failed", errorMessage, retries: { increment: 1 } },
+        });
+      }
+
+      await sleep(intervalMs);
     }
 
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: { status: "completed", sentAt: new Date() },
-    });
+    const finalStatus = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
+    if (finalStatus?.status === "running") {
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { status: "completed", sentAt: new Date() },
+      });
+    }
   },
   { connection: redisConnection }
 );

@@ -333,6 +333,7 @@ enum CampaignStatus {
   draft
   scheduled
   running
+  paused
   completed
   cancelled
   aborted
@@ -582,9 +583,10 @@ model Campaign {
   timezone       String?
   expiresAt      DateTime?           @map("expires_at")
   campaignType   String              @default("template") @map("campaign_type")
-  isArchived     Boolean             @default(false) @map("is_archived")
-  status         CampaignStatus      @default(draft)
-  scheduledAt    DateTime?           @map("scheduled_at")
+  isArchived       Boolean             @default(false) @map("is_archived")
+  status           CampaignStatus      @default(draft)
+  scheduledAt      DateTime?           @map("scheduled_at")
+  messageInterval  Int?                @map("message_interval") // seconds between sends
   sentAt         DateTime?           @map("sent_at")
   createdAt      DateTime            @default(now()) @map("created_at")
   updatedAt      DateTime            @updatedAt @map("updated_at")

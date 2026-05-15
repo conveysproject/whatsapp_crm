@@ -10,9 +10,10 @@ vi.mock("../lib/queue.js", () => ({
 const mockPrisma = {
   campaign: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   segment: { findFirst: vi.fn() },
+  campaignSegment: { findFirst: vi.fn() },
   campaignRecipient: { findMany: vi.fn(), count: vi.fn(), updateMany: vi.fn() },
   groupContact: { findMany: vi.fn() },
-  contact: { count: vi.fn() },
+  contact: { count: vi.fn(), findMany: vi.fn() },
 };
 const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const };
 
@@ -188,5 +189,84 @@ describe("GET /v1/campaigns/:id/report", () => {
     expect(body.data.stats).toHaveProperty("read");
     expect(body.data.stats).toHaveProperty("failed");
     expect(body.data.stats).toHaveProperty("pending");
+  });
+});
+
+describe("POST /v1/campaigns/:id/pause", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns 404 when campaign not found", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "POST", url: "/v1/campaigns/camp-1/pause" });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 400 when campaign is not running", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({ id: "camp-1", organizationId: "org-1", status: "draft" });
+    const res = await app.inject({ method: "POST", url: "/v1/campaigns/camp-1/pause" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_STATUS");
+  });
+
+  it("pauses a running campaign", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({ id: "camp-1", organizationId: "org-1", status: "running" });
+    mockPrisma.campaign.update.mockResolvedValue({ id: "camp-1", status: "paused" });
+    const res = await app.inject({ method: "POST", url: "/v1/campaigns/camp-1/pause" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { status: string } }>().data.status).toBe("paused");
+  });
+});
+
+describe("POST /v1/campaigns/:id/resume", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns 400 when campaign is not paused", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({ id: "camp-1", organizationId: "org-1", status: "running" });
+    const res = await app.inject({ method: "POST", url: "/v1/campaigns/camp-1/resume" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_STATUS");
+  });
+
+  it("resumes a paused campaign", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({ id: "camp-1", organizationId: "org-1", status: "paused" });
+    mockPrisma.campaignSegment.findFirst.mockResolvedValue({ segmentId: "seg-1" });
+    mockPrisma.campaign.update.mockResolvedValue({ id: "camp-1", status: "running" });
+    const res = await app.inject({ method: "POST", url: "/v1/campaigns/camp-1/resume" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { status: string } }>().data.status).toBe("running");
+  });
+});
+
+describe("POST /v1/campaigns/:id/preview", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns 404 when campaign not found", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "POST", url: "/v1/campaigns/camp-1/preview" });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns preview with resolved template vars", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({
+      id: "camp-1", organizationId: "org-1", templateId: "Hello {{name}}!", segments: [],
+    });
+    mockPrisma.contact.findMany.mockResolvedValue([
+      { id: "c-1", firstName: "Priya", lastName: "Sharma", phoneNumber: "+919001234567", email: null },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/campaigns/camp-1/preview",
+      headers: { "content-type": "application/json" },
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: { preview: Array<{ resolvedBody: string }> } }>();
+    expect(body.data.preview[0]?.resolvedBody).toBe("Hello Priya Sharma!");
   });
 });
