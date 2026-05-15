@@ -137,9 +137,25 @@ const FAQ = [
   },
 ] as const;
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "@id": "https://conveys.in/services/whatsapp-crm#service",
+  name: "WhatsApp Business API & CRM",
+  provider: { "@id": "https://conveys.in/#organization" },
+  areaServed: { "@type": "Country", name: "India" },
+  description:
+    "Set up WhatsApp Business API for your business in India. Automate conversations, run broadcast campaigns, and manage your customer pipeline.",
+  url: "https://conveys.in/services/whatsapp-crm",
+};
+
 export default function WhatsAppCRMPage(): JSX.Element {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <ConveysHeader />
 
       {/* ── Hero ── */}

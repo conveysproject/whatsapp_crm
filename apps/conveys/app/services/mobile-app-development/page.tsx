@@ -152,9 +152,25 @@ const FAQ = [
   },
 ] as const;
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "@id": "https://conveys.in/services/mobile-app-development#service",
+  name: "iOS & Android App Development",
+  provider: { "@id": "https://conveys.in/#organization" },
+  areaServed: { "@type": "Country", name: "India" },
+  description:
+    "Native and cross-platform mobile app development in Mumbai. Full lifecycle — UX design, development, QA, and App Store submission.",
+  url: "https://conveys.in/services/mobile-app-development",
+};
+
 export default function MobileAppDevelopmentPage(): JSX.Element {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <ConveysHeader />
 
       {/* ── Hero ── */}

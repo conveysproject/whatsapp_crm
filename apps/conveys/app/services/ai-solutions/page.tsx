@@ -152,9 +152,25 @@ const FAQ = [
   },
 ] as const;
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "@id": "https://conveys.in/services/ai-solutions#service",
+  name: "AI Solutions & LLM Integration",
+  provider: { "@id": "https://conveys.in/#organization" },
+  areaServed: { "@type": "Country", name: "India" },
+  description:
+    "Custom AI chatbots, document processing, and LLM integrations (Claude, GPT-4) for Indian businesses. Practical AI that solves real operational problems.",
+  url: "https://conveys.in/services/ai-solutions",
+};
+
 export default function AISolutionsPage(): JSX.Element {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <ConveysHeader />
 
       {/* ── Hero ── */}

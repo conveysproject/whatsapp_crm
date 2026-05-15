@@ -62,9 +62,52 @@ export const metadata: Metadata = {
   },
 };
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": ["Organization", "LocalBusiness"],
+      "@id": "https://conveys.in/#organization",
+      name: "Conveys Information Technology",
+      url: "https://conveys.in",
+      logo: "https://conveys.in/conveys-logo.png",
+      email: "info@conveys.in",
+      telephone: "+919907072035",
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: "SwaminarayanCity",
+        addressLocality: "Dombivli West",
+        addressRegion: "Maharashtra",
+        postalCode: "421202",
+        addressCountry: "IN",
+      },
+      areaServed: { "@type": "Country", name: "India" },
+      sameAs: [],
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://conveys.in/#website",
+      url: "https://conveys.in",
+      name: "Conveys Information Technology",
+      publisher: { "@id": "https://conveys.in/#organization" },
+      potentialAction: {
+        "@type": "SearchAction",
+        target: { "@type": "EntryPoint", urlTemplate: "https://conveys.in/?q={search_term_string}" },
+        "query-input": "required name=search_term_string",
+      },
+    },
+  ],
+};
+
 export default function RootLayout({ children }: { children: ReactNode }): JSX.Element {
   return (
     <html lang="en-IN">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body
         id="top"
         className={`${poppins.variable} bg-white font-sans text-slate-900`}

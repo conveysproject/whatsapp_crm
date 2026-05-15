@@ -152,9 +152,37 @@ const FAQ = [
   },
 ] as const;
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Service",
+      "@id": "https://conveys.in/services/web-development#service",
+      name: "Web Development & Design Services",
+      provider: { "@id": "https://conveys.in/#organization" },
+      areaServed: { "@type": "Country", name: "India" },
+      description:
+        "Custom websites, web apps, and e-commerce for Indian businesses. Next.js, React, TypeScript — SEO-ready, fast, and built to convert.",
+      url: "https://conveys.in/services/web-development",
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: FAQ.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: { "@type": "Answer", text: item.a },
+      })),
+    },
+  ],
+};
+
 export default function WebDevelopmentPage(): JSX.Element {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <ConveysHeader />
 
       {/* ── Hero ── */}
