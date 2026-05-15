@@ -2,6 +2,7 @@ import { JSX, ReactNode } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { SetupBanner } from "@/components/SetupBanner";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { OnboardingProvider } from "@/app/(dashboard)/onboarding-context";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
@@ -53,6 +54,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       <div className="flex min-h-screen bg-gray-50">
         <Sidebar />
         <div className="flex flex-col flex-1 min-w-0">
+          <ImpersonationBanner />
           <TopBar orgName={orgSlug ?? undefined} />
           <SetupBanner />
           <main className="flex-1 p-6 overflow-auto">

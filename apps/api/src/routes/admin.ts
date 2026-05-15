@@ -1,4 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import { randomBytes } from "crypto";
+import { redis } from "../lib/redis.js";
 
 function requireSuperAdmin(role: string, reply: FastifyReply): boolean {
   if (role !== "superAdmin") {
@@ -93,6 +95,77 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(201).send({ data });
     }
   );
+
+  // ── Organization detail ──────────────────────────────────────────────────
+  fastify.get<{ Params: { id: string } }>("/admin/organizations/:id", async (request, reply) => {
+    if (!requireSuperAdmin(request.auth.role, reply)) return;
+    const org = await fastify.prisma.organization.findUnique({
+      where: { id: request.params.id },
+      include: { _count: { select: { members: true, conversations: true } } },
+    });
+    if (!org) return reply.status(404).send({ error: "Organization not found" });
+    const [contactCount, messageCount, campaignCount] = await Promise.all([
+      fastify.prisma.contact.count({ where: { organizationId: org.id } }),
+      fastify.prisma.message.count({ where: { organizationId: org.id } }),
+      fastify.prisma.campaign.count({ where: { organizationId: org.id } }),
+    ]);
+    return reply.send({ data: { ...org, usage: { contacts: contactCount, messages: messageCount, campaigns: campaignCount } } });
+  });
+
+  // ── Update plan tier / ban ────────────────────────────────────────────────
+  fastify.patch<{ Params: { id: string }; Body: { planTier?: string; status?: string; banReason?: string } }>(
+    "/admin/organizations/:id",
+    async (request, reply) => {
+      if (!requireSuperAdmin(request.auth.role, reply)) return;
+      const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
+      if (!org) return reply.status(404).send({ error: "Organization not found" });
+      const { planTier, status, banReason } = request.body;
+      const data = await fastify.prisma.organization.update({
+        where: { id: request.params.id },
+        data: {
+          ...(planTier ? { planTier: planTier as "starter" | "growth" | "scale" | "enterprise" } : {}),
+          ...(status ? { status } : {}),
+          ...(banReason !== undefined ? { banReason } : {}),
+        },
+      });
+      return reply.send({ data });
+    }
+  );
+
+  // ── Impersonation token ────────────────────────────────────────────────────
+  fastify.post<{ Params: { id: string } }>("/admin/organizations/:id/impersonate", async (request, reply) => {
+    if (!requireSuperAdmin(request.auth.role, reply)) return;
+    const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
+    if (!org) return reply.status(404).send({ error: "Organization not found" });
+    const token = randomBytes(32).toString("hex");
+    const key = `impersonate:${token}`;
+    await redis.set(key, JSON.stringify({ organizationId: org.id, orgName: org.name, issuedBy: request.auth.userId }), "EX", 3600);
+    return reply.send({ data: { token, expiresIn: 3600 } });
+  });
+
+  fastify.delete<{ Params: { id: string }; Body: { token: string } }>(
+    "/admin/organizations/:id/impersonate",
+    async (request, reply) => {
+      if (!requireSuperAdmin(request.auth.role, reply)) return;
+      const { token } = request.body;
+      if (token) await redis.del(`impersonate:${token}`);
+      return reply.status(204).send();
+    }
+  );
+
+  // ── Login logs ────────────────────────────────────────────────────────────
+  fastify.get<{ Querystring: { page?: string; userId?: string } }>("/admin/login-logs", async (request, reply) => {
+    if (!requireSuperAdmin(request.auth.role, reply)) return;
+    const page = Math.max(1, parseInt(request.query.page ?? "1", 10));
+    const where = request.query.userId ? { userId: request.query.userId } : {};
+    const logs = await fastify.prisma.loginLog.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * 50,
+      take: 50,
+    });
+    return reply.send({ data: logs, page });
+  });
 
   // ── Platform config ──────────────────────────────────────────────────────
   fastify.get("/admin/platform-config", async (request, reply) => {

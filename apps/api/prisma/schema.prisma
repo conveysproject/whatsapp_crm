@@ -1207,3 +1207,18 @@ model PlatformConfig {
 
   @@map("platform_configs")
 }
+
+model LoginLog {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  orgId      String?  @map("org_id")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent") @db.Text
+  success    Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([orgId])
+  @@index([createdAt])
+  @@map("login_logs")
+}

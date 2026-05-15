@@ -65,6 +65,31 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(204).send();
   });
 
+  // Mobile Expo device token registration
+  fastify.post<{ Body: { token: string; platform?: string } }>("/users/device-token", async (request, reply) => {
+    const { token, platform } = request.body;
+    if (!token) return reply.status(400).send({ error: { code: "MISSING_TOKEN", message: "token is required" } });
+    await fastify.prisma.user.update({
+      where: { id: request.auth.userId },
+      data: { pushToken: token },
+    });
+    void platform; // stored on User for now; no separate device table needed
+    return reply.send({ data: { registered: true } });
+  });
+
+  // Auth login log — called from Clerk webhook on session.created
+  fastify.post<{ Body: { userId: string; orgId?: string; ipAddress?: string; userAgent?: string; success?: boolean } }>(
+    "/auth/login-log",
+    async (request, reply) => {
+      const { userId, orgId, ipAddress, userAgent, success = true } = request.body;
+      if (!userId) return reply.status(400).send({ error: { code: "MISSING_USER_ID", message: "userId is required" } });
+      const entry = await fastify.prisma.loginLog.create({
+        data: { userId, orgId: orgId ?? null, ipAddress: ipAddress ?? null, userAgent: userAgent ?? null, success },
+      });
+      return reply.status(201).send({ data: { id: entry.id } });
+    }
+  );
+
   fastify.put<{ Params: { id: string }; Body: { permissions: Record<string, string> } }>(
     "/users/:id/permissions",
     async (request, reply) => {

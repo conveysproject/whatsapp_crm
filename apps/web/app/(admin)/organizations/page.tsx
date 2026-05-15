@@ -6,6 +6,7 @@ interface Org {
   id: string;
   name: string;
   status: string;
+  planTier: string;
   createdAt: string;
   _count: { members: number };
 }
@@ -13,6 +14,7 @@ interface Org {
 export default function AdminOrgsPage(): JSX.Element {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [impersonating, setImpersonating] = useState<string | null>(null);
 
   const { data } = useQuery<{ data: Org[]; total: number }>({
     queryKey: ["admin-orgs"],
@@ -35,17 +37,18 @@ export default function AdminOrgsPage(): JSX.Element {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-orgs"] }),
   });
 
-  const impersonate = useMutation({
-    mutationFn: (id: string) =>
-      fetch(`/api/v1/admin/organizations/${id}/login-as`, { method: "POST" }).then((r) => r.json()),
-    onSuccess: (result: { data: { organization: Org } }) => {
-      localStorage.setItem("impersonate_org", JSON.stringify(result.data.organization));
-      window.location.href = "/";
-    },
-  });
+  async function loginAs(org: Org) {
+    setImpersonating(org.id);
+    const res = await fetch(`/api/v1/admin/organizations/${org.id}/impersonate`, { method: "POST" });
+    if (res.ok) {
+      const json = await res.json() as { data: { token: string } };
+      sessionStorage.setItem("impersonation", JSON.stringify({ token: json.data.token, orgId: org.id, orgName: org.name }));
+      window.location.href = "/dashboard";
+    }
+    setImpersonating(null);
+  }
 
   const orgs = (data?.data ?? []).filter((o) => o.name.toLowerCase().includes(search.toLowerCase()));
-
   const statusColor: Record<string, string> = { active: "text-green-600", banned: "text-red-600", inactive: "text-gray-400" };
 
   return (
@@ -67,15 +70,18 @@ export default function AdminOrgsPage(): JSX.Element {
           <div key={org.id} className="flex items-center justify-between p-4">
             <div>
               <p className="font-medium text-sm">{org.name}</p>
-              <p className="text-xs text-gray-500">{org._count.members} members · {new Date(org.createdAt).toLocaleDateString("en-IN")}</p>
+              <p className="text-xs text-gray-500">
+                {org._count.members} members · <span className="capitalize">{org.planTier}</span> · {new Date(org.createdAt).toLocaleDateString("en-IN")}
+              </p>
             </div>
             <div className="flex items-center gap-3">
               <span className={`text-xs font-medium capitalize ${statusColor[org.status] ?? "text-gray-500"}`}>{org.status}</span>
               <button
-                onClick={() => impersonate.mutate(org.id)}
-                className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
+                onClick={() => { void loginAs(org); }}
+                disabled={impersonating === org.id}
+                className="text-xs px-2 py-1 border rounded hover:bg-gray-50 disabled:opacity-50"
               >
-                Login As
+                {impersonating === org.id ? "…" : "Login As"}
               </button>
               {org.status === "banned" ? (
                 <button onClick={() => unban.mutate(org.id)} className="text-xs px-2 py-1 border border-green-300 text-green-700 rounded hover:bg-green-50">Unban</button>
