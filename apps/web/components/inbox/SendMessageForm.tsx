@@ -5,6 +5,8 @@ import { useAuth } from "@clerk/nextjs";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { InteractiveMessagePicker } from "./InteractiveMessagePicker";
+import type { InteractivePayload } from "./InteractiveMessagePicker";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -26,6 +28,7 @@ export function SendMessageForm({ conversationId, prefillText, onSent }: Props):
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [interactiveOpen, setInteractiveOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingMediaTypeRef = useRef<string>("document");
   const { getToken } = useAuth();
@@ -62,6 +65,26 @@ export function SendMessageForm({ conversationId, prefillText, onSent }: Props):
     if (fileInputRef.current) {
       fileInputRef.current.accept = ACCEPT_BY_TYPE[mediaType] ?? "*/*";
       fileInputRef.current.click();
+    }
+  }
+
+  async function handleInteractiveSend(payload: InteractivePayload) {
+    if (!conversationId) return;
+    setInteractiveOpen(false);
+    setSending(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ contentType: "interactive", interactive: payload }),
+      });
+      if (res.ok) {
+        onSent?.();
+        await queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+      }
+    } finally {
+      setSending(false);
     }
   }
 
@@ -114,6 +137,27 @@ export function SendMessageForm({ conversationId, prefillText, onSent }: Props):
         className="hidden"
         onChange={(e) => { void handleFileSelected(e); }}
       />
+
+      {/* Interactive message picker */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => { setInteractiveOpen((v) => !v); setAttachMenuOpen(false); }}
+          disabled={!conversationId || sending || uploading}
+          className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
+          title="Send interactive message"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+        </button>
+        {interactiveOpen && (
+          <InteractiveMessagePicker
+            onSend={(payload) => { void handleInteractiveSend(payload); }}
+            onClose={() => setInteractiveOpen(false)}
+          />
+        )}
+      </div>
 
       {/* Attachment menu */}
       <div className="relative">

@@ -38,6 +38,80 @@ export async function sendTextMessage(
   return { messageId: data.messages[0]!.id };
 }
 
+export async function sendMediaMessage(
+  phoneNumberId: string,
+  to: string,
+  contentType: string,
+  mediaId: string,
+  caption: string | undefined,
+  accessToken: string
+): Promise<WaSendResult> {
+  const mediaType = contentType === "document" ? "document"
+    : contentType === "video" ? "video"
+    : contentType === "audio" ? "audio"
+    : "image";
+
+  const mediaObject: Record<string, string | undefined> = { id: mediaId };
+  if (caption) mediaObject.caption = caption;
+
+  const res = await fetch(`${WA_BASE}/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: mediaType,
+      [mediaType]: mediaObject,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json() as unknown;
+    throw new Error(`WA media send failed: ${JSON.stringify(err)}`);
+  }
+  const data = await res.json() as WaMessageResponse;
+  return { messageId: data.messages[0]!.id };
+}
+
+export interface WaInteractivePayload {
+  type: "button" | "list";
+  header?: { type: "text"; text: string };
+  body: { text: string };
+  footer?: { text: string };
+  action: Record<string, unknown>;
+}
+
+export async function sendInteractiveMessage(
+  phoneNumberId: string,
+  to: string,
+  interactive: WaInteractivePayload,
+  accessToken: string
+): Promise<WaSendResult> {
+  const res = await fetch(`${WA_BASE}/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "interactive",
+      interactive,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json() as unknown;
+    throw new Error(`WA interactive send failed: ${JSON.stringify(err)}`);
+  }
+  const data = await res.json() as WaMessageResponse;
+  return { messageId: data.messages[0]!.id };
+}
+
 export function verifyWebhookSignature(
   rawBody: string,
   signature: string,

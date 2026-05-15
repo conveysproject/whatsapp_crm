@@ -1,10 +1,12 @@
 import type { FastifyPluginAsync } from "fastify";
-import { sendTextMessage } from "../lib/whatsapp.js";
+import { sendTextMessage, sendMediaMessage, sendInteractiveMessage } from "../lib/whatsapp.js";
+import type { WaInteractivePayload } from "../lib/whatsapp.js";
 import type { ConversationId } from "@WBMSG/shared";
 
-interface SendMessageBody {
-  text: string;
-}
+type SendMessageBody =
+  | { contentType?: "text"; text: string }
+  | { contentType: "image" | "video" | "document" | "audio"; mediaId: string; mimeType?: string; filename?: string; caption?: string }
+  | { contentType: "interactive"; interactive: WaInteractivePayload };
 
 export const messagesRouter: FastifyPluginAsync = async (fastify) => {
   // ── Message log (all messages with date filter) ──────────────────────────
@@ -54,20 +56,15 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Params: { id: ConversationId }; Body: SendMessageBody }>(
     "/conversations/:id/messages",
-    {
-      schema: {
-        body: {
-          type: "object",
-          required: ["text"],
-          properties: { text: { type: "string", minLength: 1 } },
-        },
-      },
-    },
     async (request, reply) => {
       const { organizationId } = request.auth;
+      const body = request.body;
 
       const conversation = await fastify.prisma.conversation.findFirst({
         where: { id: request.params.id, organizationId },
+        include: {
+          organization: { select: { phoneNumberId: true, wabaAccessToken: true } },
+        },
       });
       if (!conversation) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
@@ -76,23 +73,58 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ error: { code: "NO_WA_CONTACT", message: "No WhatsApp contact on this conversation" } });
       }
 
-      const phoneNumberId = process.env["WA_PHONE_NUMBER_ID"] ?? "";
-      const accessToken = process.env["WA_ACCESS_TOKEN"] ?? "";
+      const phoneNumberId = conversation.organization?.phoneNumberId
+        ?? process.env["WA_PHONE_NUMBER_ID"]
+        ?? "";
+      const accessToken = conversation.organization?.wabaAccessToken
+        ?? process.env["WA_ACCESS_TOKEN"]
+        ?? "";
 
-      const { messageId } = await sendTextMessage(
-        phoneNumberId,
-        conversation.whatsappContactId,
-        request.body.text,
-        accessToken
-      );
+      const contentType = body.contentType ?? "text";
+
+      let messageId: string;
+      let storedBody: string | null = null;
+
+      if (contentType === "text") {
+        const textBody = body as { contentType?: "text"; text: string };
+        if (!textBody.text?.trim()) {
+          return reply.status(400).send({ error: { code: "MISSING_TEXT", message: "text is required for text messages" } });
+        }
+        const result = await sendTextMessage(phoneNumberId, conversation.whatsappContactId, textBody.text.trim(), accessToken);
+        messageId = result.messageId;
+        storedBody = textBody.text.trim();
+      } else if (contentType === "interactive") {
+        const intBody = body as { contentType: "interactive"; interactive: WaInteractivePayload };
+        if (!intBody.interactive) {
+          return reply.status(400).send({ error: { code: "MISSING_INTERACTIVE", message: "interactive payload required" } });
+        }
+        const result = await sendInteractiveMessage(phoneNumberId, conversation.whatsappContactId, intBody.interactive, accessToken);
+        messageId = result.messageId;
+        storedBody = JSON.stringify(intBody.interactive);
+      } else {
+        const mediaBody = body as { contentType: "image" | "video" | "document" | "audio"; mediaId: string; caption?: string };
+        if (!mediaBody.mediaId) {
+          return reply.status(400).send({ error: { code: "MISSING_MEDIA_ID", message: "mediaId is required for media messages" } });
+        }
+        const result = await sendMediaMessage(
+          phoneNumberId,
+          conversation.whatsappContactId,
+          contentType,
+          mediaBody.mediaId,
+          mediaBody.caption,
+          accessToken
+        );
+        messageId = result.messageId;
+        storedBody = mediaBody.caption ?? null;
+      }
 
       const message = await fastify.prisma.message.create({
         data: {
           conversationId: conversation.id,
           organizationId,
           direction: "outbound",
-          contentType: "text",
-          body: request.body.text,
+          contentType,
+          body: storedBody,
           whatsappMessageId: messageId,
           status: "sent",
         },

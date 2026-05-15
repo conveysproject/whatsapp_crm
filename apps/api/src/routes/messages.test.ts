@@ -22,7 +22,16 @@ const mockAuth = {
 
 vi.mock("../lib/whatsapp.js", () => ({
   sendTextMessage: vi.fn().mockResolvedValue({ messageId: "wamid-123" }),
+  sendMediaMessage: vi.fn().mockResolvedValue({ messageId: "wamid-media-456" }),
+  sendInteractiveMessage: vi.fn().mockResolvedValue({ messageId: "wamid-int-789" }),
 }));
+
+const baseConversation = {
+  id: "conv-1",
+  organizationId: "org-1",
+  whatsappContactId: "+919000000001",
+  organization: { phoneNumberId: "pn-1", wabaAccessToken: "token-abc" },
+};
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -51,5 +60,129 @@ describe("GET /v1/messages/log", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json<{ data: unknown[]; total: number }>().total).toBe(1);
+  });
+});
+
+describe("POST /v1/conversations/:id/messages — text", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns 404 when conversation not found", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(null);
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/conversations/conv-1/messages",
+      headers: { "content-type": "application/json" },
+      payload: { text: "Hello" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 400 when conversation has no WA contact", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ ...baseConversation, whatsappContactId: null });
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/conversations/conv-1/messages",
+      headers: { "content-type": "application/json" },
+      payload: { text: "Hello" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("NO_WA_CONTACT");
+  });
+
+  it("sends text message and returns 201", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(baseConversation);
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-1", contentType: "text", body: "Hello", direction: "outbound" });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    const { sendTextMessage } = await import("../lib/whatsapp.js");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/conversations/conv-1/messages",
+      headers: { "content-type": "application/json" },
+      payload: { text: "Hello" },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(vi.mocked(sendTextMessage)).toHaveBeenCalledWith("pn-1", "+919000000001", "Hello", "token-abc");
+  });
+});
+
+describe("POST /v1/conversations/:id/messages — media", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("sends image message and returns 201", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(baseConversation);
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-2", contentType: "image", direction: "outbound" });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    const { sendMediaMessage } = await import("../lib/whatsapp.js");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/conversations/conv-1/messages",
+      headers: { "content-type": "application/json" },
+      payload: { contentType: "image", mediaId: "wa-media-123" },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(vi.mocked(sendMediaMessage)).toHaveBeenCalledWith("pn-1", "+919000000001", "image", "wa-media-123", undefined, "token-abc");
+  });
+
+  it("returns 400 when mediaId is missing", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(baseConversation);
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/conversations/conv-1/messages",
+      headers: { "content-type": "application/json" },
+      payload: { contentType: "image" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("MISSING_MEDIA_ID");
+  });
+});
+
+describe("POST /v1/conversations/:id/messages — interactive", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  const interactivePayload = {
+    type: "button" as const,
+    body: { text: "Pick an option" },
+    action: {
+      buttons: [
+        { type: "reply", reply: { id: "btn-1", title: "Yes" } },
+        { type: "reply", reply: { id: "btn-2", title: "No" } },
+      ],
+    },
+  };
+
+  it("sends interactive button message and returns 201", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(baseConversation);
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-3", contentType: "interactive", direction: "outbound" });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    const { sendInteractiveMessage } = await import("../lib/whatsapp.js");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/conversations/conv-1/messages",
+      headers: { "content-type": "application/json" },
+      payload: { contentType: "interactive", interactive: interactivePayload },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(vi.mocked(sendInteractiveMessage)).toHaveBeenCalledWith("pn-1", "+919000000001", interactivePayload, "token-abc");
+  });
+
+  it("returns 400 when interactive payload is missing", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(baseConversation);
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/conversations/conv-1/messages",
+      headers: { "content-type": "application/json" },
+      payload: { contentType: "interactive" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("MISSING_INTERACTIVE");
   });
 });
