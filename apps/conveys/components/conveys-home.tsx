@@ -120,7 +120,7 @@ export function ConveysHome(): JSX.Element {
       </section>
 
       {/* ── Stats Bar ── */}
-      <section className="bg-white py-16">
+      <section className="bg-white py-16" aria-label="Stats">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <dl className="grid grid-cols-2 gap-10 md:grid-cols-4">
             {STATS.map((s) => (
@@ -156,9 +156,6 @@ export function ConveysHome(): JSX.Element {
                 </div>
                 <h3 className="mt-5 text-lg font-bold text-slate-900">{s.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-slate-500">{s.description}</p>
-                <span className="mt-5 inline-flex text-sm font-semibold text-blue-600 group-hover:text-blue-700">
-                  Learn more →
-                </span>
               </div>
             ))}
           </div>
@@ -187,7 +184,7 @@ export function ConveysHome(): JSX.Element {
             <div className="grid grid-cols-2 gap-4">
               {WHY_US.map((w) => (
                 <div key={w.title} className="rounded-2xl border border-slate-100 bg-slate-50 p-6 shadow-sm">
-                  <div className="mb-3 h-1.5 w-8 rounded-full bg-blue-600" />
+                  <div className="mb-3 h-1.5 w-8 rounded-full bg-blue-600" aria-hidden="true" />
                   <h3 className="text-sm font-bold text-slate-900">{w.title}</h3>
                   <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{w.body}</p>
                 </div>
@@ -198,7 +195,7 @@ export function ConveysHome(): JSX.Element {
       </section>
 
       {/* ── How We Work ── */}
-      <section className="bg-slate-900 py-20 sm:py-24">
+      <section className="bg-slate-900 py-20 sm:py-24" aria-label="How We Work">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-sm font-bold uppercase tracking-widest text-sky-400">Our Process</p>
