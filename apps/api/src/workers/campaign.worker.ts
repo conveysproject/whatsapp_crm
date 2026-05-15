@@ -3,6 +3,7 @@ import { redisConnection } from "../lib/queue.js";
 import { prisma } from "../lib/prisma.js";
 import { sendTextMessage } from "../lib/whatsapp.js";
 import { evaluateSegment, type SegmentFilter } from "../lib/segment-evaluator.js";
+import { getIo } from "../lib/io-ref.js";
 
 interface CampaignJob {
   campaignId: string;
@@ -50,10 +51,24 @@ export const campaignWorker = new Worker<CampaignJob>(
     const accessToken = org?.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
     const templateBody = campaign.templateId ?? "";
     const intervalMs = (campaign.messageInterval ?? 1) * 1000;
+    const total = phones.length;
+    let sent = 0;
+    let failed = 0;
 
-    for (const phone of phones) {
+    function emitProgress() {
+      const io = getIo();
+      if (!io) return;
+      const percentage = total > 0 ? Math.round(((sent + failed) / total) * 100) : 0;
+      io.to(`org:${organizationId}`).emit("campaign:progress", { campaignId, sent, failed, total, percentage });
+    }
+
+    for (let i = 0; i < phones.length; i++) {
+      const phone = phones[i]!;
       const current = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
-      if (current?.status === "paused" || current?.status === "aborted") break;
+      if (current?.status === "paused" || current?.status === "aborted") {
+        getIo()?.to(`org:${organizationId}`).emit("campaign:aborted", { campaignId });
+        break;
+      }
 
       let recipient = await prisma.campaignRecipient.findFirst({ where: { campaignId, phoneNumber: phone } });
       if (!recipient) {
@@ -61,7 +76,7 @@ export const campaignWorker = new Worker<CampaignJob>(
           data: { campaignId, organizationId, phoneNumber: phone, status: "pending" },
         });
       }
-      if (recipient.status === "sent" || recipient.status === "delivered") continue;
+      if (recipient.status === "sent" || recipient.status === "delivered") { sent++; continue; }
 
       const contact = await prisma.contact.findFirst({
         where: { organizationId, phoneNumber: phone },
@@ -76,16 +91,24 @@ export const campaignWorker = new Worker<CampaignJob>(
           where: { id: recipient.id },
           data: { status: "sent", sentAt: new Date(), messageId },
         });
+        sent++;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         await prisma.campaignRecipient.update({
           where: { id: recipient.id },
           data: { status: "failed", errorMessage, retries: { increment: 1 } },
         });
+        failed++;
       }
+
+      // Emit progress every 50 messages
+      if ((i + 1) % 50 === 0) emitProgress();
 
       await sleep(intervalMs);
     }
+
+    // Final progress emission
+    emitProgress();
 
     const finalStatus = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
     if (finalStatus?.status === "running") {
@@ -93,6 +116,7 @@ export const campaignWorker = new Worker<CampaignJob>(
         where: { id: campaignId },
         data: { status: "completed", sentAt: new Date() },
       });
+      getIo()?.to(`org:${organizationId}`).emit("campaign:completed", { campaignId, sent, failed, total });
     }
   },
   { connection: redisConnection }

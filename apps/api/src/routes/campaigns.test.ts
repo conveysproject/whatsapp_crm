@@ -270,3 +270,55 @@ describe("POST /v1/campaigns/:id/preview", () => {
     expect(body.data.preview[0]?.resolvedBody).toBe("Hello Priya Sharma!");
   });
 });
+
+describe("PATCH /v1/campaigns/:id", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns 404 when campaign not found", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue(null);
+    const res = await app.inject({
+      method: "PATCH", url: "/v1/campaigns/camp-1",
+      headers: { "content-type": "application/json" },
+      payload: { name: "New Name" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 400 when campaign is not draft", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({ id: "camp-1", organizationId: "org-1", status: "running" });
+    const res = await app.inject({
+      method: "PATCH", url: "/v1/campaigns/camp-1",
+      headers: { "content-type": "application/json" },
+      payload: { name: "New Name" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("NOT_DRAFT");
+  });
+
+  it("updates campaign name and returns 200", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({ id: "camp-1", organizationId: "org-1", status: "draft", templateId: "t-1" });
+    mockPrisma.campaign.update.mockResolvedValue({ id: "camp-1", name: "Updated Name", status: "draft" });
+    const res = await app.inject({
+      method: "PATCH", url: "/v1/campaigns/camp-1",
+      headers: { "content-type": "application/json" },
+      payload: { name: "Updated Name" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { name: string } }>().data.name).toBe("Updated Name");
+  });
+
+  it("stores textBody in templateId for text campaigns", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({ id: "camp-1", organizationId: "org-1", status: "draft", templateId: null });
+    mockPrisma.campaign.update.mockResolvedValue({ id: "camp-1", status: "draft", templateId: "Hello {{name}}!" });
+    await app.inject({
+      method: "PATCH", url: "/v1/campaigns/camp-1",
+      headers: { "content-type": "application/json" },
+      payload: { campaignType: "text", textBody: "Hello {{name}}!" },
+    });
+    expect(mockPrisma.campaign.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ templateId: "Hello {{name}}!" }) })
+    );
+  });
+});

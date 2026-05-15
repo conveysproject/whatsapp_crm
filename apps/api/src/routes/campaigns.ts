@@ -6,7 +6,9 @@ import { evaluateSegment, type SegmentFilter } from "../lib/segment-evaluator.js
 
 interface CampaignBody {
   name: string;
-  templateId: TemplateId;
+  templateId?: TemplateId;
+  textBody?: string;
+  campaignType?: string;
   segmentId?: SegmentId;
   scheduledAt?: string;
   messageInterval?: number;
@@ -35,18 +37,55 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: CampaignBody }>("/campaigns", async (request, reply) => {
     const { organizationId } = request.auth;
+    const { name, templateId, textBody, campaignType, scheduledAt, messageInterval } = request.body;
+    // For text campaigns, store the body in templateId field (worker reads it regardless of type)
+    const resolvedTemplateId = campaignType === "text" || campaignType === "non_template"
+      ? (textBody ?? null)
+      : (templateId ?? null);
     const campaign = await fastify.prisma.campaign.create({
       data: {
         organizationId,
-        name: request.body.name,
-        templateId: request.body.templateId,
+        name,
+        templateId: resolvedTemplateId,
+        campaignType: campaignType ?? "template",
         status: "draft" as CampaignStatus,
-        scheduledAt: request.body.scheduledAt ? new Date(request.body.scheduledAt) : null,
-        messageInterval: request.body.messageInterval ?? null,
+        scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+        messageInterval: messageInterval ?? null,
       },
     });
     return reply.status(201).send({ data: campaign });
   });
+
+  fastify.patch<{ Params: { id: CampaignId }; Body: Partial<CampaignBody> }>(
+    "/campaigns/:id",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const campaign = await fastify.prisma.campaign.findFirst({
+        where: { id: request.params.id, organizationId },
+      });
+      if (!campaign) {
+        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
+      }
+      if (campaign.status !== "draft") {
+        return reply.status(400).send({ error: { code: "NOT_DRAFT", message: "Only draft campaigns can be edited" } });
+      }
+      const { name, templateId, textBody, campaignType, scheduledAt, messageInterval } = request.body;
+      const resolvedTemplateId = campaignType === "text" || campaignType === "non_template"
+        ? (textBody ?? campaign.templateId)
+        : (templateId ?? campaign.templateId);
+      const updated = await fastify.prisma.campaign.update({
+        where: { id: campaign.id },
+        data: {
+          ...(name ? { name } : {}),
+          ...(resolvedTemplateId !== undefined ? { templateId: resolvedTemplateId } : {}),
+          ...(campaignType ? { campaignType } : {}),
+          ...(scheduledAt !== undefined ? { scheduledAt: scheduledAt ? new Date(scheduledAt) : null } : {}),
+          ...(messageInterval !== undefined ? { messageInterval } : {}),
+        },
+      });
+      return reply.send({ data: updated });
+    }
+  );
 
   fastify.post<{ Params: { id: CampaignId }; Body: { scheduledAt?: string; segmentId: SegmentId } }>(
     "/campaigns/:id/schedule",
