@@ -37,6 +37,7 @@ import { webhookActionsRouter } from "./webhook-actions.js";
 import { adminRouter } from "./admin.js";
 import { labelsRouter } from "./labels.js";
 import { mediaRouter } from "./media.js";
+import { infoMaterialsRouter } from "./info-materials.js";
 
 export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoute);
@@ -77,4 +78,5 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(adminRouter, { prefix: "/v1" });
   await fastify.register(labelsRouter, { prefix: "/v1" });
   await fastify.register(mediaRouter, { prefix: "/v1" });
+  await fastify.register(infoMaterialsRouter, { prefix: "/v1" });
 };

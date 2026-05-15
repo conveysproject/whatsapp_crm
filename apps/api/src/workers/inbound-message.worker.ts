@@ -11,6 +11,30 @@ import Expo from "expo-server-sdk";
 
 const expo = new Expo();
 
+function isBotInWindow(startTime: string | undefined, endTime: string | undefined, timezone: string | undefined): boolean {
+  if (!startTime || !endTime) return true; // no restriction configured
+  const tz = timezone ?? "UTC";
+  try {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz });
+    const parts = formatter.formatToParts(now);
+    const hour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+    const minute = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
+    const currentMinutes = hour * 60 + minute;
+    const [sh, sm] = startTime.split(":").map(Number);
+    const [eh, em] = endTime.split(":").map(Number);
+    const startMinutes = (sh ?? 0) * 60 + (sm ?? 0);
+    const endMinutes = (eh ?? 0) * 60 + (em ?? 0);
+    if (startMinutes <= endMinutes) {
+      return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+    }
+    // spans midnight
+    return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+  } catch {
+    return true;
+  }
+}
+
 export interface InboundMessageJob {
   organizationId: string;
   whatsappContactPhone: string;
@@ -126,7 +150,15 @@ export const inboundWorker = new Worker<InboundMessageJob>(
     });
 
     const refreshed = await prisma.conversation.findFirst({ where: { id: conversation.id } });
-    if (refreshed?.status === "bot") {
+
+    const botSettings = await prisma.vendorSetting.findMany({
+      where: { organizationId, key: { in: ["enable_bot_timing_restrictions", "bot_start_timing", "bot_end_timing", "bot_timing_timezone"] } },
+    });
+    const botSettingMap = Object.fromEntries(botSettings.map((s) => [s.key, s.value ?? undefined]));
+    const botRestricted = botSettingMap["enable_bot_timing_restrictions"] === "true";
+    const botInWindow = !botRestricted || isBotInWindow(botSettingMap["bot_start_timing"], botSettingMap["bot_end_timing"], botSettingMap["bot_timing_timezone"]);
+
+    if (refreshed?.status === "bot" && botInWindow) {
       await handleBotMessage(prisma, conversation.id, organizationId, body);
     }
 

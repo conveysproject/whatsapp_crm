@@ -1042,6 +1042,24 @@ model AutoReply {
   @@map("auto_replies")
 }
 
+// ─── Info Materials (Media Library) ──────────────────────────────────────────
+
+model InfoMaterial {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  type           String   // image | video | document | audio
+  url            String?  @db.Text // public CDN/S3 URL
+  fileUrl        String?  @map("file_url") @db.Text // original upload URL (Meta or R2)
+  description    String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@index([organizationId, type])
+  @@map("info_materials")
+}
+
 // ─── Campaign Recipients ──────────────────────────────────────────────────────
 // One row per contact per campaign. Enables UI progress reporting:
 // "1,247 sent / 83 failed / 210 pending" without querying BullMQ/Redis.

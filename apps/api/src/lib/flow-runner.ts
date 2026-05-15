@@ -1,11 +1,11 @@
 import type { PrismaClient } from "@prisma/client";
-import { sendTextMessage } from "./whatsapp.js";
+import { sendTextMessage, sendMediaMessage, sendInteractiveMessage, type WaInteractivePayload } from "./whatsapp.js";
 
 export type TriggerType = "inbound_message" | "contact_tag_added" | "conversation_assigned";
 
 export interface FlowNode {
   id: string;
-  type: "send_message" | "update_stage" | "assign_conversation" | "add_tag" | "wait" | "end";
+  type: "send_message" | "send_media" | "send_interactive" | "update_stage" | "assign_conversation" | "add_tag" | "wait" | "end";
   config: Record<string, unknown>;
   next: string | null;
 }
@@ -31,6 +31,14 @@ export async function runFlow(
     flowDefinition.nodes.map((n) => [n.id, n])
   );
 
+  // Fetch org credentials once for all send nodes
+  const org = await prisma.organization.findUnique({
+    where: { id: payload.organizationId },
+    select: { phoneNumberId: true, wabaAccessToken: true },
+  });
+  const phoneNumberId = org?.phoneNumberId ?? process.env["WA_PHONE_NUMBER_ID"] ?? "";
+  const accessToken = org?.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
+
   let currentNodeId: string | null = flowDefinition.startNodeId;
 
   while (currentNodeId) {
@@ -41,12 +49,23 @@ export async function runFlow(
       case "send_message": {
         const text = (node.config["text"] as string) ?? "";
         if (payload.contactPhone && text) {
-          await sendTextMessage(
-            process.env["WA_PHONE_NUMBER_ID"] ?? "",
-            payload.contactPhone,
-            text,
-            process.env["WA_ACCESS_TOKEN"] ?? ""
-          );
+          await sendTextMessage(phoneNumberId, payload.contactPhone, text, accessToken);
+        }
+        break;
+      }
+      case "send_media": {
+        const mediaId = node.config["mediaId"] as string;
+        const contentType = (node.config["contentType"] as string) ?? "image";
+        const caption = node.config["caption"] as string | undefined;
+        if (payload.contactPhone && mediaId) {
+          await sendMediaMessage(phoneNumberId, payload.contactPhone, contentType, mediaId, caption, accessToken);
+        }
+        break;
+      }
+      case "send_interactive": {
+        const interactive = node.config["interactive"] as WaInteractivePayload | undefined;
+        if (payload.contactPhone && interactive) {
+          await sendInteractiveMessage(phoneNumberId, payload.contactPhone, interactive, accessToken);
         }
         break;
       }

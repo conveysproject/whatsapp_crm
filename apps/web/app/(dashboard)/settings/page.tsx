@@ -40,6 +40,24 @@ export default async function SettingsPage(): Promise<JSX.Element> {
           <p className="mt-1 capitalize text-gray-900">{org?.planTier ?? "—"}</p>
         </div>
       </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { href: "/settings/members", label: "Members", desc: "Manage team access" },
+          { href: "/settings/whatsapp-account", label: "WhatsApp Account", desc: "Connect your WABA" },
+          { href: "/settings/branding", label: "Branding", desc: "Logo, colors, favicon" },
+          { href: "/settings/labels", label: "Labels", desc: "Color-coded contact tags" },
+          { href: "/settings/vendor-settings", label: "Advanced Settings", desc: "Bot timing, API token" },
+          { href: "/settings/media-library", label: "Media Library", desc: "Reusable images, docs, audio" },
+          { href: "/settings/routing", label: "Routing Rules", desc: "Auto-assign conversations" },
+          { href: "/settings/billing", label: "Billing", desc: "Subscription and usage" },
+        ].map(({ href, label, desc }) => (
+          <Link key={href} href={href} className="block border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+            <p className="text-sm font-medium text-gray-900">{label}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
