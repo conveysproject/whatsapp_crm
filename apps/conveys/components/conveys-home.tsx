@@ -60,22 +60,18 @@ const STEPS = [
 const TESTIMONIALS = [
   {
     name: "Naman Gupta",
-    org: "GT Infotech, Delhi",
     quote: "Conveys built our internal tool from scratch. Clean code, on time, and they actually understood what we needed.",
   },
   {
     name: "Ramya Joshi",
-    org: "Infinity Trade, Kolkata",
     quote: "The WhatsApp automation they set up completely changed how we follow up with leads. Night and day difference.",
   },
   {
     name: "Mudit Thakkar",
-    org: "Aryan Solutions, Mumbai",
     quote: "Professional team with real technical depth. They didn't just build what we asked — they improved on it.",
   },
   {
     name: "Reena Maheshwari",
-    org: "ARK Designs, Jaipur",
     quote: "Great experience end to end. The website they designed for us gets genuine compliments from our customers.",
   },
 ] as const;
@@ -235,7 +231,6 @@ export function ConveysHome(): JSX.Element {
                 </blockquote>
                 <figcaption className="mt-4 border-t border-slate-100 pt-4">
                   <p className="text-sm font-bold text-slate-900">{t.name}</p>
-                  <p className="text-xs text-slate-400">{t.org}</p>
                 </figcaption>
               </figure>
             ))}

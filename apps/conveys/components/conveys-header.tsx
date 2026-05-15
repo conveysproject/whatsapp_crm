@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import type { JSX } from "react";
 import { useState } from "react";
 
@@ -23,11 +24,8 @@ export function ConveysHeader(): JSX.Element {
         Skip to content
       </a>
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2.5 text-lg font-bold tracking-tight text-slate-900">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-700 text-sm font-extrabold text-white">
-            C
-          </span>
-          <span>Conveys IT</span>
+        <Link href="/" className="flex items-center gap-2.5">
+          <Image src="/conveys-logo.png" alt="Conveys Information Technology" width={160} height={48} className="h-10 w-auto object-contain" priority />
         </Link>
 
         <nav className="hidden items-center gap-7 text-sm font-medium text-slate-600 md:flex" aria-label="Primary">

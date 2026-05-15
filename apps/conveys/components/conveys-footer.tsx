@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { JSX } from "react";
 
 export function ConveysFooter(): JSX.Element {
@@ -6,14 +7,9 @@ export function ConveysFooter(): JSX.Element {
     <footer className="bg-slate-900 text-slate-400">
       <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
 
-        <div className="mb-10 flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-700 text-sm font-extrabold text-white">
-            C
-          </span>
-          <div>
-            <p className="text-sm font-bold text-white">Conveys Information Technology</p>
-            <p className="text-xs text-slate-500">Turning Ideas Into Digital Reality</p>
-          </div>
+        <div className="mb-10">
+          <Image src="/conveys-logo.png" alt="Conveys Information Technology" width={180} height={54} className="h-12 w-auto object-contain brightness-0 invert" />
+          <p className="mt-2 text-xs text-slate-500">Turning Ideas Into Digital Reality</p>
         </div>
 
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
