@@ -13,13 +13,10 @@ export const onboardingRouter: FastifyPluginAsync = async (fastify) => {
     const appSecret = process.env["META_APP_SECRET"] ?? "";
 
     const params = new URLSearchParams({ client_id: appId, client_secret: appSecret, code });
-    // Embedded signup uses FB SDK's internal popup redirect; non-embedded uses our configured callback URL.
-    params.set(
-      "redirect_uri",
-      embedded
-        ? "https://www.facebook.com/connect/login_success.html"
-        : (process.env["META_REDIRECT_URI"] ?? "")
-    );
+    // Both flows use the same redirect_uri: the config's callback URL on our domain.
+    // For embedded signup, the FB SDK redirects the popup to this URL (base_domain match),
+    // intercepts it, and relays the code via postMessage — so the server exchange must match.
+    params.set("redirect_uri", process.env["META_REDIRECT_URI"] ?? "");
 
     const metaUrl = `https://graph.facebook.com/v22.0/oauth/access_token?${params.toString()}`;
     fastify.log.info({ embedded, redirectUri: params.get("redirect_uri"), appId }, "Meta token exchange attempt");
