@@ -5,7 +5,8 @@
 .vercel
 
 # Playwright
-e2e/.auth/
+e2e/.auth/*
+!e2e/.auth/.gitkeep
 .env.test
 playwright-report/
 test-results/
