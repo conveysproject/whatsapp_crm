@@ -10,7 +10,8 @@ export class ContactsPage {
 
   async search(query: string) {
     await this.page.getByPlaceholder('Search contacts…').fill(query);
-    await this.page.waitForTimeout(500);
+    // Wait for the loading indicator to appear then disappear, or for results to stabilize
+    await this.page.waitForLoadState('networkidle');
   }
 
   async clickAddContact() {

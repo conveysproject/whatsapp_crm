@@ -26,7 +26,8 @@ test.describe('Inbox', () => {
       data: { name: TEST_CONTACT_NAME, phoneNumber: TEST_PHONE },
     });
     const body = await res.json();
-    contactId = body.data.id;
+    if (!body.data?.id) throw new Error(`Failed to create test contact: ${JSON.stringify(body)}`);
+    contactId = body.data.id as string;
 
     await ctx.close();
   });
