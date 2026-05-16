@@ -8,9 +8,14 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "clean": "rm -rf .next"
+    "clean": "rm -rf .next",
+    "test:e2e":        "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui":     "playwright test --ui",
+    "test:e2e:debug":  "playwright test --debug"
   },
   "dependencies": {
+    "@WBMSG/shared": "workspace:*",
     "@clerk/nextjs": "^7.2.7",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -20,7 +25,6 @@
     "@radix-ui/react-toast": "^1.2.15",
     "@sentry/nextjs": "^10.50.0",
     "@tanstack/react-query": "^5.100.5",
-    "@WBMSG/shared": "workspace:*",
     "next": "^15.0.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
@@ -31,10 +35,12 @@
   "devDependencies": {
     "@WBMSG/eslint-config": "workspace:*",
     "@WBMSG/tsconfig": "workspace:*",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.0",
+    "dotenv": "^17.4.2",
     "eslint-config-next": "^15.0.8",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",

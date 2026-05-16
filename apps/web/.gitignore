@@ -3,3 +3,9 @@
 /.clerk/
 
 .vercel
+
+# Playwright
+e2e/.auth/
+.env.test
+playwright-report/
+test-results/
