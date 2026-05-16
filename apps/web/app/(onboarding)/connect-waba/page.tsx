@@ -38,8 +38,9 @@ export default function ConnectWabaPage(): JSX.Element {
   });
 
   useEffect(() => {
-    // Listen for session info from Meta's popup
+    // Listen for ALL messages from the popup to capture session info and debug
     const sessionInfoListener = (event: MessageEvent) => {
+      console.log("[WA Signup] postMessage received:", event.origin, event.data);
       if (event.origin !== "https://www.facebook.com") return;
       try {
         const data = JSON.parse(event.data as string) as {
@@ -47,11 +48,16 @@ export default function ConnectWabaPage(): JSX.Element {
           event?: string;
           data?: { phone_number_id?: string; waba_id?: string };
         };
-        if (data.type === "WA_EMBEDDED_SIGNUP" && data.event === "FINISH") {
-          sessionRef.current = {
-            phoneNumberId: data.data?.phone_number_id ?? "",
-            wabaId: data.data?.waba_id ?? "",
-          };
+        console.log("[WA Signup] Parsed postMessage:", JSON.stringify(data));
+        if (data.type === "WA_EMBEDDED_SIGNUP") {
+          console.log("[WA Signup] Embedded signup event:", data.event, "data:", JSON.stringify(data.data));
+          if (data.event === "FINISH") {
+            sessionRef.current = {
+              phoneNumberId: data.data?.phone_number_id ?? "",
+              wabaId: data.data?.waba_id ?? "",
+            };
+            console.log("[WA Signup] FINISH captured — phoneNumberId:", sessionRef.current.phoneNumberId, "wabaId:", sessionRef.current.wabaId);
+          }
         }
       } catch {
         // non-JSON message — ignore
@@ -64,12 +70,14 @@ export default function ConnectWabaPage(): JSX.Element {
 
   useEffect(() => {
     window.fbAsyncInit = function () {
+      console.log("[WA Signup] FB SDK loaded, initialising with appId:", APP_ID);
       window.FB.init({
         appId: APP_ID,
         autoLogAppEvents: true,
         xfbml: true,
         version: "v22.0",
       });
+      console.log("[WA Signup] FB.init() done — SDK ready");
       setSdkReady(true);
     };
   }, []);
@@ -80,42 +88,59 @@ export default function ConnectWabaPage(): JSX.Element {
     setErrorMsg(null);
     sessionRef.current = { phoneNumberId: "", wabaId: "" };
 
-    console.log("[WA Signup] APP_ID:", APP_ID, "CONFIG_ID:", CONFIG_ID);
+    console.log("[WA Signup] Button clicked — APP_ID:", APP_ID, "CONFIG_ID:", CONFIG_ID, "API_URL:", API_URL);
+    console.log("[WA Signup] Calling FB.login() with config_id:", CONFIG_ID);
 
     window.FB.login(
       (response) => {
+        console.log("[WA Signup] FB.login callback fired — full response:", JSON.stringify(response));
+
         if (!response.authResponse?.code) {
+          console.warn("[WA Signup] No code in authResponse — user cancelled or popup blocked");
           setStatus("error");
           setErrorMsg("Connection cancelled or failed. Please try again.");
           return;
         }
 
+        console.log("[WA Signup] Got code (first 10 chars):", response.authResponse.code.slice(0, 10), "...");
+        console.log("[WA Signup] Session at callback — phoneNumberId:", sessionRef.current.phoneNumberId, "wabaId:", sessionRef.current.wabaId);
+
         void (async () => {
           try {
+            console.log("[WA Signup] Getting Clerk token...");
             const token = await getToken();
+            console.log("[WA Signup] Token obtained:", token ? "yes" : "MISSING");
+
+            const payload = {
+              code: response.authResponse!.code,
+              embedded: true,
+              phoneNumberId: sessionRef.current.phoneNumberId,
+              wabaId: sessionRef.current.wabaId,
+            };
+            console.log("[WA Signup] POSTing to", `${API_URL}/v1/onboarding/waba-callback`, "payload:", JSON.stringify({ ...payload, code: payload.code.slice(0, 10) + "..." }));
+
             const res = await fetch(`${API_URL}/v1/onboarding/waba-callback`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${token ?? ""}`,
               },
-              body: JSON.stringify({
-                code: response.authResponse!.code,
-                embedded: true,
-                phoneNumberId: sessionRef.current.phoneNumberId,
-                wabaId: sessionRef.current.wabaId,
-              }),
+              body: JSON.stringify(payload),
             });
 
+            console.log("[WA Signup] API response status:", res.status, res.statusText);
+
             if (res.ok) {
-              // Phone number provisioned in the popup — skip straight to invite
               const hasPhone = !!sessionRef.current.phoneNumberId;
-              router.replace(hasPhone ? "/invite-team" : "/provision-number");
+              const dest = hasPhone ? "/invite-team" : "/provision-number";
+              console.log("[WA Signup] Success! hasPhone:", hasPhone, "→ redirecting to:", dest);
+              router.replace(dest);
             } else {
               const body = await res.json().catch(() => ({})) as {
                 error?: { message?: string } | string;
                 detail?: { error?: { message?: string } };
               };
+              console.error("[WA Signup] API error body:", JSON.stringify(body));
               const msg =
                 body?.detail?.error?.message ??
                 (typeof body?.error === "string" ? body.error : (body?.error as { message?: string })?.message) ??
@@ -123,7 +148,8 @@ export default function ConnectWabaPage(): JSX.Element {
               setErrorMsg(msg);
               setStatus("error");
             }
-          } catch {
+          } catch (err) {
+            console.error("[WA Signup] Network/fetch error:", err);
             setErrorMsg("Network error. Please try again.");
             setStatus("error");
           }
