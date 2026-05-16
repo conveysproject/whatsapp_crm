@@ -11,6 +11,11 @@ export const test = base.extend<AuthFixtures>({
       if (!page.url().includes('localhost:3000') || page.url().includes('sign-in')) {
         await page.goto('/dashboard');
       }
+      // Wait for Clerk to load and a session to be active
+      await page.waitForFunction(
+        () => !!(window as any).Clerk?.session,
+        { timeout: 10_000 },
+      );
       const token = await page.evaluate(async (): Promise<string> => {
         const clerk = (window as any).Clerk;
         if (!clerk) throw new Error('Clerk not available on window');
