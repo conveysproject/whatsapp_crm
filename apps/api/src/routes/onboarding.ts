@@ -13,13 +13,20 @@ export const onboardingRouter: FastifyPluginAsync = async (fastify) => {
     const appSecret = process.env["META_APP_SECRET"] ?? "";
 
     const params = new URLSearchParams({ client_id: appId, client_secret: appSecret, code });
-    if (!embedded) params.set("redirect_uri", process.env["META_REDIRECT_URI"] ?? "");
+    // Embedded signup uses FB SDK's internal popup redirect; non-embedded uses our configured callback URL.
+    params.set(
+      "redirect_uri",
+      embedded
+        ? "https://www.facebook.com/connect/login_success.html"
+        : (process.env["META_REDIRECT_URI"] ?? "")
+    );
 
     const metaUrl = `https://graph.facebook.com/v22.0/oauth/access_token?${params.toString()}`;
+    fastify.log.info({ embedded, redirectUri: params.get("redirect_uri"), appId }, "Meta token exchange attempt");
     const tokenRes = await fetch(metaUrl);
     if (!tokenRes.ok) {
       const errBody = await tokenRes.json().catch(() => ({})) as object;
-      fastify.log.error({ metaError: errBody }, "Meta OAuth token exchange failed");
+      fastify.log.error({ metaError: errBody, embedded, redirectUri: params.get("redirect_uri") }, "Meta OAuth token exchange failed");
       return reply.status(502).send({ error: "meta_oauth_failed", detail: errBody });
     }
     const { access_token } = await tokenRes.json() as { access_token: string };
