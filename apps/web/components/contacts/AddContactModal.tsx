@@ -86,12 +86,14 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
 
         <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
           <Input
-            label="Phone Number *"
+            id="contact-phone"
+            label="Phone"
             value={form.phoneNumber}
             onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value }))}
             placeholder="+1 234 567 8900"
           />
           <Input
+            id="contact-name"
             label="Name"
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}

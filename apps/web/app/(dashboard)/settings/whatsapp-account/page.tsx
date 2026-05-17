@@ -78,8 +78,9 @@ export default function WhatsAppAccountPage(): JSX.Element {
         ) : (
           <>
             <div>
-              <label className="block text-sm font-medium mb-1">About</label>
+              <label htmlFor="wa-about" className="block text-sm font-medium mb-1">About</label>
               <textarea
+                id="wa-about"
                 className="w-full border rounded px-3 py-2 text-sm"
                 rows={3}
                 defaultValue={profileData?.data?.about ?? ""}
@@ -87,8 +88,9 @@ export default function WhatsAppAccountPage(): JSX.Element {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Address</label>
+              <label htmlFor="wa-address" className="block text-sm font-medium mb-1">Address</label>
               <input
+                id="wa-address"
                 className="w-full border rounded px-3 py-2 text-sm"
                 defaultValue={profileData?.data?.address ?? ""}
                 onChange={(e) => setAddress(e.target.value)}
