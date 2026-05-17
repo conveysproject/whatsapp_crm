@@ -4,9 +4,10 @@
 
 .vercel
 
-# Playwright
-e2e/.auth/*
-!e2e/.auth/.gitkeep
+# Playwright — all E2E test files are local-only
+e2e/
+playwright.config.ts
 .env.test
+.env.test.example
 playwright-report/
 test-results/

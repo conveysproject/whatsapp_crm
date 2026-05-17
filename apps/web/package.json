@@ -9,10 +9,10 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf .next",
-    "test:e2e":        "playwright test",
+    "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:ui":     "playwright test --ui",
-    "test:e2e:debug":  "playwright test --debug"
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
     "@WBMSG/shared": "workspace:*",
@@ -35,6 +35,7 @@
   "devDependencies": {
     "@WBMSG/eslint-config": "workspace:*",
     "@WBMSG/tsconfig": "workspace:*",
+    "@clerk/testing": "^2.0.29",
     "@playwright/test": "^1.60.0",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",
