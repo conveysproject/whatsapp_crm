@@ -135,6 +135,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const contacts = await fastify.prisma.contact.findMany({
       where: {
         organizationId,
+        deletedAt: null,
         ...(cursor ? { id: { gt: cursor } } : {}),
         ...(labelId ? { labels: { some: { labelId } } } : {}),
       },
@@ -149,7 +150,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { id: ContactId } }>("/contacts/:id", async (request, reply) => {
     const { organizationId } = request.auth;
     const contact = await fastify.prisma.contact.findFirst({
-      where: { id: request.params.id, organizationId },
+      where: { id: request.params.id, organizationId, deletedAt: null },
       include: { labels: { include: { label: true } } },
     });
     if (!contact) {
@@ -185,7 +186,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { organizationId } = request.auth;
       const existing = await fastify.prisma.contact.findFirst({
-        where: { id: request.params.id, organizationId },
+        where: { id: request.params.id, organizationId, deletedAt: null },
       });
       if (!existing) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
@@ -215,12 +216,16 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { id: ContactId } }>("/contacts/:id", async (request, reply) => {
     const { organizationId } = request.auth;
     const existing = await fastify.prisma.contact.findFirst({
-      where: { id: request.params.id, organizationId },
+      where: { id: request.params.id, organizationId, deletedAt: null },
     });
     if (!existing) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
     }
-    await fastify.prisma.contact.delete({ where: { id: request.params.id } });
+    // GDPR soft delete — preserves audit trail; removes from search index immediately
+    await fastify.prisma.contact.update({
+      where: { id: request.params.id },
+      data: { deletedAt: new Date() },
+    });
     await removeContact(request.params.id);
     return reply.status(204).send();
   });

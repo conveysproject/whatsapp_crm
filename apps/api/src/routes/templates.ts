@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { TemplateCategory, TemplateStatus } from "@prisma/client";
 import { submitTemplateToMeta } from "../lib/meta-templates.js";
+import { sendTemplateMessage } from "../lib/whatsapp.js";
 import type { TemplateId, ContactId } from "@WBMSG/shared";
 
 interface TemplateBody {
@@ -116,7 +117,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
 
     const rows = await fastify.prisma.message.groupBy({
       by: ["status"],
-      where: { organizationId, direction: "outbound" },
+      where: { organizationId, direction: "outbound", contentType: "template", body: template.name },
       _count: { status: true },
     });
 
@@ -220,6 +221,31 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
       }
 
+      if (!template.metaTemplateId) {
+        return reply.status(400).send({ error: { code: "TEMPLATE_NOT_SUBMITTED", message: "Template has not been submitted to or approved by Meta" } });
+      }
+
+      const org = await fastify.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { phoneNumberId: true, wabaAccessToken: true },
+      });
+      if (!org?.phoneNumberId) {
+        return reply.status(400).send({ error: { code: "WA_NOT_CONNECTED", message: "WhatsApp account not connected" } });
+      }
+
+      const recipientPhone = contact.phoneNumber;
+      const accessToken = org.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
+
+      // Build body component parameters from caller-supplied variables
+      const variables = request.body.variables ?? [];
+      const components = variables.length > 0
+        ? [{ type: "body" as const, parameters: variables.map((v) => ({ type: "text" as const, text: v })) }]
+        : [];
+
+      const { messageId } = await sendTemplateMessage(
+        org.phoneNumberId, recipientPhone, template.name, template.language, components, accessToken
+      );
+
       let conversation = await fastify.prisma.conversation.findFirst({
         where: { organizationId, contactId: contact.id },
         orderBy: { createdAt: "desc" },
@@ -227,7 +253,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
 
       if (!conversation) {
         conversation = await fastify.prisma.conversation.create({
-          data: { organizationId, contactId: contact.id },
+          data: { organizationId, contactId: contact.id, whatsappContactId: recipientPhone },
         });
       }
 
@@ -238,6 +264,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
           direction: "outbound",
           contentType: "template",
           body: template.name,
+          whatsappMessageId: messageId,
           status: "sent",
         },
       });

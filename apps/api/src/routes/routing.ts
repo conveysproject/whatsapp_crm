@@ -34,6 +34,31 @@ export const routingRouter: FastifyPluginAsync = async (fastify) => {
     return reply.status(201).send({ data: rule });
   });
 
+  fastify.patch<{ Params: { id: string }; Body: Partial<RoutingRuleBody> }>(
+    "/routing-rules/:id",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const existing = await fastify.prisma.routingRule.findFirst({
+        where: { id: request.params.id, organizationId },
+      });
+      if (!existing) {
+        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Rule not found" } });
+      }
+      const { name, priority, conditions, assignTo, assignType } = request.body;
+      const rule = await fastify.prisma.routingRule.update({
+        where: { id: request.params.id },
+        data: {
+          ...(name !== undefined && { name }),
+          ...(priority !== undefined && { priority }),
+          ...(conditions !== undefined && { conditions }),
+          ...(assignTo !== undefined && { assignTo }),
+          ...(assignType !== undefined && { assignType }),
+        },
+      });
+      return reply.send({ data: rule });
+    }
+  );
+
   fastify.delete<{ Params: { id: string } }>("/routing-rules/:id", async (request, reply) => {
     const { organizationId } = request.auth;
     const existing = await fastify.prisma.routingRule.findFirst({

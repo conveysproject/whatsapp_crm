@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
 import { redisConnection } from "../lib/queue.js";
 import { prisma } from "../lib/prisma.js";
-import { sendTextMessage } from "../lib/whatsapp.js";
+import { sendTextMessage, sendTemplateMessage } from "../lib/whatsapp.js";
 import { evaluateSegment, type SegmentFilter } from "../lib/segment-evaluator.js";
 import { getIo } from "../lib/io-ref.js";
 
@@ -32,7 +32,7 @@ export const campaignWorker = new Worker<CampaignJob>(
     const { campaignId, organizationId, segmentId } = job.data;
 
     const [campaign, segment, org] = await Promise.all([
-      prisma.campaign.findFirst({ where: { id: campaignId } }),
+      prisma.campaign.findFirst({ where: { id: campaignId }, include: { segments: { take: 1 } } }),
       prisma.segment.findFirst({ where: { id: segmentId, organizationId } }),
       prisma.organization.findUnique({ where: { id: organizationId }, select: { phoneNumberId: true, wabaAccessToken: true } }),
     ]);
@@ -49,8 +49,18 @@ export const campaignWorker = new Worker<CampaignJob>(
 
     const phoneNumberId = org?.phoneNumberId ?? process.env["WA_PHONE_NUMBER_ID"] ?? "";
     const accessToken = org?.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
+    const isTemplateCampaign = campaign.campaignType === "template";
     const templateBody = campaign.templateId ?? "";
     const intervalMs = (campaign.messageInterval ?? 1) * 1000;
+
+    // For template campaigns, load the approved template from DB
+    let metaTemplate: { name: string; language: string; metaTemplateId: string | null } | null = null;
+    if (isTemplateCampaign && campaign.templateId) {
+      metaTemplate = await prisma.template.findUnique({
+        where: { id: campaign.templateId },
+        select: { name: true, language: true, metaTemplateId: true },
+      });
+    }
     const total = phones.length;
     let sent = 0;
     let failed = 0;
@@ -86,7 +96,22 @@ export const campaignWorker = new Worker<CampaignJob>(
       const body = contact ? resolveTemplateVars(templateBody, contact) : templateBody;
 
       try {
-        const { messageId } = await sendTextMessage(phoneNumberId, phone, body, accessToken);
+        let messageId: string;
+        if (isTemplateCampaign && metaTemplate?.metaTemplateId) {
+          // Build a body component with personalised text if the template has a body variable
+          const fullName = contact
+            ? [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.phoneNumber
+            : phone;
+          const components = [{
+            type: "body" as const,
+            parameters: [{ type: "text" as const, text: fullName }],
+          }];
+          ({ messageId } = await sendTemplateMessage(
+            phoneNumberId, phone, metaTemplate.name, metaTemplate.language, components, accessToken
+          ));
+        } else {
+          ({ messageId } = await sendTextMessage(phoneNumberId, phone, body, accessToken));
+        }
         await prisma.campaignRecipient.update({
           where: { id: recipient.id },
           data: { status: "sent", sentAt: new Date(), messageId },

@@ -32,11 +32,76 @@ function interpolate(template: string, contact: Contact): string {
     .replace(/\{\{phone\}\}/g, contact.phone ?? "");
 }
 
+interface AutoReplyBody {
+  name: string;
+  triggerType: AutoReplyTriggerType;
+  triggerKeyword: string;
+  replyText: string;
+  replyData?: Prisma.InputJsonValue;
+  flowId?: string | null;
+  parentId?: string | null;
+  priorityIndex?: number;
+  isActive?: boolean;
+}
+
 export const autoRepliesRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/auto-replies", async (request, reply) => {
     const { organizationId } = request.auth;
-    const autoReplies = await fastify.prisma.autoReply.findMany({ where: { organizationId } });
+    const autoReplies = await fastify.prisma.autoReply.findMany({
+      where: { organizationId },
+      orderBy: { priorityIndex: "asc" },
+    });
     return reply.send({ data: autoReplies });
+  });
+
+  fastify.post<{ Body: AutoReplyBody }>("/auto-replies", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const { name, triggerType, triggerKeyword, replyText, replyData, flowId, parentId, priorityIndex, isActive } = request.body;
+    const data = await fastify.prisma.autoReply.create({
+      data: {
+        organizationId,
+        name,
+        triggerType,
+        triggerKeyword,
+        replyText,
+        replyData: (replyData ?? null) as Prisma.InputJsonValue,
+        flowId: flowId ?? null,
+        parentId: parentId ?? null,
+        priorityIndex: priorityIndex ?? 0,
+        isActive: isActive ?? true,
+      },
+    });
+    return reply.status(201).send({ data });
+  });
+
+  fastify.patch<{ Params: { id: string }; Body: Partial<AutoReplyBody> }>("/auto-replies/:id", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const existing = await fastify.prisma.autoReply.findFirst({ where: { id: request.params.id, organizationId } });
+    if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Auto-reply not found" } });
+    const { name, triggerType, triggerKeyword, replyText, replyData, flowId, parentId, priorityIndex, isActive } = request.body;
+    const data = await fastify.prisma.autoReply.update({
+      where: { id: request.params.id },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(triggerType !== undefined && { triggerType }),
+        ...(triggerKeyword !== undefined && { triggerKeyword }),
+        ...(replyText !== undefined && { replyText }),
+        ...(replyData !== undefined && { replyData: replyData as Prisma.InputJsonValue }),
+        ...(flowId !== undefined && { flowId }),
+        ...(parentId !== undefined && { parentId }),
+        ...(priorityIndex !== undefined && { priorityIndex }),
+        ...(isActive !== undefined && { isActive }),
+      },
+    });
+    return reply.send({ data });
+  });
+
+  fastify.delete<{ Params: { id: string } }>("/auto-replies/:id", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const existing = await fastify.prisma.autoReply.findFirst({ where: { id: request.params.id, organizationId } });
+    if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Auto-reply not found" } });
+    await fastify.prisma.autoReply.delete({ where: { id: request.params.id } });
+    return reply.status(204).send();
   });
 
   fastify.post<{ Params: { id: string } }>("/auto-replies/:id/duplicate", async (request, reply) => {

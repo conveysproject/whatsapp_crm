@@ -7,15 +7,16 @@ import { summarizeConversation } from "../lib/claude.js";
 export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
   // ── List with status / assignee filters ────────────────────────────────
   fastify.get<{
-    Querystring: { status?: string; assignedTo?: string; page?: string };
+    Querystring: { status?: string; assignedTo?: string; teamId?: string; page?: string };
   }>("/conversations", async (request, reply) => {
     const { organizationId } = request.auth;
-    const { status, assignedTo, page } = request.query;
+    const { status, assignedTo, teamId, page } = request.query;
     const pageNum = Math.max(1, parseInt(page ?? "1", 10));
 
     const where: Record<string, unknown> = { organizationId };
     if (status) where.status = status;
     if (assignedTo) where.assignedTo = assignedTo;
+    if (teamId) where.teamId = teamId;
 
     const conversations = await fastify.prisma.conversation.findMany({
       where,
@@ -27,7 +28,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: conversations });
   });
 
-  fastify.get<{ Params: { id: ConversationId } }>(
+  fastify.get<{ Params: { id: ConversationId }; Querystring: { cursor?: string; limit?: string } }>(
     "/conversations/:id/messages",
     async (request, reply) => {
       const { organizationId } = request.auth;
@@ -37,12 +38,22 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       if (!conversation) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
       }
+      const limit = Math.min(parseInt(request.query.limit ?? "50", 10), 100);
+      const cursor = request.query.cursor;
       const messages = await fastify.prisma.message.findMany({
-        where: { conversationId: request.params.id },
-        orderBy: { sentAt: "asc" },
-        take: 100,
+        where: {
+          conversationId: request.params.id,
+          ...(cursor ? { id: { lt: cursor } } : {}),
+        },
+        orderBy: { sentAt: "desc" },
+        take: limit + 1,
       });
-      return reply.send({ data: messages });
+      const hasMore = messages.length > limit;
+      const page = hasMore ? messages.slice(0, limit) : messages;
+      return reply.send({
+        data: page.toReversed(),
+        pagination: { hasMore, nextCursor: hasMore ? page[0]?.id ?? null : null },
+      });
     }
   );
 
@@ -69,7 +80,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { organizationId } = request.auth;
       const { status } = request.body;
-      const validStatuses = ["open", "closed", "pending"];
+      const validStatuses = ["open", "resolved", "pending", "bot"];
       if (!validStatuses.includes(status)) {
         return reply.status(400).send({ error: { code: "INVALID_STATUS", message: `status must be one of: ${validStatuses.join(", ")}` } });
       }

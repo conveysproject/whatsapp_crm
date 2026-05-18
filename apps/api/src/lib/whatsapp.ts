@@ -84,6 +84,47 @@ export interface WaInteractivePayload {
   action: Record<string, unknown>;
 }
 
+export interface WaTemplateComponent {
+  type: "header" | "body" | "button";
+  sub_type?: string;
+  index?: number;
+  parameters?: Array<{ type: "text" | "image" | "document"; text?: string }>;
+}
+
+export async function sendTemplateMessage(
+  phoneNumberId: string,
+  to: string,
+  templateName: string,
+  languageCode: string,
+  components: WaTemplateComponent[],
+  accessToken: string
+): Promise<WaSendResult> {
+  const res = await fetch(`${WA_BASE}/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "template",
+      template: {
+        name: templateName,
+        language: { code: languageCode },
+        components,
+      },
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json() as unknown;
+    throw new Error(`WA template send failed: ${JSON.stringify(err)}`);
+  }
+  const data = await res.json() as WaMessageResponse;
+  return { messageId: data.messages[0]!.id };
+}
+
 export async function sendInteractiveMessage(
   phoneNumberId: string,
   to: string,

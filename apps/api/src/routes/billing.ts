@@ -174,6 +174,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   // ── Razorpay ─────────────────────────────────────────────────────────────
   fastify.post<{ Body: { planId: string; amount: number } }>(
     "/billing/razorpay/create-order",
+    { config: { public: false } },
     async (request, reply) => {
       const rzp = new Razorpay({
         key_id: process.env["RAZORPAY_KEY_ID"] ?? "",
@@ -188,7 +189,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  fastify.post("/billing/razorpay/webhook", async (request, reply) => {
+  fastify.post("/billing/razorpay/webhook", { config: { public: true } }, async (request, reply) => {
     const signature = request.headers["x-razorpay-signature"] as string;
     const body = JSON.stringify(request.body);
     const { createHmac } = await import("crypto");
@@ -199,12 +200,19 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       payload: { payment: { entity: { notes: { organizationId: string; planId: string } } } };
     };
     if (event.event === "payment.captured") {
-      const { organizationId } = event.payload.payment.entity.notes;
+      const { organizationId, planId } = event.payload.payment.entity.notes;
+      const org = await fastify.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { settings: true },
+      });
+      const existing = (org?.settings as Record<string, unknown>) ?? {};
       await fastify.prisma.organization.update({
         where: { id: organizationId },
         data: {
+          planTier: planId as PlanTier,
           settings: ({
-            planId: event.payload.payment.entity.notes.planId,
+            ...existing,
+            razorpayPlanId: planId,
             activatedAt: new Date().toISOString(),
           } as Record<string, unknown>) as Prisma.InputJsonValue,
         },
@@ -223,7 +231,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: { verified: true } });
   });
 
-  fastify.post("/billing/paystack/webhook", async (request, reply) => {
+  fastify.post("/billing/paystack/webhook", { config: { public: true } }, async (request, reply) => {
     const hash = request.headers["x-paystack-signature"] as string;
     const { createHmac } = await import("crypto");
     const expected = createHmac("sha512", process.env["PAYSTACK_SECRET_KEY"] ?? "")

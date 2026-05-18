@@ -74,7 +74,10 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.post<{ Params: { slug: string }; Body: { url: string } }>(
       `/organizations/branding/${slug}`,
       async (request, reply) => {
-        const { organizationId } = request.auth;
+        const { organizationId, role } = request.auth;
+        if (role !== "admin") {
+          return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can update branding" } });
+        }
         const data = await prisma.organization.update({
           where: { id: organizationId },
           data: { [field]: request.body.url },

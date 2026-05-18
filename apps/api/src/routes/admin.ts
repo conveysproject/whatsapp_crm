@@ -3,8 +3,8 @@ import { randomBytes } from "crypto";
 import { redis } from "../lib/redis.js";
 
 function requireSuperAdmin(role: string, reply: FastifyReply): boolean {
-  if (role !== "superAdmin") {
-    void reply.status(403).send({ error: "Super admin access required" });
+  if (role !== "admin") {
+    void reply.status(403).send({ error: "Admin access required" });
     return false;
   }
   return true;

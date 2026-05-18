@@ -77,9 +77,10 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: { registered: true } });
   });
 
-  // Auth login log — called from Clerk webhook on session.created
+  // Auth login log — called from Clerk webhook on session.created (public: Clerk has no JWT)
   fastify.post<{ Body: { userId: string; orgId?: string; ipAddress?: string; userAgent?: string; success?: boolean } }>(
     "/auth/login-log",
+    { config: { public: true } },
     async (request, reply) => {
       const { userId, orgId, ipAddress, userAgent, success = true } = request.body;
       if (!userId) return reply.status(400).send({ error: { code: "MISSING_USER_ID", message: "userId is required" } });
@@ -93,7 +94,10 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.put<{ Params: { id: string }; Body: { permissions: Record<string, string> } }>(
     "/users/:id/permissions",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role } = request.auth;
+      if (role !== "admin") {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can update permissions" } });
+      }
       const member = await fastify.prisma.organizationMember.findFirst({
         where: { userId: request.params.id, organizationId },
       });

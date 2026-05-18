@@ -20,6 +20,36 @@ export const chatbotsRouter: FastifyPluginAsync = async (fastify) => {
     return reply.status(201).send({ data: bot });
   });
 
+  fastify.patch<{ Params: { id: string }; Body: Partial<ChatbotBody> & { isActive?: boolean; sessionTimeoutMinutes?: number; isStrictFlow?: boolean; startTrigger?: string } }>(
+    "/chatbots/:id",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const existing = await fastify.prisma.chatbot.findFirst({ where: { id: request.params.id, organizationId } });
+      if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Chatbot not found" } });
+      const { name, flowId, isActive, sessionTimeoutMinutes, isStrictFlow, startTrigger } = request.body;
+      const bot = await fastify.prisma.chatbot.update({
+        where: { id: request.params.id },
+        data: {
+          ...(name !== undefined && { name }),
+          ...(flowId !== undefined && { flowId }),
+          ...(isActive !== undefined && { isActive }),
+          ...(sessionTimeoutMinutes !== undefined && { sessionTimeoutMinutes }),
+          ...(isStrictFlow !== undefined && { isStrictFlow }),
+          ...(startTrigger !== undefined && { startTrigger }),
+        },
+      });
+      return reply.send({ data: bot });
+    }
+  );
+
+  fastify.delete<{ Params: { id: string } }>("/chatbots/:id", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const existing = await fastify.prisma.chatbot.findFirst({ where: { id: request.params.id, organizationId } });
+    if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Chatbot not found" } });
+    await fastify.prisma.chatbot.delete({ where: { id: request.params.id } });
+    return reply.status(204).send();
+  });
+
   fastify.post<{ Params: { id: string } }>("/chatbots/:id/activate", async (request, reply) => {
     const { organizationId } = request.auth;
     const existing = await fastify.prisma.chatbot.findFirst({ where: { id: request.params.id, organizationId } });

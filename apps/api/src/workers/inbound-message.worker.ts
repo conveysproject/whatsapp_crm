@@ -70,9 +70,14 @@ export const inboundWorker = new Worker<InboundMessageJob>(
     });
 
     if (!conversation) {
+      const existingContact = await prisma.contact.findFirst({
+        where: { organizationId, phoneNumber: whatsappContactPhone, deletedAt: null },
+        select: { id: true },
+      });
       conversation = await prisma.conversation.create({
         data: {
           organizationId,
+          contactId: existingContact?.id ?? null,
           whatsappContactId: whatsappContactPhone,
           channelType: "whatsapp",
           status: "open",

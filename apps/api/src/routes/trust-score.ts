@@ -15,7 +15,7 @@ export const trustScoreRouter: FastifyPluginAsync = async (fastify) => {
     }
 
     const messages = await fastify.prisma.message.findMany({
-      where: { organizationId },
+      where: { organizationId, conversation: { contactId: contact.id } },
       select: { direction: true, sentAt: true },
       orderBy: { sentAt: "desc" },
     });

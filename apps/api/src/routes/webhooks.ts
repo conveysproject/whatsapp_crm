@@ -2,12 +2,27 @@ import type { FastifyPluginAsync } from "fastify";
 import { verifyWebhookSignature } from "../lib/whatsapp.js";
 import { inboundMessageQueue } from "../lib/queue.js";
 
+interface WaMediaObject {
+  id: string;
+  mime_type?: string;
+  sha256?: string;
+  caption?: string;
+}
+
 interface WaMessage {
   id: string;
   from: string;
   timestamp: string;
   type: string;
   text?: { body: string };
+  image?: WaMediaObject;
+  video?: WaMediaObject;
+  audio?: WaMediaObject;
+  document?: WaMediaObject;
+  sticker?: WaMediaObject;
+  voice?: WaMediaObject;
+  location?: { latitude: number; longitude: number; name?: string; address?: string };
+  reaction?: { message_id: string; emoji: string };
 }
 
 interface WaChangeValue {
@@ -81,13 +96,29 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
           if (!org) continue;
 
           for (const msg of change.value.messages) {
+            const mediaId = msg.image?.id ?? msg.video?.id ?? msg.audio?.id
+              ?? msg.document?.id ?? msg.sticker?.id ?? msg.voice?.id ?? null;
+            let body: string | null = null;
+            if (msg.text?.body) {
+              body = msg.text.body;
+            } else if (msg.location) {
+              body = `📍 Location: ${msg.location.name ?? ""} (${msg.location.latitude},${msg.location.longitude})`;
+            } else if (msg.reaction) {
+              body = `${msg.reaction.emoji}`;
+            } else if (msg.image?.caption) {
+              body = msg.image.caption;
+            } else if (msg.video?.caption) {
+              body = msg.video.caption;
+            } else if (msg.document?.caption) {
+              body = msg.document.caption;
+            }
             await inboundMessageQueue.add("inbound", {
               organizationId: org.id,
               whatsappContactPhone: msg.from,
               whatsappMessageId: msg.id,
               contentType: msg.type,
-              body: msg.text?.body ?? null,
-              mediaId: null,
+              body,
+              mediaId,
               timestamp: parseInt(msg.timestamp, 10),
             });
           }

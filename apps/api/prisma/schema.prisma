@@ -236,6 +236,7 @@ model Conversation {
   @@index([organizationId, status])
   @@index([organizationId, assignedTo])
   @@index([organizationId, teamId])
+  @@index([organizationId, whatsappContactId])
   @@map("conversations")
 }
 
