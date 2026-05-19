@@ -39,8 +39,8 @@ Visitor fills form → onSubmit → fetch POST /api/contact (JSON)
 | File | Change |
 |---|---|
 | `apps/conveys/package.json` | Add `resend` dependency |
-| `apps/conveys/lib/mail.ts` | Resend client + two HTML email template functions |
-| `apps/conveys/app/api/contact/route.ts` | POST handler — validation, rate limit, send emails |
+| `apps/conveys/lib/mail.ts` | Generic mail service — Resend client singleton + typed `sendMail()` + contact form template builders |
+| `apps/conveys/app/api/contact/route.ts` | POST handler — validation, rate limit, calls `sendMail` via template builders |
 | `apps/conveys/components/conveys-home.tsx` | Controlled form — service dropdown, loading/success/error states |
 | Vercel env vars | `RESEND_API_KEY`, `CONTACT_TO_EMAIL` (default `info@conveys.in`) |
 
@@ -65,7 +65,49 @@ Visitor fills form → onSubmit → fetch POST /api/contact (JSON)
 
 ---
 
-## 5. Email Specs
+## 5. Generic Mail Service (`lib/mail.ts`)
+
+The mail service is a **reusable module** — not tied to the contact form. Any route handler in the Conveys app imports from here.
+
+### Public API
+
+```ts
+interface MailOptions {
+  to: string | string[];
+  subject: string;
+  html: string;
+  replyTo?: string;
+}
+
+// Single send function — all email flows use this
+export async function sendMail(options: MailOptions): Promise<void>
+```
+
+### Template builders
+
+Template functions are pure functions (no side effects, easy to test) that return `{ subject: string; html: string }`. They live in the same file, exported alongside `sendMail`.
+
+```ts
+// Contact form templates — used by /api/contact
+export function buildLeadNotificationEmail(data: {
+  name: string; email: string; phone?: string;
+  service: string; message: string;
+}): { subject: string; html: string }
+
+export function buildAutoReplyEmail(data: {
+  name: string; service: string;
+}): { subject: string; html: string }
+
+// Future templates are added here as named exports:
+// export function buildNewsletterWelcomeEmail(...)
+// export function buildQuoteRequestEmail(...)
+```
+
+**Adding a new email flow** = write a template builder in `lib/mail.ts`, call `sendMail` from the new route. No Resend config repeated anywhere.
+
+---
+
+## 6. Email Specs
 
 ### 5a. Lead Notification (to `info@conveys.in`)
 
@@ -83,7 +125,7 @@ Visitor fills form → onSubmit → fetch POST /api/contact (JSON)
 
 ---
 
-## 6. Route Handler Logic (`/api/contact`)
+## 7. Route Handler Logic (`/api/contact`)
 
 ```
 POST /api/contact
@@ -109,7 +151,7 @@ Body: { name, email, phone?, service, message }
 
 ---
 
-## 7. Form UX States
+## 8. Form UX States
 
 | State | UI |
 |---|---|
@@ -120,7 +162,7 @@ Body: { name, email, phone?, service, message }
 
 ---
 
-## 8. Environment Variables
+## 9. Environment Variables
 
 | Variable | Description | Default |
 |---|---|---|
@@ -131,13 +173,22 @@ Set in Vercel project settings for the `conveys` deployment. Locally, add to `ap
 
 ---
 
-## 9. Rate Limiting Notes
+## 10. Rate Limiting Notes
 
 In-memory `Map` keyed by IP. Works correctly on Vercel serverless (each cold start gets a fresh map; the window is short enough that this is acceptable for a low-traffic marketing site). No Redis dependency needed.
 
 ---
 
-## 10. Out of Scope
+## 11. Prerequisites
+
+Before the route handler will send real email:
+1. **Resend account** — create at resend.com and get an API key
+2. **Domain verification** — verify `conveys.in` in the Resend dashboard (add DNS TXT/CNAME records). Until verified, Resend only allows sending from `onboarding@resend.dev` (fine for local dev testing)
+3. **Vercel env vars** — add `RESEND_API_KEY` to the `conveys` project in Vercel
+
+---
+
+## 12. Out of Scope
 
 - Saving submissions to a database (no persistence layer in Conveys)
 - reCAPTCHA / hCaptcha (rate limiting is sufficient for now)
