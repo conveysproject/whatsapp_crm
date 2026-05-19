@@ -17,6 +17,8 @@ export async function sendTextMessage(
   text: string,
   accessToken: string
 ): Promise<WaSendResult> {
+  // GAP-S51: demo mode — prefix all outgoing messages with [DEMO] to prevent real sends being mistaken
+  const body = process.env["IS_DEMO_MODE"] === "true" ? `[DEMO] ${text}` : text;
   const res = await fetch(`${WA_BASE}/${phoneNumberId}/messages`, {
     method: "POST",
     headers: {
@@ -28,7 +30,7 @@ export async function sendTextMessage(
       recipient_type: "individual",
       to,
       type: "text",
-      text: { body: text },
+      text: { body },
     }),
   });
   if (!res.ok) {

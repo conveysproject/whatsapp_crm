@@ -125,6 +125,8 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
         });
         organizationId = org.id;
 
+        // GAP-S02: if vendor activation is required, start inactive until superAdmin approves
+        const requireActivation = process.env["REQUIRE_VENDOR_ACTIVATION"] === "true";
         await fastify.prisma.user.create({
           data: {
             id: userId,
@@ -132,7 +134,7 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
             email,
             fullName,
             role: "admin",
-            isActive: true,
+            isActive: !requireActivation,
           },
         });
       }

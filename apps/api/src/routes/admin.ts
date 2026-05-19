@@ -167,6 +167,30 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: logs, page });
   });
 
+  // ── Vendor activation (GAP-S02) ─────────────────────────────────────────
+  // When REQUIRE_VENDOR_ACTIVATION=true, new registrations have isActive=false
+  // until a superAdmin explicitly activates them here.
+  fastify.post<{ Params: { orgId: string } }>("/admin/vendors/:orgId/activate", async (request, reply) => {
+    if (!requireSuperAdmin(request.auth.role, reply)) return;
+    const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.orgId } });
+    if (!org) return reply.status(404).send({ error: "Organization not found" });
+    // Activate all users in this org
+    await fastify.prisma.user.updateMany({ where: { organizationId: request.params.orgId }, data: { isActive: true } });
+    return reply.send({ success: true, organizationId: request.params.orgId });
+  });
+
+  fastify.post<{ Params: { orgId: string } }>("/admin/vendors/:orgId/deactivate", async (request, reply) => {
+    if (!requireSuperAdmin(request.auth.role, reply)) return;
+    const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.orgId } });
+    if (!org) return reply.status(404).send({ error: "Organization not found" });
+    // Deactivate all users in this org (prevents login; reversible via /activate)
+    await fastify.prisma.user.updateMany({
+      where: { organizationId: request.params.orgId },
+      data: { isActive: false },
+    });
+    return reply.send({ success: true, organizationId: request.params.orgId });
+  });
+
   // ── Platform config ──────────────────────────────────────────────────────
   fastify.get("/admin/platform-config", async (request, reply) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
