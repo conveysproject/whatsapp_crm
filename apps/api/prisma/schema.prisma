@@ -384,6 +384,8 @@ enum PaymentGateway {
 }
 
 enum ManualSubscriptionStatus {
+  initiated
+  pending
   active
   trial
   expired
@@ -1104,7 +1106,7 @@ model ManualSubscription {
   organizationId   String                   @map("organization_id")
   organization     Organization             @relation(fields: [organizationId], references: [id])
   planTier         PlanTier                 @map("plan_tier")
-  status           ManualSubscriptionStatus @default(active)
+  status           ManualSubscriptionStatus @default(pending)
   charges          Decimal                  @db.Decimal(13, 4)
   chargesFrequency String                   @map("charges_frequency") // monthly | yearly | one_time
   gateway          PaymentGateway
