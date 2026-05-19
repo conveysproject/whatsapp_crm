@@ -198,9 +198,48 @@ export async function updateDisplayName(
   return { success: true };
 }
 
-export async function syncPhoneNumbers(organizationId: string): Promise<unknown[]> {
-  void organizationId;
-  return [];
+export async function syncPhoneNumbers(organizationId: string): Promise<Array<{ id: string; displayPhoneNumber: string; verifiedName: string }>> {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { whatsappBusinessAccountId: true, wabaAccessToken: true },
+  });
+  if (!org?.whatsappBusinessAccountId || !org.wabaAccessToken) return [];
+
+  const res = await fetch(
+    `${WA_BASE}/${org.whatsappBusinessAccountId}/phone_numbers?fields=id,display_phone_number,verified_name,code_verification_status`,
+    { headers: { Authorization: `Bearer ${org.wabaAccessToken}` } }
+  );
+  if (!res.ok) return [];
+  const data = await res.json() as { data?: Array<{ id: string; display_phone_number: string; verified_name: string }> };
+  const phones = data.data ?? [];
+
+  // Persist first phone number back to org if not already set
+  if (phones[0] && !org.wabaAccessToken) {
+    // access token already set; update phoneNumberId only if absent
+  }
+  if (phones[0]) {
+    const existing = await prisma.organization.findUnique({ where: { id: organizationId }, select: { phoneNumberId: true } });
+    if (!existing?.phoneNumberId) {
+      await prisma.organization.update({
+        where: { id: organizationId },
+        data: { phoneNumberId: phones[0].id },
+      });
+    }
+    // Save as vendor settings for health check
+    const upserts = [
+      { key: "current_phone_number_id", value: phones[0].id },
+      { key: "current_phone_number_number", value: phones[0].display_phone_number },
+    ];
+    await Promise.all(upserts.map((s) =>
+      prisma.vendorSetting.upsert({
+        where: { organizationId_key: { organizationId, key: s.key } },
+        create: { organizationId, key: s.key, value: s.value, dataType: "string" },
+        update: { value: s.value },
+      })
+    ));
+  }
+
+  return phones.map((p) => ({ id: p.id, displayPhoneNumber: p.display_phone_number, verifiedName: p.verified_name }));
 }
 
 const HEALTH_KEYS = [
