@@ -124,12 +124,19 @@ export const inboundWorker = new Worker<InboundMessageJob>(
           select: { pushToken: true },
         });
         if (profile?.pushToken && Expo.isExpoPushToken(profile.pushToken)) {
-          await expo.sendPushNotificationsAsync([{
+          // GAP-S38: auto-delete push token on DeviceNotRegistered / invalid token errors
+          const tickets = await expo.sendPushNotificationsAsync([{
             to: profile.pushToken,
             title: whatsappContactPhone,
             body: (body ?? "New voice message").slice(0, 100),
             sound: "default",
           }]);
+          const shouldDelete = tickets.some(
+            (t) => t.status === "error" && (t.details as { error?: string } | undefined)?.error === "DeviceNotRegistered"
+          );
+          if (shouldDelete) {
+            await prisma.user.update({ where: { id: assignment.assignTo }, data: { pushToken: null } });
+          }
         }
       }
     }
