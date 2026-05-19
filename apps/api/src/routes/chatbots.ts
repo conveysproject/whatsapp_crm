@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { checkPlanLimit } from "../lib/plan-limits.js";
+import { canAccess } from "../lib/permissions.js";
 
 interface ChatbotBody {
   name: string;
@@ -14,7 +15,11 @@ export const chatbotsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Body: ChatbotBody }>("/chatbots", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    // GAP-S04: manage_bot_replies permission required to create bots
+    if (!canAccess(role, permissions, "manage_bot_replies")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_bot_replies permission required" } });
+    }
     const limitCheck = await checkPlanLimit(fastify.prisma, organizationId, "chatbots");
     if (!limitCheck.allowed) {
       return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Chatbot limit of ${limitCheck.limit} reached` } });
