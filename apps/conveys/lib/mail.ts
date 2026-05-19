@@ -1,9 +1,15 @@
 import nodemailer from "nodemailer";
 
+// GoDaddy authenticated SMTP — works from Vercel and any external host.
+// Set SMTP_USER (info@conveys.in) and SMTP_PASS in Vercel environment variables.
 const transporter = nodemailer.createTransport({
-  host: "relay-hosting.secureserver.net",
-  port: 25,
-  secure: false,
+  host: "smtpout.secureserver.net",
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
 });
 
 export interface MailOptions {
@@ -15,7 +21,7 @@ export interface MailOptions {
 
 export async function sendMail(options: MailOptions): Promise<void> {
   await transporter.sendMail({
-    from: "Conveys <info@conveys.in>",
+    from: `Conveys <${process.env.SMTP_USER}>`,
     to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
     subject: options.subject,
     html: options.html,
