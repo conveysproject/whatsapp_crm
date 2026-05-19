@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { generateSuggestions, detectIntent, analyzeSentiment, generateSmartReplies, detectIntentWithConfidence, buildAiContext, summarizeConversation, AI_CONTEXT_LONG } from "../lib/claude.js";
+import { findTopRelevantSections, generateAnswerFromSections } from "../lib/ai-rag.js";
 import type { ConversationId, MessageId } from "@WBMSG/shared";
 
 export const aiRouter: FastifyPluginAsync = async (fastify) => {
@@ -120,5 +121,21 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
     }
     const result = await detectIntentWithConfidence(request.body.text);
     return reply.send({ data: result });
+  });
+
+  // ── RAG answer from training data (GAP-S27) ───────────────────────────────
+  fastify.post<{ Body: { question: string; topK?: number } }>("/ai/rag-answer", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const { question, topK = 3 } = request.body;
+    if (!question) return reply.status(400).send({ error: { code: "MISSING_QUESTION", message: "question is required" } });
+    if (!process.env["OPENAI_API_KEY"]) {
+      return reply.status(400).send({ error: { code: "NO_OPENAI_KEY", message: "OPENAI_API_KEY not configured; RAG mode requires OpenAI embeddings" } });
+    }
+    const sections = await findTopRelevantSections(organizationId, question, Math.min(topK, 5));
+    if (sections.length === 0) {
+      return reply.send({ data: { answer: null, sections: [], note: "No training data found; upload training text via vendor settings (key: open_ai_input_training_data)" } });
+    }
+    const answer = await generateAnswerFromSections(question, sections);
+    return reply.send({ data: { answer, sections } });
   });
 };

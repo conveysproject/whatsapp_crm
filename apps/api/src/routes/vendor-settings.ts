@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { syncPhoneNumbers } from "../lib/whatsapp.js";
 import { prisma } from "../lib/prisma.js";
+import { storeTrainingEmbeddings } from "../lib/ai-rag.js";
 
 interface SettingEntry {
   key: string;
@@ -45,6 +46,11 @@ async function runSettingsSideEffects(organizationId: string, settings: SettingE
         data: { organizationId, phoneNumber: phone, name: "Test Contact" },
       });
     }
+  }
+
+  // GAP-S27/S67: open_ai_input_training_data saved → re-generate RAG embeddings
+  if ("open_ai_input_training_data" in keyMap && keyMap["open_ai_input_training_data"] && process.env["OPENAI_API_KEY"]) {
+    await storeTrainingEmbeddings(organizationId, keyMap["open_ai_input_training_data"]!);
   }
 }
 
