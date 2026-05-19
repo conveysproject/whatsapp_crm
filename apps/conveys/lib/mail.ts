@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 
+const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = "Conveys <info@conveys.in>";
 
 export interface MailOptions {
@@ -10,7 +11,6 @@ export interface MailOptions {
 }
 
 export async function sendMail(options: MailOptions): Promise<void> {
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const { error } = await resend.emails.send({
     from: FROM,
     to: Array.isArray(options.to) ? options.to : [options.to],
@@ -19,6 +19,16 @@ export async function sendMail(options: MailOptions): Promise<void> {
     ...(options.replyTo ? { replyTo: options.replyTo } : {}),
   });
   if (error) throw new Error(error.message);
+}
+
+// ─── HTML Escaping ────────────────────────────────────────────────────────────
+
+function h(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 // ─── Template Builders ────────────────────────────────────────────────────────
@@ -39,7 +49,7 @@ export function buildLeadNotificationEmail(data: {
   });
 
   return {
-    subject: `New enquiry from ${name} — ${service}`,
+    subject: `New enquiry from ${h(name)} — ${h(service)}`,
     html: `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -71,7 +81,7 @@ export function buildLeadNotificationEmail(data: {
                     <span style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;">Name</span>
                   </td>
                   <td style="padding:16px 20px;border-bottom:1px solid #f1f5f9;vertical-align:top;">
-                    <span style="font-size:15px;font-weight:600;color:#0f172a;">${name}</span>
+                    <span style="font-size:15px;font-weight:600;color:#0f172a;">${h(name)}</span>
                   </td>
                 </tr>
                 <tr>
@@ -79,7 +89,7 @@ export function buildLeadNotificationEmail(data: {
                     <span style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;">Email</span>
                   </td>
                   <td style="padding:16px 20px;border-bottom:1px solid #f1f5f9;vertical-align:top;">
-                    <a href="mailto:${email}" style="font-size:15px;font-weight:600;color:#1d4ed8;text-decoration:none;">${email}</a>
+                    <a href="mailto:${email}" style="font-size:15px;font-weight:600;color:#1d4ed8;text-decoration:none;">${h(email)}</a>
                   </td>
                 </tr>
                 ${phone ? `<tr>
@@ -87,7 +97,7 @@ export function buildLeadNotificationEmail(data: {
                     <span style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;">Phone</span>
                   </td>
                   <td style="padding:16px 20px;border-bottom:1px solid #f1f5f9;vertical-align:top;">
-                    <a href="tel:${phone}" style="font-size:15px;font-weight:600;color:#0f172a;text-decoration:none;">${phone}</a>
+                    <a href="tel:${phone}" style="font-size:15px;font-weight:600;color:#0f172a;text-decoration:none;">${h(phone)}</a>
                   </td>
                 </tr>` : ""}
                 <tr>
@@ -95,7 +105,7 @@ export function buildLeadNotificationEmail(data: {
                     <span style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;">Service</span>
                   </td>
                   <td style="padding:16px 20px;border-bottom:1px solid #f1f5f9;vertical-align:top;">
-                    <span style="display:inline-block;background:#dbeafe;color:#1d4ed8;border-radius:100px;padding:4px 12px;font-size:13px;font-weight:700;">${service}</span>
+                    <span style="display:inline-block;background:#dbeafe;color:#1d4ed8;border-radius:100px;padding:4px 12px;font-size:13px;font-weight:700;">${h(service)}</span>
                   </td>
                 </tr>
                 <tr>
@@ -103,7 +113,7 @@ export function buildLeadNotificationEmail(data: {
                     <span style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;">Message</span>
                   </td>
                   <td style="padding:16px 20px;vertical-align:top;">
-                    <p style="margin:0;font-size:15px;color:#334155;line-height:1.6;white-space:pre-wrap;">${message}</p>
+                    <p style="margin:0;font-size:15px;color:#334155;line-height:1.6;white-space:pre-wrap;">${h(message)}</p>
                   </td>
                 </tr>
               </table>
@@ -111,7 +121,7 @@ export function buildLeadNotificationEmail(data: {
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
                 <tr>
                   <td>
-                    <a href="mailto:${email}" style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 24px;border-radius:8px;">Reply to ${name} →</a>
+                    <a href="mailto:${email}" style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 24px;border-radius:8px;">Reply to ${h(name)} →</a>
                   </td>
                 </tr>
               </table>
@@ -140,7 +150,7 @@ export function buildAutoReplyEmail(data: {
 }): { subject: string; html: string } {
   const { name, service } = data;
   return {
-    subject: `We got your message, ${name} 👋`,
+    subject: `We got your message, ${h(name)} 👋`,
     html: `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -165,8 +175,8 @@ export function buildAutoReplyEmail(data: {
                   </td>
                 </tr>
               </table>
-              <h1 style="margin:0 0 12px;font-size:28px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">We got your message, ${name}!</h1>
-              <p style="margin:0;font-size:16px;color:#bfdbfe;line-height:1.6;">Thanks for reaching out. We&apos;ve received your enquiry and we&apos;ll be in touch very soon.</p>
+              <h1 style="margin:0 0 12px;font-size:28px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">We got your message, ${h(name)}!</h1>
+              <p style="margin:0;font-size:16px;color:#bfdbfe;line-height:1.6;">Thanks for reaching out. We&#39;ve received your enquiry and we&#39;ll be in touch very soon.</p>
             </td>
           </tr>
 
@@ -185,7 +195,7 @@ export function buildAutoReplyEmail(data: {
               </table>
 
               <p style="margin:0 0 8px;font-size:14px;color:#64748b;">Your enquiry about:</p>
-              <p style="margin:0 0 28px;"><span style="display:inline-block;background:#dbeafe;color:#1d4ed8;border-radius:100px;padding:6px 16px;font-size:14px;font-weight:700;">${service}</span></p>
+              <p style="margin:0 0 28px;"><span style="display:inline-block;background:#dbeafe;color:#1d4ed8;border-radius:100px;padding:6px 16px;font-size:14px;font-weight:700;">${h(service)}</span></p>
 
               <p style="margin:0 0 32px;font-size:15px;color:#475569;line-height:1.7;">While you wait, feel free to explore our work at <a href="https://conveys.in" style="color:#1d4ed8;text-decoration:none;font-weight:600;">conveys.in</a>. If you have anything to add or need to reach us urgently, just reply to this email or use the contact details below.</p>
 
