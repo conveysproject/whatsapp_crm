@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import type { Role } from "@prisma/client";
+import { checkPlanLimit } from "../lib/plan-limits.js";
 
 export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { email: string; role: Role } }>(
@@ -20,6 +21,10 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       if (request.auth.role !== "admin") {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can invite members" } });
+      }
+      const limitCheck = await checkPlanLimit(prisma, request.auth.organizationId, "team_members");
+      if (!limitCheck.allowed) {
+        return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Team member limit of ${limitCheck.limit} reached` } });
       }
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       const invitation = await prisma.invitation.create({

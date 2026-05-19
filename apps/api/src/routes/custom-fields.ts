@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { checkPlanLimit } from "../lib/plan-limits.js";
 
 interface CustomFieldBody {
   inputName: string;
@@ -21,6 +22,10 @@ export const customFieldsRouter: FastifyPluginAsync = async (fastify) => {
     const { inputName, inputType = "text" } = request.body;
     if (!inputName) {
       return reply.status(400).send({ error: { code: "MISSING_FIELDS", message: "inputName is required" } });
+    }
+    const limitCheck = await checkPlanLimit(fastify.prisma, organizationId, "custom_fields");
+    if (!limitCheck.allowed) {
+      return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Custom field limit of ${limitCheck.limit} reached` } });
     }
     const field = await fastify.prisma.contactCustomField.create({
       data: { organizationId, inputName, inputType },

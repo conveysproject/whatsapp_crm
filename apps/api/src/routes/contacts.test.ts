@@ -15,6 +15,7 @@ const mockPrisma = {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    count: vi.fn().mockResolvedValue(0),
   },
   contactGroup: {
     findMany: vi.fn(),
@@ -23,12 +24,16 @@ const mockPrisma = {
     createMany: vi.fn(),
     deleteMany: vi.fn(),
   },
+  vendorSetting: {
+    findFirst: vi.fn().mockResolvedValue(null),
+  },
 };
 
 const mockAuth = {
   userId: "user-1",
   organizationId: "org-1",
   role: "admin" as const,
+  permissions: {},
 };
 
 async function buildApp(): Promise<FastifyInstance> {

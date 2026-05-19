@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { flowQueue } from "../lib/queue.js";
 import type { FlowDefinition, FlowTriggerPayload } from "../lib/flow-runner.js";
+import { checkPlanLimit } from "../lib/plan-limits.js";
 
 interface FlowBody {
   name: string;
@@ -24,6 +25,10 @@ export const flowsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: FlowBody }>("/flows", async (request, reply) => {
     const { organizationId } = request.auth;
+    const limitCheck = await checkPlanLimit(fastify.prisma, organizationId, "flows");
+    if (!limitCheck.allowed) {
+      return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Flow limit of ${limitCheck.limit} reached` } });
+    }
     const flow = await fastify.prisma.flow.create({
       data: {
         organizationId,

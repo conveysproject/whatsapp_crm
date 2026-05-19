@@ -8,14 +8,15 @@ vi.mock("../lib/queue.js", () => ({
 }));
 
 const mockPrisma = {
-  campaign: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+  campaign: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), count: vi.fn().mockResolvedValue(0) },
   segment: { findFirst: vi.fn() },
   campaignSegment: { findFirst: vi.fn() },
   campaignRecipient: { findMany: vi.fn(), count: vi.fn(), updateMany: vi.fn() },
   groupContact: { findMany: vi.fn() },
   contact: { count: vi.fn(), findMany: vi.fn() },
+  vendorSetting: { findFirst: vi.fn().mockResolvedValue(null) },
 };
-const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const };
+const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });

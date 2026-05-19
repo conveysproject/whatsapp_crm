@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { checkPlanLimit } from "../lib/plan-limits.js";
 
 interface ChatbotBody {
   name: string;
@@ -14,6 +15,10 @@ export const chatbotsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: ChatbotBody }>("/chatbots", async (request, reply) => {
     const { organizationId } = request.auth;
+    const limitCheck = await checkPlanLimit(fastify.prisma, organizationId, "chatbots");
+    if (!limitCheck.allowed) {
+      return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Chatbot limit of ${limitCheck.limit} reached` } });
+    }
     const bot = await fastify.prisma.chatbot.create({
       data: { organizationId, name: request.body.name, flowId: request.body.flowId, isActive: false },
     });

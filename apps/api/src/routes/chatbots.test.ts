@@ -3,12 +3,13 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
 const mockPrisma = {
-  chatbot: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+  chatbot: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), count: vi.fn().mockResolvedValue(0) },
   contact: { findFirst: vi.fn() },
   conversation: { findFirst: vi.fn() },
   botSession: { upsert: vi.fn() },
+  vendorSetting: { findFirst: vi.fn().mockResolvedValue(null) },
 };
-const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const };
+const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });

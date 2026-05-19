@@ -6,6 +6,7 @@ import { indexContact, removeContact, searchContacts } from "../lib/search.js";
 import { generateContactsCsv } from "../lib/csv.js";
 import type { ContactId } from "@WBMSG/shared";
 import { maskPhone, maskEmail } from "../lib/permissions.js";
+import { checkPlanLimit } from "../lib/plan-limits.js";
 
 function csvEscape(value: string): string {
   const str = value.replace(/"/g, '""');
@@ -179,6 +180,10 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: ContactBody }>("/contacts", async (request, reply) => {
     const { organizationId } = request.auth;
+    const limitCheck = await checkPlanLimit(fastify.prisma, organizationId, "contacts");
+    if (!limitCheck.allowed) {
+      return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Contact limit of ${limitCheck.limit} reached` } });
+    }
     const contact = await fastify.prisma.contact.create({
       data: {
         organizationId,
