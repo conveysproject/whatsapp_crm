@@ -206,12 +206,15 @@ enum MessageDirection {
   outbound
 }
 
+// GAP-S48: 7-state model — expired = timed out before delivery; aborted = manually stopped
 enum MessageStatus {
   sending
   sent
   delivered
   read
   failed
+  expired
+  aborted
 }
 
 model Conversation {

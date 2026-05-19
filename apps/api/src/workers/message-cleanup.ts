@@ -65,11 +65,12 @@ export async function scheduleMessageCleanupCron() {
 
 export async function recoverStuckMessages(): Promise<void> {
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  // GAP-S48: messages stuck in "sending" for >5 min are expired (not failed — timeout, not error)
   const result = await prisma.message.updateMany({
     where: { status: "sending", createdAt: { lt: fiveMinutesAgo } },
-    data: { status: "failed" },
+    data: { status: "expired" },
   });
   if (result.count > 0) {
-    console.log(`[message-cleanup] recovered ${result.count} stuck messages`);
+    console.log(`[message-cleanup] expired ${result.count} stuck messages`);
   }
 }
