@@ -13,6 +13,31 @@ interface CampaignBody {
   segmentId?: SegmentId;
   scheduledAt?: string;
   messageInterval?: number;
+  // GAP-S70: accept CSV string OR array; normalize to array
+  contactGroup?: string | string[];
+  contactLabels?: string | string[];
+}
+
+// GAP-S15: computed display status and delete eligibility
+type DisplayStatus = "upcoming" | "running" | "paused" | "completed" | "aborted" | "cancelled" | "draft" | "scheduled";
+
+function computeDisplayStatus(status: CampaignStatus, scheduledAt: Date | null): DisplayStatus {
+  if (status === "aborted") return "aborted";
+  if (status === "scheduled" && scheduledAt && scheduledAt > new Date()) return "upcoming";
+  return status as DisplayStatus;
+}
+
+function isDeleteAllowed(status: CampaignStatus, scheduledAt: Date | null): boolean {
+  if (status === "draft") return true;
+  if (status === "scheduled" && scheduledAt && scheduledAt > new Date()) return true;
+  return false;
+}
+
+// GAP-S70: normalize contactGroup/contactLabels from CSV string or array to string[]
+function normalizeGroupIds(value: string | string[] | undefined): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  return value.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
 export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
@@ -22,7 +47,12 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
       where: { organizationId },
       orderBy: { createdAt: "desc" },
     });
-    return reply.send({ data: campaigns });
+    const data = campaigns.map((c) => ({
+      ...c,
+      displayStatus: computeDisplayStatus(c.status, c.scheduledAt),
+      deleteAllowed: isDeleteAllowed(c.status, c.scheduledAt),
+    }));
+    return reply.send({ data });
   });
 
   fastify.get<{ Params: { id: CampaignId } }>("/campaigns/:id", async (request, reply) => {

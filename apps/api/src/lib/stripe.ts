@@ -23,3 +23,13 @@ export const PLAN_LIMITS: Record<string, { contacts: number; messages: number }>
   scale: { contacts: 50000, messages: 200000 },
   enterprise: { contacts: Infinity, messages: Infinity },
 };
+
+// GAP-S73: Currencies that use whole units — do NOT multiply by 100 for Stripe
+export const ZERO_DECIMAL_CURRENCIES = new Set([
+  "BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW", "MGA", "PYG",
+  "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF", "HUF",
+]);
+
+export function toStripeAmount(amount: number, currency: string): number {
+  return ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase()) ? Math.round(amount) : Math.round(amount * 100);
+}

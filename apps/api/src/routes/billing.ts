@@ -371,6 +371,33 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true });
   });
 
+  // ── Stripe webhook endpoint auto-creation (GAP-S72) ─────────────────────
+  fastify.post("/billing/stripe/setup-webhook", async (request, reply) => {
+    const { role } = request.auth;
+    if (role !== "admin") return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Admin only" } });
+    const apiUrl = process.env["API_PUBLIC_URL"] ?? process.env["RAILWAY_PUBLIC_DOMAIN"] ?? "";
+    if (!apiUrl) return reply.status(400).send({ error: { code: "NO_API_URL", message: "API_PUBLIC_URL env var not set" } });
+    const endpoint = await getStripe().webhookEndpoints.create({
+      url: `${apiUrl.replace(/\/$/, "")}/v1/billing/stripe/webhook`,
+      enabled_events: [
+        "checkout.session.completed",
+        "customer.subscription.created",
+        "customer.subscription.updated",
+        "customer.subscription.deleted",
+        "invoice.payment_succeeded",
+        "invoice.payment_failed",
+        "customer.created",
+        "payment_intent.succeeded",
+      ],
+    });
+    await fastify.prisma.vendorSetting.upsert({
+      where: { organizationId_key: { organizationId: request.auth.organizationId, key: "stripe_webhook_secret" } },
+      create: { organizationId: request.auth.organizationId, key: "stripe_webhook_secret", value: endpoint.secret ?? "", dataType: "string" },
+      update: { value: endpoint.secret ?? "" },
+    });
+    return reply.send({ data: { webhookId: endpoint.id, url: endpoint.url } });
+  });
+
   // ── UPI QR code generation ────────────────────────────────────────────────
   fastify.get<{ Querystring: { amount?: string; planId?: string } }>("/billing/upi-qr", async (request, reply) => {
     const QRCode = await import("qrcode");

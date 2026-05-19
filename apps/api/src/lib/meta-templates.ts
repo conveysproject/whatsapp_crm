@@ -1,10 +1,30 @@
 const WA_BASE = "https://graph.facebook.com/v20.0";
 
+// GAP-S20: all valid WhatsApp template button types
+export const TEMPLATE_BUTTON_TYPES = [
+  "QUICK_REPLY",
+  "PHONE_NUMBER",
+  "URL",
+  "VOICE_CALL",
+  "DYNAMIC_URL",
+  "COPY_CODE",
+] as const;
+
+export type TemplateButtonType = typeof TEMPLATE_BUTTON_TYPES[number];
+
+interface MetaTemplateButton {
+  type: TemplateButtonType;
+  text: string;
+  url?: string;
+  phone_number?: string;
+  example?: string[];
+}
+
 interface MetaTemplateComponent {
   type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS";
   format?: string;
   text?: string;
-  buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
+  buttons?: MetaTemplateButton[];
 }
 
 interface SubmitResult {

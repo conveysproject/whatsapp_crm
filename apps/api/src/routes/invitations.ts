@@ -22,6 +22,16 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
       if (request.auth.role !== "admin") {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can invite members" } });
       }
+      // GAP-S50: reject disposable/temporary email addresses
+      try {
+        const check = await fetch(`https://disposable.debounce.io/?email=${encodeURIComponent(request.body.email)}`, { signal: AbortSignal.timeout(10000) });
+        if (check.ok) {
+          const result = await check.json() as { disposable?: string };
+          if (result.disposable !== "false") {
+            return reply.status(422).send({ error: { code: "DISPOSABLE_EMAIL", message: "Disposable email addresses are not allowed" } });
+          }
+        }
+      } catch { /* treat external failure as pass — don't block invite on API outage */ }
       const limitCheck = await checkPlanLimit(prisma, request.auth.organizationId, "team_members");
       if (!limitCheck.allowed) {
         return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Team member limit of ${limitCheck.limit} reached` } });

@@ -21,6 +21,8 @@ export default fp(async (fastify: FastifyInstance) => {
 
   setIo(io);
 
+  // GAP-S37: room format is `org:{organizationId}`; clients emit "join-org" with orgId to subscribe.
+  // WhatsJet used Pusher `private channel vendor-channel.{vendorUid}` — TrustCRM uses Socket.io rooms instead.
   io.on("connection", (socket) => {
     socket.on("join-org", (organizationId: string) => {
       void socket.join(`org:${organizationId}`);

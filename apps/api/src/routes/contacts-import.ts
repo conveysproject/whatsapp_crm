@@ -9,6 +9,10 @@ import type { FieldMapping, ContactImportId } from "@WBMSG/shared";
 
 const CSV_SESSION_TTL_SECONDS = 1800; // 30 minutes
 
+// GAP-S12: standard 7-column import spec (case-insensitive match)
+const STANDARD_IMPORT_COLUMNS = ["First Name", "Last Name", "Mobile", "Language", "Country", "Email", "Groups"] as const;
+const STANDARD_COLUMNS_LOWER = STANDARD_IMPORT_COLUMNS.map((c) => c.toLowerCase());
+
 function getImportTokenSecret(): string {
   const s = process.env["IMPORT_TOKEN_SECRET"];
   if (!s || s === "dev-import-secret-change-in-prod") {
@@ -115,9 +119,16 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
     const sampleRows = result.data.slice(0, 3);
     const sessionId = randomUUID();
 
+    // GAP-S12: identify missing standard columns for UI warning
+    const columnsLower = columns.map((c) => c.toLowerCase());
+    const missingStandardColumns = STANDARD_IMPORT_COLUMNS.filter(
+      (c) => !columnsLower.includes(c.toLowerCase())
+    );
+    const hasAllStandardColumns = missingStandardColumns.length === 0;
+
     await redis.set(`import:csv:${sessionId}`, csvText, "EX", CSV_SESSION_TTL_SECONDS);
 
-    return reply.send({ data: { sessionId, columns, sampleRows } });
+    return reply.send({ data: { sessionId, columns, sampleRows, hasAllStandardColumns, missingStandardColumns, standardColumns: STANDARD_IMPORT_COLUMNS } });
   });
 
   fastify.post<{ Body: { sessionId: string; fieldMapping: FieldMapping } }>(

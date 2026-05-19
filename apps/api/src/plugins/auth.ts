@@ -37,16 +37,18 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
     // Fire-and-forget login audit log
     setImmediate(() => {
-      fastify.prisma.loginLog
-        .create({
-          data: {
-            userId,
-            orgId: user.organizationId,
-            ipAddress: request.ip,
-            userAgent: request.headers["user-agent"] ?? null,
-          },
-        })
-        .catch(() => {/* non-critical */});
+      try {
+        fastify.prisma.loginLog
+          .create({
+            data: {
+              userId,
+              orgId: user.organizationId,
+              ipAddress: request.ip,
+              userAgent: request.headers["user-agent"] ?? null,
+            },
+          })
+          .catch(() => {/* non-critical */});
+      } catch {/* non-critical — app may have been closed before timer fires */}
     });
   });
 };
