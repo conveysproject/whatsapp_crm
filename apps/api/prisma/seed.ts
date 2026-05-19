@@ -5,7 +5,7 @@ import "dotenv/config";
 const adapter = new PrismaPg({ connectionString: process.env["DATABASE_URL"]! });
 const prisma = new PrismaClient({ adapter } as ConstructorParameters<typeof PrismaClient>[0]);
 
-// Source: WhatsJet data-schema.sql countries table (188 rows + extra)
+// Source: WhatsJet data-schema.sql countries table (252 rows; ID 189 commented out in source)
 // https://gist.github.com/paulochf/9616f85f3f3904f1c36f
 const countries = [
   { id: 1, isoCode: "AF", nameCapitalized: "AFGHANISTAN", name: "Afghanistan", iso3Code: "AFG", isoNumCode: 4, phoneCode: 93 },
@@ -246,6 +246,19 @@ const countries = [
   { id: 237, isoCode: "YE", nameCapitalized: "YEMEN", name: "Yemen", iso3Code: "YEM", isoNumCode: 887, phoneCode: 967 },
   { id: 238, isoCode: "ZM", nameCapitalized: "ZAMBIA", name: "Zambia", iso3Code: "ZMB", isoNumCode: 894, phoneCode: 260 },
   { id: 239, isoCode: "ZW", nameCapitalized: "ZIMBABWE", name: "Zimbabwe", iso3Code: "ZWE", isoNumCode: 716, phoneCode: 263 },
+  { id: 240, isoCode: "RS", nameCapitalized: "SERBIA", name: "Serbia", iso3Code: "SRB", isoNumCode: 688, phoneCode: 381 },
+  { id: 241, isoCode: "AP", nameCapitalized: "ASIA PACIFIC REGION", name: "Asia / Pacific Region", iso3Code: "0", isoNumCode: 0, phoneCode: 0 },
+  { id: 242, isoCode: "ME", nameCapitalized: "MONTENEGRO", name: "Montenegro", iso3Code: "MNE", isoNumCode: 499, phoneCode: 382 },
+  { id: 243, isoCode: "AX", nameCapitalized: "ALAND ISLANDS", name: "Aland Islands", iso3Code: "ALA", isoNumCode: 248, phoneCode: 358 },
+  { id: 244, isoCode: "BQ", nameCapitalized: "BONAIRE, SINT EUSTATIUS AND SABA", name: "Bonaire, Sint Eustatius and Saba", iso3Code: "BES", isoNumCode: 535, phoneCode: 599 },
+  { id: 245, isoCode: "CW", nameCapitalized: "CURACAO", name: "Curacao", iso3Code: "CUW", isoNumCode: 531, phoneCode: 599 },
+  { id: 246, isoCode: "GG", nameCapitalized: "GUERNSEY", name: "Guernsey", iso3Code: "GGY", isoNumCode: 831, phoneCode: 44 },
+  { id: 247, isoCode: "IM", nameCapitalized: "ISLE OF MAN", name: "Isle of Man", iso3Code: "IMN", isoNumCode: 833, phoneCode: 44 },
+  { id: 248, isoCode: "JE", nameCapitalized: "JERSEY", name: "Jersey", iso3Code: "JEY", isoNumCode: 832, phoneCode: 44 },
+  { id: 249, isoCode: "XK", nameCapitalized: "KOSOVO", name: "Kosovo", iso3Code: "---", isoNumCode: 0, phoneCode: 381 },
+  { id: 250, isoCode: "BL", nameCapitalized: "SAINT BARTHELEMY", name: "Saint Barthelemy", iso3Code: "BLM", isoNumCode: 652, phoneCode: 590 },
+  { id: 251, isoCode: "MF", nameCapitalized: "SAINT MARTIN", name: "Saint Martin", iso3Code: "MAF", isoNumCode: 663, phoneCode: 590 },
+  { id: 252, isoCode: "SX", nameCapitalized: "SINT MAARTEN", name: "Sint Maarten", iso3Code: "SXM", isoNumCode: 534, phoneCode: 1 },
   { id: 253, isoCode: "SS", nameCapitalized: "SOUTH SUDAN", name: "South Sudan", iso3Code: "SSD", isoNumCode: 728, phoneCode: 211 },
 ];
 
