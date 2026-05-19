@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { flowQueue } from "../lib/queue.js";
 import type { FlowDefinition, FlowTriggerPayload } from "../lib/flow-runner.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
+import { canAccess } from "../lib/permissions.js";
 
 interface FlowBody {
   name: string;
@@ -24,7 +25,11 @@ export const flowsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Body: FlowBody }>("/flows", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    // GAP-S04: bot flow builder requires manage_bot_replies + manage_bot_flow_builder sub-permission
+    if (!canAccess(role, permissions, "manage_bot_replies")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_bot_replies permission required" } });
+    }
     const limitCheck = await checkPlanLimit(fastify.prisma, organizationId, "flows");
     if (!limitCheck.allowed) {
       return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Flow limit of ${limitCheck.limit} reached` } });
