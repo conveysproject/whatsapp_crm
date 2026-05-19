@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 
-// Mock resend so the module-level singleton doesn't throw when RESEND_API_KEY is absent in tests.
-vi.mock("resend", () => ({
-  Resend: vi.fn().mockImplementation(() => ({
-    emails: { send: vi.fn().mockResolvedValue({ data: {}, error: null }) },
-  })),
+// Mock nodemailer so the module-level transporter doesn't attempt a real SMTP connection in tests.
+vi.mock("nodemailer", () => ({
+  default: {
+    createTransport: vi.fn().mockReturnValue({
+      sendMail: vi.fn().mockResolvedValue({ messageId: "test-id" }),
+    }),
+  },
 }));
 
 import { buildLeadNotificationEmail, buildAutoReplyEmail } from "./mail";

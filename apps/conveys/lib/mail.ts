@@ -1,7 +1,10 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = "Conveys <info@conveys.in>";
+const transporter = nodemailer.createTransport({
+  host: "relay-hosting.secureserver.net",
+  port: 25,
+  secure: false,
+});
 
 export interface MailOptions {
   to: string | string[];
@@ -11,14 +14,13 @@ export interface MailOptions {
 }
 
 export async function sendMail(options: MailOptions): Promise<void> {
-  const { error } = await resend.emails.send({
-    from: FROM,
-    to: Array.isArray(options.to) ? options.to : [options.to],
+  await transporter.sendMail({
+    from: "Conveys <info@conveys.in>",
+    to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
     subject: options.subject,
     html: options.html,
     ...(options.replyTo ? { replyTo: options.replyTo } : {}),
   });
-  if (error) throw new Error(error.message);
 }
 
 // ─── HTML Escaping ────────────────────────────────────────────────────────────
