@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import type { ChangeEvent, FormEvent, JSX } from "react";
 import Link from "next/link";
-import type { JSX } from "react";
 
 const STATS = [
   { value: "50+", label: "Projects Delivered" },
@@ -226,6 +227,37 @@ const TESTIMONIALS = [
 ] as const;
 
 export function ConveysHome(): JSX.Element {
+  const [form, setForm] = useState({ name: "", email: "", phone: "", service: "", message: "" });
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  function handleChange(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
+    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+  }
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setStatus("loading");
+    setErrorMsg("");
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) {
+        setStatus("error");
+        setErrorMsg(data.error ?? "Something went wrong, please try again.");
+      } else {
+        setStatus("success");
+      }
+    } catch {
+      setStatus("error");
+      setErrorMsg("Network error. Please check your connection and try again.");
+    }
+  }
+
   return (
     <main id="main-content">
 
@@ -489,61 +521,117 @@ export function ConveysHome(): JSX.Element {
 
             <form
               className="rounded-2xl bg-white p-8 shadow-xl"
-              onSubmit={(e) => {
-                e.preventDefault();
-              }}
+              onSubmit={handleSubmit}
             >
               <h3 className="text-lg font-bold text-slate-900">Send a Message</h3>
-              <div className="mt-5 space-y-4">
-                <div>
-                  <label htmlFor="cf-name" className="sr-only">Name</label>
-                  <input
-                    id="cf-name"
-                    name="name"
-                    required
-                    placeholder="Your name"
-                    className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                  />
+
+              {status === "success" ? (
+                <div className="mt-6 flex flex-col items-center py-8 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+                    <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h4 className="mt-4 text-lg font-bold text-slate-900">Message sent!</h4>
+                  <p className="mt-2 text-sm text-slate-500">We&apos;ll reply within 24 hours. Talk soon!</p>
                 </div>
-                <div>
-                  <label htmlFor="cf-email" className="sr-only">Email</label>
-                  <input
-                    id="cf-email"
-                    name="email"
-                    type="email"
-                    required
-                    placeholder="Email address"
-                    className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                  />
+              ) : (
+                <div className="mt-5 space-y-4">
+                  <div>
+                    <label htmlFor="cf-name" className="sr-only">Name</label>
+                    <input
+                      id="cf-name"
+                      name="name"
+                      required
+                      placeholder="Your name"
+                      value={form.name}
+                      onChange={handleChange}
+                      disabled={status === "loading"}
+                      className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="cf-email" className="sr-only">Email</label>
+                    <input
+                      id="cf-email"
+                      name="email"
+                      type="email"
+                      required
+                      placeholder="Email address"
+                      value={form.email}
+                      onChange={handleChange}
+                      disabled={status === "loading"}
+                      className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="cf-phone" className="sr-only">Phone</label>
+                    <input
+                      id="cf-phone"
+                      name="phone"
+                      type="tel"
+                      placeholder="Phone number (optional)"
+                      value={form.phone}
+                      onChange={handleChange}
+                      disabled={status === "loading"}
+                      className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="cf-service" className="sr-only">Service interested in</label>
+                    <select
+                      id="cf-service"
+                      name="service"
+                      required
+                      value={form.service}
+                      onChange={handleChange}
+                      disabled={status === "loading"}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
+                    >
+                      <option value="" disabled>Service interested in…</option>
+                      <option>Web &amp; App Development</option>
+                      <option>Mobile App Development</option>
+                      <option>WhatsApp CRM &amp; Business API</option>
+                      <option>AI Solutions</option>
+                      <option>Other / General Enquiry</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="cf-msg" className="sr-only">Message</label>
+                    <textarea
+                      id="cf-msg"
+                      name="message"
+                      rows={4}
+                      required
+                      placeholder="Tell us about your project…"
+                      value={form.message}
+                      onChange={handleChange}
+                      disabled={status === "loading"}
+                      className="w-full resize-none rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
+                    />
+                  </div>
+                  {status === "error" && (
+                    <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {errorMsg}
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={status === "loading"}
+                    className="w-full rounded-lg bg-blue-700 py-3.5 text-sm font-bold text-white shadow transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {status === "loading" ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Sending…
+                      </span>
+                    ) : "Send Message"}
+                  </button>
                 </div>
-                <div>
-                  <label htmlFor="cf-phone" className="sr-only">Phone</label>
-                  <input
-                    id="cf-phone"
-                    name="phone"
-                    type="tel"
-                    placeholder="Phone number (optional)"
-                    className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="cf-msg" className="sr-only">Message</label>
-                  <textarea
-                    id="cf-msg"
-                    name="message"
-                    rows={4}
-                    required
-                    placeholder="Tell us about your project…"
-                    className="w-full resize-none rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full rounded-lg bg-blue-700 py-3.5 text-sm font-bold text-white shadow transition hover:bg-blue-800"
-                >
-                  Send Message
-                </button>
-              </div>
+              )}
             </form>
           </div>
         </div>
