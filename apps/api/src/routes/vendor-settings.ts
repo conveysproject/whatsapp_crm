@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { syncPhoneNumbers } from "../lib/whatsapp.js";
 import { prisma } from "../lib/prisma.js";
 import { storeTrainingEmbeddings } from "../lib/ai-rag.js";
+import { canAccess } from "../lib/permissions.js";
 
 interface SettingEntry {
   key: string;
@@ -70,7 +71,11 @@ export const vendorSettingsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.put<{ Body: { settings: SettingEntry[] } }>(
     "/vendor-settings",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      // GAP-S04: administrative permission required to modify org-level settings
+      if (!canAccess(role, permissions, "administrative")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "administrative permission required" } });
+      }
       const { settings } = request.body;
       await Promise.all(
         settings.map((s) =>
