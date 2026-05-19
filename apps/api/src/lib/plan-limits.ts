@@ -24,6 +24,10 @@ async function countEntity(prisma: PrismaClient, entity: LimitEntity, organizati
     case "campaigns":
       return prisma.campaign.count({ where: { organizationId } });
     case "chatbots":
+      // GAP-S69: WhatsJet only counts standalone bots (bot_flows__id IS NULL). TrustCRM's
+      // Chatbot model always requires a flowId, so all bots are "flow-attached" and the plan
+      // limit counts all chatbots equally. If a standalone-bot concept is added later, filter
+      // by flowId IS NULL here.
       return prisma.chatbot.count({ where: { organizationId } });
     case "flows":
       return prisma.flow.count({ where: { organizationId } });
