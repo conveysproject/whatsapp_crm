@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { createHash } from "node:crypto";
+import { canAccess } from "../lib/permissions.js";
 import {
   getBusinessProfile,
   updateBusinessProfile,
@@ -101,7 +102,10 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post("/whatsapp-account/connect-webhook", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "administrative")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "administrative permission required" } });
+    }
     // GAP-S65: subscribe to all 7 WABA webhook event types
     const org = await fastify.prisma.organization.findUnique({
       where: { id: organizationId },
@@ -129,7 +133,10 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post("/whatsapp-account/disconnect-webhook", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "administrative")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "administrative permission required" } });
+    }
     await fastify.prisma.vendorSetting.upsert({
       where: { organizationId_key: { organizationId, key: "webhook_verified_at" } },
       create: { organizationId, key: "webhook_verified_at", value: "", dataType: "string" },
@@ -289,7 +296,10 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
   );
 
   fastify.post("/whatsapp-account/disconnect-account", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "administrative")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "administrative permission required" } });
+    }
     const waKeys = ["whatsapp_access_token", "whatsapp_business_account_id", "current_phone_number_id", "webhook_verified_at"];
     await Promise.all(
       waKeys.map((key) =>
