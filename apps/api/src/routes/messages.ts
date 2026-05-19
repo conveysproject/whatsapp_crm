@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { sendTextMessage, sendMediaMessage, sendInteractiveMessage } from "../lib/whatsapp.js";
 import type { WaInteractivePayload } from "../lib/whatsapp.js";
 import type { ConversationId } from "@WBMSG/shared";
+import { canAccess } from "../lib/permissions.js";
 
 type SendMessageBody =
   | { contentType?: "text"; text: string }
@@ -57,7 +58,11 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: ConversationId }; Body: SendMessageBody }>(
     "/conversations/:id/messages",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      // GAP-S04: messaging permission required to send messages
+      if (!canAccess(role, permissions, "messaging")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "messaging permission required" } });
+      }
       const body = request.body;
 
       const conversation = await fastify.prisma.conversation.findFirst({
