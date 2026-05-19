@@ -30,12 +30,13 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     });
 
     const hidePhone = permissions["hide_contact_phone_numbers"] === "allow";
-    const data = hidePhone
-      ? conversations.map((c) => ({
-          ...c,
-          contact: c.contact ? { ...c.contact, phoneNumber: maskPhone(c.contact.phoneNumber) } : null,
-        }))
-      : conversations;
+    const now = Date.now();
+    // GAP-S07: serviceWindowActive = lastInboundAt within 24h (non-template messages allowed)
+    const data = conversations.map((c) => ({
+      ...c,
+      contact: hidePhone && c.contact ? { ...c.contact, phoneNumber: maskPhone(c.contact.phoneNumber) } : c.contact,
+      serviceWindowActive: c.lastInboundAt != null && now - c.lastInboundAt.getTime() < 86_400_000,
+    }));
     return reply.send({ data });
   });
 

@@ -172,9 +172,10 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       void markAsRead(org.phoneNumberId, whatsappMessageId, org.wabaAccessToken);
     }
 
+    // GAP-S07: update service window timestamp on every inbound message
     await prisma.conversation.update({
       where: { id: conversation.id },
-      data: { lastMessageAt: messageDate, unreadCount: { increment: 1 } },
+      data: { lastMessageAt: messageDate, lastInboundAt: messageDate, unreadCount: { increment: 1 } },
     });
 
     const refreshed = await prisma.conversation.findFirst({ where: { id: conversation.id } });

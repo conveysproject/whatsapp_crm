@@ -232,6 +232,8 @@ model Conversation {
   sla               SlaPolicy?         @relation(fields: [slaId], references: [id], onDelete: SetNull)
   whatsappContactId String?            @map("whatsapp_contact_id")
   lastMessageAt     DateTime?          @map("last_message_at")
+  // GAP-S07: WhatsApp 24h service window — set on every inbound message
+  lastInboundAt     DateTime?          @map("last_inbound_at")
   unreadCount       Int                @default(0) @map("unread_count")
   closedAt          DateTime?          @map("closed_at")
   createdAt         DateTime           @default(now()) @map("created_at")
