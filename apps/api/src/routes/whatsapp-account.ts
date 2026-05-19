@@ -182,6 +182,112 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // GAP-S35: Embedded WABA sign-up — 5-step OAuth flow
+  fastify.post<{ Body: { code: string; isSMB?: boolean; syncType?: string } }>(
+    "/whatsapp-account/embedded-signup",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const { code, isSMB = false, syncType = "full" } = request.body;
+      if (!code) {
+        return reply.status(400).send({ error: { code: "MISSING_CODE", message: "code is required" } });
+      }
+
+      const appId = process.env["FACEBOOK_APP_ID"] ?? "";
+      const appSecret = process.env["FACEBOOK_APP_SECRET"] ?? "";
+      if (!appId || !appSecret) {
+        return reply.status(500).send({ error: { code: "APP_NOT_CONFIGURED", message: "Facebook app credentials not configured" } });
+      }
+
+      // Step 1: exchange code for user access token
+      const tokenRes = await fetch(
+        `${WA_GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${encodeURIComponent(code)}`,
+        { method: "GET" }
+      );
+      if (!tokenRes.ok) {
+        const err = await tokenRes.json() as { error?: { message?: string } };
+        return reply.status(400).send({ error: { code: "TOKEN_EXCHANGE_FAILED", message: err.error?.message ?? "Failed to exchange code for token" } });
+      }
+      const tokenData = await tokenRes.json() as { access_token: string };
+      const accessToken = tokenData.access_token;
+
+      // Step 2: get WABA and phone number info for this user
+      const wabaRes = await fetch(
+        `${WA_GRAPH}/me/whatsapp_business_accounts?access_token=${accessToken}&fields=id,name`,
+        { method: "GET" }
+      );
+      if (!wabaRes.ok) {
+        return reply.status(400).send({ error: { code: "WABA_FETCH_FAILED", message: "Failed to fetch WhatsApp Business Account" } });
+      }
+      const wabaData = await wabaRes.json() as { data?: { id: string; name: string }[] };
+      const waba = wabaData.data?.[0];
+      if (!waba) {
+        return reply.status(400).send({ error: { code: "NO_WABA", message: "No WhatsApp Business Account found for this Facebook user" } });
+      }
+      const wabaId = waba.id;
+
+      // Step 3: get phone numbers for this WABA
+      const phonesRes = await fetch(
+        `${WA_GRAPH}/${wabaId}/phone_numbers?access_token=${accessToken}&fields=id,display_phone_number,verified_name`,
+        { method: "GET" }
+      );
+      const phonesData = phonesRes.ok
+        ? (await phonesRes.json() as { data?: { id: string; display_phone_number: string; verified_name: string }[] })
+        : { data: [] };
+      const phone = phonesData.data?.[0];
+
+      // Subscribe webhooks with override callback and verify_token = sha1(organizationId)
+      const callbackUrl = `${(process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/v1/webhooks/whatsapp`;
+      const verifyToken = createHash("sha1").update(organizationId).digest("hex");
+      await fetch(`${WA_GRAPH}/${wabaId}/subscribed_apps`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          override_callback_uri: callbackUrl,
+          verify_token: verifyToken,
+          subscribed_fields: WA_SUBSCRIBED_FIELDS,
+        }),
+      }).catch(() => undefined);
+
+      // Step 4: if SMB mode, post smb_app_data
+      if (isSMB) {
+        await fetch(`${WA_GRAPH}/${wabaId}/smb_app_data`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ sync_type: syncType }),
+        }).catch(() => undefined);
+      }
+
+      // Step 5: save all WABA settings
+      const settingsToSave = [
+        { key: "whatsapp_access_token", value: accessToken },
+        { key: "whatsapp_business_account_id", value: wabaId },
+        { key: "webhook_verified_at", value: new Date().toISOString() },
+        ...(phone ? [
+          { key: "current_phone_number_id", value: phone.id },
+          { key: "current_phone_number_number", value: phone.display_phone_number },
+        ] : []),
+      ];
+      await Promise.all(
+        settingsToSave.map((s) =>
+          fastify.prisma.vendorSetting.upsert({
+            where: { organizationId_key: { organizationId, key: s.key } },
+            create: { organizationId, key: s.key, value: s.value, dataType: "string" },
+            update: { value: s.value },
+          })
+        )
+      );
+
+      return reply.send({
+        data: {
+          wabaId,
+          wabaName: waba.name,
+          phoneNumber: phone?.display_phone_number ?? null,
+          phoneNumberId: phone?.id ?? null,
+        },
+      });
+    }
+  );
+
   fastify.post("/whatsapp-account/disconnect-account", async (request, reply) => {
     const { organizationId } = request.auth;
     const waKeys = ["whatsapp_access_token", "whatsapp_business_account_id", "current_phone_number_id", "webhook_verified_at"];
