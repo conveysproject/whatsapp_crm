@@ -442,6 +442,23 @@ enum CallStatus {
   failed
 }
 
+// ─── Countries ───────────────────────────────────────────────────────────────
+// Seeded from WhatsJet data-schema.sql. Static reference table — never written
+// at runtime. Used for contact country selection and phone-code display.
+
+model Country {
+  id              Int       @id
+  isoCode         String?   @map("iso_code") @db.Char(2)
+  nameCapitalized String?   @map("name_capitalized") @db.VarChar(100)
+  name            String    @db.VarChar(100)
+  iso3Code        String?   @map("iso3_code") @db.Char(3)
+  isoNumCode      Int?      @map("iso_num_code")
+  phoneCode       Int?      @map("phone_code")
+  contacts        Contact[]
+
+  @@map("countries")
+}
+
 // ─── Models ──────────────────────────────────────────────────────────────────
 
 model Contact {
@@ -468,6 +485,8 @@ model Contact {
   username        String?
   phoneVerifiedAt DateTime? @map("phone_verified_at")
   countryCode     String?   @map("country_code")
+  countryId       Int?      @map("country_id")
+  country         Country?  @relation(fields: [countryId], references: [id])
   pastAiSummary  String?        @map("past_ai_summary") @db.Text
   deletedAt      DateTime?      @map("deleted_at")   // GDPR soft delete
   createdAt      DateTime       @default(now()) @map("created_at")
@@ -487,6 +506,7 @@ model Contact {
   @@index([organizationId, lifecycleStage])
   @@index([organizationId, whatsappOptOut])
   @@index([organizationId, deletedAt])
+  @@index([countryId])
   @@map("contacts")
 }
 

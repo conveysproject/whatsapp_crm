@@ -104,6 +104,14 @@ export const contactImportWorker = new Worker<ContactImportJob>(
     const rows = parsed.data;
     const BATCH_SIZE = 500;
     const seenPhones = new Set<string>();
+
+    // Build country lookup: isoCode (2-letter) and lower-cased name → country.id
+    const allCountries = await prisma.country.findMany({ select: { id: true, isoCode: true, name: true } });
+    const countryLookup = new Map<string, number>();
+    for (const c of allCountries) {
+      if (c.isoCode) countryLookup.set(c.isoCode.toLowerCase(), c.id);
+      countryLookup.set(c.name.toLowerCase(), c.id);
+    }
     let created = 0;
     let updated = 0;
     let skipped = 0;
@@ -147,11 +155,13 @@ export const contactImportWorker = new Worker<ContactImportJob>(
           const email = extractField(row, fieldMapping, "email") ?? null;
           const csvLifecycle = extractField(row, fieldMapping, "lifecycleStage");
           const stage = (csvLifecycle || lifecycleStage) as LifecycleStage;
+          const countryRaw = extractField(row, fieldMapping, "country");
+          const countryId = countryRaw ? (countryLookup.get(countryRaw.toLowerCase()) ?? null) : null;
 
           if (existingId && updateExisting) {
-            toUpdate.push({ id: existingId, phone, data: { name, email, lifecycleStage: stage, tags } });
+            toUpdate.push({ id: existingId, phone, data: { name, email, lifecycleStage: stage, tags, ...(countryId !== null && { countryId }) } });
           } else if (!existingId) {
-            toCreate.push({ organizationId, phoneNumber: phone, name, email, lifecycleStage: stage, tags });
+            toCreate.push({ organizationId, phoneNumber: phone, name, email, lifecycleStage: stage, tags, ...(countryId !== null && { countryId }) });
           } else {
             skipped++;
           }

@@ -21,6 +21,7 @@ interface ContactBody {
   name?: string;
   email?: string;
   companyId?: string;
+  countryId?: number;
 }
 
 interface ContactPatchBody {
@@ -29,6 +30,7 @@ interface ContactPatchBody {
   lifecycleStage?: string;
   tags?: string[];
   customFields?: Record<string, unknown>;
+  countryId?: number | null;
 }
 
 export const contactsRouter: FastifyPluginAsync = async (fastify) => {
@@ -54,9 +56,9 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     if (format === "csv") {
       const contacts = await fastify.prisma.contact.findMany({
         where: { organizationId },
-        select: { id: true, firstName: true, lastName: true, phoneNumber: true, email: true, countryCode: true, createdAt: true },
+        select: { id: true, firstName: true, lastName: true, phoneNumber: true, email: true, countryCode: true, country: { select: { name: true } }, createdAt: true },
       });
-      const header = "id,first_name,last_name,phone,email,country_code,created_at\n";
+      const header = "id,first_name,last_name,phone,email,country,created_at\n";
       const rows = contacts.map((c) =>
         [
           csvEscape(c.id),
@@ -64,7 +66,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           csvEscape(c.lastName ?? ""),
           csvEscape(`="${c.phoneNumber}"`),
           csvEscape(c.email ?? ""),
-          csvEscape(c.countryCode ?? ""),
+          csvEscape(c.country?.name ?? c.countryCode ?? ""),
           csvEscape(c.createdAt.toISOString()),
         ].join(",")
       );
@@ -141,14 +143,17 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const { cursor, limit } = parsePaginationParams(query);
     const labelId = query["labelId"];
 
+    const countryId = query["countryId"] ? parseInt(query["countryId"], 10) : undefined;
+
     const contacts = await fastify.prisma.contact.findMany({
       where: {
         organizationId,
         deletedAt: null,
         ...(cursor ? { id: { gt: cursor } } : {}),
         ...(labelId ? { labels: { some: { labelId } } } : {}),
+        ...(countryId && !isNaN(countryId) ? { countryId } : {}),
       },
-      include: { labels: { include: { label: true } } },
+      include: { labels: { include: { label: true } }, country: true },
       take: limit + 1,
       orderBy: { id: "asc" },
     });
@@ -170,7 +175,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId, permissions } = request.auth;
     const contact = await fastify.prisma.contact.findFirst({
       where: { id: request.params.id, organizationId, deletedAt: null },
-      include: { labels: { include: { label: true } } },
+      include: { labels: { include: { label: true } }, country: true },
     });
     if (!contact) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
@@ -202,6 +207,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
         name: request.body.name ?? null,
         email: request.body.email ?? null,
         companyId: request.body.companyId ?? null,
+        countryId: request.body.countryId ?? null,
       },
     });
     await indexContact({
@@ -236,6 +242,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           lifecycleStage: request.body.lifecycleStage as LifecycleStage | undefined,
           tags: request.body.tags,
           customFields: request.body.customFields as Prisma.InputJsonValue | undefined,
+          ...(request.body.countryId !== undefined && { countryId: request.body.countryId }),
         },
       });
       await indexContact({
