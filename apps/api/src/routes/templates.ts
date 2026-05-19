@@ -3,6 +3,7 @@ import type { TemplateCategory, TemplateStatus } from "@prisma/client";
 import { submitTemplateToMeta } from "../lib/meta-templates.js";
 import { sendTemplateMessage } from "../lib/whatsapp.js";
 import type { TemplateId, ContactId } from "@WBMSG/shared";
+import { canAccess } from "../lib/permissions.js";
 
 interface TemplateBody {
   name: string;
@@ -38,7 +39,11 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Body: TemplateBody }>("/templates", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    // GAP-S04: manage_templates permission required to create templates
+    if (!canAccess(role, permissions, "manage_templates")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_templates permission required" } });
+    }
     const template = await fastify.prisma.template.create({
       data: {
         organizationId,

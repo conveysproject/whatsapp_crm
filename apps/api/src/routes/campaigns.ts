@@ -3,7 +3,7 @@ import type { CampaignStatus } from "@prisma/client";
 import { campaignQueue } from "../lib/queue.js";
 import type { CampaignId, SegmentId, TemplateId } from "@WBMSG/shared";
 import { evaluateSegment, type SegmentFilter } from "../lib/segment-evaluator.js";
-import { maskPhone, maskEmail } from "../lib/permissions.js";
+import { maskPhone, maskEmail, canAccess } from "../lib/permissions.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 
 interface CampaignBody {
@@ -68,7 +68,11 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Body: CampaignBody }>("/campaigns", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    // GAP-S04: manage_campaigns permission required
+    if (!canAccess(role, permissions, "manage_campaigns")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_campaigns permission required" } });
+    }
     const limitCheck = await checkPlanLimit(fastify.prisma, organizationId, "campaigns");
     if (!limitCheck.allowed) {
       return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Campaign limit of ${limitCheck.limit} reached` } });

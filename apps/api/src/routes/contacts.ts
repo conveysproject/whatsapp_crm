@@ -5,7 +5,7 @@ import { paginate, parsePaginationParams } from "../lib/pagination.js";
 import { indexContact, removeContact, searchContacts } from "../lib/search.js";
 import { generateContactsCsv } from "../lib/csv.js";
 import type { ContactId } from "@WBMSG/shared";
-import { maskPhone, maskEmail } from "../lib/permissions.js";
+import { maskPhone, maskEmail, canAccess } from "../lib/permissions.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 
 function csvEscape(value: string): string {
@@ -179,7 +179,11 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Body: ContactBody }>("/contacts", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    // GAP-S04: manage_contacts permission required to create contacts
+    if (!canAccess(role, permissions, "manage_contacts")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
+    }
     const limitCheck = await checkPlanLimit(fastify.prisma, organizationId, "contacts");
     if (!limitCheck.allowed) {
       return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Contact limit of ${limitCheck.limit} reached` } });
@@ -207,7 +211,10 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.patch<{ Params: { id: ContactId }; Body: ContactPatchBody }>(
     "/contacts/:id",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccess(role, permissions, "manage_contacts")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
+      }
       const existing = await fastify.prisma.contact.findFirst({
         where: { id: request.params.id, organizationId, deletedAt: null },
       });
@@ -237,7 +244,10 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
   );
 
   fastify.delete<{ Params: { id: ContactId } }>("/contacts/:id", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_contacts")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
+    }
     const existing = await fastify.prisma.contact.findFirst({
       where: { id: request.params.id, organizationId, deletedAt: null },
     });

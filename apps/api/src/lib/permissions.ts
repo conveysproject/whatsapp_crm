@@ -8,6 +8,20 @@ export function maskEmail(email: string): string {
   return email.slice(0, 2) + "***" + email.slice(atIdx);
 }
 
+// GAP-S04: admin role bypasses all permission checks.
+// For non-admin users: empty permissions object = allow (backwards compat for pre-permission orgs);
+// once any key is set, the full tree is enforced.
+export function canAccess(
+  role: string,
+  permissions: Record<string, string>,
+  key: string
+): boolean {
+  if (role === "admin" || role === "superAdmin") return true;
+  const keys = Object.keys(permissions);
+  if (keys.length === 0) return true; // no permissions configured: open access
+  return permissions[key] === "allow";
+}
+
 // GAP-S58: parent permissions require explicit "allow"; absent = deny
 export function hasPermission(permissions: Record<string, string>, key: string): boolean {
   return permissions[key] === "allow";
