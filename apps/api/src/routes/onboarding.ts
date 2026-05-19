@@ -54,14 +54,18 @@ export const onboardingRouter: FastifyPluginAsync = async (fastify) => {
           await syncPhoneNumbers(organizationId);
         }
 
-        // Step 3: subscribe app to WABA webhooks
+        // Step 3: subscribe app to WABA webhooks (all 7 event types per GAP-S65)
         if (resolvedWabaId) {
           const callbackUrl = `${(process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/v1/webhooks/whatsapp`;
           const verifyToken = createHash("sha1").update(organizationId).digest("hex");
           await fetch(`${WA_GRAPH}/${resolvedWabaId}/subscribed_apps`, {
             method: "POST",
             headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ override_callback_uri: callbackUrl, verify_token: verifyToken }),
+            body: JSON.stringify({
+              override_callback_uri: callbackUrl,
+              verify_token: verifyToken,
+              subscribed_fields: ["messages", "message_template_quality_update", "message_template_status_update", "account_update", "history", "smb_app_state_sync", "smb_message_echoes"],
+            }),
           });
           // Persist webhook verification marker
           await fastify.prisma.vendorSetting.upsert({

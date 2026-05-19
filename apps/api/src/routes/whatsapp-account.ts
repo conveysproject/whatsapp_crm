@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { createHash } from "node:crypto";
 import {
   getBusinessProfile,
   updateBusinessProfile,
@@ -9,6 +10,19 @@ import {
   registerPhoneNumber,
   setTwoStepVerification,
 } from "../lib/whatsapp.js";
+
+// GAP-S65: 7 WhatsApp webhook event types to subscribe to
+const WA_SUBSCRIBED_FIELDS = [
+  "messages",
+  "message_template_quality_update",
+  "message_template_status_update",
+  "account_update",
+  "history",
+  "smb_app_state_sync",
+  "smb_message_echoes",
+] as const;
+
+const WA_GRAPH = "https://graph.facebook.com/v22.0";
 
 export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/whatsapp-account/health-status", async (request, reply) => {
@@ -88,6 +102,24 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post("/whatsapp-account/connect-webhook", async (request, reply) => {
     const { organizationId } = request.auth;
+    // GAP-S65: subscribe to all 7 WABA webhook event types
+    const org = await fastify.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { whatsappBusinessAccountId: true, wabaAccessToken: true },
+    });
+    if (org?.whatsappBusinessAccountId && org.wabaAccessToken) {
+      const callbackUrl = `${(process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/v1/webhooks/whatsapp`;
+      const verifyToken = createHash("sha1").update(organizationId).digest("hex");
+      await fetch(`${WA_GRAPH}/${org.whatsappBusinessAccountId}/subscribed_apps`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${org.wabaAccessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          override_callback_uri: callbackUrl,
+          verify_token: verifyToken,
+          subscribed_fields: WA_SUBSCRIBED_FIELDS,
+        }),
+      }).catch(() => undefined);
+    }
     await fastify.prisma.vendorSetting.upsert({
       where: { organizationId_key: { organizationId, key: "webhook_verified_at" } },
       create: { organizationId, key: "webhook_verified_at", value: new Date().toISOString(), dataType: "string" },
@@ -107,22 +139,48 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── QR Code ───────────────────────────────────────────────────────────────
-  fastify.get("/whatsapp-account/qr-code", async (request, reply) => {
-    const { organizationId } = request.auth;
-    const org = await fastify.prisma.organization.findUnique({
-      where: { id: organizationId },
-      select: { phoneNumberId: true, wabaAccessToken: true },
-    });
-    if (!org?.phoneNumberId || !org.wabaAccessToken) {
-      return reply.status(400).send({ error: { code: "WA_NOT_CONNECTED", message: "WhatsApp not connected" } });
+  // GAP-S39: generate wa.me/{phone} QR PNG for the org's WhatsApp number (300px, low error correction)
+  fastify.get<{ Querystring: { message?: string; format?: "png" | "json" } }>(
+    "/whatsapp-account/qr-code",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const setting = await fastify.prisma.vendorSetting.findFirst({
+        where: { organizationId, key: "current_phone_number_number" },
+        select: { value: true },
+      });
+      if (!setting?.value) {
+        return reply.status(400).send({ error: { code: "NO_PHONE_NUMBER", message: "No WhatsApp phone number found; sync phone numbers first" } });
+      }
+      // Strip all non-numeric chars for wa.me URL (international format)
+      const phone = setting.value.replace(/\D/g, "");
+      const message = request.query.message ? `?text=${encodeURIComponent(request.query.message)}` : "";
+      const waUrl = `https://wa.me/${phone}${message}`;
+      const QRCode = await import("qrcode");
+      if (request.query.format === "json") {
+        const dataUrl = await QRCode.toDataURL(waUrl, { width: 300, errorCorrectionLevel: "L" });
+        return reply.send({ data: { url: waUrl, qrDataUrl: dataUrl } });
+      }
+      const buffer = await QRCode.toBuffer(waUrl, { type: "png", width: 300, errorCorrectionLevel: "L" });
+      reply.header("Content-Type", "image/png");
+      reply.header("Content-Disposition", "inline; filename=whatsapp-qr.png");
+      return reply.send(buffer);
     }
-    const res = await fetch(
-      `https://graph.facebook.com/v25.0/${org.phoneNumberId}/whatsapp_business_profile_media`,
-      { headers: { Authorization: `Bearer ${org.wabaAccessToken}` } }
-    );
-    const json = await res.json() as Record<string, unknown>;
-    return reply.send({ data: json });
-  });
+  );
+
+  // GAP-S57: generate QR for an arbitrary URL (e.g. UPI address)
+  fastify.get<{ Querystring: { url: string } }>(
+    "/whatsapp-account/url-qr",
+    { config: { public: true } },
+    async (request, reply) => {
+      const { url } = request.query;
+      if (!url) return reply.status(400).send({ error: "url required" });
+      const QRCode = await import("qrcode");
+      const buffer = await QRCode.toBuffer(url, { type: "png", width: 300, errorCorrectionLevel: "L" });
+      reply.header("Content-Type", "image/png");
+      reply.header("Content-Disposition", "inline; filename=url-qr.png");
+      return reply.send(buffer);
+    }
+  );
 
   fastify.post("/whatsapp-account/disconnect-account", async (request, reply) => {
     const { organizationId } = request.auth;

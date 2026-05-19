@@ -160,6 +160,12 @@ export const contactGroupsRouter: FastifyPluginAsync = async (fastify) => {
       if (!campaignId) return reply.status(400).send({ error: { code: "MISSING_CAMPAIGN_ID", message: "campaignId required for campaign_status mode" } });
       const campaign = await fastify.prisma.campaign.findFirst({ where: { id: campaignId, organizationId } });
       if (!campaign) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
+      // GAP-S68: guard — cannot build group from a still-running campaign
+      if (campaign.status === "running") {
+        await fastify.prisma.contactGroup.delete({ where: { id: group.id } });
+        return reply.status(409).send({ error: { code: "CAMPAIGN_IN_PROGRESS", message: "Campaign is still running — wait for it to complete before building a group" } });
+      }
+      // GAP-S68: empty statuses = "total" (all recipients, no status filter)
       const validStatuses = (statuses ?? []).filter((s) => CAMPAIGN_RECIPIENT_STATUSES.includes(s));
       const recipients = await fastify.prisma.campaignRecipient.findMany({
         where: {

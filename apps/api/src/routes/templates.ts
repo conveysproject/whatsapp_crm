@@ -126,12 +126,17 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       stats[row.status] = row._count.status;
     }
 
+    const delivered = stats["delivered"] ?? 0;
+    const read = stats["read"] ?? 0;
+    // GAP-S21: readPercentage = (read / delivered) × 100, capped at 100, rounded
+    const readPercentage = delivered > 0 ? Math.min(100, Math.round((read / delivered) * 100)) : 0;
     return reply.send({
       data: {
         sent: stats["sent"] ?? 0,
-        delivered: stats["delivered"] ?? 0,
-        read: stats["read"] ?? 0,
+        delivered,
+        read,
         failed: stats["failed"] ?? 0,
+        readPercentage,
       },
     });
   });

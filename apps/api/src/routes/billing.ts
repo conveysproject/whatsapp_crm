@@ -16,6 +16,23 @@ async function getGatewayCredentials(prisma: PrismaClient, organizationId: strin
   return Object.fromEntries(settings.filter((s) => s.value).map((s) => [s.key, s.value!]));
 }
 
+// GAP-S56: planSelectorId may arrive as "{planTier}___monthly" or "{planTier}___yearly"
+function parsePlanSelector(selector: string): { planTier: PlanTier; interval: "monthly" | "yearly" } {
+  const parts = selector.split("___");
+  const tier = (parts[0] ?? selector) as PlanTier;
+  const interval = parts[1] === "yearly" ? "yearly" : "monthly";
+  return { planTier: tier, interval };
+}
+
+// GAP-S31: calculate subscription end date; lifetime cap at year 9999
+function calcEndsAt(interval: "monthly" | "yearly", proratedDays: number): Date {
+  const now = new Date();
+  const baseDays = interval === "yearly" ? 365 : 30;
+  const endsAt = new Date(now.getTime() + (baseDays + proratedDays) * 86_400_000);
+  const cap = new Date("9999-12-31T23:59:59Z");
+  return endsAt > cap ? cap : endsAt;
+}
+
 // GAP-S53: activate a manual subscription and cancel all previously active ones
 async function activateManualSubscription(prisma: PrismaClient, organizationId: string, manualSubId: string, planTier: PlanTier): Promise<void> {
   await prisma.$transaction([
@@ -120,9 +137,10 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── Switch plan via Stripe ────────────────────────────────────────────────
-  fastify.post<{ Body: { planTier: PlanTier } }>("/billing/switch-plan", async (request, reply) => {
+  fastify.post<{ Body: { planTier: PlanTier | string } }>("/billing/switch-plan", async (request, reply) => {
     const { organizationId } = request.auth;
-    const { planTier } = request.body;
+    // GAP-S56: support planSelectorId "___" format
+    const { planTier } = parsePlanSelector(request.body.planTier as string);
     const priceId = PLAN_PRICE_IDS[planTier];
     if (!priceId) return reply.status(400).send({ error: { code: "INVALID_PLAN", message: "Unknown plan tier" } });
 
@@ -209,11 +227,13 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     };
   });
 
-  fastify.post<{ Body: { planTier: PlanTier; successUrl: string; cancelUrl: string } }>(
+  fastify.post<{ Body: { planTier: PlanTier | string; successUrl: string; cancelUrl: string } }>(
     "/billing/checkout",
     async (request, reply) => {
       const { organizationId } = request.auth;
-      const { planTier, successUrl, cancelUrl } = request.body;
+      const { successUrl, cancelUrl } = request.body;
+      // GAP-S56: support "{planTier}___monthly" / "{planTier}___yearly" selectors
+      const { planTier } = parsePlanSelector(request.body.planTier as string);
       const priceId = PLAN_PRICE_IDS[planTier];
       if (!priceId) return reply.status(400).send({ error: "invalid_plan" });
 
@@ -393,11 +413,16 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── Manual payment proof ─────────────────────────────────────────────────
-  fastify.post<{ Body: { planId: string; proofUrl: string; transactionRef: string } }>(
+  fastify.post<{ Body: { planId: string | undefined; planSelector?: string; proofUrl: string; transactionRef: string; interval?: "monthly" | "yearly" } }>(
     "/billing/manual/submit-proof",
     async (request, reply) => {
       const { organizationId } = request.auth;
-      const { planId, proofUrl, transactionRef } = request.body;
+      const { proofUrl, transactionRef } = request.body;
+      // GAP-S56: accept planSelector "{tier}___interval" or plain planId
+      const { planTier, interval } = request.body.planSelector
+        ? parsePlanSelector(request.body.planSelector)
+        : { planTier: request.body.planId as PlanTier, interval: (request.body.interval ?? "monthly") as "monthly" | "yearly" };
+
       if (transactionRef) {
         const duplicate = await fastify.prisma.manualSubscription.findFirst({
           where: { organizationId, transactionRef },
@@ -406,16 +431,31 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
           return reply.status(409).send({ error: { code: "DUPLICATE_TRANSACTION", message: "This transaction reference has already been submitted" } });
         }
       }
+
+      // GAP-S31: delete any lingering "initiated" subs before creating a new one
+      await fastify.prisma.manualSubscription.deleteMany({ where: { organizationId, status: "initiated" } });
+
+      // GAP-S31: proration — find days remaining on current active sub, roll into new period
+      const activeSub = await fastify.prisma.manualSubscription.findFirst({
+        where: { organizationId, status: "active" },
+        select: { endsAt: true },
+      });
+      const proratedDays = activeSub?.endsAt
+        ? Math.max(0, Math.round((activeSub.endsAt.getTime() - Date.now()) / 86_400_000))
+        : 0;
+      const endsAt = calcEndsAt(interval, proratedDays);
+
       // GAP-S53: create with "pending" status (awaiting admin approval)
       const data = await fastify.prisma.manualSubscription.create({
         data: {
           organizationId,
-          planTier: planId as PlanTier,
+          planTier,
           status: "pending",
           charges: 0,
-          chargesFrequency: "one_time",
+          chargesFrequency: interval === "yearly" ? "yearly" : "monthly",
           gateway: "other",
           transactionRef: transactionRef ?? null,
+          endsAt,
           remarks: JSON.stringify({ proofUrl, transactionRef }),
         },
       });

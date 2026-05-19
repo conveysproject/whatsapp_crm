@@ -33,7 +33,7 @@ const mockPrisma = {
   contactCustomField: { count: vi.fn().mockResolvedValue(0) },
   user: { count: vi.fn().mockResolvedValue(0) },
   vendorSetting: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
-  manualSubscription: { create: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn().mockResolvedValue(null), update: vi.fn() },
+  manualSubscription: { create: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn().mockResolvedValue(null), update: vi.fn(), deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
   $transaction: vi.fn().mockResolvedValue([]),
 };
 const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
