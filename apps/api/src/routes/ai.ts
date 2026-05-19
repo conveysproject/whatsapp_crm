@@ -138,4 +138,94 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
     const answer = await generateAnswerFromSections(question, sections);
     return reply.send({ data: { answer, sections } });
   });
+
+  // ── Predictive analytics (churn risk, high value, reorder candidates) ─────
+  fastify.get("/ai/predictive", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const now = Date.now();
+    const thirtyDaysAgo = new Date(now - 30 * 86_400_000);
+
+    // Load contacts with last-message date
+    const contacts = await fastify.prisma.contact.findMany({
+      where: { organizationId, deletedAt: null },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        phoneNumber: true,
+        lifecycleStage: true,
+        conversations: {
+          select: {
+            messages: {
+              select: { sentAt: true },
+              orderBy: { sentAt: "desc" },
+              take: 1,
+            },
+          },
+          take: 1,
+        },
+      },
+      take: 500,
+    });
+
+    // Load deals separately and group by contactId
+    const deals = await fastify.prisma.deal.findMany({
+      where: { organizationId, contactId: { not: null } },
+      select: { contactId: true, value: true, createdAt: true },
+    });
+    const dealsByContact = new Map<string, Array<{ value: number; createdAt: Date }>>();
+    for (const d of deals) {
+      if (!d.contactId) continue;
+      const existing = dealsByContact.get(d.contactId) ?? [];
+      existing.push({ value: Number(d.value ?? 0), createdAt: d.createdAt });
+      dealsByContact.set(d.contactId, existing);
+    }
+
+    const churnRisk: Array<{ id: string; name: string; phone: string; trustScore: number | null; riskLevel: "high" | "medium" | "low" }> = [];
+    const highValue: Array<{ id: string; name: string; phone: string; trustScore: number | null; riskLevel: "high" | "medium" | "low" }> = [];
+    const reorderCandidates: Array<{ id: string; name: string; phone: string; trustScore: number | null; riskLevel: "high" | "medium" | "low" }> = [];
+
+    for (const c of contacts) {
+      const name = [c.firstName, c.lastName].filter(Boolean).join(" ") || c.phoneNumber;
+      const phone = c.phoneNumber;
+      const lastMsgDate = c.conversations[0]?.messages[0]?.sentAt;
+      const contactDeals = dealsByContact.get(c.id) ?? [];
+      const totalDealValue = contactDeals.reduce((sum, d) => sum + d.value, 0);
+
+      // Churn risk: had activity but nothing in last 30 days
+      if (lastMsgDate && lastMsgDate < thirtyDaysAgo) {
+        const daysInactive = Math.floor((now - lastMsgDate.getTime()) / 86_400_000);
+        const riskLevel: "high" | "medium" | "low" = daysInactive > 90 ? "high" : daysInactive > 60 ? "medium" : "low";
+        churnRisk.push({ id: c.id, name, phone, trustScore: null, riskLevel });
+      }
+
+      // High value: contacts with deals
+      if (totalDealValue > 0) {
+        const riskLevel: "high" | "medium" | "low" = totalDealValue > 50000 ? "low" : totalDealValue > 10000 ? "medium" : "high";
+        highValue.push({ id: c.id, name, phone, trustScore: Math.min(100, Math.round(totalDealValue / 1000)), riskLevel });
+      }
+
+      // Reorder candidates: had a deal 60-120 days ago
+      const hasReorderDeal = contactDeals.some((d) => {
+        const age = now - d.createdAt.getTime();
+        return age > 60 * 86_400_000 && age < 120 * 86_400_000;
+      });
+      if (hasReorderDeal) {
+        reorderCandidates.push({ id: c.id, name, phone, trustScore: null, riskLevel: "medium" });
+      }
+    }
+
+    const byRisk = (a: { riskLevel: string }, b: { riskLevel: string }) => {
+      const order = { high: 0, medium: 1, low: 2 } as Record<string, number>;
+      return (order[a.riskLevel] ?? 2) - (order[b.riskLevel] ?? 2);
+    };
+
+    return reply.send({
+      data: {
+        churnRisk: churnRisk.sort(byRisk).slice(0, 50),
+        highValue: highValue.sort((a, b) => (b.trustScore ?? 0) - (a.trustScore ?? 0)).slice(0, 50),
+        reorderCandidates: reorderCandidates.slice(0, 50),
+      },
+    });
+  });
 };

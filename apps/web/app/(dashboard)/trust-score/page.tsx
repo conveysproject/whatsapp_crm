@@ -138,9 +138,9 @@ export default function TrustScorePage(): JSX.Element {
           }
           return;
         }
-        const json = (await res.json()) as TrustScoreData;
+        const json = (await res.json()) as { data: TrustScoreData };
         if (!cancelled) {
-          setData(json);
+          setData(json.data);
           setLoading(false);
         }
       } catch {

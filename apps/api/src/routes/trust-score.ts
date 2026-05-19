@@ -4,6 +4,69 @@ import type { ContactId } from "@WBMSG/shared";
 const ML_URL = process.env["ML_SERVICE_URL"] ?? "http://localhost:8000";
 
 export const trustScoreRouter: FastifyPluginAsync = async (fastify) => {
+  // Org-level trust score (aggregate across all contacts/campaigns)
+  fastify.get("/trust-score", async (request, reply) => {
+    const { organizationId } = request.auth;
+
+    const [totalMessages, deliveredMessages, inboundMessages, totalContacts, contactsWithTags, campaigns] =
+      await Promise.all([
+        fastify.prisma.message.count({ where: { organizationId, direction: "outbound" } }),
+        fastify.prisma.message.count({ where: { organizationId, direction: "outbound", status: "delivered" } }),
+        fastify.prisma.message.count({ where: { organizationId, direction: "inbound" } }),
+        fastify.prisma.contact.count({ where: { organizationId, deletedAt: null } }),
+        fastify.prisma.contact.count({ where: { organizationId, deletedAt: null, tags: { isEmpty: false } } }),
+        fastify.prisma.campaign.findMany({
+          where: { organizationId, status: "completed" },
+          select: { id: true },
+          take: 50,
+        }),
+      ]);
+
+    // Category 1: Delivery Rate (max 30)
+    const deliveryRate = totalMessages > 0 ? deliveredMessages / totalMessages : 0;
+    const deliveryScore = Math.round(deliveryRate * 30);
+    const deliveryDesc = totalMessages === 0
+      ? "No outbound messages yet"
+      : `${deliveredMessages} of ${totalMessages} messages delivered`;
+
+    // Category 2: Response Rate (max 25)
+    const responseRate = totalMessages > 0 ? Math.min(1, inboundMessages / totalMessages) : 0;
+    const responseScore = Math.round(responseRate * 25);
+    const responseDesc = `${inboundMessages} inbound replies vs ${totalMessages} outbound messages`;
+
+    // Category 3: Contact Quality (max 25) — contacts with tags/lifecycle
+    const contactQualityRate = totalContacts > 0 ? contactsWithTags / totalContacts : 0;
+    const contactScore = Math.round(contactQualityRate * 25);
+    const contactDesc = totalContacts === 0
+      ? "No contacts yet"
+      : `${contactsWithTags} of ${totalContacts} contacts have tags`;
+
+    // Category 4: Campaign Activity (max 20) — based on executed campaigns
+    const campaignScore = Math.min(20, campaigns.length * 2);
+    const campaignDesc = `${campaigns.length} campaign${campaigns.length !== 1 ? "s" : ""} executed`;
+
+    const total = deliveryScore + responseScore + contactScore + campaignScore;
+
+    const recommendations: string[] = [];
+    if (deliveryRate < 0.8 && totalMessages > 0) recommendations.push("Check phone number validity — low delivery rate may indicate stale contacts.");
+    if (responseRate < 0.1 && totalMessages > 50) recommendations.push("Increase engagement by using personalised messages and follow-ups.");
+    if (contactQualityRate < 0.3 && totalContacts > 0) recommendations.push("Tag your contacts with lifecycle stage and interest to improve targeting.");
+    if (campaigns.length === 0) recommendations.push("Run your first campaign to start building engagement history.");
+
+    return reply.send({
+      data: {
+        score: total,
+        breakdown: [
+          { category: "Delivery Rate", score: deliveryScore, maxScore: 30, description: deliveryDesc },
+          { category: "Response Rate", score: responseScore, maxScore: 25, description: responseDesc },
+          { category: "Contact Quality", score: contactScore, maxScore: 25, description: contactDesc },
+          { category: "Campaign Activity", score: campaignScore, maxScore: 20, description: campaignDesc },
+        ],
+        recommendations,
+      },
+    });
+  });
+
   fastify.get<{ Params: { id: ContactId } }>("/contacts/:id/trust-score", async (request, reply) => {
     const { organizationId } = request.auth;
 

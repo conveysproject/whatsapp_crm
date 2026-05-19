@@ -135,9 +135,9 @@ export default function PredictiveAnalyticsPage(): JSX.Element {
           }
           return;
         }
-        const json = (await res.json()) as PredictiveData;
+        const json = (await res.json()) as { data: PredictiveData };
         if (!cancelled) {
-          setData(json);
+          setData(json.data);
           setLoading(false);
         }
       } catch {

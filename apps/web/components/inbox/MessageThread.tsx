@@ -5,6 +5,7 @@ import { useMessages } from "@/hooks/useMessages";
 import { IntentBadge } from "@/components/intent-badge";
 import { VoicePlayer } from "@/components/voice-player";
 import { MediaMessage } from "./MediaMessage";
+import { formatWhatsAppText } from "@/lib/whatsapp-format";
 
 interface Props {
   conversationId: string | null;
@@ -61,7 +62,7 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
               <MediaMessage mediaUrl={msg.mediaUrl} contentType={msg.contentType ?? "document"} />
             ) : (
               <>
-                <p>{msg.body ?? "[media]"}</p>
+                <p dangerouslySetInnerHTML={{ __html: msg.body ? formatWhatsAppText(msg.body) : "[media]" }} />
                 {msg.direction === "inbound" && msg.body && (
                   <IntentBadge messageId={msg.id} text={msg.body} direction={msg.direction} />
                 )}

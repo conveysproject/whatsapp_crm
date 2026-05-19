@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { PlanTier } from "@WBMSG/shared";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS } from "../lib/stripe.js";
+import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS, ZERO_DECIMAL_CURRENCIES } from "../lib/stripe.js";
 import { checkPlanLimit, isFeatureEnabled } from "../lib/plan-limits.js";
 import Razorpay from "razorpay";
 
@@ -402,13 +402,22 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       if (isTest) {
         const receiver = creds["yoomoney_wallet"] ?? process.env["YOOMONEY_WALLET"] ?? "";
         const label = `${organizationId}:${request.body.planId}`;
-        const url = `https://yoomoney.ru/quickpay/confirm?receiver=${receiver}&quickpay-form=shop&targets=Subscription&paymentType=AC&sum=${(request.body.amount / 100).toFixed(2)}&label=${encodeURIComponent(label)}`;
+        const quickpayCurrency = request.body.currency ?? "RUB";
+        const quickpayIsZero = ZERO_DECIMAL_CURRENCIES.has(quickpayCurrency.toUpperCase());
+        const quickpaySum = quickpayIsZero
+          ? Math.round(request.body.amount).toString()
+          : (request.body.amount / 100).toFixed(2);
+        const url = `https://yoomoney.ru/quickpay/confirm?receiver=${receiver}&quickpay-form=shop&targets=Subscription&paymentType=AC&sum=${quickpaySum}&label=${encodeURIComponent(label)}`;
         return reply.send({ data: { checkoutUrl: url, mode: "test" } });
       }
 
-      // GAP-S33: live mode — YooKassa API with VAT receipt items
+      // GAP-S33/S73: live mode — YooKassa API with VAT receipt items
       const currency = request.body.currency ?? "RUB";
-      const amountValue = (request.body.amount / 100).toFixed(2);
+      // GAP-S73: zero-decimal currencies (JPY, KRW, etc.) must not be divided by 100
+      const isZeroDecimal = ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase());
+      const amountValue = isZeroDecimal
+        ? Math.round(request.body.amount).toString()
+        : (request.body.amount / 100).toFixed(2);
       const description = request.body.description ?? `TrustCRM Subscription — ${request.body.planId}`;
       const label = `${organizationId}:${request.body.planId}`;
       const returnUrl = `${(process.env["WEB_PUBLIC_URL"] ?? process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/settings/billing?status=success`;
