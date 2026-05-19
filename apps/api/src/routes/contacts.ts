@@ -5,7 +5,7 @@ import { paginate, parsePaginationParams } from "../lib/pagination.js";
 import { indexContact, removeContact, searchContacts } from "../lib/search.js";
 import { generateContactsCsv } from "../lib/csv.js";
 import type { ContactId } from "@WBMSG/shared";
-import { maskPhone, maskEmail, canAccess } from "../lib/permissions.js";
+import { maskPhone, maskEmail, canAccess, hasSubPermission } from "../lib/permissions.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 
 function csvEscape(value: string): string {
@@ -33,7 +33,14 @@ interface ContactPatchBody {
 
 export const contactsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Querystring: { format?: string } }>("/contacts/export", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    // GAP-S04: manage_contacts + export_contacts sub-permission required
+    if (!canAccess(role, permissions, "manage_contacts")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
+    }
+    if (!hasSubPermission(permissions, "manage_contacts", "export_contacts")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "export_contacts permission required" } });
+    }
     const format = request.query.format;
 
     if (format === "json") {
@@ -247,6 +254,10 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId, role, permissions } = request.auth;
     if (!canAccess(role, permissions, "manage_contacts")) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
+    }
+    // GAP-S04: delete_contacts sub-permission (default-allow; explicit deny blocks)
+    if (!hasSubPermission(permissions, "manage_contacts", "delete_contacts")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "delete_contacts permission required" } });
     }
     const existing = await fastify.prisma.contact.findFirst({
       where: { id: request.params.id, organizationId, deletedAt: null },
