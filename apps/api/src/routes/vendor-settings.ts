@@ -1,4 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
+import { syncPhoneNumbers } from "../lib/whatsapp.js";
+import { prisma } from "../lib/prisma.js";
 
 interface SettingEntry {
   key: string;
@@ -14,6 +16,35 @@ function castSetting(value: string | null, dataType: string): unknown {
     case "float": return parseFloat(value);
     case "json": try { return JSON.parse(value); } catch { return value; }
     default: return value;
+  }
+}
+
+async function runSettingsSideEffects(organizationId: string, settings: SettingEntry[]): Promise<void> {
+  const keyMap = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+
+  // whatsapp_access_token saved → clear expired flag
+  if ("whatsapp_access_token" in keyMap) {
+    await prisma.vendorSetting.upsert({
+      where: { organizationId_key: { organizationId, key: "whatsapp_access_token_expired" } },
+      create: { organizationId, key: "whatsapp_access_token_expired", value: "0", dataType: "boolean" },
+      update: { value: "0" },
+    });
+  }
+
+  // whatsapp_business_account_id saved → re-sync phone numbers
+  if ("whatsapp_business_account_id" in keyMap && keyMap["whatsapp_business_account_id"]) {
+    await syncPhoneNumbers(organizationId);
+  }
+
+  // test_recipient_contact saved → auto-create contact if not found
+  if ("test_recipient_contact" in keyMap && keyMap["test_recipient_contact"]) {
+    const phone = keyMap["test_recipient_contact"]!;
+    const existing = await prisma.contact.findFirst({ where: { organizationId, phoneNumber: phone, deletedAt: null } });
+    if (!existing) {
+      await prisma.contact.create({
+        data: { organizationId, phoneNumber: phone, name: "Test Contact" },
+      });
+    }
   }
 }
 
@@ -44,6 +75,10 @@ export const vendorSettingsRouter: FastifyPluginAsync = async (fastify) => {
           })
         )
       );
+
+      // GAP-S67: side effects for specific setting keys
+      void runSettingsSideEffects(organizationId, settings).catch(() => {/* non-critical */});
+
       return reply.send({ success: true });
     }
   );

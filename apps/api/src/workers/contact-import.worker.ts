@@ -5,8 +5,11 @@ import type { LifecycleStage, Prisma } from "@prisma/client";
 import { redisConnection } from "../lib/queue.js";
 import { redis } from "../lib/redis.js";
 import { prisma } from "../lib/prisma.js";
+import { getIo } from "../lib/io-ref.js";
 import { normalizeFullPhone, normalizeSplitPhone } from "../lib/phone-normalize.js";
 import type { FieldMapping } from "@WBMSG/shared";
+
+const IMPORT_LOCK_TTL_SECONDS = 3600; // max 1 hour per import
 
 interface ContactImportJob {
   importId: string;
@@ -67,6 +70,13 @@ export const contactImportWorker = new Worker<ContactImportJob>(
   async (job) => {
     const { importId, sessionId, organizationId, fieldMapping, batchTags, lifecycleStage, updateExisting } = job.data;
     console.log(`[contact-import] job started importId=${importId}`);
+
+    // GAP-S66: per-org concurrent import lock
+    const lockKey = `import:lock:${organizationId}`;
+    const acquired = await redis.set(lockKey, importId, "EX", IMPORT_LOCK_TTL_SECONDS, "NX");
+    if (!acquired) {
+      throw new Error("Another import is already in progress for this organization. Please wait and retry.");
+    }
 
     await prisma.contactImport.update({ where: { id: importId }, data: { status: "processing" } });
 
@@ -185,6 +195,12 @@ export const contactImportWorker = new Worker<ContactImportJob>(
         where: { id: importId },
         data: { processedRows: created + updated + skipped, createdCount: created, updatedCount: updated, skippedCount: skipped },
       });
+      // GAP-S66: emit real-time progress via Socket.io
+      const io = getIo();
+      if (io) {
+        const pct = rows.length > 0 ? Math.round(((i + batch.length) / rows.length) * 100) : 0;
+        io.to(`org:${organizationId}`).emit("import:progress", { importId, processed: i + batch.length, total: rows.length, percentage: pct });
+      }
     }
 
     await prisma.contactImport.update({
@@ -197,6 +213,9 @@ export const contactImportWorker = new Worker<ContactImportJob>(
     });
 
     await writeProgress(importId, rows.length, rows.length, created, updated, skipped, "completed");
+    // Release per-org lock
+    await redis.del(`import:lock:${organizationId}`);
+    getIo()?.to(`org:${organizationId}`).emit("import:completed", { importId });
   },
   { connection: redisConnection, concurrency: 1 }
 );
@@ -214,7 +233,7 @@ contactImportWorker.on("completed", (job) => {
 contactImportWorker.on("failed", async (job, err) => {
   console.error(`[contact-import] job failed importId=${job?.data?.importId} err=${err.message}`);
   if (!job) return;
-  const { importId } = job.data;
+  const { importId, organizationId } = job.data;
   await prisma.contactImport
     .update({
       where: { id: importId },
@@ -224,6 +243,8 @@ contactImportWorker.on("failed", async (job, err) => {
   await redis
     .set(`import:progress:${importId}`, JSON.stringify({ status: "failed" }), "EX", 7200)
     .catch(() => undefined);
+  // GAP-S66: release per-org lock on failure
+  await redis.del(`import:lock:${organizationId}`).catch(() => undefined);
 });
 
 contactImportWorker.on("error", (err) => {

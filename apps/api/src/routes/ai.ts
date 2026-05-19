@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { generateSuggestions, detectIntent, analyzeSentiment, generateSmartReplies, detectIntentWithConfidence } from "../lib/claude.js";
+import { generateSuggestions, detectIntent, analyzeSentiment, generateSmartReplies, detectIntentWithConfidence, buildAiContext, summarizeConversation, AI_CONTEXT_LONG } from "../lib/claude.js";
 import type { ConversationId, MessageId } from "@WBMSG/shared";
 
 export const aiRouter: FastifyPluginAsync = async (fastify) => {
@@ -15,21 +15,40 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
       }
 
+      // GAP-S26: use contact's past AI summary for sliding window (6 vs 30 messages)
+      const contact = conversation.contactId
+        ? await fastify.prisma.contact.findUnique({
+            where: { id: conversation.contactId },
+            select: { pastAiSummary: true },
+          })
+        : null;
+
       const messages = await fastify.prisma.message.findMany({
         where: { conversationId: request.params.id },
         orderBy: { sentAt: "desc" },
-        take: 10,
+        take: AI_CONTEXT_LONG,
       });
 
-      const history = messages
-        .reverse()
-        .filter((m) => m.body)
-        .map((m) => ({
-          role: (m.direction === "inbound" ? "user" : "assistant") as "user" | "assistant",
-          content: m.body ?? "",
-        }));
+      const { contextMessages } = await buildAiContext(messages.toReversed(), contact?.pastAiSummary);
 
-      const suggestions = await generateSuggestions(history);
+      // Auto-summarize after 30 messages and store back to contact
+      if (!contact?.pastAiSummary && messages.length >= AI_CONTEXT_LONG && conversation.contactId) {
+        void (async () => {
+          try {
+            const summary = await summarizeConversation(
+              messages.toReversed().map((m) => ({ body: m.body, direction: m.direction, sentAt: m.sentAt }))
+            );
+            if (summary) {
+              await fastify.prisma.contact.update({
+                where: { id: conversation.contactId! },
+                data: { pastAiSummary: summary },
+              });
+            }
+          } catch { /* non-critical */ }
+        })();
+      }
+
+      const suggestions = await generateSuggestions(contextMessages);
       return reply.send({ data: { suggestions } });
     }
   );

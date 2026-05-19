@@ -9,6 +9,7 @@ import { handleBotMessage } from "../lib/bot-runner.js";
 import { getMediaUrl, downloadMediaBytes, markAsRead } from "../lib/whatsapp.js";
 import { dispatchWebhook } from "../lib/webhook-dispatch.js";
 import { isFeatureEnabled } from "../lib/plan-limits.js";
+import { phoneVariants } from "../lib/phone-normalize.js";
 import Expo from "expo-server-sdk";
 
 const expo = new Expo();
@@ -72,10 +73,25 @@ export const inboundWorker = new Worker<InboundMessageJob>(
     });
 
     if (!conversation) {
-      const existingContact = await prisma.contact.findFirst({
+      // GAP-S08: try exact match first, then fall back to phone variant lookup
+      let existingContact = await prisma.contact.findFirst({
         where: { organizationId, phoneNumber: whatsappContactPhone, deletedAt: null },
-        select: { id: true },
+        select: { id: true, phoneNumber: true },
       });
+      if (!existingContact) {
+        const variants = phoneVariants(whatsappContactPhone).filter((v) => v !== whatsappContactPhone);
+        for (const variant of variants) {
+          existingContact = await prisma.contact.findFirst({
+            where: { organizationId, phoneNumber: variant, deletedAt: null },
+            select: { id: true, phoneNumber: true },
+          });
+          if (existingContact) {
+            // Canonicalize stored phone to match incoming format
+            void prisma.contact.update({ where: { id: existingContact.id }, data: { phoneNumber: whatsappContactPhone } }).catch(() => {});
+            break;
+          }
+        }
+      }
       conversation = await prisma.conversation.create({
         data: {
           organizationId,

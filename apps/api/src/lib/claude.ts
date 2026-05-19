@@ -17,6 +17,29 @@ const SYSTEM_PROMPT = `You are a helpful customer support assistant for WBMSG, a
 Your job is to help support agents respond to customer messages.
 Be concise, professional, and empathetic. Respond in the same language as the customer.`;
 
+// GAP-S26: sliding window — 6 messages when a past summary exists; 30 messages when not.
+export const AI_CONTEXT_SHORT = 6;
+export const AI_CONTEXT_LONG = 30;
+
+// Summarize and store back to contact when context is long
+export async function buildAiContext(
+  messages: { body: string | null; direction: string }[],
+  pastSummary?: string | null
+): Promise<{ contextMessages: Message[]; systemContext: string }> {
+  const limit = pastSummary ? AI_CONTEXT_SHORT : AI_CONTEXT_LONG;
+  const recent = messages.slice(-limit);
+  const contextMessages: Message[] = recent
+    .filter((m) => m.body)
+    .map((m) => ({
+      role: (m.direction === "inbound" ? "user" : "assistant") as "user" | "assistant",
+      content: m.body ?? "",
+    }));
+  const systemContext = pastSummary
+    ? `Previous conversation summary:\n${pastSummary}\n\n${SYSTEM_PROMPT}`
+    : SYSTEM_PROMPT;
+  return { contextMessages, systemContext };
+}
+
 export async function generateSuggestions(
   history: Message[],
   count = 3
