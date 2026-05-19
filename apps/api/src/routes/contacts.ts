@@ -305,4 +305,36 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       return reply.send({ data });
     }
   );
+
+  // ── Per-user saved contact filter (GAP-S09) ───────────────────────────────
+  // Stored in VendorSetting as "saved_contact_filter_{userId}" — per-user within org
+  fastify.get("/contacts/saved-filter", async (request, reply) => {
+    const { organizationId, userId } = request.auth;
+    const key = `saved_contact_filter_${userId}`;
+    const setting = await fastify.prisma.vendorSetting.findFirst({
+      where: { organizationId, key },
+      select: { value: true },
+    });
+    const filter = setting?.value ? (JSON.parse(setting.value) as Record<string, unknown>) : null;
+    return reply.send({ data: filter });
+  });
+
+  fastify.put<{ Body: Record<string, unknown> }>("/contacts/saved-filter", async (request, reply) => {
+    const { organizationId, userId } = request.auth;
+    const key = `saved_contact_filter_${userId}`;
+    const value = JSON.stringify(request.body);
+    await fastify.prisma.vendorSetting.upsert({
+      where: { organizationId_key: { organizationId, key } },
+      create: { organizationId, key, value, dataType: "json" },
+      update: { value },
+    });
+    return reply.send({ success: true });
+  });
+
+  fastify.delete("/contacts/saved-filter", async (request, reply) => {
+    const { organizationId, userId } = request.auth;
+    const key = `saved_contact_filter_${userId}`;
+    await fastify.prisma.vendorSetting.deleteMany({ where: { organizationId, key } });
+    return reply.status(204).send();
+  });
 };

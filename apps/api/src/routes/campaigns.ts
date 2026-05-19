@@ -3,6 +3,7 @@ import type { CampaignStatus } from "@prisma/client";
 import { campaignQueue } from "../lib/queue.js";
 import type { CampaignId, SegmentId, TemplateId } from "@WBMSG/shared";
 import { evaluateSegment, type SegmentFilter } from "../lib/segment-evaluator.js";
+import { maskPhone, maskEmail } from "../lib/permissions.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 
 interface CampaignBody {
@@ -359,6 +360,40 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
       }));
 
       return reply.send({ data: { totalReach, preview } });
+    }
+  );
+
+  // ── Campaign report export (GAP-S16) — CSV with permission-based phone masking ──
+  fastify.get<{ Params: { id: CampaignId } }>(
+    "/campaigns/:id/export",
+    async (request, reply) => {
+      const { organizationId, permissions } = request.auth;
+      const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
+      if (!campaign) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
+
+      const recipients = await fastify.prisma.campaignRecipient.findMany({
+        where: { campaignId: request.params.id, organizationId },
+        include: { contact: { select: { firstName: true, lastName: true, phoneNumber: true, email: true } } },
+        orderBy: { createdAt: "asc" },
+      });
+
+      const maskPhones = permissions["hide_contact_phone_numbers"] === "allow";
+      const maskEmails = permissions["hide_contact_emails"] === "allow";
+
+      const header = "Contact Name,Phone Number,Email,Status,Sent At,Error\n";
+      const rows = recipients.map((r) => {
+        const name = [r.contact?.firstName, r.contact?.lastName].filter(Boolean).join(" ") || "";
+        const phone = maskPhones ? maskPhone(r.contact?.phoneNumber ?? "") : (r.contact?.phoneNumber ?? "");
+        const email = maskEmails ? maskEmail(r.contact?.email ?? "") : (r.contact?.email ?? "");
+        const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+        return [escape(name), escape(`="${phone}"`), escape(email), r.status, r.sentAt?.toISOString() ?? "", escape(r.errorMessage ?? "")].join(",");
+      });
+
+      const csv = header + rows.join("\n");
+      const filename = `campaign-report-${campaign.name.replace(/\s+/g, "-")}.csv`;
+      reply.header("Content-Type", "text/csv; charset=utf-8");
+      reply.header("Content-Disposition", `attachment; filename=${filename}`);
+      return reply.send("﻿" + csv); // UTF-8 BOM for Excel compatibility
     }
   );
 };

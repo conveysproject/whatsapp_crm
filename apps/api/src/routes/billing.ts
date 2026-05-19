@@ -386,12 +386,68 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── YooMoney ──────────────────────────────────────────────────────────────
-  fastify.post<{ Body: { amount: number; planId: string } }>("/billing/yoomoney/checkout", async (request, reply) => {
-    const receiver = process.env["YOOMONEY_WALLET"] ?? "";
-    const label = `${request.auth.organizationId}:${request.body.planId}`;
-    const url = `https://yoomoney.ru/quickpay/confirm?receiver=${receiver}&quickpay-form=shop&targets=Subscription&paymentType=AC&sum=${request.body.amount / 100}&label=${encodeURIComponent(label)}`;
-    return reply.send({ data: { checkoutUrl: url } });
-  });
+  fastify.post<{ Body: { amount: number; planId: string; currency?: string; description?: string } }>(
+    "/billing/yoomoney/checkout",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      // GAP-S60: DB credentials first
+      const creds = await getGatewayCredentials(fastify.prisma, organizationId, "yoomoney");
+      const shopId = creds["yoomoney_shop_id"] ?? process.env["YOOMONEY_SHOP_ID"] ?? "";
+      const secretKey = creds["yoomoney_secret_key"] ?? process.env["YOOMONEY_SECRET_KEY"] ?? "";
+      const isTest = creds["use_test_yoomoney"] === "true" || !shopId;
+
+      // Quickpay fallback for test mode (no shop credentials needed)
+      if (isTest) {
+        const receiver = creds["yoomoney_wallet"] ?? process.env["YOOMONEY_WALLET"] ?? "";
+        const label = `${organizationId}:${request.body.planId}`;
+        const url = `https://yoomoney.ru/quickpay/confirm?receiver=${receiver}&quickpay-form=shop&targets=Subscription&paymentType=AC&sum=${(request.body.amount / 100).toFixed(2)}&label=${encodeURIComponent(label)}`;
+        return reply.send({ data: { checkoutUrl: url, mode: "test" } });
+      }
+
+      // GAP-S33: live mode — YooKassa API with VAT receipt items
+      const currency = request.body.currency ?? "RUB";
+      const amountValue = (request.body.amount / 100).toFixed(2);
+      const description = request.body.description ?? `TrustCRM Subscription — ${request.body.planId}`;
+      const label = `${organizationId}:${request.body.planId}`;
+      const returnUrl = `${(process.env["WEB_PUBLIC_URL"] ?? process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/settings/billing?status=success`;
+
+      const paymentBody = {
+        amount: { value: amountValue, currency },
+        description,
+        metadata: { organizationId, planId: request.body.planId, label },
+        confirmation: { type: "redirect", return_url: returnUrl },
+        // GAP-S33: receipt with VAT for Russian market
+        receipt: {
+          items: [{
+            description,
+            quantity: "1.00",
+            amount: { value: amountValue, currency },
+            vat_code: 1, // VAT-free (0%)
+            payment_subject: "service",
+            payment_mode: "full_payment",
+          }],
+        },
+        capture: true,
+      };
+
+      const res = await fetch("https://api.yookassa.ru/v3/payments", {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${shopId}:${secretKey}`).toString("base64")}`,
+          "Content-Type": "application/json",
+          "Idempotence-Key": label,
+        },
+        body: JSON.stringify(paymentBody),
+      });
+      if (!res.ok) {
+        const err = await res.json() as unknown;
+        fastify.log.error({ err }, "YooKassa payment creation failed");
+        return reply.status(502).send({ error: { code: "YOOKASSA_ERROR", message: "Payment creation failed" } });
+      }
+      const json = await res.json() as { id: string; status: string; confirmation: { confirmation_url: string } };
+      return reply.send({ data: { checkoutUrl: json.confirmation.confirmation_url, paymentId: json.id, mode: "live" } });
+    }
+  );
 
   // GAP-S61: YooMoney payment.succeeded webhook
   fastify.post("/billing/yoomoney/webhook", { config: { public: true } }, async (request, reply) => {
