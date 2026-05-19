@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { checkPlanLimit } from "../lib/plan-limits.js";
-import { canAccess } from "../lib/permissions.js";
+import { canAccess, hasSubPermission } from "../lib/permissions.js";
 
 interface ChatbotBody {
   name: string;
@@ -33,7 +33,14 @@ export const chatbotsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.patch<{ Params: { id: string }; Body: Partial<ChatbotBody> & { isActive?: boolean; sessionTimeoutMinutes?: number; isStrictFlow?: boolean; startTrigger?: string } }>(
     "/chatbots/:id",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      // GAP-S04: manage_bot_replies + add_edit_bot_replies sub-permission required
+      if (!canAccess(role, permissions, "manage_bot_replies")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_bot_replies permission required" } });
+      }
+      if (!hasSubPermission(permissions, "manage_bot_replies", "add_edit_bot_replies")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "add_edit_bot_replies permission required" } });
+      }
       const existing = await fastify.prisma.chatbot.findFirst({ where: { id: request.params.id, organizationId } });
       if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Chatbot not found" } });
       const { name, flowId, isActive, sessionTimeoutMinutes, isStrictFlow, startTrigger } = request.body;
@@ -53,7 +60,14 @@ export const chatbotsRouter: FastifyPluginAsync = async (fastify) => {
   );
 
   fastify.delete<{ Params: { id: string } }>("/chatbots/:id", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    // GAP-S04: manage_bot_replies + delete_bot_replies sub-permission required
+    if (!canAccess(role, permissions, "manage_bot_replies")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_bot_replies permission required" } });
+    }
+    if (!hasSubPermission(permissions, "manage_bot_replies", "delete_bot_replies")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "delete_bot_replies permission required" } });
+    }
     const existing = await fastify.prisma.chatbot.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Chatbot not found" } });
     await fastify.prisma.chatbot.delete({ where: { id: request.params.id } });
