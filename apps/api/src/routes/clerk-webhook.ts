@@ -22,10 +22,16 @@ interface ClerkMembership {
   role: string; // "org:admin" | "org:member"
 }
 
+interface ClerkSession {
+  user_id: string;
+  client_id?: string;
+}
+
 type ClerkEvent =
   | { type: "organization.created"; data: ClerkOrg }
   | { type: "organizationMembership.created"; data: ClerkMembership }
   | { type: "organizationMembership.deleted"; data: ClerkMembership }
+  | { type: "session.created"; data: ClerkSession }
   | { type: string; data: unknown };
 
 export const clerkWebhookRouter: FastifyPluginAsync = async (fastify) => {
@@ -137,6 +143,26 @@ export const clerkWebhookRouter: FastifyPluginAsync = async (fastify) => {
           where: { id: public_user_data.user_id },
           data: { isActive: false },
         });
+      }
+
+      // GAP-S03: write login audit log on session creation
+      if (event.type === "session.created") {
+        const session = event.data as ClerkSession;
+        const user = await fastify.prisma.user.findUnique({
+          where: { id: session.user_id },
+          select: { organizationId: true },
+        });
+        if (user) {
+          await fastify.prisma.loginLog.create({
+            data: {
+              userId: session.user_id,
+              orgId: user.organizationId,
+              ipAddress: request.ip ?? null,
+              userAgent: (request.headers["user-agent"] as string | undefined) ?? null,
+              success: true,
+            },
+          });
+        }
       }
 
       return reply.status(200).send({ ok: true });
