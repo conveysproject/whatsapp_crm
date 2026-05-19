@@ -1110,6 +1110,7 @@ model ManualSubscription {
   gateway          PaymentGateway
   gatewayPriceId   String?                  @map("gateway_price_id")
   isAutoRecurring  Boolean                  @default(false) @map("is_auto_recurring")
+  transactionRef   String?                  @map("transaction_ref")
   startsAt         DateTime                 @default(now()) @map("starts_at")
   endsAt           DateTime?                @map("ends_at")
   trialEndsAt      DateTime?                @map("trial_ends_at")
@@ -1119,6 +1120,7 @@ model ManualSubscription {
   updatedAt        DateTime                 @updatedAt @map("updated_at")
   transactions     Transaction[]
 
+  @@unique([organizationId, transactionRef])
   @@index([organizationId])
   @@index([organizationId, status])
   @@map("manual_subscriptions")

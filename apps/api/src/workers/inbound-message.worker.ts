@@ -8,6 +8,7 @@ import { flowQueue } from "../lib/queue.js";
 import { handleBotMessage } from "../lib/bot-runner.js";
 import { getMediaUrl, downloadMediaBytes, markAsRead } from "../lib/whatsapp.js";
 import { dispatchWebhook } from "../lib/webhook-dispatch.js";
+import { isFeatureEnabled } from "../lib/plan-limits.js";
 import Expo from "expo-server-sdk";
 
 const expo = new Expo();
@@ -169,7 +170,8 @@ export const inboundWorker = new Worker<InboundMessageJob>(
     const botRestricted = botSettingMap["enable_bot_timing_restrictions"] === "true";
     const botInWindow = !botRestricted || isBotInWindow(botSettingMap["bot_start_timing"], botSettingMap["bot_end_timing"], botSettingMap["bot_timing_timezone"]);
 
-    if (refreshed?.status === "bot" && botInWindow) {
+    const aiBotEnabled = await isFeatureEnabled(prisma, organizationId, "ai_chat_bot");
+    if (aiBotEnabled && refreshed?.status === "bot" && botInWindow) {
       const io = getIo();
       io?.to(`org:${organizationId}`).emit("bot:triggered", { conversationId: conversation.id });
       try {

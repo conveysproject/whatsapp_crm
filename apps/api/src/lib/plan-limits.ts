@@ -34,6 +34,19 @@ async function countEntity(prisma: PrismaClient, entity: LimitEntity, organizati
   }
 }
 
+// Binary feature switch: enabled when plan_feature_{feature} = "1" or "true".
+export async function isFeatureEnabled(
+  prisma: PrismaClient,
+  organizationId: string,
+  feature: "ai_chat_bot" | "api_access"
+): Promise<boolean> {
+  const setting = await prisma.vendorSetting.findFirst({
+    where: { organizationId, key: `plan_feature_${feature}` },
+    select: { value: true },
+  });
+  return setting?.value === "1" || setting?.value === "true";
+}
+
 // Returns allowed:true when under limit, or allowed:false when at/over limit.
 // limit=-1 means unlimited (always allowed).
 export async function checkPlanLimit(
@@ -47,8 +60,7 @@ export async function checkPlanLimit(
   });
 
   const limit = parseInt(setting?.value ?? "-1", 10);
-  if (isNaN(limit) || limit < 0) return { allowed: true, limit: -1, current: 0 };
-
   const current = await countEntity(prisma, entity, organizationId);
+  if (isNaN(limit) || limit < 0) return { allowed: true, limit: -1, current };
   return { allowed: current < limit, limit, current };
 }

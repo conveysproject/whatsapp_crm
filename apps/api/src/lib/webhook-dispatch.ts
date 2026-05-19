@@ -1,17 +1,15 @@
 import { createHmac } from "node:crypto";
 import { prisma } from "./prisma.js";
+import { isFeatureEnabled } from "./plan-limits.js";
 
 export async function dispatchWebhook(
   organizationId: string,
   event: string,
   payload: Record<string, unknown>
 ): Promise<void> {
-  // Gate behind plan.api_access
-  const planSetting = await prisma.vendorSetting.findFirst({
-    where: { organizationId, key: "plan.api_access" },
-    select: { value: true },
-  });
-  if (planSetting?.value !== "true") return;
+  // Gate behind plan.api_access feature switch
+  const apiEnabled = await isFeatureEnabled(prisma, organizationId, "api_access");
+  if (!apiEnabled) return;
 
   const webhooks = await prisma.webhook.findMany({
     where: { organizationId, isActive: true, events: { has: event } },

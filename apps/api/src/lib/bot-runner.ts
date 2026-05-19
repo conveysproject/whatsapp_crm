@@ -2,6 +2,19 @@ import type { PrismaClient } from "@prisma/client";
 import { sendTextMessage } from "./whatsapp.js";
 import type { FlowDefinition, FlowNode } from "./flow-runner.js";
 
+function substituteTokens(
+  text: string,
+  contact: { firstName: string | null; lastName: string | null; name: string | null; phoneNumber: string; email: string | null } | null
+): string {
+  if (!contact) return text;
+  return text
+    .replace(/\{first_name\}/gi, contact.firstName ?? "")
+    .replace(/\{last_name\}/gi, contact.lastName ?? "")
+    .replace(/\{full_name\}/gi, contact.name ?? `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim())
+    .replace(/\{phone_number\}/gi, contact.phoneNumber)
+    .replace(/\{email\}/gi, contact.email ?? "");
+}
+
 export async function handleBotMessage(
   prisma: PrismaClient,
   conversationId: string,
@@ -25,11 +38,16 @@ export async function handleBotMessage(
   const node = nodeMap.get(currentNodeId);
   if (!node) return;
 
-  const conversation = await prisma.conversation.findFirst({ where: { id: conversationId } });
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: conversationId },
+    include: { contact: { select: { firstName: true, lastName: true, name: true, phoneNumber: true, email: true } } },
+  });
   const contactPhone = conversation?.whatsappContactId ?? "";
+  const contact = conversation?.contact ?? null;
 
   if (node.type === "send_message") {
-    const text = (node.config["text"] as string) ?? "";
+    const rawText = (node.config["text"] as string) ?? "";
+    const text = substituteTokens(rawText, contact);
     if (text && contactPhone) {
       await sendTextMessage(
         process.env["WA_PHONE_NUMBER_ID"] ?? "",

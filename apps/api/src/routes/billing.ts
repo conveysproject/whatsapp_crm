@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { PlanTier } from "@WBMSG/shared";
 import type { Prisma } from "@prisma/client";
 import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS } from "../lib/stripe.js";
+import { checkPlanLimit, isFeatureEnabled } from "../lib/plan-limits.js";
 import Razorpay from "razorpay";
 
 export const billingRouter: FastifyPluginAsync = async (fastify) => {
@@ -62,6 +63,42 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     };
   });
 
+  // ── Cancel at period end (grace period) ─────────────────────────────────
+  fastify.post("/billing/cancel", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const org = await fastify.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { settings: true },
+    });
+    const settings = org?.settings as Record<string, string> | null;
+    const stripeCustomerId = settings?.["stripeCustomerId"];
+    if (!stripeCustomerId) return reply.status(400).send({ error: { code: "NO_BILLING_ACCOUNT", message: "No Stripe customer found" } });
+    const subs = await getStripe().subscriptions.list({ customer: stripeCustomerId, status: "active", limit: 1 });
+    const sub = subs.data[0];
+    if (!sub) return reply.status(400).send({ error: { code: "NO_ACTIVE_SUBSCRIPTION", message: "No active subscription" } });
+    const updated = await getStripe().subscriptions.update(sub.id, { cancel_at_period_end: true });
+    const periodEnd = (updated as unknown as { current_period_end: number }).current_period_end;
+    return reply.send({ data: { cancelled: true, accessUntil: new Date(periodEnd * 1000) } });
+  });
+
+  // ── Cancel immediately ────────────────────────────────────────────────────
+  fastify.post("/billing/cancel-now", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const org = await fastify.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { settings: true },
+    });
+    const settings = org?.settings as Record<string, string> | null;
+    const stripeCustomerId = settings?.["stripeCustomerId"];
+    if (!stripeCustomerId) return reply.status(400).send({ error: { code: "NO_BILLING_ACCOUNT", message: "No Stripe customer found" } });
+    const subs = await getStripe().subscriptions.list({ customer: stripeCustomerId, status: "active", limit: 1 });
+    const sub = subs.data[0];
+    if (!sub) return reply.status(400).send({ error: { code: "NO_ACTIVE_SUBSCRIPTION", message: "No active subscription" } });
+    await getStripe().subscriptions.cancel(sub.id);
+    await fastify.prisma.organization.update({ where: { id: organizationId }, data: { planTier: "starter" } });
+    return reply.send({ data: { cancelled: true } });
+  });
+
   // ── Switch plan via Stripe ────────────────────────────────────────────────
   fastify.post<{ Body: { planTier: PlanTier } }>("/billing/switch-plan", async (request, reply) => {
     const { organizationId } = request.auth;
@@ -114,20 +151,39 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       select: { planTier: true },
     });
     const tier = (org?.planTier ?? "starter") as string;
-    const limits = PLAN_LIMITS[tier] ?? PLAN_LIMITS["starter"];
 
-    const [contactCount, messageCount] = await Promise.all([
-      fastify.prisma.contact.count({ where: { organizationId } }),
-      fastify.prisma.message.count({ where: { organizationId } }),
+    const [contacts, campaigns, chatbots, flows, customFields, teamMembers, aiChatBot, apiAccess] = await Promise.all([
+      checkPlanLimit(fastify.prisma, organizationId, "contacts"),
+      checkPlanLimit(fastify.prisma, organizationId, "campaigns"),
+      checkPlanLimit(fastify.prisma, organizationId, "chatbots"),
+      checkPlanLimit(fastify.prisma, organizationId, "flows"),
+      checkPlanLimit(fastify.prisma, organizationId, "custom_fields"),
+      checkPlanLimit(fastify.prisma, organizationId, "team_members"),
+      isFeatureEnabled(fastify.prisma, organizationId, "ai_chat_bot"),
+      isFeatureEnabled(fastify.prisma, organizationId, "api_access"),
     ]);
+
+    const unavailable: string[] = [];
+    if (!contacts.allowed) unavailable.push("contacts");
+    if (!campaigns.allowed) unavailable.push("campaigns");
+    if (!chatbots.allowed) unavailable.push("chatbots");
+    if (!flows.allowed) unavailable.push("flows");
+    if (!customFields.allowed) unavailable.push("custom_fields");
+    if (!teamMembers.allowed) unavailable.push("team_members");
 
     return {
       data: {
         plan: tier,
-        usage: { contacts: contactCount, messages: messageCount },
-        limits: {
-          contacts: limits.contacts === Infinity ? null : limits.contacts,
-          messages: limits.messages === Infinity ? null : limits.messages,
+        unavailableFeatures: unavailable,
+        gates: {
+          contacts: { current: contacts.current, limit: contacts.limit === -1 ? null : contacts.limit, allowed: contacts.allowed },
+          campaigns: { current: campaigns.current, limit: campaigns.limit === -1 ? null : campaigns.limit, allowed: campaigns.allowed },
+          chatbots: { current: chatbots.current, limit: chatbots.limit === -1 ? null : chatbots.limit, allowed: chatbots.allowed },
+          flows: { current: flows.current, limit: flows.limit === -1 ? null : flows.limit, allowed: flows.allowed },
+          custom_fields: { current: customFields.current, limit: customFields.limit === -1 ? null : customFields.limit, allowed: customFields.allowed },
+          team_members: { current: teamMembers.current, limit: teamMembers.limit === -1 ? null : teamMembers.limit, allowed: teamMembers.allowed },
+          ai_chat_bot: { enabled: aiChatBot },
+          api_access: { enabled: apiAccess },
         },
       },
     };
@@ -282,6 +338,14 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { organizationId } = request.auth;
       const { planId, proofUrl, transactionRef } = request.body;
+      if (transactionRef) {
+        const duplicate = await fastify.prisma.manualSubscription.findFirst({
+          where: { organizationId, transactionRef },
+        });
+        if (duplicate) {
+          return reply.status(409).send({ error: { code: "DUPLICATE_TRANSACTION", message: "This transaction reference has already been submitted" } });
+        }
+      }
       const data = await fastify.prisma.manualSubscription.create({
         data: {
           organizationId,
@@ -290,6 +354,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
           charges: 0,
           chargesFrequency: "one_time",
           gateway: "other",
+          transactionRef: transactionRef ?? null,
           remarks: JSON.stringify({ proofUrl, transactionRef }),
         },
       });

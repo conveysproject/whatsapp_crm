@@ -6,15 +6,26 @@ interface SettingEntry {
   dataType?: string;
 }
 
+function castSetting(value: string | null, dataType: string): unknown {
+  if (value === null || value === "") return null;
+  switch (dataType) {
+    case "boolean": return value === "true" || value === "1";
+    case "integer": return parseInt(value, 10);
+    case "float": return parseFloat(value);
+    case "json": try { return JSON.parse(value); } catch { return value; }
+    default: return value;
+  }
+}
+
 export const vendorSettingsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/vendor-settings", async (request, reply) => {
     const { organizationId } = request.auth;
     const rows = await fastify.prisma.vendorSetting.findMany({
       where: { organizationId },
     });
-    const data: Record<string, string> = {};
+    const data: Record<string, unknown> = {};
     for (const row of rows) {
-      data[row.key] = row.value ?? "";
+      data[row.key] = castSetting(row.value, row.dataType);
     }
     return reply.send({ data });
   });

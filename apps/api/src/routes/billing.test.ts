@@ -25,9 +25,15 @@ vi.mock("razorpay", () => ({
 
 const mockPrisma = {
   organization: { findUnique: vi.fn(), update: vi.fn() },
-  contact: { count: vi.fn() },
-  message: { count: vi.fn() },
-  manualSubscription: { create: vi.fn(), updateMany: vi.fn() },
+  contact: { count: vi.fn().mockResolvedValue(0) },
+  message: { count: vi.fn().mockResolvedValue(0) },
+  campaign: { count: vi.fn().mockResolvedValue(0) },
+  chatbot: { count: vi.fn().mockResolvedValue(0) },
+  flow: { count: vi.fn().mockResolvedValue(0) },
+  contactCustomField: { count: vi.fn().mockResolvedValue(0) },
+  user: { count: vi.fn().mockResolvedValue(0) },
+  vendorSetting: { findFirst: vi.fn().mockResolvedValue(null) },
+  manualSubscription: { create: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
 };
 const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
 
@@ -48,13 +54,12 @@ describe("GET /v1/billing/usage", () => {
   it("returns usage and limits", async () => {
     mockPrisma.organization.findUnique.mockResolvedValue({ planTier: "starter" });
     mockPrisma.contact.count.mockResolvedValue(100);
-    mockPrisma.message.count.mockResolvedValue(300);
 
     const res = await app.inject({ method: "GET", url: "/v1/billing/usage" });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ data: { plan: string; usage: { contacts: number } } }>();
+    const body = res.json<{ data: { plan: string; gates: { contacts: { current: number } } } }>();
     expect(body.data.plan).toBe("starter");
-    expect(body.data.usage.contacts).toBe(100);
+    expect(body.data.gates.contacts.current).toBe(100);
   });
 });
 

@@ -32,8 +32,8 @@ describe("GET /v1/vendor-settings", () => {
     ]);
     const res = await app.inject({ method: "GET", url: "/v1/vendor-settings" });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ data: Record<string, string> }>();
-    expect(body.data["is_disabled_message_sound_notification"]).toBe("false");
+    const body = res.json<{ data: Record<string, unknown> }>();
+    expect(body.data["is_disabled_message_sound_notification"]).toBe(false);
     expect(mockPrisma.vendorSetting.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { organizationId: "org-1" } })
     );
