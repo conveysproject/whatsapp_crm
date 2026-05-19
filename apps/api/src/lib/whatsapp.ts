@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { prisma } from "./prisma.js";
 
 const WA_BASE = "https://graph.facebook.com/v25.0";
 
@@ -202,9 +203,30 @@ export async function syncPhoneNumbers(organizationId: string): Promise<unknown[
   return [];
 }
 
-export async function getHealthStatus(organizationId: string): Promise<{ status: string }> {
-  void organizationId;
-  return { status: "unknown" };
+const HEALTH_KEYS = [
+  "facebook_app_id",
+  "whatsapp_access_token",
+  "whatsapp_business_account_id",
+  "current_phone_number_number",
+  "current_phone_number_id",
+  "webhook_verified_at",
+] as const;
+
+export async function getHealthStatus(
+  organizationId: string
+): Promise<{ status: "healthy" | "degraded"; conditions: Record<string, boolean> }> {
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const conditions: Record<string, boolean> = {};
+  for (const k of HEALTH_KEYS) {
+    conditions[k] = Boolean(map[k]);
+  }
+  conditions["token_not_expired"] = map["whatsapp_access_token_expired"] !== "1";
+  const status = Object.values(conditions).every(Boolean) ? "healthy" : "degraded";
+  return { status, conditions };
 }
 
 export async function registerPhoneNumber(

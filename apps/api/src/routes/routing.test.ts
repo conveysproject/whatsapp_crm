@@ -6,7 +6,7 @@ const mockPrisma = {
   routingRule: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
   conversation: { findFirst: vi.fn(), update: vi.fn() },
 };
-const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const };
+const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });

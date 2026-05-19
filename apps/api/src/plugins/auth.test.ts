@@ -16,6 +16,9 @@ vi.mock("../lib/prisma.js", () => ({
     organizationMember: {
       findFirst: vi.fn().mockResolvedValue({ permissions: {} }),
     },
+    loginLog: {
+      create: vi.fn().mockResolvedValue({}),
+    },
     $disconnect: vi.fn(),
   },
 }));

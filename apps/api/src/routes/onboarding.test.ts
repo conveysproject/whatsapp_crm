@@ -5,7 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 const mockPrisma = {
   organization: { update: vi.fn(), findUnique: vi.fn() },
 };
-const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const };
+const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });

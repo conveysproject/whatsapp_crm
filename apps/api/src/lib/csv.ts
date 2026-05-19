@@ -18,7 +18,7 @@ export function generateContactsCsv(
   }>
 ): string {
   const rows: ContactCsvRow[] = contacts.map((c) => ({
-    phoneNumber: c.phoneNumber,
+    phoneNumber: `="${c.phoneNumber}"`,
     name: c.name ?? "",
     email: c.email ?? "",
     lifecycleStage: c.lifecycleStage,

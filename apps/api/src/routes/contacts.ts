@@ -55,7 +55,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           csvEscape(c.id),
           csvEscape(c.firstName ?? ""),
           csvEscape(c.lastName ?? ""),
-          csvEscape(c.phoneNumber),
+          csvEscape(`="${c.phoneNumber}"`),
           csvEscape(c.email ?? ""),
           csvEscape(c.countryCode ?? ""),
           csvEscape(c.createdAt.toISOString()),

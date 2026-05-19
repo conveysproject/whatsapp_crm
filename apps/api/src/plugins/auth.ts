@@ -34,6 +34,20 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     const permissions = (member?.permissions ?? {}) as Record<string, string>;
 
     request.auth = { userId, organizationId: user.organizationId, role: user.role, permissions };
+
+    // Fire-and-forget login audit log
+    setImmediate(() => {
+      fastify.prisma.loginLog
+        .create({
+          data: {
+            userId,
+            orgId: user.organizationId,
+            ipAddress: request.ip,
+            userAgent: request.headers["user-agent"] ?? null,
+          },
+        })
+        .catch(() => {/* non-critical */});
+    });
   });
 };
 

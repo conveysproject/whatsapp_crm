@@ -13,7 +13,7 @@ const mockPrisma = {
   contact: { findMany: vi.fn() },
 };
 
-const mockAuth = { userId: "user-1", organizationId: "org-1", role: "admin" as const };
+const mockAuth = { userId: "user-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });

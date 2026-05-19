@@ -11,6 +11,7 @@ const mockPrisma = {
     findMany: vi.fn(),
     count: vi.fn(),
     create: vi.fn(),
+    update: vi.fn(),
   },
 };
 
@@ -94,7 +95,8 @@ describe("POST /v1/conversations/:id/messages — text", () => {
 
   it("sends text message and returns 201", async () => {
     mockPrisma.conversation.findFirst.mockResolvedValue(baseConversation);
-    mockPrisma.message.create.mockResolvedValue({ id: "msg-1", contentType: "text", body: "Hello", direction: "outbound" });
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-1", status: "sending" });
+    mockPrisma.message.update.mockResolvedValue({ id: "msg-1", contentType: "text", body: "Hello", direction: "outbound", status: "sent" });
     mockPrisma.conversation.update.mockResolvedValue({});
     const { sendTextMessage } = await import("../lib/whatsapp.js");
 
@@ -116,7 +118,8 @@ describe("POST /v1/conversations/:id/messages — media", () => {
 
   it("sends image message and returns 201", async () => {
     mockPrisma.conversation.findFirst.mockResolvedValue(baseConversation);
-    mockPrisma.message.create.mockResolvedValue({ id: "msg-2", contentType: "image", direction: "outbound" });
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-2", status: "sending" });
+    mockPrisma.message.update.mockResolvedValue({ id: "msg-2", contentType: "image", direction: "outbound", status: "sent" });
     mockPrisma.conversation.update.mockResolvedValue({});
     const { sendMediaMessage } = await import("../lib/whatsapp.js");
 
@@ -161,7 +164,8 @@ describe("POST /v1/conversations/:id/messages — interactive", () => {
 
   it("sends interactive button message and returns 201", async () => {
     mockPrisma.conversation.findFirst.mockResolvedValue(baseConversation);
-    mockPrisma.message.create.mockResolvedValue({ id: "msg-3", contentType: "interactive", direction: "outbound" });
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-3", status: "sending" });
+    mockPrisma.message.update.mockResolvedValue({ id: "msg-3", contentType: "interactive", direction: "outbound", status: "sent" });
     mockPrisma.conversation.update.mockResolvedValue({});
     const { sendInteractiveMessage } = await import("../lib/whatsapp.js");
 

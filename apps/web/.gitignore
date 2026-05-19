@@ -11,3 +11,5 @@ playwright.config.ts
 .env.test.example
 playwright-report/
 test-results/
+
+.vercel

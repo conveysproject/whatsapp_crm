@@ -19,7 +19,7 @@ vi.mock("../lib/whisper.js", () => ({
 const mockPrisma = {
   message: { findFirst: vi.fn(), update: vi.fn() },
 };
-const mockAuth = { userId: "u-1", organizationId: "org-1", role: "agent" as const };
+const mockAuth = { userId: "u-1", organizationId: "org-1", role: "agent" as const, permissions: {} };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });

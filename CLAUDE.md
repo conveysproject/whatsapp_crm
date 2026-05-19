@@ -144,10 +144,10 @@ docker compose --profile observability up -d  # + Datadog agent
 |--|-------|
 | API public URL | `https://trustcrmapi-production.up.railway.app` |
 | API internal URL | `trustcrmapi.railway.internal` |
-| Web URL | `https://trustcrm-web-conveysproject-7758s-projects.vercel.app` |
+| Web URL | `https://whatsapp-crm-web-conveysproject-7758s-projects.vercel.app` |
 | Railway project | `focused-forgiveness` · environment: `production` |
 | Railway service name | `@trustcrm/api` (ID: `421b2efd-ea6d-4eb3-9b37-f507d56a9ac2`) |
-| Vercel project | `trustcrm-web` (ID: `prj_g88r1mFO3xWc5BmjIfTRUXT0ZJ4z`) |
+| Vercel project | `whatsapp-crm-web` (ID: `prj_g88r1mFO3xWc5BmjIfTRUXT0ZJ4z`) |
 
 Railway also runs: **Redis** · **Meilisearch** · **Postgres** (all on internal railway.internal hostnames).
 
@@ -183,7 +183,7 @@ railway run <cmd>                          # run command with production env var
 ```bash
 vercel whoami                              # confirm auth
 vercel ls                                  # list all deployments (most recent first)
-vercel project inspect trustcrm-web        # show project settings incl. build command
+vercel project inspect whatsapp-crm-web        # show project settings incl. build command
 vercel inspect --logs <deployment-id>      # full build logs for a specific deployment
 vercel env ls                              # list all env vars
 vercel env add <NAME>                      # add/update an env var

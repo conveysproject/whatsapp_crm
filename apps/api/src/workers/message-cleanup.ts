@@ -8,7 +8,11 @@ messageCleanupQueue.on("error", (err) => console.error(`[message-cleanup] queue 
 export function startMessageCleanupWorker() {
   const worker = new Worker(
     "message-cleanup",
-    async () => {
+    async (job) => {
+      if (job.name === "recover-stuck") {
+        await recoverStuckMessages();
+        return;
+      }
       const settings = await prisma.vendorSetting.findMany({
         where: { key: "enable_automatic_message_deletion", value: "true" },
       });
@@ -48,4 +52,24 @@ export async function scheduleMessageCleanupCron() {
       jobId: "message-cleanup-cron",
     }
   );
+  // Every 5 minutes: reset messages stuck in "sending" state
+  await messageCleanupQueue.add(
+    "recover-stuck",
+    {},
+    {
+      repeat: { pattern: "*/5 * * * *" },
+      jobId: "message-stuck-recovery-cron",
+    }
+  );
+}
+
+export async function recoverStuckMessages(): Promise<void> {
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  const result = await prisma.message.updateMany({
+    where: { status: "sending", createdAt: { lt: fiveMinutesAgo } },
+    data: { status: "failed" },
+  });
+  if (result.count > 0) {
+    console.log(`[message-cleanup] recovered ${result.count} stuck messages`);
+  }
 }

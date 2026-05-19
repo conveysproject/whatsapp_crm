@@ -82,52 +82,70 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
 
       const contentType = body.contentType ?? "text";
 
-      let messageId: string;
+      // Determine storedBody before WA call so we can create the record first
       let storedBody: string | null = null;
-
       if (contentType === "text") {
         const textBody = body as { contentType?: "text"; text: string };
         if (!textBody.text?.trim()) {
           return reply.status(400).send({ error: { code: "MISSING_TEXT", message: "text is required for text messages" } });
         }
-        const result = await sendTextMessage(phoneNumberId, conversation.whatsappContactId, textBody.text.trim(), accessToken);
-        messageId = result.messageId;
         storedBody = textBody.text.trim();
       } else if (contentType === "interactive") {
         const intBody = body as { contentType: "interactive"; interactive: WaInteractivePayload };
         if (!intBody.interactive) {
           return reply.status(400).send({ error: { code: "MISSING_INTERACTIVE", message: "interactive payload required" } });
         }
-        const result = await sendInteractiveMessage(phoneNumberId, conversation.whatsappContactId, intBody.interactive, accessToken);
-        messageId = result.messageId;
         storedBody = JSON.stringify(intBody.interactive);
       } else {
         const mediaBody = body as { contentType: "image" | "video" | "document" | "audio"; mediaId: string; caption?: string };
         if (!mediaBody.mediaId) {
           return reply.status(400).send({ error: { code: "MISSING_MEDIA_ID", message: "mediaId is required for media messages" } });
         }
-        const result = await sendMediaMessage(
-          phoneNumberId,
-          conversation.whatsappContactId,
-          contentType,
-          mediaBody.mediaId,
-          mediaBody.caption,
-          accessToken
-        );
-        messageId = result.messageId;
         storedBody = mediaBody.caption ?? null;
       }
 
-      const message = await fastify.prisma.message.create({
+      // Create record with "sending" status before WA call for stuck-message recovery
+      const draft = await fastify.prisma.message.create({
         data: {
           conversationId: conversation.id,
           organizationId,
           direction: "outbound",
           contentType,
           body: storedBody,
-          whatsappMessageId: messageId,
-          status: "sent",
+          status: "sending",
         },
+      });
+
+      let messageId: string;
+      try {
+        if (contentType === "text") {
+          const textBody = body as { contentType?: "text"; text: string };
+          const result = await sendTextMessage(phoneNumberId, conversation.whatsappContactId, textBody.text.trim(), accessToken);
+          messageId = result.messageId;
+        } else if (contentType === "interactive") {
+          const intBody = body as { contentType: "interactive"; interactive: WaInteractivePayload };
+          const result = await sendInteractiveMessage(phoneNumberId, conversation.whatsappContactId, intBody.interactive, accessToken);
+          messageId = result.messageId;
+        } else {
+          const mediaBody = body as { contentType: "image" | "video" | "document" | "audio"; mediaId: string; caption?: string };
+          const result = await sendMediaMessage(
+            phoneNumberId,
+            conversation.whatsappContactId,
+            contentType,
+            mediaBody.mediaId,
+            mediaBody.caption,
+            accessToken
+          );
+          messageId = result.messageId;
+        }
+      } catch (err) {
+        await fastify.prisma.message.update({ where: { id: draft.id }, data: { status: "failed" } });
+        throw err;
+      }
+
+      const message = await fastify.prisma.message.update({
+        where: { id: draft.id },
+        data: { status: "sent", whatsappMessageId: messageId },
       });
 
       await fastify.prisma.conversation.update({

@@ -7,6 +7,7 @@ import { transcribeAudio } from "../lib/whisper.js";
 import { flowQueue } from "../lib/queue.js";
 import { handleBotMessage } from "../lib/bot-runner.js";
 import { getMediaUrl, downloadMediaBytes, markAsRead } from "../lib/whatsapp.js";
+import { dispatchWebhook } from "../lib/webhook-dispatch.js";
 import Expo from "expo-server-sdk";
 
 const expo = new Expo();
@@ -204,6 +205,16 @@ export const inboundWorker = new Worker<InboundMessageJob>(
         sentAt: messageDate.toISOString(),
       });
     }
+
+    // Dispatch outbound webhook (plan-gated)
+    void dispatchWebhook(organizationId, "message.inbound", {
+      messageId: storedMessage.id,
+      conversationId: conversation.id,
+      contactPhone: whatsappContactPhone,
+      body,
+      contentType,
+      sentAt: messageDate.toISOString(),
+    });
   },
   { connection: redisConnection }
 );
