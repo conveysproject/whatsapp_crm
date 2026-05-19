@@ -47,6 +47,13 @@ describe("POST /api/contact", () => {
     expect(sendMail).toHaveBeenCalledTimes(2);
   });
 
+  it("routes notification to CONTACT_TO_EMAIL and auto-reply to submitter", async () => {
+    await POST(makeRequest(validBody));
+    const calls = vi.mocked(sendMail).mock.calls;
+    expect(calls[0]?.[0]?.to).toBe("info@conveys.in");
+    expect(calls[1]?.[0]?.to).toBe(validBody.email);
+  });
+
   it("returns 400 when required fields are missing", async () => {
     const res = await POST(makeRequest({ name: "Riya" }));
     expect(res.status).toBe(400);

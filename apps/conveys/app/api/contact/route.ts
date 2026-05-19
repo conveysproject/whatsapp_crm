@@ -9,8 +9,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request: Request): Promise<Response> {
   const ip =
-    request.headers.get("x-forwarded-for") ??
-    request.headers.get("x-real-ip") ??
+    (request.headers.get("x-forwarded-for") ?? "").split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
     "unknown";
 
   if (!checkRateLimit(ip)) {
