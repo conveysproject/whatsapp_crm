@@ -7,8 +7,13 @@ const mockPrisma = {
   message: { groupBy: vi.fn(), create: vi.fn() },
   contact: { findFirst: vi.fn() },
   conversation: { findFirst: vi.fn(), create: vi.fn() },
+  organization: { findUnique: vi.fn() },
 };
-const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const };
+const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
+
+vi.mock("../lib/whatsapp.js", () => ({
+  sendTemplateMessage: vi.fn().mockResolvedValue({ messageId: "wamid-tpl-1" }),
+}));
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -93,12 +98,18 @@ describe("POST /v1/templates/:id/send-to-contact", () => {
       organizationId: "org-1",
       name: "Welcome",
       status: "approved",
+      metaTemplateId: "meta-t-1",
+      language: "en_US",
     });
     mockPrisma.contact.findFirst.mockResolvedValue({
       id: "c-1",
       organizationId: "org-1",
       phoneNumber: "+919999999999",
       firstName: "Alice",
+    });
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      phoneNumberId: "phone-1",
+      wabaAccessToken: "token-1",
     });
     mockPrisma.conversation.findFirst.mockResolvedValue({
       id: "conv-1",
@@ -139,6 +150,8 @@ describe("POST /v1/templates/:id/send-to-contact", () => {
       organizationId: "org-1",
       name: "Welcome",
       status: "approved",
+      metaTemplateId: "meta-t-1",
+      language: "en_US",
     });
     mockPrisma.contact.findFirst.mockResolvedValue(null);
     const res = await app.inject({
@@ -155,12 +168,18 @@ describe("POST /v1/templates/:id/send-to-contact", () => {
       organizationId: "org-1",
       name: "Welcome",
       status: "approved",
+      metaTemplateId: "meta-t-1",
+      language: "en_US",
     });
     mockPrisma.contact.findFirst.mockResolvedValue({
       id: "c-2",
       organizationId: "org-1",
       phoneNumber: "+919999999998",
       firstName: "Bob",
+    });
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      phoneNumberId: "phone-1",
+      wabaAccessToken: "token-1",
     });
     mockPrisma.conversation.findFirst.mockResolvedValue(null);
     mockPrisma.conversation.create.mockResolvedValue({

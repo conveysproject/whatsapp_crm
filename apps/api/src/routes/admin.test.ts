@@ -22,7 +22,7 @@ const mockPrisma = {
 };
 
 // SuperAdmin auth
-const mockAdminAuth = { userId: "sa-1", organizationId: "platform", role: "superAdmin" as const };
+const mockAdminAuth = { userId: "sa-1", organizationId: "platform", role: "superAdmin" as const, permissions: {} };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -94,7 +94,7 @@ describe("SuperAdmin guard", () => {
     appAsAdmin = Fastify({ logger: false });
     appAsAdmin.decorate("prisma", mockPrisma as unknown as PrismaClient);
     appAsAdmin.addHook("onRequest", async (req) => {
-      req.auth = { userId: "u-1", organizationId: "org-1", role: "admin" as const };
+      req.auth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
     });
     const { adminRouter } = await import("./admin.js");
     await appAsAdmin.register(adminRouter, { prefix: "/v1" });

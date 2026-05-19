@@ -11,7 +11,10 @@ vi.mock("../lib/clerk.js", () => ({
 vi.mock("../lib/prisma.js", () => ({
   prisma: {
     user: {
-      findFirst: vi.fn().mockResolvedValue({ role: "admin" }),
+      findFirst: vi.fn().mockResolvedValue({ role: "admin", organizationId: "org_123" }),
+    },
+    organizationMember: {
+      findFirst: vi.fn().mockResolvedValue({ permissions: {} }),
     },
     $disconnect: vi.fn(),
   },

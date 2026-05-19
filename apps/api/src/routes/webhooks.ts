@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import type { MessageStatus } from "@prisma/client";
 import { verifyWebhookSignature } from "../lib/whatsapp.js";
 import { inboundMessageQueue } from "../lib/queue.js";
 
@@ -25,10 +26,18 @@ interface WaMessage {
   reaction?: { message_id: string; emoji: string };
 }
 
+interface WaStatusUpdate {
+  id: string; // whatsappMessageId
+  status: string; // "sent" | "delivered" | "read" | "failed"
+  timestamp: string;
+  recipient_id: string;
+}
+
 interface WaChangeValue {
   messaging_product: string;
   metadata: { phone_number_id: string };
   messages?: WaMessage[];
+  statuses?: WaStatusUpdate[];
 }
 
 interface WaEntry {
@@ -85,6 +94,31 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
               data: { status: status as "approved" | "rejected" | "pending" },
             });
             continue;
+          }
+
+          // Outbound message status updates (delivered / read) with ratchet protection
+          if (change.field === "messages" && change.value.statuses?.length) {
+            // terminal statuses that cannot be overwritten by a later webhook
+            const TERMINAL = new Set<string>(["read"]);
+            const STATUS_RANK: Record<string, number> = { sent: 0, delivered: 1, read: 2 };
+            for (const su of change.value.statuses) {
+              const msg = await fastify.prisma.message.findFirst({
+                where: { whatsappMessageId: su.id },
+                select: { id: true, status: true },
+              });
+              if (!msg) continue;
+              if (TERMINAL.has(msg.status)) continue; // ratchet: never downgrade from read
+              const currentRank = STATUS_RANK[msg.status] ?? 0;
+              const newRank = STATUS_RANK[su.status] ?? -1;
+              if (newRank <= currentRank) continue; // no downgrade
+              const allowedStatuses: MessageStatus[] = ["sent", "delivered", "read", "failed"];
+              const newStatus = allowedStatuses.includes(su.status as MessageStatus) ? (su.status as MessageStatus) : null;
+              if (!newStatus) continue;
+              await fastify.prisma.message.update({
+                where: { id: msg.id },
+                data: { status: newStatus },
+              });
+            }
           }
 
           if (change.field !== "messages" || !change.value.messages?.length) continue;

@@ -5,6 +5,7 @@ import { paginate, parsePaginationParams } from "../lib/pagination.js";
 import { indexContact, removeContact, searchContacts } from "../lib/search.js";
 import { generateContactsCsv } from "../lib/csv.js";
 import type { ContactId } from "@WBMSG/shared";
+import { maskPhone, maskEmail } from "../lib/permissions.js";
 
 function csvEscape(value: string): string {
   const str = value.replace(/"/g, '""');
@@ -127,7 +128,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get("/contacts", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, permissions } = request.auth;
     const query = request.query as Record<string, string>;
     const { cursor, limit } = parsePaginationParams(query);
     const labelId = query["labelId"];
@@ -144,11 +145,21 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       orderBy: { id: "asc" },
     });
 
-    return reply.send(paginate(contacts, limit));
+    const hidePhone = permissions["hide_contact_phone_numbers"] === "allow";
+    const hideEmail = permissions["hide_contact_emails"] === "allow";
+    const masked = (hidePhone || hideEmail)
+      ? contacts.map((c) => ({
+          ...c,
+          phoneNumber: hidePhone ? maskPhone(c.phoneNumber) : c.phoneNumber,
+          email: hideEmail && c.email ? maskEmail(c.email) : c.email,
+        }))
+      : contacts;
+
+    return reply.send(paginate(masked, limit));
   });
 
   fastify.get<{ Params: { id: ContactId } }>("/contacts/:id", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, permissions } = request.auth;
     const contact = await fastify.prisma.contact.findFirst({
       where: { id: request.params.id, organizationId, deletedAt: null },
       include: { labels: { include: { label: true } } },
@@ -156,7 +167,14 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     if (!contact) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
     }
-    return reply.send({ data: contact });
+    const hidePhone = permissions["hide_contact_phone_numbers"] === "allow";
+    const hideEmail = permissions["hide_contact_emails"] === "allow";
+    const data = {
+      ...contact,
+      phoneNumber: hidePhone ? maskPhone(contact.phoneNumber) : contact.phoneNumber,
+      email: hideEmail && contact.email ? maskEmail(contact.email) : contact.email,
+    };
+    return reply.send({ data });
   });
 
   fastify.post<{ Body: ContactBody }>("/contacts", async (request, reply) => {

@@ -3,13 +3,14 @@ import type { ConversationStatus } from "@prisma/client";
 import type { ConversationId } from "@WBMSG/shared";
 import { getIo } from "../lib/io-ref.js";
 import { summarizeConversation } from "../lib/claude.js";
+import { maskPhone } from "../lib/permissions.js";
 
 export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
   // ── List with status / assignee filters ────────────────────────────────
   fastify.get<{
     Querystring: { status?: string; assignedTo?: string; teamId?: string; page?: string };
   }>("/conversations", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { userId, organizationId, permissions } = request.auth;
     const { status, assignedTo, teamId, page } = request.query;
     const pageNum = Math.max(1, parseInt(page ?? "1", 10));
 
@@ -17,6 +18,8 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     if (status) where.status = status;
     if (assignedTo) where.assignedTo = assignedTo;
     if (teamId) where.teamId = teamId;
+    // agents with assigned_chats_only permission see only their own conversations
+    if (permissions["assigned_chats_only"] === "allow") where.assignedTo = userId;
 
     const conversations = await fastify.prisma.conversation.findMany({
       where,
@@ -25,7 +28,15 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       skip: (pageNum - 1) * 50,
       take: 50,
     });
-    return reply.send({ data: conversations });
+
+    const hidePhone = permissions["hide_contact_phone_numbers"] === "allow";
+    const data = hidePhone
+      ? conversations.map((c) => ({
+          ...c,
+          contact: c.contact ? { ...c.contact, phoneNumber: maskPhone(c.contact.phoneNumber) } : null,
+        }))
+      : conversations;
+    return reply.send({ data });
   });
 
   fastify.get<{ Params: { id: ConversationId }; Querystring: { cursor?: string; limit?: string } }>(
@@ -94,7 +105,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
         where: { id: conversation.id },
         data: {
           status: status as ConversationStatus,
-          closedAt: status === "closed" ? new Date() : null,
+          closedAt: status === "resolved" ? new Date() : null,
         },
       });
       getIo()?.to(`org:${organizationId}`).emit("conversation:status", { conversationId: conversation.id, status });

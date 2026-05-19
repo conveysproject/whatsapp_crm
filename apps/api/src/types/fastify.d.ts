@@ -2,6 +2,7 @@ export interface AuthContext {
   userId: string;
   organizationId: string;
   role: "superAdmin" | "admin" | "manager" | "agent" | "viewer";
+  permissions: Record<string, string>;
 }
 
 declare module "fastify" {

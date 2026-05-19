@@ -22,6 +22,7 @@ const mockAuth = {
   userId: "user-1",
   organizationId: "org-1",
   role: "agent" as const,
+  permissions: {},
 };
 
 async function buildApp(): Promise<FastifyInstance> {
@@ -114,15 +115,15 @@ describe("POST /v1/conversations/:id/status", () => {
 
   it("closes a conversation and sets closedAt", async () => {
     mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1" });
-    mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", status: "closed" });
+    mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", status: "resolved" });
     const res = await app.inject({
       method: "POST", url: "/v1/conversations/conv-1/status",
       headers: { "content-type": "application/json" },
-      payload: { status: "closed" },
+      payload: { status: "resolved" },
     });
     expect(res.statusCode).toBe(200);
     expect(mockPrisma.conversation.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: "closed" }) })
+      expect.objectContaining({ data: expect.objectContaining({ status: "resolved" }) })
     );
   });
 });

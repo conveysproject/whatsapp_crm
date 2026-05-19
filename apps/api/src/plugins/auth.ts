@@ -27,7 +27,13 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    request.auth = { userId, organizationId: user.organizationId, role: user.role };
+    const member = await fastify.prisma.organizationMember.findFirst({
+      where: { userId, organizationId: user.organizationId },
+      select: { permissions: true },
+    });
+    const permissions = (member?.permissions ?? {}) as Record<string, string>;
+
+    request.auth = { userId, organizationId: user.organizationId, role: user.role, permissions };
   });
 };
 
