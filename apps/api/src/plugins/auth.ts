@@ -1,11 +1,24 @@
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync } from "fastify";
 import { verifyClerkToken } from "../lib/clerk.js";
+import { redis } from "../lib/redis.js";
 
 const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.addHook("preHandler", async (request, reply) => {
     const routeConfig = request.routeOptions?.config as unknown as Record<string, unknown> | undefined;
     if (routeConfig?.["public"]) return;
+
+    // GAP-S71: super-admin impersonation via Redis token
+    const impersonateToken = request.headers["x-impersonate-token"] as string | undefined;
+    if (impersonateToken) {
+      const raw = await redis.get(`impersonate:${impersonateToken}`);
+      if (!raw) {
+        return reply.status(401).send({ error: { code: "INVALID_IMPERSONATION_TOKEN", message: "Invalid or expired impersonation token" } });
+      }
+      const { organizationId, issuedBy } = JSON.parse(raw) as { organizationId: string; issuedBy: string };
+      request.auth = { userId: issuedBy, organizationId, role: "superAdmin", permissions: {} };
+      return;
+    }
 
     let userId: string;
     try {

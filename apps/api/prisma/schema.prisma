@@ -98,6 +98,8 @@ model CannedResponse {
   shortcut       String?
   content        String       @db.Text
   mediaData      Json?        @map("media_data")
+  // GAP-S17: "nt_campaign" category for non-template campaign preset messages
+  category       String       @default("general")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 

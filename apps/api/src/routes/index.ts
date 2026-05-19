@@ -29,6 +29,7 @@ import { registerRouter } from "./register.js";
 import { contactsImportRouter } from "./contacts-import.js";
 import { vendorSettingsRouter } from "./vendor-settings.js";
 import { cannedResponsesRouter } from "./canned-responses.js";
+import { ntCampaignPresetsRouter } from "./nt-campaign-presets.js";
 import { whatsappAccountRouter } from "./whatsapp-account.js";
 import { contactGroupsRouter } from "./contact-groups.js";
 import { savedFiltersRouter } from "./saved-filters.js";
@@ -72,6 +73,7 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(registerRouter, { prefix: "/v1" });
   await fastify.register(vendorSettingsRouter, { prefix: "/v1" });
   await fastify.register(cannedResponsesRouter, { prefix: "/v1" });
+  await fastify.register(ntCampaignPresetsRouter, { prefix: "/v1" });
   await fastify.register(whatsappAccountRouter, { prefix: "/v1" });
   await fastify.register(contactGroupsRouter, { prefix: "/v1" });
   await fastify.register(savedFiltersRouter, { prefix: "/v1" });

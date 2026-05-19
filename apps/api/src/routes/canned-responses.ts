@@ -11,8 +11,9 @@ interface CannedResponseBody {
 export const cannedResponsesRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/canned-responses", async (request, reply) => {
     const { organizationId } = request.auth;
+    // GAP-S17: exclude NT campaign presets from regular canned response list
     const data = await fastify.prisma.cannedResponse.findMany({
-      where: { organizationId },
+      where: { organizationId, category: "general" },
       orderBy: { name: "asc" },
     });
     return reply.send({ data });
@@ -22,7 +23,7 @@ export const cannedResponsesRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId } = request.auth;
     const { name, shortcut, content, mediaData } = request.body;
     const data = await fastify.prisma.cannedResponse.create({
-      data: { organizationId, name, shortcut: shortcut ?? null, content, mediaData: (mediaData !== undefined ? mediaData as Prisma.InputJsonValue : Prisma.DbNull) },
+      data: { organizationId, name, shortcut: shortcut ?? null, content, mediaData: (mediaData !== undefined ? mediaData as Prisma.InputJsonValue : Prisma.DbNull), category: "general" },
     });
     return reply.status(201).send({ data });
   });

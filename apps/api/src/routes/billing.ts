@@ -371,11 +371,13 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       createHash("sha256")
         .update(`/pg/v1/status/${merchantId}/${request.body.transactionId}${apiKey}`)
         .digest("hex") + "###1";
+    // GAP-S62: PhonePe requires "O-Bearer" prefix (not standard "Bearer")
     const res = await fetch(
       `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${request.body.transactionId}`,
       {
         headers: {
           "Content-Type": "application/json",
+          Authorization: `O-Bearer ${apiKey}`,
           "X-VERIFY": checksum,
           "X-MERCHANT-ID": merchantId,
         },
