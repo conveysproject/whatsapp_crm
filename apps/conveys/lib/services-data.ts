@@ -270,6 +270,151 @@ export const SERVICES: ServiceData[] = [
     ],
     relatedSlugs: ["whatsapp-crm", "whatsapp-marketing-automation", "whatsapp-commerce"],
   },
+
+  // ─── Cloud Architecture Review ────────────────────────────────────────────────
+  {
+    slug: "cloud-architecture-review",
+    column: "Cloud Services",
+    title: "Cloud Architecture Review",
+    tagline: "Spot the Gaps Before They Become Outages",
+    metaTitle: "Cloud Architecture Review & Audit India | AWS, GCP, Azure | Conveys",
+    metaDescription: "Independent cloud architecture audit covering cost, security, reliability, and performance. Delivered in 5 business days with a prioritised action plan. Fixed fee.",
+    overview: [
+      "An independent audit of your cloud architecture — cost, security, reliability, and performance — with a prioritised action plan you can hand to your team or have us implement. No lock-in, no sales pitch.",
+      "We follow AWS Well-Architected, Google Cloud Architecture Framework, and Azure Well-Architected — giving you a report your auditors will recognise.",
+    ],
+    offerings: [
+      {
+        title: "Architecture Audit",
+        description: "Full review of your VPC design, service topology, IAM policies, and infrastructure-as-code — mapped against the Well-Architected pillars: operational excellence, security, reliability, performance, and cost.",
+        icon: ICONS.search,
+      },
+      {
+        title: "Cost Analysis",
+        description: "We audit your billing exports, identify waste (idle resources, over-provisioned instances, orphaned snapshots), and model Reserved Instance or Savings Plan purchases to cut spend by 20–40%.",
+        icon: ICONS.chart,
+      },
+      {
+        title: "Security Assessment",
+        description: "IAM least-privilege review, public-exposure audit, secret hygiene check, encryption-at-rest and in-transit verification, and a prioritised CVE list for your running images.",
+        icon: ICONS.shield,
+      },
+      {
+        title: "Performance Benchmarking",
+        description: "Latency profiling, cache hit-rate analysis, database query review, and CDN configuration check — with before/after projections for each recommended change.",
+        icon: ICONS.bolt,
+      },
+      {
+        title: "Disaster Recovery Review",
+        description: "RTO and RPO targets assessed against your actual backup schedules, replication lag, and failover runbooks. We identify single points of failure and model the cost of fixing them.",
+        icon: ICONS.refresh,
+      },
+      {
+        title: "Roadmap & Action Plan",
+        description: "Every finding scored by severity and effort. You get a phased roadmap: quick wins in week 1, medium-term improvements in months 1–3, and strategic changes for the next 12 months.",
+        icon: ICONS.document,
+      },
+    ],
+    process: [
+      { step: "01", title: "Access & Discovery", duration: "Day 1", body: "Read-only IAM access granted to our audit account. We never need write permissions — you can revoke access after the review." },
+      { step: "02", title: "Automated Scan", duration: "Day 1–2", body: "Prowler, AWS Trusted Advisor, and Infracost run against your environment. Results feed into our manual review." },
+      { step: "03", title: "Manual Deep Dive", duration: "Day 2–4", body: "Senior architect reviews your IaC, architecture diagrams, and billing exports. Every finding is evidence-backed with a screenshot or CLI output." },
+      { step: "04", title: "Report Delivery", duration: "Day 5", body: "PDF report with executive summary, detailed findings, and the prioritised action plan. Delivered before noon." },
+      { step: "05", title: "Review Call", duration: "Day 5–6", body: "60-minute walkthrough of every finding. You ask questions, we explain trade-offs. Recording provided." },
+      { step: "06", title: "30-Day Follow-up", duration: "Day 30", body: "We check back on your progress. Findings that have been addressed are closed; blockers get a second opinion at no charge." },
+    ],
+    techStack: [
+      { name: "AWS Well-Architected", category: "Framework" },
+      { name: "GCP Architecture Framework", category: "Framework" },
+      { name: "Prowler", category: "Security Scan" },
+      { name: "Infracost", category: "Cost Analysis" },
+      { name: "Terraform", category: "IaC" },
+      { name: "Datadog", category: "Monitoring" },
+      { name: "Grafana", category: "Dashboards" },
+      { name: "Snyk", category: "Vulnerability Scan" },
+    ],
+    faqs: [
+      { q: "What access do you need to run the audit?", a: "Read-only IAM access to your AWS, GCP, or Azure account. We use a dedicated audit IAM role with the minimum permissions required to run the tools. You can revoke access immediately after we deliver the report." },
+      { q: "How long does the review take?", a: "Standard delivery is 5 business days from when we receive access. For large multi-account organisations or multi-cloud environments, allow 7–10 days." },
+      { q: "Will you implement the recommendations?", a: "That is a separate engagement. Many clients use the review report to have their internal team or our cloud infrastructure team implement the changes. We can quote implementation alongside the audit if you prefer." },
+      { q: "Is the report confidential?", a: "Yes. Everything we see is covered by an NDA signed before access is granted. We do not share your architecture, data, or findings with any third party." },
+      { q: "What do I actually receive?", a: "A PDF report with an executive summary (suitable for your board or investors), detailed findings section with evidence screenshots, and a prioritised action plan spreadsheet. Plus the 60-minute review call recording." },
+    ],
+    relatedSlugs: ["cloud-infrastructure-setup", "devops-cicd", "managed-it-services"],
+  },
+
+  // ─── DevOps & CI/CD ───────────────────────────────────────────────────────────
+  {
+    slug: "devops-cicd",
+    column: "Cloud Services",
+    title: "DevOps & CI/CD",
+    tagline: "Ship Faster, Break Less — DevOps & CI/CD Done Right",
+    metaTitle: "DevOps & CI/CD Pipeline Setup India | GitHub Actions, Kubernetes | Conveys",
+    metaDescription: "CI/CD pipelines, Docker containerisation, Kubernetes deployment, and infrastructure as code for Indian engineering teams. Fixed pricing, in-house DevOps engineers.",
+    overview: [
+      "We design and implement CI/CD pipelines, containerise your applications, and set up infrastructure as code so every push to production is automated, tested, and reversible.",
+      "No more manual deployments, no more Friday-night hotfixes. Just a repeatable process that your whole team trusts.",
+    ],
+    offerings: [
+      {
+        title: "CI/CD Pipeline Setup",
+        description: "GitHub Actions, GitLab CI, or Bitbucket Pipelines configured to run tests, lint, type-check, build Docker images, and deploy — all triggered on PR merge. Rollback in one click.",
+        icon: ICONS.refresh,
+      },
+      {
+        title: "Docker Containerisation",
+        description: "Multi-stage Dockerfiles for every service — optimised for layer caching, minimal image size, and non-root runtime. Docker Compose for local dev parity.",
+        icon: ICONS.cube,
+      },
+      {
+        title: "Kubernetes Deployment",
+        description: "Deployment manifests, Helm charts, HPA and VPA configuration, and readiness/liveness probes — so your services self-heal and scale without manual intervention.",
+        icon: ICONS.server,
+      },
+      {
+        title: "Infrastructure as Code",
+        description: "Every cloud resource defined in Terraform or Pulumi, checked into your repository, and applied via a GitOps workflow. No more snowflake servers.",
+        icon: ICONS.code,
+      },
+      {
+        title: "Monitoring & Alerting",
+        description: "Datadog or Grafana dashboards for deployment frequency, lead time, change failure rate, and MTTR — the four DORA metrics that tell you if your DevOps is working.",
+        icon: ICONS.chart,
+      },
+      {
+        title: "Security Scanning",
+        description: "Snyk or Trivy vulnerability scanning in every pipeline run. SAST checks on pull requests. Secrets scanning so credentials never reach your repository.",
+        icon: ICONS.shield,
+      },
+    ],
+    process: [
+      { step: "01", title: "Audit Current State", duration: "Day 1–2", body: "We document your current deployment process, find the manual steps, and identify the highest-risk failure points. You see exactly what we plan to automate and why." },
+      { step: "02", title: "Pipeline Design", duration: "Day 3–4", body: "Stage-by-stage pipeline design agreed with your team: test → build → staging deploy → approval gate → production deploy. Branch strategy documented." },
+      { step: "03", title: "Implementation", duration: "Week 2–3", body: "Pipelines built, Dockerfiles written, Kubernetes manifests created. Every step tested against your actual codebase — not a toy example." },
+      { step: "04", title: "Staging Validation", duration: "Week 3", body: "Full end-to-end deployment run on staging. Rollback tested. Failure scenarios simulated. Your team runs a deployment while we watch." },
+      { step: "05", title: "Production Go-Live", duration: "Week 3–4", body: "First automated production deployment run together. Monitoring confirmed. Alerting tested with a synthetic incident." },
+      { step: "06", title: "Team Training", duration: "Week 4", body: "2-hour session covering pipeline debugging, rollback procedures, adding new services, and reading the dashboards. Runbook left in your repo." },
+    ],
+    techStack: [
+      { name: "GitHub Actions", category: "CI/CD" },
+      { name: "Docker", category: "Containers" },
+      { name: "Kubernetes", category: "Orchestration" },
+      { name: "Terraform", category: "IaC" },
+      { name: "Helm", category: "K8s Packaging" },
+      { name: "Datadog", category: "Monitoring" },
+      { name: "Sentry", category: "Error Tracking" },
+      { name: "Snyk", category: "Security" },
+      { name: "AWS / Railway", category: "Cloud" },
+    ],
+    faqs: [
+      { q: "Which CI/CD tool do you recommend?", a: "GitHub Actions for most teams — it is free for public repos, well-documented, and has the largest ecosystem of community actions. For teams on GitLab or Bitbucket, we use native CI. We do not push you to a paid CI tool unless your build times specifically require it." },
+      { q: "Can you handle a monorepo with multiple services?", a: "Yes. We use Turborepo or Nx for JavaScript monorepos and path filtering in CI to only build and deploy the services affected by each commit. Build times stay fast even as the repo grows." },
+      { q: "What is your rollback strategy?", a: "For Kubernetes deployments, rollback is a single kubectl rollout undo command — takes under 30 seconds. For Vercel and Railway, we use deployment snapshots. Every pipeline has a documented rollback runbook." },
+      { q: "What do self-hosted CI runners cost?", a: "GitHub-hosted runners are free up to 2,000 minutes/month, then roughly $0.008/minute. For teams with heavy build loads we set up self-hosted runners on a small EC2 instance — typically ₹2,000–4,000/month — which is usually cheaper and faster." },
+      { q: "How long does a full DevOps setup take?", a: "3–4 weeks for a single-repo project with one production environment. Multi-service, multi-environment setups take 5–6 weeks. We give you a precise timeline after reviewing your codebase." },
+    ],
+    relatedSlugs: ["cloud-infrastructure-setup", "backend-development", "cloud-architecture-review"],
+  },
 ];
 
 export function getService(slug: string): ServiceData {

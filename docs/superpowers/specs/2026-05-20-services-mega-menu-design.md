@@ -30,8 +30,8 @@ Build infrastructure first, then add page data one by one:
 | 5 | `site-migration` | ✅ Done (2026-05-22) |
 | 6 | `cloud-infrastructure-setup` | ✅ Done (2026-05-22) |
 | 7 | `whatsapp-business-api` | ✅ Done (2026-05-22) |
-| 8 | `cloud-architecture-review` | ⬜ Pending |
-| 9 | `devops-cicd` | ⬜ Pending |
+| 8 | `cloud-architecture-review` | ✅ Done (2026-05-22) |
+| 9 | `devops-cicd` | ✅ Done (2026-05-22) |
 | 10 | `database-administration` | ⬜ Pending |
 | 11 | `native-app-development` | ⬜ Pending |
 | 12 | `custom-software-development` | ⬜ Pending |
