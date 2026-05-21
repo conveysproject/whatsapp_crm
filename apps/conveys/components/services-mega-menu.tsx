@@ -50,6 +50,16 @@ function NavIcon({ path }: { path: string }): JSX.Element {
 export function ServicesMegaMenu(): JSX.Element {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleMouseEnter() {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setOpen(true);
+  }
+
+  function handleMouseLeave() {
+    closeTimer.current = setTimeout(() => setOpen(false), 150);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -71,12 +81,16 @@ export function ServicesMegaMenu(): JSX.Element {
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
+  useEffect(() => {
+    return () => { if (closeTimer.current) clearTimeout(closeTimer.current); };
+  }, []);
+
   return (
     <div
       ref={wrapperRef}
       className="relative"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       <button
         type="button"
