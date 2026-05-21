@@ -97,6 +97,19 @@ const jsonLd = {
       },
       areaServed: { "@type": "Country", name: "India" },
       sameAs: [],
+      knowsAbout: [
+        "WhatsApp Business API",
+        "Web Development",
+        "Mobile App Development",
+        "AI Solutions",
+        "LLM Integration",
+        "SaaS Development",
+        "Digital Marketing",
+        "React",
+        "Next.js",
+        "Node.js",
+        "React Native",
+      ],
     },
     {
       "@type": "WebSite",
@@ -121,6 +134,8 @@ export default function RootLayout({ children }: { children: ReactNode }): JSX.E
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        {/* Replace BING_CODE below after verifying at bing.com/webmasters */}
+        <meta name="msvalidate.01" content="BING_CODE_PLACEHOLDER" />
       </head>
       <body
         id="top"
