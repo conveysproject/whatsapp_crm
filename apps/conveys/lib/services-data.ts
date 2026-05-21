@@ -125,7 +125,152 @@ export const SERVICE_NAV: ServiceNavItem[] = [
 ];
 
 // Full service data — populated one by one as pages are built
-export const SERVICES: ServiceData[] = [];
+export const SERVICES: ServiceData[] = [
+  // ─── Cloud Infrastructure Setup ──────────────────────────────────────────────
+  {
+    slug: "cloud-infrastructure-setup",
+    column: "Cloud Services",
+    title: "Cloud Infrastructure Setup",
+    tagline: "Cloud Infrastructure Built for Indian Business Scale",
+    metaTitle: "Cloud Infrastructure Setup Services India | AWS, GCP, Azure | Conveys",
+    metaDescription: "Expert cloud infrastructure setup on AWS, GCP, and Azure for Indian businesses. Kubernetes, load balancing, VPN, monitoring — fixed pricing, in-house team.",
+    overview: [
+      "From day-one cloud setup to production-grade multi-region architectures — we design, provision, and manage your AWS, GCP, or Azure environment so your engineering team can ship without worrying about infrastructure.",
+      "In-house DevOps engineers, fixed project pricing, and 24/7 alerting on every deployment we touch.",
+    ],
+    offerings: [
+      {
+        title: "Cloud Provider Setup",
+        description: "Account structure, IAM roles, billing alerts, and VPC configuration on AWS, GCP, or Azure — built to your team's security and compliance requirements from day one.",
+        icon: ICONS.cloud,
+      },
+      {
+        title: "Kubernetes & Containers",
+        description: "EKS, GKE, or AKS cluster provisioning, Helm chart management, autoscaling policies, and namespace RBAC so your services deploy reliably at any load.",
+        icon: ICONS.cube,
+      },
+      {
+        title: "Load Balancing & Autoscaling",
+        description: "Application load balancers, target group routing, horizontal pod autoscaling, and CDN integration — your stack scales up under traffic and scales down to save cost.",
+        icon: ICONS.refresh,
+      },
+      {
+        title: "Network & VPN Security",
+        description: "Private subnets, security groups, NAT gateways, site-to-site VPN, and AWS PrivateLink so your internal services are never exposed to the public internet.",
+        icon: ICONS.shield,
+      },
+      {
+        title: "Cost Optimisation",
+        description: "Reserved instance planning, spot instance pools, right-sizing recommendations, and S3 lifecycle rules — we typically cut first-month cloud bills by 25–40%.",
+        icon: ICONS.chart,
+      },
+      {
+        title: "Monitoring & Alerting",
+        description: "Datadog or Grafana dashboards, CloudWatch/GCP Monitoring alarms, PagerDuty on-call routing, and SLO tracking so you know before your users do.",
+        icon: ICONS.chart,
+      },
+    ],
+    process: [
+      { step: "01", title: "Requirements & Cloud Selection", duration: "Day 1–2", body: "We map your workload, compliance needs, and team skills to pick the right cloud provider and region. You get a written architecture proposal before any provisioning begins." },
+      { step: "02", title: "Architecture Design", duration: "Day 3–5", body: "VPC layout, subnet strategy, IAM structure, and service topology documented in diagrams you approve. No black-box decisions." },
+      { step: "03", title: "Provisioning via IaC", duration: "Week 2", body: "Terraform or Pulumi scripts checked into your repo provision every resource — repeatable, auditable, and rollback-safe." },
+      { step: "04", title: "Security Hardening", duration: "Week 2–3", body: "CIS benchmark review, secret rotation via AWS Secrets Manager or GCP Secret Manager, WAF rules, and penetration test sign-off." },
+      { step: "05", title: "CI/CD Integration", duration: "Week 3", body: "GitHub Actions or GitLab CI pipelines deploy to your new cluster. Blue/green or canary rollout strategy agreed and tested." },
+      { step: "06", title: "Handover & Training", duration: "Week 4", body: "Runbooks, architecture diagrams, and a 2-hour walkthrough for your team. Ongoing retainer available for DBA and infra support." },
+    ],
+    techStack: [
+      { name: "AWS", category: "Cloud" },
+      { name: "GCP", category: "Cloud" },
+      { name: "Azure", category: "Cloud" },
+      { name: "Terraform", category: "IaC" },
+      { name: "Kubernetes", category: "Orchestration" },
+      { name: "Docker", category: "Containers" },
+      { name: "Nginx", category: "Ingress" },
+      { name: "Cloudflare", category: "CDN / DNS" },
+      { name: "Datadog", category: "Monitoring" },
+      { name: "Grafana", category: "Dashboards" },
+    ],
+    faqs: [
+      { q: "Which cloud provider do you recommend for Indian startups?", a: "AWS has the most mature Mumbai region (ap-south-1) with the widest service coverage — we recommend it for most new projects. GCP is strong for ML workloads, and Azure is best if your team is already on Microsoft 365. We are provider-agnostic and will recommend based on your specific workload." },
+      { q: "How long does a cloud infrastructure setup take?", a: "A standard setup with VPC, EKS, RDS, Redis, and CI/CD pipelines takes 3–4 weeks. A more complex multi-region active-active architecture can take 6–8 weeks. We give you a precise timeline after the discovery call." },
+      { q: "Do you handle ongoing infrastructure management after setup?", a: "Yes. We offer monthly infrastructure retainers that cover monitoring, incident response, cost optimisation, security patching, and capacity planning. Most clients keep us on for at least the first 6 months." },
+      { q: "Can you migrate our existing on-premise or cPanel infrastructure to cloud?", a: "Yes — see our Site Migration service. We handle the full lift-and-shift or re-architect, including database migration, DNS cutover, and email continuity." },
+      { q: "What compliance standards can you help us meet?", a: "We have experience setting up infrastructure for ISO 27001, SOC 2 Type II, and India's DPDP Act requirements. We document every control and produce the evidence your auditors need." },
+    ],
+    relatedSlugs: ["site-migration", "devops-cicd", "cloud-architecture-review"],
+  },
+
+  // ─── WhatsApp Business API Setup ─────────────────────────────────────────────
+  {
+    slug: "whatsapp-business-api",
+    column: "Cloud Services",
+    title: "WhatsApp Business API Setup",
+    tagline: "Go Live on WhatsApp Business API in Under 7 Days",
+    metaTitle: "WhatsApp Business API Setup India — Meta WABA Onboarding | Conveys",
+    metaDescription: "Full Meta WhatsApp Business API onboarding — business verification, number registration, template approvals, webhook integration. Fixed pricing for Indian businesses.",
+    overview: [
+      "We handle the complete Meta WABA onboarding — business verification, phone number registration, message template approvals, and webhook integration — so you can start sending transactional and marketing messages on WhatsApp immediately.",
+      "Official API only. No grey-area tools, no account ban risk. Your number, your WABA account, your data.",
+    ],
+    offerings: [
+      {
+        title: "Meta WABA Account Setup",
+        description: "Business Manager creation, WABA provisioning, and business verification with Meta. We navigate the verification process and chase escalations so you are not waiting weeks.",
+        icon: ICONS.chat,
+      },
+      {
+        title: "Phone Number Registration",
+        description: "Register a new number or migrate your existing WhatsApp Business App number to the API — we handle display name approval and two-step verification PIN setup.",
+        icon: ICONS.phone,
+      },
+      {
+        title: "Template Creation & Approval",
+        description: "We write, format, and submit your utility, authentication, and marketing message templates for Meta approval — including variable mapping and header media.",
+        icon: ICONS.document,
+      },
+      {
+        title: "Webhook & API Integration",
+        description: "Inbound message webhooks, delivery receipt handlers, and status update listeners integrated into your backend so every WhatsApp event is captured and acted on.",
+        icon: ICONS.link,
+      },
+      {
+        title: "Chatbot & Auto-Reply Setup",
+        description: "Rule-based or AI-powered chatbot flows for lead qualification, order status queries, and FAQ handling — connected to your CRM or database.",
+        icon: ICONS.sparkle,
+      },
+      {
+        title: "Analytics & Reporting Dashboard",
+        description: "Message delivery rates, read rates, opt-out tracking, and campaign performance — all visible in a dashboard your team can check without touching code.",
+        icon: ICONS.chart,
+      },
+    ],
+    process: [
+      { step: "01", title: "Business Verification", duration: "Day 1–3", body: "We set up your Facebook Business Manager, submit verification documents, and manage the Meta review process. Most Indian businesses verify within 2–3 business days." },
+      { step: "02", title: "WABA Provisioning", duration: "Day 2–4", body: "WABA account created, phone number registered, and display name submitted for approval. We handle the back-and-forth with Meta support." },
+      { step: "03", title: "Template Submission", duration: "Day 3–5", body: "We write and submit your first batch of message templates — utility, authentication, and marketing categories. Typical approval time is 24–48 hours." },
+      { step: "04", title: "Webhook Integration", duration: "Day 4–6", body: "Inbound and outbound webhook endpoints set up in your backend. Delivery receipts, read events, and opt-outs all handled and logged." },
+      { step: "05", title: "Testing & Validation", duration: "Day 6–7", body: "End-to-end test of every message type, opt-out flow, and error scenario. You approve each flow before go-live." },
+      { step: "06", title: "Go-Live & Handover", duration: "Day 7", body: "Production switch flipped. Monitoring set up on delivery rates and error queues. Runbook delivered for your team." },
+    ],
+    techStack: [
+      { name: "Meta WhatsApp Cloud API", category: "Messaging" },
+      { name: "Node.js", category: "Backend" },
+      { name: "Fastify", category: "Framework" },
+      { name: "PostgreSQL", category: "Database" },
+      { name: "Redis", category: "Cache / Queue" },
+      { name: "BullMQ", category: "Job Queue" },
+      { name: "AWS", category: "Hosting" },
+    ],
+    faqs: [
+      { q: "What is the difference between WhatsApp Business App and WhatsApp Business API?", a: "The WhatsApp Business App is a mobile app for small businesses — one user, one device, no automation. The Business API is a cloud platform that lets you send messages programmatically, integrate with your CRM, run bulk campaigns, and build chatbots. You need the API to do anything at scale." },
+      { q: "How long does Meta template approval take?", a: "Marketing templates are reviewed within 24–48 hours. Utility and authentication templates are usually approved within a few hours. We write templates that pass first-time — poorly structured templates can be rejected and require re-submission." },
+      { q: "Can I keep my existing WhatsApp Business App number?", a: "Yes, Meta allows migration of a number from the Business App to the API. The process takes 1–2 days and requires a brief offline period for the number. We manage this for you." },
+      { q: "What does Meta charge per message?", a: "Meta charges per conversation (24-hour window), not per message. Rates for India are approximately ₹0.40–0.70 per marketing conversation and ₹0.10–0.15 per utility conversation. We give you a full cost estimate based on your expected volumes before you commit." },
+      { q: "Do you provide ongoing support after setup?", a: "Yes. We monitor delivery rates, handle template re-submissions when Meta policy changes, and are available to add new integrations or chatbot flows. Monthly support retainers start at ₹8,000/month." },
+    ],
+    relatedSlugs: ["whatsapp-crm", "whatsapp-marketing-automation", "whatsapp-commerce"],
+  },
+];
 
 export function getService(slug: string): ServiceData {
   const found = SERVICES.find((s) => s.slug === slug);
