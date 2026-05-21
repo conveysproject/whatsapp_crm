@@ -1,0 +1,234 @@
+# Conveys Information Technology — Full Reference
+
+> Conveys Information Technology is a software development company headquartered in Dombivli West, Mumbai, Maharashtra, India (PIN 421202). We design, build, and maintain custom technology solutions for Indian businesses. Our specialisations are WhatsApp Business API, web development, mobile apps, AI/LLM integration, and SaaS product development.
+
+---
+
+## Company
+
+**Name:** Conveys Information Technology
+**Location:** SwaminarayanCity, Dombivli West, Mumbai, Maharashtra 421202, India
+**Service Area:** India (remote projects accepted from any location)
+**Contact:** info@conveys.in | +91 9907072035
+**Website:** https://conveys.in
+
+**Tech Stack:** Next.js, React, Node.js, Fastify, TypeScript, PostgreSQL, Redis, React Native, Flutter, Anthropic Claude API, OpenAI GPT-4, WhatsApp Cloud API, AWS, Cloudflare, Vercel, Railway.
+
+---
+
+## Service 1: WhatsApp Business API & CRM
+
+**URL:** https://conveys.in/services/whatsapp-crm
+
+**What it is:** WhatsApp Business API (also called WhatsApp Cloud API) allows businesses to send and receive WhatsApp messages programmatically. Unlike the WhatsApp Business App (which is manual and limited to 1 device), the API supports bulk broadcasts, automation, multi-agent inboxes, and CRM integration.
+
+**What we deliver:**
+- Meta Business Manager verification and WhatsApp Business Account setup
+- Phone number registration on the WhatsApp Cloud API
+- Message template creation and Meta approval management
+- Broadcast campaigns to segmented contact lists
+- Automated chatbot flows (lead qualification, FAQ answering, appointment booking)
+- Multi-agent shared inbox for customer support teams
+- Contact import, segmentation, and CRM pipeline
+- Analytics: delivery rates, read rates, reply rates, campaign ROI
+
+**Who it's for:** Indian SMBs in retail, real estate, education, healthcare, e-commerce, and any business where customers already communicate on WhatsApp.
+
+**Pricing context:** Meta charges per conversation (a 24-hour window). In India: approximately ₹0.25–0.85 per conversation depending on template category. Our platform subscription is separate.
+
+**Timeline:** Most clients send their first broadcast within 4–5 weeks of kickoff (includes Meta verification, which takes 1–2 weeks).
+
+**FAQs:**
+Q: How do I get started with WhatsApp Business API in India?
+A: We handle the entire process — Meta Business Manager verification, WhatsApp Business Account creation, phone number registration, and webhook configuration. You don't need a technical team. Most businesses are live within 2–3 weeks.
+
+Q: What is the difference between WhatsApp Business App and WhatsApp Business API?
+A: The WhatsApp Business App is a free mobile app for small businesses — it supports 1 device, manual replies only, and no bulk messaging. The WhatsApp Business API is a paid, developer-accessible interface that supports automation, bulk broadcasts, multiple agents, and CRM integration.
+
+Q: How much does WhatsApp Business API cost in India?
+A: Meta charges per conversation (a 24-hour messaging window), not per message. In India: marketing templates cost approximately ₹0.85/conversation, utility templates ₹0.25/conversation, and authentication templates ₹0.15/conversation (rates as of 2025). There is no monthly fee from Meta — you pay only for conversations initiated.
+
+Q: Is WhatsApp marketing legal in India?
+A: Yes, provided contacts have opted in to receive messages. WhatsApp requires explicit opt-in before you can send marketing messages. All message templates must be approved by Meta before use. We help you build compliant opt-in flows.
+
+Q: How many messages can I send per day on WhatsApp API?
+A: WhatsApp uses a messaging tier system. New numbers start at 250 conversations/day and scale to 1,000 → 10,000 → 100,000/day based on volume and quality rating. We help you scale tiers by maintaining high message quality scores.
+
+---
+
+## Service 2: Web Development & Design
+
+**URL:** https://conveys.in/services/web-development
+
+**What it is:** Custom website and web application development using modern frameworks. We build marketing websites, web apps, e-commerce stores, client portals, and internal tools.
+
+**What we deliver:**
+- Marketing websites (Next.js, Tailwind CSS)
+- Web applications with authentication, dashboards, and data management
+- E-commerce stores (custom or Shopify/WooCommerce)
+- Client and vendor portals
+- API development and third-party integrations
+- Performance optimisation and Core Web Vitals improvement
+- Ongoing maintenance and hosting management
+
+**Tech stack:** Next.js 15, React, TypeScript, Tailwind CSS, Node.js, Fastify, PostgreSQL, Prisma, Vercel, AWS.
+
+**Pricing context:** A professional marketing website starts at ₹25,000. A custom web application with authentication, dashboards, and integrations typically ranges from ₹75,000–₹3,00,000 depending on complexity.
+
+**Timeline:** A marketing website typically takes 2–4 weeks. A full web application takes 6–16 weeks.
+
+**FAQs:**
+Q: How much does a website cost in India?
+A: A professional 5–10 page marketing website built in Next.js starts at ₹25,000. An e-commerce website starts at ₹50,000. A custom web application with user authentication, admin panel, and API integrations typically costs ₹75,000–₹3,00,000 depending on the number of features.
+
+Q: How long does it take to build a website?
+A: A marketing website takes 2–4 weeks from design approval to launch. An e-commerce store takes 4–8 weeks. A custom web application with multiple user roles and integrations takes 8–16 weeks.
+
+Q: Should I choose WordPress or custom development?
+A: WordPress suits simple blogs and brochure sites where you want easy content management. Custom development (Next.js/React) is better for performance-critical sites, web applications, SaaS products, or any site that needs custom integrations. Custom sites load faster, rank better on Core Web Vitals, and are easier to scale.
+
+Q: Do you provide website maintenance after launch?
+A: Yes. We offer monthly maintenance packages covering security updates, plugin/dependency updates, performance monitoring, uptime checks, and content updates. Pricing starts at ₹3,000/month.
+
+Q: What technologies do you use for web development?
+A: Next.js 15 (React framework) for the frontend, Node.js with Fastify for backends, PostgreSQL for databases, Prisma as ORM, Tailwind CSS for styling, and Vercel or Railway for deployment. All code is TypeScript with strict type checking.
+
+---
+
+## Service 3: Mobile App Development
+
+**URL:** https://conveys.in/services/mobile-app-development
+
+**What it is:** iOS and Android app development, both native and cross-platform. We cover the full lifecycle: UX design, development, QA, and App Store/Google Play submission.
+
+**What we deliver:**
+- Cross-platform apps (React Native) — one codebase for iOS + Android
+- Native iOS apps (Swift) and native Android apps (Kotlin) for performance-critical use cases
+- UX/UI design for mobile (Figma prototypes before development)
+- Backend APIs for mobile apps
+- Push notifications, offline support, device sensors, payment integrations
+- App Store and Google Play submission and review management
+- Post-launch updates and feature development
+
+**Pricing context:** A cross-platform MVP app starts at ₹1,50,000. A full-featured app with backend, authentication, and payment integration typically costs ₹3,00,000–₹10,00,000.
+
+**Timeline:** An MVP cross-platform app takes 8–12 weeks. A full-featured app takes 16–24 weeks.
+
+**FAQs:**
+Q: Should I build an iOS app, Android app, or both?
+A: In India, Android has approximately 95% market share. If budget is constrained, start with Android. If your target audience is urban professionals or enterprise users, iOS matters more. Cross-platform development (React Native) lets you target both with one codebase at 60–70% of the cost of building two native apps.
+
+Q: How much does it cost to build a mobile app in India?
+A: A cross-platform MVP app (login, core feature, basic UI) starts at ₹1,50,000. A full-featured app with backend, notifications, payments, and admin panel typically costs ₹3,00,000–₹10,00,000. Native iOS-only or Android-only apps cost slightly less than cross-platform for a single platform.
+
+Q: How long does app development take?
+A: An MVP cross-platform app takes 8–12 weeks. A full-featured app with complex backend integration takes 16–24 weeks. We always begin with a 2-week UX design phase before writing any code.
+
+Q: What is the difference between React Native and Flutter?
+A: Both are cross-platform frameworks. React Native (JavaScript/TypeScript) has a larger ecosystem and shares code with web React projects. Flutter (Dart) produces near-native performance and pixel-perfect UI. We primarily use React Native because it integrates well with our web tech stack and has better library support for Indian payment gateways.
+
+Q: Do you handle App Store and Google Play submission?
+A: Yes. We manage the full submission process including app signing, metadata, screenshots, and responding to Apple or Google review feedback. First-time submissions typically take 1–3 days for Google Play and 1–7 days for the Apple App Store.
+
+---
+
+## Service 4: AI Solutions & LLM Integration
+
+**URL:** https://conveys.in/services/ai-solutions
+
+**What it is:** Practical AI integration for business operations — not experimental prototypes, but production systems that automate real work. We integrate large language models (Claude, GPT-4) into your existing workflows.
+
+**What we deliver:**
+- Custom AI chatbots for customer support, lead qualification, and FAQ answering
+- RAG (Retrieval-Augmented Generation) systems — AI that answers questions from your own documents, PDFs, and databases
+- Document processing automation — extract structured data from invoices, contracts, forms
+- AI-powered reporting — natural language queries against your business data
+- WhatsApp + AI integration — AI chatbot on your WhatsApp Business number
+- LLM fine-tuning and prompt engineering for domain-specific accuracy
+- Voice AI (speech-to-text + AI responses via ElevenLabs)
+
+**Pricing context:** A simple AI chatbot integration starts at ₹50,000. A full RAG system with document ingestion pipeline and custom UI costs ₹1,50,000–₹5,00,000.
+
+**FAQs:**
+Q: Which AI model should I use — Claude or GPT-4?
+A: Both are excellent. Anthropic Claude is superior for document analysis, long-context tasks, and following precise instructions. OpenAI GPT-4 has a wider plugin/tool ecosystem. We recommend Claude (via Anthropic API) for most Indian business use cases due to its accuracy with complex instructions and cost efficiency.
+
+Q: What is RAG and why does my business need it?
+A: RAG (Retrieval-Augmented Generation) connects an AI model to your specific documents and data. Instead of relying on the AI's training data, it searches your product manuals, policies, or database before answering. This means accurate, up-to-date answers grounded in your actual business information — not generic AI responses.
+
+Q: How much does AI integration cost for a small business in India?
+A: A simple AI chatbot added to your website or WhatsApp starts at ₹50,000. A RAG system that can answer questions from your document library costs ₹1,50,000–₹3,00,000. Ongoing API costs (Anthropic/OpenAI) are separate and typically ₹2,000–₹20,000/month depending on usage volume.
+
+Q: Can AI replace my customer support team?
+A: AI works best as a first-response layer that handles 60–80% of repetitive queries automatically, escalating complex issues to human agents. It doesn't replace your team — it makes them more efficient by eliminating routine FAQ handling.
+
+Q: How long does it take to build an AI solution?
+A: A simple chatbot integration takes 2–3 weeks. A full RAG pipeline with document ingestion, vector search, and a custom UI takes 6–10 weeks. WhatsApp + AI integration (connecting the AI to your WhatsApp Business API) takes 3–4 weeks.
+
+---
+
+## Service 5: SaaS & MVP Development
+
+**URL:** https://conveys.in/services/saas-product-development
+
+**What it is:** Full-stack SaaS product development from idea to production — multi-tenant architecture, subscription billing, user management, and all the infrastructure a commercial software product needs.
+
+**What we deliver:**
+- Product definition and technical architecture
+- UX/UI design (Figma)
+- Multi-tenant backend (shared database with row-level security, or separate schemas)
+- Authentication (social login, email/password, 2FA)
+- Subscription billing (Stripe or Razorpay integration)
+- Admin panel and analytics dashboard
+- API development for third-party integrations
+- DevOps: CI/CD pipeline, staging + production environments, monitoring
+
+**Pricing context:** An MVP SaaS product (core features, billing, auth) starts at ₹3,00,000. A fully-featured SaaS with advanced reporting, integrations, and mobile app typically costs ₹8,00,000–₹25,00,000.
+
+**FAQs:**
+Q: How much does it cost to build a SaaS product in India?
+A: An MVP SaaS with core features, user authentication, and Stripe billing starts at ₹3,00,000. A production-ready SaaS with multi-tenancy, admin panel, analytics, and API integrations costs ₹8,00,000–₹25,00,000. The exact cost depends on the number of features, integrations, and whether you need a mobile app alongside the web product.
+
+Q: How long does SaaS development take?
+A: An MVP takes 12–16 weeks (3–4 months) from kickoff to launch. A full SaaS product takes 6–12 months. We recommend launching an MVP with 3–5 core features first, then iterating based on real user feedback.
+
+Q: What is the difference between MVP and full product development?
+A: An MVP (Minimum Viable Product) includes only the core features needed to validate your idea with real users. Full product development adds secondary features, integrations, mobile apps, and enterprise capabilities. We always recommend starting with an MVP to avoid building features nobody uses.
+
+Q: Do you build multi-tenant SaaS?
+A: Yes. We build shared-database multi-tenant architecture using PostgreSQL with row-level security (RLS). Each tenant's data is logically isolated at the database level. This is more cost-efficient than per-tenant database architectures and scales well to thousands of tenants.
+
+Q: Can you help with product strategy, not just development?
+A: Yes. Before writing code, we run a 2-week discovery phase covering user research, competitor analysis, feature prioritisation, and technical architecture. We help you decide what to build first, not just how to build it.
+
+---
+
+## Service 6: Digital Marketing
+
+**URL:** https://conveys.in/services/digital-marketing
+
+**What it is:** SEO, WhatsApp marketing, and performance campaigns for Indian businesses. We focus on channels that drive measurable leads — not vanity metrics.
+
+**What we deliver:**
+- SEO (on-page, technical, local SEO for Google Business Profile)
+- WhatsApp broadcast campaigns (using WhatsApp Business API)
+- Google Ads and Meta Ads management
+- Content marketing and blog writing
+- Analytics setup (GA4, Google Search Console)
+- Conversion rate optimisation
+
+**FAQs:**
+Q: How long does SEO take to show results in India?
+A: For a new website, expect 4–6 months before meaningful organic traffic. For an established site with existing content, improvements can show within 6–8 weeks. The timeline depends heavily on domain age, backlink profile, and competition in your niche.
+
+Q: Is WhatsApp marketing effective for Indian businesses?
+A: Yes — WhatsApp has 500+ million users in India with open rates of 95%+ compared to 20–25% for email. Bulk WhatsApp campaigns (via the Business API) consistently outperform email for lead nurturing, cart recovery, and event notifications in Indian markets.
+
+Q: What is the difference between WhatsApp Business App and WhatsApp API for marketing?
+A: The WhatsApp Business App is free but limited — you can only message manually, one conversation at a time, from one device. The WhatsApp Business API supports bulk broadcasts to thousands of opted-in contacts, automation, segmentation, and analytics.
+
+Q: How much does WhatsApp marketing cost per message in India?
+A: Meta charges per conversation (24-hour window), not per message. Marketing template conversations in India cost approximately ₹0.85 each. A campaign to 1,000 contacts costs approximately ₹850 in Meta fees, plus your platform subscription.
+
+Q: Do you manage Google Ads for Indian businesses?
+A: Yes. We manage Google Search, Display, and Performance Max campaigns. Our minimum recommended monthly ad spend is ₹20,000. We charge a management fee of 15–20% of ad spend. We set up conversion tracking in GA4 so you can see cost-per-lead for every campaign.

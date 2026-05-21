@@ -1,0 +1,25 @@
+# Conveys Information Technology
+
+> Custom software development company based in Mumbai, India. We build web applications, mobile apps, WhatsApp CRM solutions, AI-powered tools, and SaaS products for Indian SMBs, startups, and enterprises.
+
+## Services
+
+- [WhatsApp CRM & Business API](https://conveys.in/services/whatsapp-crm): End-to-end WhatsApp Business API setup, broadcast campaigns, chatbot automation, and customer pipeline management for Indian businesses.
+- [Web Development & Design](https://conveys.in/services/web-development): Custom websites, web applications, e-commerce stores, and portals built with React, Next.js, and Node.js.
+- [Mobile App Development](https://conveys.in/services/mobile-app-development): iOS, Android, and cross-platform apps (React Native, Flutter). Full lifecycle from UX design to App Store submission.
+- [AI Solutions & LLM Integration](https://conveys.in/services/ai-solutions): Custom AI chatbots, RAG systems, document processing, and LLM integrations (Claude, GPT-4) for operational automation.
+- [SaaS & MVP Development](https://conveys.in/services/saas-product-development): Full-stack SaaS product development from idea validation to multi-tenant production deployment.
+- [Digital Marketing](https://conveys.in/services/digital-marketing): SEO, WhatsApp marketing campaigns, and performance marketing for Indian businesses.
+
+## Resources
+
+- [Blog](https://conveys.in/blog): Guides, comparisons, and insights on web development, WhatsApp API, mobile apps, and AI for Indian businesses.
+- [About](https://conveys.in/about): Company background, team, and technology expertise.
+- [Full details](https://conveys.in/llms-full.txt)
+
+## Contact
+
+- Website: https://conveys.in
+- Email: info@conveys.in
+- Phone: +91 9907072035
+- Address: SwaminarayanCity, Dombivli West, Mumbai 421202, Maharashtra, India
