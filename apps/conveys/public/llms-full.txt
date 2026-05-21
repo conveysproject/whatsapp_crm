@@ -40,7 +40,7 @@
 
 **FAQs:**
 Q: How do I get started with WhatsApp Business API in India?
-A: We handle the entire process — Meta Business Manager verification, WhatsApp Business Account creation, phone number registration, and webhook configuration. You don't need a technical team. Most businesses are live within 2–3 weeks.
+A: We handle the entire process — Meta Business Manager verification, WhatsApp Business Account creation, phone number registration, and webhook configuration. You don't need a technical team. The API is typically live within 1–2 weeks; the full onboarding including templates and first campaign takes 4–5 weeks.
 
 Q: What is the difference between WhatsApp Business App and WhatsApp Business API?
 A: The WhatsApp Business App is a free mobile app for small businesses — it supports 1 device, manual replies only, and no bulk messaging. The WhatsApp Business API is a paid, developer-accessible interface that supports automation, bulk broadcasts, multiple agents, and CRM integration.
@@ -216,6 +216,10 @@ A: Yes. Before writing code, we run a 2-week discovery phase covering user resea
 - Content marketing and blog writing
 - Analytics setup (GA4, Google Search Console)
 - Conversion rate optimisation
+
+**Pricing context:** SEO retainers start at ₹15,000/month. Google Ads management fee is 15–20% of ad spend (minimum ₹20,000/month ad spend). WhatsApp campaign costs depend on Meta's per-conversation pricing (₹0.85/marketing conversation in India).
+
+**Timeline:** SEO results typically appear within 4–6 months for new sites, 6–8 weeks for established sites. Ad campaigns can drive traffic from day one.
 
 **FAQs:**
 Q: How long does SEO take to show results in India?
