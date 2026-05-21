@@ -42,10 +42,10 @@ Build infrastructure first, then add page data one by one:
 | 17 | `backend-development` | ✅ Done (2026-05-22) |
 | 18 | `digital-transformation` | ✅ Done (2026-05-22) |
 | 19 | `managed-it-services` | ✅ Done (2026-05-22) |
-| 20 | `digital-marketing` | ⬜ Pending |
-| 21 | `whatsapp-marketing-automation` | ⬜ Pending |
-| 22 | `crm-integration` | ⬜ Pending |
-| 23 | `managed-service-provider` | ⬜ Pending |
+| 20 | `digital-marketing` | ✅ Done (2026-05-22) |
+| 21 | `whatsapp-marketing-automation` | ✅ Done (2026-05-22) |
+| 22 | `crm-integration` | ✅ Done (2026-05-22) |
+| 23 | `managed-service-provider` | ✅ Done (2026-05-22) |
 | 24 | `saas-product-development` | ⬜ Pending |
 | 25 | `mvp-development` | ⬜ Pending |
 | 26 | `api-integration-development` | ⬜ Pending |
