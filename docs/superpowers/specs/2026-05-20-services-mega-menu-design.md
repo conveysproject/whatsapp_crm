@@ -1,7 +1,59 @@
 # Services Mega Menu & 26 Service Pages — Design Spec
 **Date:** 2026-05-20  
 **Project:** conveys.in marketing site (`apps/conveys`)  
-**Status:** Approved — ready for implementation plan
+**Status:** Approved — revised implementation order
+
+## Implementation Order (REVISED)
+
+Build infrastructure first, then add page data one by one:
+
+**Phase 1 — Infrastructure (do first):**
+1. `apps/conveys/lib/services-data.ts` — type definitions + `SERVICES` array with slugs/titles/columns only (no full page data yet); `getService()` helper
+2. `apps/conveys/components/service-page.tsx` — full template component (Hero, Offerings, Process, TechStack, FAQ, Related, CTA)
+3. `apps/conveys/components/services-mega-menu.tsx` — 4-column dropdown panel
+4. Update `apps/conveys/components/conveys-header.tsx` — replace Services link with mega menu
+5. Update `apps/conveys/components/conveys-footer.tsx` — 26-service grouped links
+6. Update `apps/conveys/app/sitemap.ts` — all 26 slugs
+
+**Phase 2 — Pages (one at a time, ask user which to do next):**
+- For each service: fill in full `ServiceData` in services-data.ts, then create `apps/conveys/app/services/{slug}/page.tsx`
+- Start with the 4 existing pages (web-development, mobile-app-development, whatsapp-crm, ai-solutions)
+- Then add the 22 new pages on demand
+
+**Phase 2 Progress:**
+| # | Slug | Status |
+|---|------|--------|
+| 1 | `web-development` | ✅ Done |
+| 2 | `mobile-app-development` | ✅ Done |
+| 3 | `whatsapp-crm` | ✅ Done |
+| 4 | `ai-solutions` | ✅ Done |
+| 5 | `site-migration` | ✅ Done (2026-05-22) |
+| 6 | `cloud-infrastructure-setup` | ⬜ Pending |
+| 7 | `whatsapp-business-api` | ⬜ Pending |
+| 8 | `cloud-architecture-review` | ⬜ Pending |
+| 9 | `devops-cicd` | ⬜ Pending |
+| 10 | `database-administration` | ⬜ Pending |
+| 11 | `native-app-development` | ⬜ Pending |
+| 12 | `custom-software-development` | ⬜ Pending |
+| 13 | `cross-platform-development` | ⬜ Pending |
+| 14 | `iot-development` | ⬜ Pending |
+| 15 | `ui-ux-design` | ⬜ Pending |
+| 16 | `frontend-development` | ⬜ Pending |
+| 17 | `backend-development` | ⬜ Pending |
+| 18 | `digital-transformation` | ⬜ Pending |
+| 19 | `managed-it-services` | ⬜ Pending |
+| 20 | `digital-marketing` | ⬜ Pending |
+| 21 | `whatsapp-marketing-automation` | ⬜ Pending |
+| 22 | `crm-integration` | ⬜ Pending |
+| 23 | `managed-service-provider` | ⬜ Pending |
+| 24 | `saas-product-development` | ⬜ Pending |
+| 25 | `mvp-development` | ⬜ Pending |
+| 26 | `api-integration-development` | ⬜ Pending |
+| 27 | `ecommerce-solutions` | ⬜ Pending |
+| 28 | `b2b-platform-design` | ⬜ Pending |
+| 29 | `whatsapp-commerce` | ⬜ Pending |
+
+---
 
 ---
 

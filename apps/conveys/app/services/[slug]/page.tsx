@@ -12,6 +12,7 @@ const STATIC_SLUGS = new Set([
   "mobile-app-development",
   "whatsapp-crm",
   "ai-solutions",
+  "site-migration",
 ]);
 
 export function generateStaticParams(): Array<{ slug: string }> {
