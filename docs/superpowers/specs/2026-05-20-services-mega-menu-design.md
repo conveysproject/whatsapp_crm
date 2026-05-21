@@ -34,8 +34,8 @@ Build infrastructure first, then add page data one by one:
 | 9 | `devops-cicd` | ✅ Done (2026-05-22) |
 | 10 | `database-administration` | ✅ Done (2026-05-22) |
 | 11 | `native-app-development` | ✅ Done (2026-05-22) |
-| 12 | `custom-software-development` | ⬜ Pending |
-| 13 | `cross-platform-development` | ⬜ Pending |
+| 12 | `custom-software-development` | ✅ Done (2026-05-22) |
+| 13 | `cross-platform-development` | ✅ Done (2026-05-22) |
 | 14 | `iot-development` | ⬜ Pending |
 | 15 | `ui-ux-design` | ⬜ Pending |
 | 16 | `frontend-development` | ⬜ Pending |
