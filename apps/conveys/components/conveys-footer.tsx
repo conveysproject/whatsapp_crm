@@ -26,9 +26,14 @@ export function ConveysFooter(): JSX.Element {
           <div>
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Services</h2>
             <ul className="mt-4 space-y-2.5 text-sm">
-              <li><Link href="/#services" className="transition hover:text-white">Web Development</Link></li>
-              <li><Link href="/#services" className="transition hover:text-white">Mobile Apps</Link></li>
-              <li><Link href="/#services" className="transition hover:text-white">WhatsApp CRM</Link></li>
+              <li><Link href="/services/web-development" className="transition hover:text-white">Web Development</Link></li>
+              <li><Link href="/services/mobile-app-development" className="transition hover:text-white">Mobile App Development</Link></li>
+              <li><Link href="/services/whatsapp-crm" className="transition hover:text-white">WhatsApp CRM</Link></li>
+              <li><Link href="/services/ai-solutions" className="transition hover:text-white">AI Solutions</Link></li>
+              <li><Link href="/services/cloud-infrastructure-setup" className="transition hover:text-white">Cloud Infrastructure</Link></li>
+              <li><Link href="/services/devops-cicd" className="transition hover:text-white">DevOps & CI/CD</Link></li>
+              <li><Link href="/services/digital-marketing" className="transition hover:text-white">Digital Marketing</Link></li>
+              <li><Link href="/services/saas-product-development" className="transition hover:text-white">SaaS Development</Link></li>
             </ul>
           </div>
 

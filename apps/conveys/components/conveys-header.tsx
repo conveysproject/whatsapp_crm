@@ -4,10 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import type { JSX } from "react";
 import { useState } from "react";
+import { ServicesMegaMenu, ServicesMobileAccordion } from "@/components/services-mega-menu";
 
-const NAV = [
+const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "/#services", label: "Services" },
   { href: "/#about", label: "About" },
   { href: "/blog", label: "Blog" },
   { href: "/#contact", label: "Contact" },
@@ -30,7 +30,9 @@ export function ConveysHeader(): JSX.Element {
         </Link>
 
         <nav className="hidden items-center gap-7 text-sm font-medium text-slate-600 md:flex" aria-label="Primary">
-          {NAV.map((item) => (
+          <Link href="/" className="transition hover:text-blue-700">Home</Link>
+          <ServicesMegaMenu />
+          {NAV_LINKS.slice(1).map((item) => (
             <Link key={item.href} href={item.href} className="transition hover:text-blue-700">
               {item.label}
             </Link>
@@ -68,8 +70,10 @@ export function ConveysHeader(): JSX.Element {
 
       {open ? (
         <div id="conveys-mobile-nav" className="border-t border-slate-100 bg-white px-4 py-4 md:hidden">
-          <nav className="flex flex-col gap-3 text-sm font-medium text-slate-700" aria-label="Mobile">
-            {NAV.map((item) => (
+          <nav className="flex flex-col gap-1 text-sm font-medium text-slate-700" aria-label="Mobile">
+            <Link href="/" onClick={() => setOpen(false)} className="rounded-md py-2 hover:text-blue-700">Home</Link>
+            <ServicesMobileAccordion onClose={() => setOpen(false)} />
+            {NAV_LINKS.slice(1).map((item) => (
               <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className="rounded-md py-2 hover:text-blue-700">
                 {item.label}
               </Link>
