@@ -36,12 +36,12 @@ Build infrastructure first, then add page data one by one:
 | 11 | `native-app-development` | ✅ Done (2026-05-22) |
 | 12 | `custom-software-development` | ✅ Done (2026-05-22) |
 | 13 | `cross-platform-development` | ✅ Done (2026-05-22) |
-| 14 | `iot-development` | ⬜ Pending |
-| 15 | `ui-ux-design` | ⬜ Pending |
-| 16 | `frontend-development` | ⬜ Pending |
-| 17 | `backend-development` | ⬜ Pending |
-| 18 | `digital-transformation` | ⬜ Pending |
-| 19 | `managed-it-services` | ⬜ Pending |
+| 14 | `iot-development` | ✅ Done (2026-05-22) |
+| 15 | `ui-ux-design` | ✅ Done (2026-05-22) |
+| 16 | `frontend-development` | ✅ Done (2026-05-22) |
+| 17 | `backend-development` | ✅ Done (2026-05-22) |
+| 18 | `digital-transformation` | ✅ Done (2026-05-22) |
+| 19 | `managed-it-services` | ✅ Done (2026-05-22) |
 | 20 | `digital-marketing` | ⬜ Pending |
 | 21 | `whatsapp-marketing-automation` | ⬜ Pending |
 | 22 | `crm-integration` | ⬜ Pending |
