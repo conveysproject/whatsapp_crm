@@ -415,6 +415,103 @@ export const SERVICES: ServiceData[] = [
     ],
     relatedSlugs: ["cloud-infrastructure-setup", "backend-development", "cloud-architecture-review"],
   },
+
+  // ─── Database Administration ──────────────────────────────────────────────────
+  {
+    slug: "database-administration",
+    column: "Cloud Services",
+    title: "Database Administration",
+    tagline: "Databases That Never Let You Down",
+    metaTitle: "Database Administration Services India | PostgreSQL, MySQL, MongoDB | Conveys",
+    metaDescription: "Schema design, query optimisation, backup, HA, and migration by experienced DBAs. PostgreSQL, MySQL, MongoDB for Indian businesses. Fixed pricing.",
+    overview: [
+      "Schema design, query optimisation, automated backups, high availability, and migration support — managed by DBAs who have run databases for production systems handling millions of rows.",
+      "We work with your existing stack or help you choose the right database for your workload — relational, document, or time-series.",
+    ],
+    offerings: [
+      { title: "Schema Design & Modelling", description: "Normalised schema design, index strategy, and constraint modelling for relational databases — or document structure and aggregation pipeline design for MongoDB. Built for query performance, not just correctness.", icon: ICONS.database },
+      { title: "Query & Index Optimisation", description: "EXPLAIN ANALYZE on your slowest queries, missing index identification, query rewrite, and connection pool tuning. We typically cut p95 query time by 60–80% on first engagement.", icon: ICONS.bolt },
+      { title: "Backup & Recovery", description: "Automated daily snapshots, point-in-time recovery setup, off-site backup to S3, and a tested restoration runbook. We run a restore drill so you know the backup actually works before you need it.", icon: ICONS.upload },
+      { title: "Replication & High Availability", description: "Primary-replica streaming replication, automatic failover with Patroni or RDS Multi-AZ, and read replica routing — so a single node failure does not take your app down.", icon: ICONS.refresh },
+      { title: "Database Migration", description: "MySQL to PostgreSQL, MongoDB to relational, or any legacy DB to a modern ORM-managed schema — with row-count validation, data transformation scripts, and a zero-downtime cutover plan.", icon: ICONS.server },
+      { title: "Security & Access Control", description: "Role-based access with least privilege, row-level security policies, encryption at rest and in transit, audit logging, and vulnerability scanning for known CVEs in your database version.", icon: ICONS.shield },
+    ],
+    process: [
+      { step: "01", title: "Audit", duration: "Day 1–2", body: "We review your schema, slow query log, connection pool settings, and backup configuration. You get a written findings report with severity ratings." },
+      { step: "02", title: "Design", duration: "Day 3–5", body: "Schema improvements, index additions, and migration plan documented and reviewed with your team before any changes touch production." },
+      { step: "03", title: "Staging Implementation", duration: "Week 2", body: "All changes applied to a staging clone first. Performance benchmarks run before and after. Rollback scripts prepared." },
+      { step: "04", title: "Production Rollout", duration: "Week 2–3", body: "Changes applied to production in a maintenance window or online (depending on the change type). Query performance monitored in real time." },
+      { step: "05", title: "Monitoring Setup", duration: "Week 3", body: "pgBouncer connection pool metrics, slow query alerts, replication lag monitoring, and disk usage alerts configured in Datadog or Grafana." },
+      { step: "06", title: "Ongoing DBA", duration: "Monthly", body: "Monthly retainer covers capacity planning, index maintenance, vacuum tuning, version upgrades, and ad-hoc query review." },
+    ],
+    techStack: [
+      { name: "PostgreSQL", category: "Database" },
+      { name: "MySQL", category: "Database" },
+      { name: "MongoDB", category: "Database" },
+      { name: "Redis", category: "Cache" },
+      { name: "AWS RDS", category: "Managed DB" },
+      { name: "Prisma ORM", category: "ORM" },
+      { name: "pgBouncer", category: "Connection Pool" },
+      { name: "TimescaleDB", category: "Time-Series" },
+    ],
+    faqs: [
+      { q: "PostgreSQL or MySQL — which should I use?", a: "PostgreSQL for almost everything new. It has better concurrency (MVCC), richer data types (JSONB, arrays, ranges), row-level security, and a more active open-source community. MySQL is fine if you are migrating an existing app — we will not force a migration that is not necessary." },
+      { q: "Should I use a managed database (RDS, Cloud SQL) or self-hosted?", a: "Managed for 95% of projects. AWS RDS or Cloud SQL handle automated backups, minor version patches, and Multi-AZ failover. The cost premium is worth it unless you have very high I/O or very strict compliance requirements that prevent using managed services." },
+      { q: "How often should databases be backed up?", a: "Daily snapshots at minimum, with point-in-time recovery (PITR) enabled so you can restore to any second in the last 7–35 days. For financial or healthcare data, we recommend continuous WAL archiving to S3 and a tested monthly restore drill." },
+      { q: "How do you handle migrations without downtime?", a: "We use expand-contract migrations: first add new columns/tables without removing old ones, deploy the new application code, then remove the old schema in a follow-up migration. For large tables, we use pg_repack or online schema change tools so locks are minimal." },
+      { q: "Do you offer an ongoing DBA retainer?", a: "Yes. Monthly retainers cover capacity planning, index maintenance, vacuum tuning, version upgrades, query review, and incident response. Retainers start at ₹15,000/month for a single PostgreSQL instance." },
+    ],
+    relatedSlugs: ["backend-development", "cloud-infrastructure-setup", "site-migration"],
+  },
+
+  // ─── Native App Development ───────────────────────────────────────────────────
+  {
+    slug: "native-app-development",
+    column: "IT Software Consultancy",
+    title: "Native App Development",
+    tagline: "Native iOS & Android Apps With No Compromise",
+    metaTitle: "Native iOS & Android App Development India | Swift, Kotlin | Conveys",
+    metaDescription: "Swift for iOS, Kotlin for Android — platform-native apps that leverage the full device API and pass App Store review first time. Fixed pricing for Indian businesses.",
+    overview: [
+      "Swift for iOS and Kotlin for Android — we build platform-native apps that use the full device API, meet Apple and Google design guidelines, and pass store review first time.",
+      "When your product needs the absolute best performance, deepest OS integration, or a platform-specific experience that cross-platform frameworks cannot replicate, native is the right call.",
+    ],
+    offerings: [
+      { title: "iOS App Development", description: "Native Swift apps targeting the latest iOS. We follow Apple's Human Interface Guidelines, use SwiftUI for modern layouts, and handle App Store submission including review escalations.", icon: ICONS.phone },
+      { title: "Android App Development", description: "Kotlin-powered Android apps built with Jetpack Compose, targeting the full Android device ecosystem — phones, tablets, and foldables. Published to Google Play with full release management.", icon: ICONS.phone },
+      { title: "App Store Submission", description: "App Store Connect and Google Play Console setup, screenshots, metadata, privacy policy, and age ratings — we manage the full submission and respond to reviewer questions on your behalf.", icon: ICONS.upload },
+      { title: "In-App Purchases & Subscriptions", description: "StoreKit 2 (iOS) and Google Play Billing (Android) integration for one-time purchases, consumables, and auto-renewing subscriptions — with RevenueCat for cross-platform subscription management.", icon: ICONS.bag },
+      { title: "Push Notifications", description: "APNs (iOS) and FCM (Android) push notification integration with segmentation, scheduling, and deep-link routing so taps land on the right screen.", icon: ICONS.broadcast },
+      { title: "Offline Support", description: "CoreData or Room database for offline-first data storage, background sync, and conflict resolution — so your app is usable even on 2G or without any signal.", icon: ICONS.database },
+    ],
+    process: [
+      { step: "01", title: "Discovery & Scope", duration: "Day 1–3", body: "Platform decision (iOS-first, Android-first, or both simultaneously), core feature list, and API contract agreed. Fixed-price quote issued." },
+      { step: "02", title: "UX Design", duration: "Week 1–2", body: "Figma prototypes for every screen, following platform-specific HIG or Material 3 conventions. Design approved before development begins." },
+      { step: "03", title: "Development Sprints", duration: "Week 2–8", body: "Two-week sprints with TestFlight (iOS) or Firebase App Distribution (Android) builds at each sprint end. You test on a real device every two weeks." },
+      { step: "04", title: "QA & Performance", duration: "Week 8–9", body: "Device matrix testing, memory profiling, battery impact analysis, and accessibility audit (VoiceOver / TalkBack). Crash-free rate target: 99.9%." },
+      { step: "05", title: "Store Submission", duration: "Week 9–10", body: "Full App Store and Play Store submission package prepared and submitted. We handle review responses — typical approval: 1–3 days for iOS, 2–7 days for Android." },
+      { step: "06", title: "Post-Launch Support", duration: "Ongoing", body: "30-day free bug-fix period. After that, monthly retainer for OS compatibility updates, new device support, and feature additions." },
+    ],
+    techStack: [
+      { name: "Swift / SwiftUI", category: "iOS" },
+      { name: "Kotlin / Jetpack Compose", category: "Android" },
+      { name: "Xcode", category: "IDE" },
+      { name: "Android Studio", category: "IDE" },
+      { name: "Firebase", category: "Backend Services" },
+      { name: "TestFlight", category: "iOS Beta" },
+      { name: "Fastlane", category: "Automation" },
+      { name: "RevenueCat", category: "Subscriptions" },
+      { name: "Sentry", category: "Crash Reporting" },
+    ],
+    faqs: [
+      { q: "When does native make more sense than React Native?", a: "Native wins when you need deep OS integration (ARKit, HealthKit, on-device ML, background audio, custom camera pipelines), when performance is critical (60fps animations, real-time audio), or when your team already has Swift/Kotlin expertise. For most B2B apps and straightforward consumer apps, React Native is faster and cheaper." },
+      { q: "How do you handle App Store rejections?", a: "We write rejection-proof submissions by reviewing Apple's common rejection reasons before submission. If a rejection does occur, we respond within 24 hours and have a 100% resolution rate — no project has been permanently rejected." },
+      { q: "Is native more expensive than cross-platform?", a: "Yes — building two native apps costs roughly 1.6× a single React Native app that covers both platforms. The trade-off is better performance, deeper OS integration, and no dependency on a cross-platform framework's release cycle." },
+      { q: "What is the typical timeline for a native app?", a: "A focused single-platform app with 10–15 screens takes 10–14 weeks from design to App Store. A dual-platform app with a custom backend takes 16–20 weeks. We do not cut corners on QA to hit an aggressive deadline." },
+      { q: "Do you maintain the app after launch?", a: "Yes. iOS releases one major OS version per year that can require UI updates. Android has more fragmentation. We offer annual maintenance contracts that cover OS compatibility, security patches, and minor feature additions." },
+    ],
+    relatedSlugs: ["mobile-app-development", "cross-platform-development", "ui-ux-design"],
+  },
 ];
 
 export function getService(slug: string): ServiceData {

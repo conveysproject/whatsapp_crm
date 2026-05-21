@@ -32,8 +32,8 @@ Build infrastructure first, then add page data one by one:
 | 7 | `whatsapp-business-api` | ✅ Done (2026-05-22) |
 | 8 | `cloud-architecture-review` | ✅ Done (2026-05-22) |
 | 9 | `devops-cicd` | ✅ Done (2026-05-22) |
-| 10 | `database-administration` | ⬜ Pending |
-| 11 | `native-app-development` | ⬜ Pending |
+| 10 | `database-administration` | ✅ Done (2026-05-22) |
+| 11 | `native-app-development` | ✅ Done (2026-05-22) |
 | 12 | `custom-software-development` | ⬜ Pending |
 | 13 | `cross-platform-development` | ⬜ Pending |
 | 14 | `iot-development` | ⬜ Pending |
