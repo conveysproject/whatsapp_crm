@@ -4,9 +4,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ConveysHeader } from "@/components/conveys-header";
 import { ConveysFooter } from "@/components/conveys-footer";
-import { SERVICE_NAV } from "@/lib/services-data";
+import { SERVICE_NAV, SERVICES } from "@/lib/services-data";
+import { ServicePage, buildMetadata } from "@/components/service-page";
 
-// These 4 have their own static page.tsx — exclude from this dynamic route
+// Slugs that have their own static page.tsx — excluded from this dynamic route
 const STATIC_SLUGS = new Set([
   "web-development",
   "mobile-app-development",
@@ -25,6 +26,9 @@ export async function generateMetadata(
   { params }: { params: Promise<{ slug: string }> }
 ): Promise<Metadata> {
   const { slug } = await params;
+  const fullData = SERVICES.find((s) => s.slug === slug);
+  if (fullData) return buildMetadata(fullData);
+
   const service = SERVICE_NAV.find((s) => s.slug === slug);
   if (!service) return {};
   const url = `https://conveys.in/services/${slug}`;
@@ -44,11 +48,15 @@ export default async function ServiceSlugPage(
   const service = SERVICE_NAV.find((s) => s.slug === slug);
   if (!service || STATIC_SLUGS.has(slug)) notFound();
 
+  // Full page — render template when data is ready
+  const fullData = SERVICES.find((s) => s.slug === slug);
+  if (fullData) return <ServicePage data={fullData} />;
+
+  // Coming-soon fallback for services not yet populated
   return (
     <>
       <ConveysHeader />
 
-      {/* ── Hero ── */}
       <section className="relative overflow-hidden bg-slate-900">
         <div className="pointer-events-none absolute inset-0" aria-hidden="true">
           <div className="absolute -left-40 -top-40 h-[36rem] w-[36rem] rounded-full bg-blue-700/20 blur-3xl" />
@@ -93,7 +101,7 @@ export default async function ServiceSlugPage(
               Full {service.title} Page in Progress
             </h2>
             <p className="mt-4 text-base leading-relaxed text-slate-500">
-              We&apos;re putting together detailed information about our {service.title.toLowerCase()} services — offerings, process, tech stack, and FAQs. In the meantime, reach out directly and we&apos;ll scope your project same day.
+              We&apos;re putting together detailed information about our {service.title.toLowerCase()} services. In the meantime, reach out directly and we&apos;ll scope your project same day.
             </p>
             <div className="mt-8">
               <Link
