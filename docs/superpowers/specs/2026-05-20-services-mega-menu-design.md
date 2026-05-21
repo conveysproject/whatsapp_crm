@@ -46,12 +46,12 @@ Build infrastructure first, then add page data one by one:
 | 21 | `whatsapp-marketing-automation` | ✅ Done (2026-05-22) |
 | 22 | `crm-integration` | ✅ Done (2026-05-22) |
 | 23 | `managed-service-provider` | ✅ Done (2026-05-22) |
-| 24 | `saas-product-development` | ⬜ Pending |
-| 25 | `mvp-development` | ⬜ Pending |
-| 26 | `api-integration-development` | ⬜ Pending |
-| 27 | `ecommerce-solutions` | ⬜ Pending |
-| 28 | `b2b-platform-design` | ⬜ Pending |
-| 29 | `whatsapp-commerce` | ⬜ Pending |
+| 24 | `saas-product-development` | ✅ Done (2026-05-22) |
+| 25 | `mvp-development` | ✅ Done (2026-05-22) |
+| 26 | `api-integration-development` | ✅ Done (2026-05-22) |
+| 27 | `ecommerce-solutions` | ✅ Done (2026-05-22) |
+| 28 | `b2b-platform-design` | ✅ Done (2026-05-22) |
+| 29 | `whatsapp-commerce` | ✅ Done (2026-05-22) |
 
 ---
 
