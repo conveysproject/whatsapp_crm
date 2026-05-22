@@ -34,7 +34,26 @@ export const onboardingRouter: FastifyPluginAsync = async (fastify) => {
     }
     const { access_token } = await tokenRes.json() as { access_token: string };
 
-    const resolvedWabaId = wabaId ?? "";
+    // If wabaId wasn't captured via postMessage (re-auth flow doesn't fire
+    // WA_EMBEDDED_SIGNUP FINISH), fall back to Graph API to find the first WABA
+    // the token has access to.
+    let resolvedWabaId = wabaId ?? "";
+    if (!resolvedWabaId) {
+      try {
+        const wabaRes = await fetch(
+          `${WA_GRAPH}/me/businesses?fields=whatsapp_business_accounts{id,name}&access_token=${access_token}`
+        );
+        if (wabaRes.ok) {
+          const wabaData = await wabaRes.json() as {
+            data?: Array<{ whatsapp_business_accounts?: { data?: Array<{ id: string }> } }>;
+          };
+          resolvedWabaId = wabaData.data?.[0]?.whatsapp_business_accounts?.data?.[0]?.id ?? "";
+          if (resolvedWabaId) fastify.log.info({ resolvedWabaId }, "WABA ID resolved from Graph API");
+        }
+      } catch (err) {
+        fastify.log.warn({ err }, "Failed to resolve WABA ID from Graph API");
+      }
+    }
 
     // Determine onboarding step
     const hasPhone = embedded && !!phoneNumberId;
