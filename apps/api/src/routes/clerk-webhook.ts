@@ -27,11 +27,22 @@ interface ClerkSession {
   client_id?: string;
 }
 
+interface ClerkUser {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email_addresses: Array<{ email_address: string; id: string }>;
+  primary_email_address_id: string | null;
+  deleted?: boolean;
+}
+
 type ClerkEvent =
   | { type: "organization.created"; data: ClerkOrg }
   | { type: "organizationMembership.created"; data: ClerkMembership }
   | { type: "organizationMembership.deleted"; data: ClerkMembership }
   | { type: "session.created"; data: ClerkSession }
+  | { type: "user.updated"; data: ClerkUser }
+  | { type: "user.deleted"; data: { id: string } }
   | { type: string; data: unknown };
 
 export const clerkWebhookRouter: FastifyPluginAsync = async (fastify) => {
@@ -142,6 +153,28 @@ export const clerkWebhookRouter: FastifyPluginAsync = async (fastify) => {
         await fastify.prisma.user.updateMany({
           where: { id: public_user_data.user_id },
           data: { isActive: false },
+        });
+      }
+
+      if (event.type === "user.updated") {
+        const u = event.data as ClerkUser;
+        const primary = u.email_addresses.find((e) => e.id === u.primary_email_address_id);
+        const email = primary?.email_address ?? u.email_addresses[0]?.email_address;
+        const fullName = [u.first_name, u.last_name].filter(Boolean).join(" ") || undefined;
+        await fastify.prisma.user.updateMany({
+          where: { id: u.id },
+          data: {
+            ...(email ? { email } : {}),
+            ...(fullName ? { fullName } : {}),
+          },
+        });
+      }
+
+      if (event.type === "user.deleted") {
+        const { id } = event.data as { id: string };
+        await fastify.prisma.user.updateMany({
+          where: { id },
+          data: { isActive: false, deletedAt: new Date() },
         });
       }
 
