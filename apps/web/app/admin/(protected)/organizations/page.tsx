@@ -3,6 +3,8 @@ import { JSX, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
 
+type CleanupResult = { dryRun: boolean; deleted: { id: string; name: string; reason: string }[] };
+
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 interface Org {
@@ -36,6 +38,25 @@ export default function AdminOrgsPage(): JSX.Element {
   const adminFetch = useAdminFetch();
   const [search, setSearch] = useState("");
   const [impersonating, setImpersonating] = useState<string | null>(null);
+  const [cleanupPreview, setCleanupPreview] = useState<CleanupResult | null>(null);
+
+  const cleanup = useMutation({
+    mutationFn: async (dryRun: boolean) => {
+      const res = await adminFetch<{ data: CleanupResult }>(
+        `/v1/admin/organizations/cleanup?dry_run=${dryRun}`,
+        { method: "POST" }
+      );
+      return res.data;
+    },
+    onSuccess: (data) => {
+      if (data.dryRun) {
+        setCleanupPreview(data);
+      } else {
+        setCleanupPreview(null);
+        void qc.invalidateQueries({ queryKey: ["admin-orgs"] });
+      }
+    },
+  });
 
   const { data } = useQuery<{ data: Org[]; total: number }>({
     queryKey: ["admin-orgs"],
@@ -75,8 +96,49 @@ export default function AdminOrgsPage(): JSX.Element {
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Organizations</h1>
-        <p className="text-sm text-gray-500">{data?.total ?? 0} total</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-gray-500">{data?.total ?? 0} total</p>
+          <button
+            onClick={() => cleanup.mutate(true)}
+            disabled={cleanup.isPending}
+            className="text-xs px-3 py-1.5 border border-orange-300 text-orange-700 rounded hover:bg-orange-50 disabled:opacity-50"
+          >
+            {cleanup.isPending ? "Checking…" : "Validate vs Clerk"}
+          </button>
+        </div>
       </div>
+
+      {cleanupPreview && (
+        <div className="border border-orange-200 bg-orange-50 rounded-lg p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-orange-900">
+              {cleanupPreview.deleted.length === 0
+                ? "All organizations have valid Clerk users."
+                : `${cleanupPreview.deleted.length} ghost org(s) found — no valid Clerk users`}
+            </p>
+            <button onClick={() => setCleanupPreview(null)} className="text-xs text-orange-600 hover:underline">Dismiss</button>
+          </div>
+          {cleanupPreview.deleted.length > 0 && (
+            <>
+              <ul className="text-xs text-orange-800 space-y-1">
+                {cleanupPreview.deleted.map((o) => (
+                  <li key={o.id} className="flex items-center gap-2">
+                    <span className="font-medium">{o.name}</span>
+                    <span className="text-orange-500">({o.reason})</span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => { if (confirm(`Delete ${cleanupPreview.deleted.length} ghost org(s)? This cannot be undone.`)) cleanup.mutate(false); }}
+                disabled={cleanup.isPending}
+                className="text-xs px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+              >
+                {cleanup.isPending ? "Deleting…" : "Delete Ghost Orgs"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       <input
         className="w-full max-w-sm border rounded px-3 py-2 text-sm"

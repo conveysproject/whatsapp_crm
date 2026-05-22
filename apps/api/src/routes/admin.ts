@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { randomBytes } from "crypto";
 import { redis } from "../lib/redis.js";
 import { writeAdminAudit } from "../lib/audit.js";
+import { getClerkUser } from "../lib/clerk-admin.js";
 
 const SENSITIVE_CONFIG_KEYS = new Set([
   "smtp_password", "stripe_secret", "stripe_webhook_secret",
@@ -434,6 +435,59 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         fastify.prisma.impersonationLog.count(),
       ]);
       return reply.send({ data: logs, total, page });
+    }
+  );
+
+  // ── Org cleanup — validate members against Clerk, delete ghost orgs ─────
+  fastify.post<{ Querystring: { dry_run?: string } }>(
+    "/admin/organizations/cleanup",
+    async (request, reply) => {
+      if (!requireSuperAdmin(request.auth.role, reply)) return;
+      const dryRun = request.query.dry_run === "true";
+
+      const orgs = await fastify.prisma.organization.findMany({
+        where: { id: { not: "platform" } },
+        include: { users: { select: { id: true, role: true } } },
+      });
+
+      const toDelete: { id: string; name: string; reason: string }[] = [];
+
+      await Promise.all(orgs.map(async (org) => {
+        // Never delete orgs that contain a superAdmin
+        if (org.users.some((u) => u.role === "superAdmin")) return;
+
+        if (org.users.length === 0) {
+          toDelete.push({ id: org.id, name: org.name, reason: "no_members" });
+          return;
+        }
+
+        // Check each member against Clerk — keep org if at least one is real
+        const checks = await Promise.all(
+          org.users.map(async (u) => {
+            try { await getClerkUser(u.id); return true; } catch { return false; }
+          })
+        );
+        if (!checks.some(Boolean)) {
+          toDelete.push({ id: org.id, name: org.name, reason: "no_valid_clerk_users" });
+        }
+      }));
+
+      if (!dryRun && toDelete.length > 0) {
+        await fastify.prisma.organization.deleteMany({
+          where: { id: { in: toDelete.map((o) => o.id) } },
+        });
+        writeAdminAudit({
+          prisma: fastify.prisma,
+          actorId: request.auth.userId,
+          action: "org.cleanup",
+          targetType: "organization",
+          targetId: undefined,
+          metadata: { deleted: toDelete.map((o) => o.id), count: toDelete.length },
+          request,
+        });
+      }
+
+      return reply.send({ data: { dryRun, deleted: toDelete } });
     }
   );
 };
