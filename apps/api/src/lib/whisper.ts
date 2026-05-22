@@ -10,7 +10,7 @@ function getClient(): OpenAI {
 }
 
 export async function downloadWhatsAppMedia(mediaId: string, accessToken: string): Promise<string> {
-  const urlRes = await fetch(`https://graph.facebook.com/v20.0/${mediaId}`, {
+  const urlRes = await fetch(`https://graph.facebook.com/v25.0/${mediaId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!urlRes.ok) throw new Error(`Failed to get media URL for ${mediaId}`);

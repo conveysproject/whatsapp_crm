@@ -1,4 +1,4 @@
-const WA_BASE = "https://graph.facebook.com/v20.0";
+const WA_BASE = "https://graph.facebook.com/v25.0";
 
 // GAP-S20: all valid WhatsApp template button types
 export const TEMPLATE_BUTTON_TYPES = [

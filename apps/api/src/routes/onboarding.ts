@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { createHash } from "crypto";
 import { syncPhoneNumbers } from "../lib/whatsapp.js";
 
-const WA_GRAPH = "https://graph.facebook.com/v22.0";
+const WA_GRAPH = "https://graph.facebook.com/v25.0";
 
 export const onboardingRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
@@ -18,7 +18,12 @@ export const onboardingRouter: FastifyPluginAsync = async (fastify) => {
 
     // Step 1: Exchange code for access_token
     const params = new URLSearchParams({ client_id: appId, client_secret: appSecret, code });
-    params.set("redirect_uri", process.env["META_REDIRECT_URI"] ?? "");
+    // Embedded Signup uses FB.login() popup — redirect_uri must NOT be sent in the
+    // token exchange; Meta validates it against the popup's internal redirect which
+    // is not your app's domain. Only the server-side redirect callback path needs it.
+    if (!embedded && process.env["META_REDIRECT_URI"]) {
+      params.set("redirect_uri", process.env["META_REDIRECT_URI"]);
+    }
     const metaUrl = `${WA_GRAPH}/oauth/access_token?${params.toString()}`;
     fastify.log.info({ embedded, appId }, "Meta token exchange attempt");
     const tokenRes = await fetch(metaUrl);

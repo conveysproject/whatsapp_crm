@@ -75,7 +75,7 @@ export default function ConnectWabaPage(): JSX.Element {
         appId: APP_ID,
         autoLogAppEvents: true,
         xfbml: true,
-        version: "v22.0",
+        version: "v25.0",
       });
       console.log("[WA Signup] FB.init() done — SDK ready");
       setSdkReady(true);
@@ -114,6 +114,7 @@ export default function ConnectWabaPage(): JSX.Element {
             const payload = {
               code: response.authResponse!.code,
               embedded: true,
+              isSMB: true,
               phoneNumberId: sessionRef.current.phoneNumberId,
               wabaId: sessionRef.current.wabaId,
             };

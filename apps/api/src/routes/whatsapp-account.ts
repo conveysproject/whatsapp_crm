@@ -23,7 +23,7 @@ const WA_SUBSCRIBED_FIELDS = [
   "smb_message_echoes",
 ] as const;
 
-const WA_GRAPH = "https://graph.facebook.com/v22.0";
+const WA_GRAPH = "https://graph.facebook.com/v25.0";
 
 export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/whatsapp-account/health-status", async (request, reply) => {
