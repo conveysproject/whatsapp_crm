@@ -19,6 +19,7 @@ export function ConveysFooter(): JSX.Element {
               <li><Link href="/" className="transition hover:text-white">Home</Link></li>
               <li><Link href="/#services" className="transition hover:text-white">Services</Link></li>
               <li><Link href="/#about" className="transition hover:text-white">About</Link></li>
+              <li><Link href="/portfolio" className="transition hover:text-white">Portfolio</Link></li>
               <li><Link href="/#contact" className="transition hover:text-white">Contact</Link></li>
             </ul>
           </div>
