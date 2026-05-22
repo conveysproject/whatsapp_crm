@@ -1,6 +1,9 @@
 "use client";
 import { JSX, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@clerk/nextjs";
+
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 interface ConfigEntry {
   id: string;
@@ -9,13 +12,31 @@ interface ConfigEntry {
   dataType: string;
 }
 
+function useAdminFetch() {
+  const { getToken } = useAuth();
+  return async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
+    const token = await getToken();
+    const res = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token ?? ""}`,
+        ...init?.headers,
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json() as Promise<T>;
+  };
+}
+
 export default function PlatformConfigPage(): JSX.Element {
   const qc = useQueryClient();
+  const adminFetch = useAdminFetch();
   const [edits, setEdits] = useState<Record<string, string>>({});
 
   const { data } = useQuery<{ data: ConfigEntry[] }>({
     queryKey: ["platform-config"],
-    queryFn: () => fetch("/api/v1/admin/platform-config").then((r) => r.json()),
+    queryFn: () => adminFetch("/v1/admin/platform-config"),
   });
 
   useEffect(() => {
@@ -27,11 +48,10 @@ export default function PlatformConfigPage(): JSX.Element {
 
   const save = useMutation({
     mutationFn: () =>
-      fetch("/api/v1/admin/platform-config", {
+      adminFetch("/v1/admin/platform-config", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ configs: Object.entries(edits).map(([key, value]) => ({ key, value })) }),
-      }).then((r) => r.json()),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["platform-config"] }),
   });
 

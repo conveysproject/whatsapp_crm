@@ -263,6 +263,14 @@ const countries = [
 ];
 
 async function main() {
+  // Reserved platform organization — superAdmins belong to this org
+  await prisma.organization.upsert({
+    where: { id: "platform" },
+    create: { id: "platform", name: "TrustCRM Platform", status: "active" },
+    update: { name: "TrustCRM Platform" },
+  });
+  console.log("Seeded platform organization.");
+
   console.log("Seeding countries...");
   for (const country of countries) {
     await prisma.country.upsert({

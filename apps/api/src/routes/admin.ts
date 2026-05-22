@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { randomBytes } from "crypto";
 import { redis } from "../lib/redis.js";
+import { writeAdminAudit } from "../lib/audit.js";
 
 function requireSuperAdmin(role: string, reply: FastifyReply): boolean {
   if (role !== "superAdmin") {
@@ -34,11 +35,10 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
     const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
     if (!org) return reply.status(404).send({ error: "Organization not found" });
-    // Return org data — frontend uses this to switch context
     return reply.send({ data: { organization: org, impersonating: true } });
   });
 
-  // ── Ban / Unban ──────────────────────────────────────────────────────────
+  // ── Ban ──────────────────────────────────────────────────────────────────
   fastify.post<{ Params: { id: string }; Body: { reason: string } }>(
     "/admin/organizations/:id/ban",
     async (request, reply) => {
@@ -49,10 +49,20 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         where: { id: request.params.id },
         data: { status: "banned", banReason: request.body.reason },
       });
+      writeAdminAudit({
+        prisma: fastify.prisma,
+        actorId: request.auth.userId,
+        action: "org.ban",
+        targetType: "organization",
+        targetId: org.id,
+        metadata: { orgName: org.name, reason: request.body.reason },
+        request,
+      });
       return reply.send({ data });
     }
   );
 
+  // ── Unban ────────────────────────────────────────────────────────────────
   fastify.post<{ Params: { id: string } }>("/admin/organizations/:id/unban", async (request, reply) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
     const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
@@ -60,6 +70,15 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     const data = await fastify.prisma.organization.update({
       where: { id: request.params.id },
       data: { status: "active", banReason: null },
+    });
+    writeAdminAudit({
+      prisma: fastify.prisma,
+      actorId: request.auth.userId,
+      action: "org.unban",
+      targetType: "organization",
+      targetId: org.id,
+      metadata: { orgName: org.name },
+      request,
     });
     return reply.send({ data });
   });
@@ -92,6 +111,15 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
           endsAt,
         },
       });
+      writeAdminAudit({
+        prisma: fastify.prisma,
+        actorId: request.auth.userId,
+        action: "subscription.manual_create",
+        targetType: "organization",
+        targetId: request.body.organizationId,
+        metadata: { planTier: request.body.planTier, charges: request.body.charges, gateway: request.body.gateway },
+        request,
+      });
       return reply.status(201).send({ data });
     }
   );
@@ -112,7 +140,7 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: { ...org, usage: { contacts: contactCount, messages: messageCount, campaigns: campaignCount } } });
   });
 
-  // ── Update plan tier / ban ────────────────────────────────────────────────
+  // ── Update plan tier / status ────────────────────────────────────────────
   fastify.patch<{ Params: { id: string }; Body: { planTier?: string; status?: string; banReason?: string } }>(
     "/admin/organizations/:id",
     async (request, reply) => {
@@ -128,27 +156,68 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
           ...(banReason !== undefined ? { banReason } : {}),
         },
       });
+      writeAdminAudit({
+        prisma: fastify.prisma,
+        actorId: request.auth.userId,
+        action: "org.update",
+        targetType: "organization",
+        targetId: org.id,
+        metadata: { changes: { planTier, status, banReason } },
+        request,
+      });
       return reply.send({ data });
     }
   );
 
-  // ── Impersonation token ────────────────────────────────────────────────────
+  // ── Impersonation token — creates Redis token + logs the session ─────────
   fastify.post<{ Params: { id: string } }>("/admin/organizations/:id/impersonate", async (request, reply) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
     const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
     if (!org) return reply.status(404).send({ error: "Organization not found" });
+
     const token = randomBytes(32).toString("hex");
     const key = `impersonate:${token}`;
     await redis.set(key, JSON.stringify({ organizationId: org.id, orgName: org.name, issuedBy: request.auth.userId }), "EX", 3600);
+
+    // Persist impersonation session for audit
+    await fastify.prisma.impersonationLog.create({
+      data: {
+        actorId: request.auth.userId,
+        organizationId: org.id,
+        orgName: org.name,
+        token,
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      },
+    });
+
+    writeAdminAudit({
+      prisma: fastify.prisma,
+      actorId: request.auth.userId,
+      action: "org.impersonate",
+      targetType: "organization",
+      targetId: org.id,
+      metadata: { orgName: org.name },
+      request,
+    });
+
     return reply.send({ data: { token, expiresIn: 3600 } });
   });
 
+  // ── End impersonation ────────────────────────────────────────────────────
   fastify.delete<{ Params: { id: string }; Body: { token: string } }>(
     "/admin/organizations/:id/impersonate",
     async (request, reply) => {
       if (!requireSuperAdmin(request.auth.role, reply)) return;
       const { token } = request.body;
-      if (token) await redis.del(`impersonate:${token}`);
+      if (token) {
+        await redis.del(`impersonate:${token}`);
+        // Mark impersonation session as ended
+        await fastify.prisma.impersonationLog.updateMany({
+          where: { token, endedAt: null },
+          data: { endedAt: new Date() },
+        });
+      }
       return reply.status(204).send();
     }
   );
@@ -167,15 +236,21 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: logs, page });
   });
 
-  // ── Vendor activation (GAP-S02) ─────────────────────────────────────────
-  // When REQUIRE_VENDOR_ACTIVATION=true, new registrations have isActive=false
-  // until a superAdmin explicitly activates them here.
+  // ── Vendor activation ────────────────────────────────────────────────────
   fastify.post<{ Params: { orgId: string } }>("/admin/vendors/:orgId/activate", async (request, reply) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
     const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.orgId } });
     if (!org) return reply.status(404).send({ error: "Organization not found" });
-    // Activate all users in this org
     await fastify.prisma.user.updateMany({ where: { organizationId: request.params.orgId }, data: { isActive: true } });
+    writeAdminAudit({
+      prisma: fastify.prisma,
+      actorId: request.auth.userId,
+      action: "org.activate",
+      targetType: "organization",
+      targetId: org.id,
+      metadata: { orgName: org.name },
+      request,
+    });
     return reply.send({ success: true, organizationId: request.params.orgId });
   });
 
@@ -183,10 +258,18 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
     const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.orgId } });
     if (!org) return reply.status(404).send({ error: "Organization not found" });
-    // Deactivate all users in this org (prevents login; reversible via /activate)
     await fastify.prisma.user.updateMany({
       where: { organizationId: request.params.orgId },
       data: { isActive: false },
+    });
+    writeAdminAudit({
+      prisma: fastify.prisma,
+      actorId: request.auth.userId,
+      action: "org.deactivate",
+      targetType: "organization",
+      targetId: org.id,
+      metadata: { orgName: org.name },
+      request,
     });
     return reply.send({ success: true, organizationId: request.params.orgId });
   });
@@ -211,7 +294,50 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
           })
         )
       );
+      writeAdminAudit({
+        prisma: fastify.prisma,
+        actorId: request.auth.userId,
+        action: "platform_config.update",
+        targetType: "platform",
+        metadata: { keys: request.body.configs.map((c) => c.key) },
+        request,
+      });
       return reply.send({ success: true });
+    }
+  );
+
+  // ── Admin audit log ──────────────────────────────────────────────────────
+  fastify.get<{ Querystring: { page?: string; action?: string; actorId?: string } }>(
+    "/admin/audit-logs",
+    async (request, reply) => {
+      if (!requireSuperAdmin(request.auth.role, reply)) return;
+      const page = Math.max(1, parseInt(request.query.page ?? "1", 10));
+      const where = {
+        ...(request.query.action ? { action: request.query.action } : {}),
+        ...(request.query.actorId ? { actorId: request.query.actorId } : {}),
+      };
+      const logs = await fastify.prisma.adminAuditLog.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * 50,
+        take: 50,
+      });
+      return reply.send({ data: logs, page });
+    }
+  );
+
+  // ── Impersonation log ────────────────────────────────────────────────────
+  fastify.get<{ Querystring: { page?: string } }>(
+    "/admin/impersonation-logs",
+    async (request, reply) => {
+      if (!requireSuperAdmin(request.auth.role, reply)) return;
+      const page = Math.max(1, parseInt(request.query.page ?? "1", 10));
+      const logs = await fastify.prisma.impersonationLog.findMany({
+        orderBy: { startedAt: "desc" },
+        skip: (page - 1) * 50,
+        take: 50,
+      });
+      return reply.send({ data: logs, page });
     }
   );
 };

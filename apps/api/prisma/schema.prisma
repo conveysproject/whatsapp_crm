@@ -14,6 +14,7 @@ enum PlanTier {
 }
 
 enum Role {
+  superAdmin
   admin
   manager
   agent
@@ -285,13 +286,14 @@ model User {
   email          String
   fullName       String   @map("full_name")
   role           Role     @default(agent)
-  isActive       Boolean  @default(true) @map("is_active")
-  pushToken      String?  @map("push_token")
-  username     String? @unique
-  mobileNumber String? @map("mobile_number")
-  settings       Json     @default("{}") // notification prefs, language, timezone, UI preferences
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  isActive       Boolean   @default(true) @map("is_active")
+  pushToken      String?   @map("push_token")
+  username       String?   @unique
+  mobileNumber   String?   @map("mobile_number")
+  settings       Json      @default("{}") // notification prefs, language, timezone, UI preferences
+  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberships  OrganizationMember[]
@@ -1255,4 +1257,46 @@ model LoginLog {
   @@index([orgId])
   @@index([createdAt])
   @@map("login_logs")
+}
+
+// ─── Admin Audit Log ──────────────────────────────────────────────────────────
+// Append-only trail for every superAdmin action. Never update or delete rows.
+// actorId = superAdmin userId, targetId = affected org/user/resource id.
+
+model AdminAuditLog {
+  id         String   @id @default(uuid())
+  actorId    String   @map("actor_id")         // superAdmin user id
+  action     String                             // e.g. "org.ban", "superadmin.create", "bootstrap"
+  targetType String?  @map("target_type")       // "organization" | "user" | "platform"
+  targetId   String?  @map("target_id")
+  metadata   Json?                              // request body, reason, changes
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([actorId])
+  @@index([targetId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("admin_audit_logs")
+}
+
+// ─── Impersonation Log ────────────────────────────────────────────────────────
+// Each row = one impersonation session. endedAt null = session still active.
+
+model ImpersonationLog {
+  id             String    @id @default(uuid())
+  actorId        String    @map("actor_id")       // superAdmin who initiated
+  organizationId String    @map("organization_id")
+  orgName        String?   @map("org_name")
+  token          String    @unique               // Redis key suffix for revocation
+  ipAddress      String?   @map("ip_address")
+  userAgent      String?   @map("user_agent") @db.Text
+  startedAt      DateTime  @default(now()) @map("started_at")
+  endedAt        DateTime? @map("ended_at")
+
+  @@index([actorId])
+  @@index([organizationId])
+  @@index([startedAt])
+  @@map("impersonation_logs")
 }

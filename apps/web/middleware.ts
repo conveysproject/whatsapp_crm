@@ -8,6 +8,9 @@ const isPublicRoute = createRouteMatcher([
   "/invitations/(.*)/accept",
 ]);
 
+const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
+const isAdminSignIn = createRouteMatcher(["/admin/sign-in(.*)"]);
+
 // Routes that are part of the setup flow itself — don't redirect these to /business-details
 const isSetupRoute = createRouteMatcher(["/business-details(.*)"]);
 
@@ -16,6 +19,24 @@ const isApiRoute = createRouteMatcher(["/api/(.*)"]);
 
 export default clerkMiddleware(async (auth, request) => {
   const { userId } = await auth();
+
+  // ── Admin routes ─────────────────────────────────────────────────────────
+  if (isAdminRoute(request)) {
+    // Admin sign-in is always public
+    if (isAdminSignIn(request)) return NextResponse.next();
+
+    // All other /admin/* require authentication → send to admin sign-in if not logged in
+    if (!userId) {
+      const signInUrl = new URL("/admin/sign-in", request.url);
+      signInUrl.searchParams.set("redirect_url", request.nextUrl.pathname);
+      return NextResponse.redirect(signInUrl);
+    }
+
+    // Authenticated admin users bypass the vendor onboarding gate entirely
+    return NextResponse.next();
+  }
+
+  // ── Vendor routes ─────────────────────────────────────────────────────────
 
   // Authenticated users hitting the landing page go straight to the dashboard
   if (userId && request.nextUrl.pathname === "/") {

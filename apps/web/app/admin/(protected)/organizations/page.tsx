@@ -1,6 +1,9 @@
 "use client";
 import { JSX, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@clerk/nextjs";
+
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 interface Org {
   id: string;
@@ -11,41 +14,58 @@ interface Org {
   _count: { members: number };
 }
 
+function useAdminFetch() {
+  const { getToken } = useAuth();
+  return async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
+    const token = await getToken();
+    const res = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token ?? ""}`,
+        ...init?.headers,
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json() as Promise<T>;
+  };
+}
+
 export default function AdminOrgsPage(): JSX.Element {
   const qc = useQueryClient();
+  const adminFetch = useAdminFetch();
   const [search, setSearch] = useState("");
   const [impersonating, setImpersonating] = useState<string | null>(null);
 
   const { data } = useQuery<{ data: Org[]; total: number }>({
     queryKey: ["admin-orgs"],
-    queryFn: () => fetch("/api/v1/admin/organizations").then((r) => r.json()),
+    queryFn: () => adminFetch("/v1/admin/organizations"),
   });
 
   const ban = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-      fetch(`/api/v1/admin/organizations/${id}/ban`, {
+      adminFetch(`/v1/admin/organizations/${id}/ban`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason }),
-      }).then((r) => r.json()),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-orgs"] }),
   });
 
   const unban = useMutation({
     mutationFn: (id: string) =>
-      fetch(`/api/v1/admin/organizations/${id}/unban`, { method: "POST" }).then((r) => r.json()),
+      adminFetch(`/v1/admin/organizations/${id}/unban`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-orgs"] }),
   });
 
   async function loginAs(org: Org) {
     setImpersonating(org.id);
-    const res = await fetch(`/api/v1/admin/organizations/${org.id}/impersonate`, { method: "POST" });
-    if (res.ok) {
-      const json = await res.json() as { data: { token: string } };
-      sessionStorage.setItem("impersonation", JSON.stringify({ token: json.data.token, orgId: org.id, orgName: org.name }));
+    try {
+      const res = await adminFetch<{ data: { token: string } }>(`/v1/admin/organizations/${org.id}/impersonate`, { method: "POST" });
+      sessionStorage.setItem("impersonation", JSON.stringify({ token: res.data.token, orgId: org.id, orgName: org.name }));
       window.location.href = "/dashboard";
+    } finally {
+      setImpersonating(null);
     }
-    setImpersonating(null);
   }
 
   const orgs = (data?.data ?? []).filter((o) => o.name.toLowerCase().includes(search.toLowerCase()));

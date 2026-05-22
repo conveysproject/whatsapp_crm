@@ -3,6 +3,9 @@
 import { JSX, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
+
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 interface OrgDetail {
   id: string;
@@ -16,50 +19,64 @@ interface OrgDetail {
 
 const PLAN_TIERS = ["starter", "growth", "scale", "enterprise"] as const;
 
+function useAdminFetch() {
+  const { getToken } = useAuth();
+  return async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
+    const token = await getToken();
+    const res = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token ?? ""}`,
+        ...init?.headers,
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json() as Promise<T>;
+  };
+}
+
 export default function AdminOrgDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const adminFetch = useAdminFetch();
   const [planTier, setPlanTier] = useState<string | null>(null);
 
   const { data: org, isLoading, refetch } = useQuery<OrgDetail>({
     queryKey: ["admin-org", id],
     queryFn: () =>
-      fetch(`/api/v1/admin/organizations/${id}`).then((r) => r.json()).then((j: { data: OrgDetail }) => j.data),
+      adminFetch<{ data: OrgDetail }>(`/v1/admin/organizations/${id}`).then((j) => j.data),
   });
 
   const updatePlan = useMutation({
     mutationFn: (tier: string) =>
-      fetch(`/api/v1/admin/organizations/${id}`, {
+      adminFetch(`/v1/admin/organizations/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ planTier: tier }),
-      }).then((r) => r.json()),
+      }),
     onSuccess: () => { void refetch(); },
   });
 
   const ban = useMutation({
     mutationFn: (reason: string) =>
-      fetch(`/api/v1/admin/organizations/${id}/ban`, {
+      adminFetch(`/v1/admin/organizations/${id}/ban`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason }),
-      }).then((r) => r.json()),
+      }),
     onSuccess: () => { void refetch(); },
   });
 
   const unban = useMutation({
     mutationFn: () =>
-      fetch(`/api/v1/admin/organizations/${id}/unban`, { method: "POST" }).then((r) => r.json()),
+      adminFetch(`/v1/admin/organizations/${id}/unban`, { method: "POST" }),
     onSuccess: () => { void refetch(); },
   });
 
   async function loginAs() {
-    const res = await fetch(`/api/v1/admin/organizations/${id}/impersonate`, { method: "POST" });
-    if (res.ok) {
-      const json = await res.json() as { data: { token: string } };
-      sessionStorage.setItem("impersonation", JSON.stringify({ token: json.data.token, orgId: org?.id, orgName: org?.name }));
-      window.location.href = "/dashboard";
-    }
+    const adminFetchFn = adminFetch;
+    const res = await adminFetchFn<{ data: { token: string } }>(`/v1/admin/organizations/${id}/impersonate`, { method: "POST" });
+    sessionStorage.setItem("impersonation", JSON.stringify({ token: res.data.token, orgId: org?.id, orgName: org?.name }));
+    window.location.href = "/dashboard";
   }
 
   if (isLoading) return <div className="p-6 text-sm text-gray-400">Loading…</div>;
@@ -75,7 +92,6 @@ export default function AdminOrgDetailPage(): JSX.Element {
         </span>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: "Members", value: org._count.members },
@@ -91,7 +107,6 @@ export default function AdminOrgDetailPage(): JSX.Element {
         ))}
       </div>
 
-      {/* Plan management */}
       <div className="border rounded-lg p-5 space-y-3">
         <h2 className="font-medium">Plan Management</h2>
         <p className="text-sm text-gray-600">Current: <span className="font-semibold capitalize">{org.planTier}</span></p>
@@ -113,7 +128,6 @@ export default function AdminOrgDetailPage(): JSX.Element {
         </div>
       </div>
 
-      {/* Actions */}
       <div className="border rounded-lg p-5 space-y-3">
         <h2 className="font-medium">Actions</h2>
         <div className="flex gap-3">

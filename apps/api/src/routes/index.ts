@@ -36,6 +36,8 @@ import { savedFiltersRouter } from "./saved-filters.js";
 import { autoRepliesRouter } from "./auto-replies.js";
 import { webhookActionsRouter } from "./webhook-actions.js";
 import { adminRouter } from "./admin.js";
+import { bootstrapRouter } from "./bootstrap.js";
+import { superAdminsRouter } from "./super-admins.js";
 import { labelsRouter } from "./labels.js";
 import { mediaRouter } from "./media.js";
 import { infoMaterialsRouter } from "./info-materials.js";
@@ -81,6 +83,8 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(autoRepliesRouter, { prefix: "/v1" });
   await fastify.register(webhookActionsRouter, { prefix: "/v1" });
   await fastify.register(adminRouter, { prefix: "/v1" });
+  await fastify.register(bootstrapRouter, { prefix: "/v1" });
+  await fastify.register(superAdminsRouter, { prefix: "/v1" });
   await fastify.register(labelsRouter, { prefix: "/v1" });
   await fastify.register(mediaRouter, { prefix: "/v1" });
   await fastify.register(infoMaterialsRouter, { prefix: "/v1" });
