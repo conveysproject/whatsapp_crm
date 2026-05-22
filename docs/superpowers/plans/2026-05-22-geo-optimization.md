@@ -10,6 +10,27 @@
 
 ---
 
+## Progress Tracker
+
+| Task | Status | Commit |
+|------|--------|--------|
+| Task 1: llms.txt + llms-full.txt | ✅ DONE | d882f92, ef41303 |
+| Task 2: layout.tsx (Bing meta + schema) | ✅ DONE | 20a8097, ced843e |
+| Task 3: /about page | ✅ DONE | bb904f0 |
+| Task 4: Blog data file (6 posts) | ⏳ IN PROGRESS | — |
+| Task 5: Blog [slug] page | ⬜ PENDING | — |
+| Task 6: Blog listing page | ⬜ PENDING | — |
+| Task 7: FAQPage JSON-LD — whatsapp-crm | ⬜ PENDING | — |
+| Task 8: FAQPage JSON-LD — ai-solutions | ⬜ PENDING | — |
+| Task 9: FAQPage JSON-LD — mobile-app-development | ⬜ PENDING | — |
+| Task 10: Sitemap update | ⬜ PENDING | — |
+
+**Notes from execution:**
+- Task 2: `knowsAbout` replaced with valid `description` field on Organization (knowsAbout is only valid on Person in schema.org). Bing verification moved to `metadata.verification.other` with `NEXT_PUBLIC_BING_VERIFY` env var instead of raw JSX meta tag.
+- Task 1 fix: WhatsApp timeline inconsistency resolved; Digital Marketing pricing/timeline fields added to llms-full.txt.
+
+---
+
 ## File Map
 
 ### New Files
