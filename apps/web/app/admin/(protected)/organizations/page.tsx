@@ -44,7 +44,7 @@ export default function AdminOrgsPage(): JSX.Element {
     mutationFn: async (dryRun: boolean) => {
       const res = await adminFetch<{ data: CleanupResult }>(
         `/v1/admin/organizations/cleanup?dry_run=${dryRun}`,
-        { method: "POST" }
+        { method: "POST", body: "{}" }
       );
       return res.data;
     },
