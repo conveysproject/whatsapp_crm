@@ -74,8 +74,8 @@ export default async function DataDeletionStatusPage({
               <h2 className="mt-6 text-lg font-bold text-slate-900">How to request deletion manually</h2>
               <p className="mt-2">
                 You can also request deletion by emailing{" "}
-                <a href="mailto:privacy@conveys.in" className="text-indigo-600 underline">
-                  privacy@conveys.in
+                <a href="mailto:info@conveys.in" className="text-indigo-600 underline">
+                  info@conveys.in
                 </a>{" "}
                 with the subject line <strong>Data Deletion Request</strong>. Include the
                 email address associated with your account. We will process your request
