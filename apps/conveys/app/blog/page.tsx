@@ -3,22 +3,14 @@ import type { JSX } from "react";
 import type { Metadata } from "next";
 import { ConveysFooter } from "@/components/conveys-footer";
 import { ConveysHeader } from "@/components/conveys-header";
+import { BLOG_POSTS } from "@/app/blog/data/posts";
 
 export const metadata: Metadata = {
   title: "Blog — Web Development Insights & Case Studies",
-  description: "Updates, case studies, and product launches from Conveys Information Technology — web development, mobile apps, and WhatsApp CRM for Indian businesses.",
+  description: "Guides, comparisons, and insights on WhatsApp Business API, web development, mobile apps, AI integration, and SaaS development for Indian businesses.",
   alternates: { canonical: "https://conveys.in/blog" },
   openGraph: { url: "https://conveys.in/blog" },
 };
-
-const POSTS = [
-  { title: "Bulk and price", date: "May 4, 2026" },
-  { title: "Silver pearl", date: "May 2, 2026" },
-  { title: "Resolute property", date: "May 1, 2026" },
-  { title: "Big growth", date: "April 27, 2026" },
-  { title: "MI Studio Salon", date: "April 14, 2026" },
-  { title: "Supreme Kesari Tea", date: "April 11, 2026" },
-] as const;
 
 export default function BlogPage(): JSX.Element {
   return (
@@ -27,15 +19,17 @@ export default function BlogPage(): JSX.Element {
       <main id="main-content" className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
         <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600">Blog</p>
         <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">Latest posts</h1>
-        <p className="mt-3 text-slate-600">Insights, case studies, and updates from our team.</p>
+        <p className="mt-3 text-slate-600">Practical guides on WhatsApp API, web development, mobile apps, and AI for Indian businesses.</p>
         <ul className="mt-10 divide-y divide-slate-100 border-t border-slate-100">
-          {POSTS.map((post) => (
-            <li key={post.title} className="py-6">
-              <Link href="/blog" className="group block">
-                <h2 className="text-xl font-bold capitalize text-slate-900 group-hover:text-indigo-700">{post.title}</h2>
+          {BLOG_POSTS.map((post) => (
+            <li key={post.slug} className="py-6">
+              <Link href={`/blog/${post.slug}`} className="group block">
+                <span className="text-xs font-semibold uppercase tracking-wide text-indigo-500">{post.category}</span>
+                <h2 className="mt-1 text-xl font-bold text-slate-900 group-hover:text-indigo-700">{post.title}</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  {post.date} · No comments
+                  {new Date(post.publishedAt).toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })} · {post.readingTime}
                 </p>
+                <p className="mt-2 text-sm text-slate-600 line-clamp-2">{post.description}</p>
                 <span className="mt-2 inline-block text-sm font-semibold text-indigo-600">Read more →</span>
               </Link>
             </li>
