@@ -1,5 +1,6 @@
 "use client";
 import { JSX, Suspense, useEffect } from "react";
+import Link from "next/link";
 import { SignIn, useAuth } from "@clerk/nextjs";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -35,7 +36,7 @@ function AdminSignInInner(): JSX.Element {
     <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-6">
       <div className="mb-8 text-center">
         <p className="text-xs font-bold tracking-widest text-red-500 uppercase mb-2">Platform Administration</p>
-        <h1 className="text-2xl font-bold text-white">TrustCRM Admin</h1>
+        <h1 className="text-2xl font-bold text-white">WBMSG Admin</h1>
         <p className="text-sm text-gray-400 mt-1">Restricted access — authorized personnel only</p>
       </div>
 
@@ -67,9 +68,9 @@ function AdminSignInInner(): JSX.Element {
 
       <p className="mt-6 text-xs text-gray-600">
         Not an admin?{" "}
-        <a href="/sign-in" className="text-gray-400 hover:text-gray-300 underline">
+        <Link href="/sign-in" className="text-gray-400 hover:text-gray-300 underline">
           Go to vendor sign-in
-        </a>
+        </Link>
       </p>
     </div>
   );

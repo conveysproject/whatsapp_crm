@@ -1,6 +1,7 @@
 "use client";
 
 import { JSX, useState } from "react";
+import Link from "next/link";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
@@ -85,7 +86,7 @@ export default function AdminOrgDetailPage(): JSX.Element {
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <a href="/admin/organizations" className="text-sm text-gray-500 hover:text-gray-700">← Organizations</a>
+        <Link href="/admin/organizations" className="text-sm text-gray-500 hover:text-gray-700">← Organizations</Link>
         <h1 className="text-2xl font-semibold">{org.name}</h1>
         <span className={`text-xs font-medium capitalize px-2 py-0.5 rounded-full ${org.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
           {org.status}

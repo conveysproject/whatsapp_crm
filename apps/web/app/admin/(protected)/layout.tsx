@@ -1,4 +1,5 @@
 import { JSX, ReactNode } from "react";
+import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { AdminSignOutButton } from "./_components/admin-sign-out";
@@ -47,10 +48,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       <nav className="bg-gray-900 text-white px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <span className="font-bold text-sm tracking-wide text-red-400 uppercase">WBMSG Platform Admin</span>
-          <a href="/admin/organizations" className="text-sm text-gray-300 hover:text-white">Organizations</a>
-          <a href="/admin/super-admins" className="text-sm text-gray-300 hover:text-white">Super Admins</a>
-          <a href="/admin/platform-config" className="text-sm text-gray-300 hover:text-white">Platform Config</a>
-          <a href="/admin/audit-logs" className="text-sm text-gray-300 hover:text-white">Audit Logs</a>
+          <Link href="/admin/organizations" className="text-sm text-gray-300 hover:text-white">Organizations</Link>
+          <Link href="/admin/super-admins" className="text-sm text-gray-300 hover:text-white">Super Admins</Link>
+          <Link href="/admin/platform-config" className="text-sm text-gray-300 hover:text-white">Platform Config</Link>
+          <Link href="/admin/audit-logs" className="text-sm text-gray-300 hover:text-white">Audit Logs</Link>
         </div>
         <AdminSignOutButton email={user.email} />
       </nav>
