@@ -142,11 +142,11 @@ docker compose --profile observability up -d  # + Datadog agent
 
 | | Value |
 |--|-------|
-| API public URL | `https://trustcrmapi-production.up.railway.app` |
+| API public URL | `https://wbmsg-production.up.railway.app` |
 | API internal URL | `trustcrmapi.railway.internal` |
 | Web URL | `https://whatsapp-crm-web-conveysproject-7758s-projects.vercel.app` |
 | Railway project | `focused-forgiveness` · environment: `production` |
-| Railway service name | `@trustcrm/api` (ID: `421b2efd-ea6d-4eb3-9b37-f507d56a9ac2`) |
+| Railway service name | `api` (ID: `62d000ce-6c8e-4fb2-8557-dd1ab4f263cf`) |
 | Vercel project | `whatsapp-crm-web` (ID: `prj_g88r1mFO3xWc5BmjIfTRUXT0ZJ4z`) |
 
 Railway also runs: **Redis** · **Meilisearch** · **Postgres** (all on internal railway.internal hostnames).
@@ -159,7 +159,7 @@ Railway also runs: **Redis** · **Meilisearch** · **Postgres** (all on internal
 railway whoami                              # confirm auth (conveysproject@gmail.com)
 railway status                             # project + environment info
 railway service status --all               # list ALL services with status (BUILDING/SUCCESS/etc)
-railway service link "@trustcrm/api"       # link CLI to the API service (required once per session)
+railway service link "api"                 # link CLI to the API service (required once per session)
 railway variable                           # list env vars for linked service
 railway service logs --lines 100           # pull last 100 log lines (no streaming)
 railway service logs                       # stream live logs

@@ -39,7 +39,9 @@
       "Bash(node -e \"const r = /^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+\\\\$/; console.log\\(r.test\\('a@b.c'\\)\\); console.log\\(r.test\\('a+b@c.d.e'\\)\\); console.log\\(r.test\\('not-an-email'\\)\\); console.log\\(r.test\\('a@b'\\)\\); console.log\\(r.test\\('@b.com'\\)\\); console.log\\(r.test\\('a @b.com'\\)\\);\")",
       "Bash(git ls-tree *)",
       "Bash(sed -i 's/role: \"admin\" as const,$/role: \"admin\" as const,\\\\n  permissions: {},/g' apps/api/src/routes/contacts.test.ts)",
-      "Bash(sed -i 's/role: \"agent\" as const,$/role: \"agent\" as const,\\\\n  permissions: {},/g' apps/api/src/routes/conversations.test.ts apps/api/src/routes/messages.test.ts)"
+      "Bash(sed -i 's/role: \"agent\" as const,$/role: \"agent\" as const,\\\\n  permissions: {},/g' apps/api/src/routes/conversations.test.ts apps/api/src/routes/messages.test.ts)",
+      "Bash(cd /mnt/e/Product/WhatsApp_CRM && pnpm --filter @WBMSG/api type-check 2>&1 | tail -20)",
+      "Read(//mnt/e/Product/**)"
     ]
   },
   "enabledPlugins": {

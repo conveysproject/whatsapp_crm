@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { MessageStatus } from "@prisma/client";
+import { createHmac, timingSafeEqual } from "crypto";
 import { verifyWebhookSignature } from "../lib/whatsapp.js";
 import { inboundMessageQueue } from "../lib/queue.js";
 
@@ -160,6 +161,64 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.status(200).send({ status: "ok" });
+    }
+  );
+
+  // Meta data deletion callback — required for App Review
+  // Meta POSTs application/x-www-form-urlencoded with a signed_request field
+  fastify.addContentTypeParser(
+    "application/x-www-form-urlencoded",
+    { parseAs: "string" },
+    (_req, body, done) => {
+      const params = new URLSearchParams(body as string);
+      const obj: Record<string, string> = {};
+      params.forEach((value, key) => { obj[key] = value; });
+      done(null, obj);
+    }
+  );
+
+  fastify.post<{ Body: Record<string, string> }>(
+    "/webhooks/meta/data-deletion",
+    { config: { public: true } },
+    async (request, reply) => {
+      const signedRequest = request.body["signed_request"];
+      if (!signedRequest) {
+        return reply.status(400).send({ error: { code: "BAD_REQUEST", message: "Missing signed_request" } });
+      }
+
+      const dotIndex = signedRequest.indexOf(".");
+      if (dotIndex === -1) {
+        return reply.status(400).send({ error: { code: "BAD_REQUEST", message: "Malformed signed_request" } });
+      }
+
+      const encodedSig = signedRequest.slice(0, dotIndex);
+      const payload = signedRequest.slice(dotIndex + 1);
+      const appSecret = process.env["META_APP_SECRET"] ?? "";
+
+      const expectedSig = createHmac("sha256", appSecret).update(payload).digest("base64url");
+      const sigBuf = Buffer.from(encodedSig, "base64url");
+      const expectedBuf = Buffer.from(expectedSig, "base64url");
+
+      if (
+        sigBuf.length !== expectedBuf.length ||
+        !timingSafeEqual(sigBuf, expectedBuf)
+      ) {
+        return reply.status(403).send({ error: { code: "INVALID_SIGNATURE", message: "Signature mismatch" } });
+      }
+
+      const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
+        user_id: string;
+        algorithm: string;
+        issued_at: number;
+      };
+
+      const confirmationCode = `del_${data.user_id}_${Date.now()}`;
+      fastify.log.info({ userId: data.user_id, confirmationCode }, "Meta data deletion request received");
+
+      return reply.status(200).send({
+        url: `https://conveys.in/data-deletion-status?code=${confirmationCode}`,
+        confirmation_code: confirmationCode,
+      });
     }
   );
 };
