@@ -18,12 +18,13 @@ export const onboardingRouter: FastifyPluginAsync = async (fastify) => {
 
     // Step 1: Exchange code for access_token
     const params = new URLSearchParams({ client_id: appId, client_secret: appSecret, code });
-    // FB.login() popup uses facebook.com/connect/login_success.html internally.
-    // Server-side redirect flow uses META_REDIRECT_URI. Must match exactly.
-    const redirectUri = embedded
-      ? "https://www.facebook.com/connect/login_success.html"
-      : (process.env["META_REDIRECT_URI"] ?? "");
-    if (redirectUri) params.set("redirect_uri", redirectUri);
+    // Embedded Signup: omit redirect_uri — Meta's own docs show no redirect_uri
+    // for JS SDK popup code exchange. Facebook URLs cannot be added to Valid OAuth
+    // Redirect URIs, and the popup flow doesn't redirect to the app domain.
+    // Non-embedded (server-side redirect) flow must send META_REDIRECT_URI.
+    if (!embedded && process.env["META_REDIRECT_URI"]) {
+      params.set("redirect_uri", process.env["META_REDIRECT_URI"]);
+    }
     const metaUrl = `${WA_GRAPH}/oauth/access_token?${params.toString()}`;
     fastify.log.info({ embedded, appId }, "Meta token exchange attempt");
     const tokenRes = await fetch(metaUrl);
