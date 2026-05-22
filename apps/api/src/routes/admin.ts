@@ -438,56 +438,56 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // ── Org cleanup — validate members against Clerk, delete ghost orgs ─────
-  fastify.post<{ Querystring: { dry_run?: string } }>(
-    "/admin/organizations/cleanup",
-    async (request, reply) => {
-      if (!requireSuperAdmin(request.auth.role, reply)) return;
-      const dryRun = request.query.dry_run === "true";
-
-      const orgs = await fastify.prisma.organization.findMany({
-        where: { id: { not: "platform" } },
-        include: { users: { select: { id: true, role: true } } },
-      });
-
-      const toDelete: { id: string; name: string; reason: string }[] = [];
-
-      await Promise.all(orgs.map(async (org) => {
-        // Never delete orgs that contain a superAdmin
-        if (org.users.some((u) => u.role === "superAdmin")) return;
-
-        if (org.users.length === 0) {
-          toDelete.push({ id: org.id, name: org.name, reason: "no_members" });
-          return;
-        }
-
-        // Check each member against Clerk — keep org if at least one is real
-        const checks = await Promise.all(
-          org.users.map(async (u) => {
-            try { await getClerkUser(u.id); return true; } catch { return false; }
-          })
-        );
-        if (!checks.some(Boolean)) {
-          toDelete.push({ id: org.id, name: org.name, reason: "no_valid_clerk_users" });
-        }
-      }));
-
-      if (!dryRun && toDelete.length > 0) {
-        await fastify.prisma.organization.deleteMany({
-          where: { id: { in: toDelete.map((o) => o.id) } },
-        });
-        writeAdminAudit({
-          prisma: fastify.prisma,
-          actorId: request.auth.userId,
-          action: "org.cleanup",
-          targetType: "organization",
-          targetId: undefined,
-          metadata: { deleted: toDelete.map((o) => o.id), count: toDelete.length },
-          request,
-        });
+  // ── Org cleanup helpers ──────────────────────────────────────────────────
+  async function findGhostOrgs(prisma: typeof fastify.prisma) {
+    const orgs = await prisma.organization.findMany({
+      where: { id: { not: "platform" } },
+      include: { users: { select: { id: true, role: true } } },
+    });
+    const toDelete: { id: string; name: string; reason: string }[] = [];
+    await Promise.all(orgs.map(async (org) => {
+      if (org.users.some((u) => u.role === "superAdmin")) return;
+      if (org.users.length === 0) {
+        toDelete.push({ id: org.id, name: org.name, reason: "no_members" });
+        return;
       }
+      const checks = await Promise.all(
+        org.users.map(async (u) => {
+          try { await getClerkUser(u.id); return true; } catch { return false; }
+        })
+      );
+      if (!checks.some(Boolean)) {
+        toDelete.push({ id: org.id, name: org.name, reason: "no_valid_clerk_users" });
+      }
+    }));
+    return toDelete;
+  }
 
-      return reply.send({ data: { dryRun, deleted: toDelete } });
+  // GET  — dry-run preview (no body needed)
+  fastify.get("/admin/organizations/cleanup", async (request, reply) => {
+    if (!requireSuperAdmin(request.auth.role, reply)) return;
+    const deleted = await findGhostOrgs(fastify.prisma);
+    return reply.send({ data: { dryRun: true, deleted } });
+  });
+
+  // DELETE — commit deletion (no body needed)
+  fastify.delete("/admin/organizations/cleanup", async (request, reply) => {
+    if (!requireSuperAdmin(request.auth.role, reply)) return;
+    const toDelete = await findGhostOrgs(fastify.prisma);
+    if (toDelete.length > 0) {
+      await fastify.prisma.organization.deleteMany({
+        where: { id: { in: toDelete.map((o) => o.id) } },
+      });
+      writeAdminAudit({
+        prisma: fastify.prisma,
+        actorId: request.auth.userId,
+        action: "org.cleanup",
+        targetType: "organization",
+        targetId: undefined,
+        metadata: { deleted: toDelete.map((o) => o.id), count: toDelete.length },
+        request,
+      });
     }
-  );
+    return reply.send({ data: { dryRun: false, deleted: toDelete } });
+  });
 };
