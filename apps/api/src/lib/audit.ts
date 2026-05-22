@@ -27,6 +27,9 @@ export function writeAdminAudit(params: AuditParams): void {
           userAgent: request?.headers?.["user-agent"] ?? null,
         },
       })
-      .catch(() => {/* non-critical */});
+      .catch((err: unknown) => {
+        // Audit write failed — log it; never let this propagate or block
+        console.error("[AUDIT WRITE FAILED]", { action, actorId, targetId, err });
+      });
   });
 }

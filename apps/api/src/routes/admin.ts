@@ -3,9 +3,14 @@ import { randomBytes } from "crypto";
 import { redis } from "../lib/redis.js";
 import { writeAdminAudit } from "../lib/audit.js";
 
+const SENSITIVE_CONFIG_KEYS = new Set([
+  "smtp_password", "stripe_secret", "stripe_webhook_secret",
+  "razorpay_key_secret", "razorpay_webhook_secret",
+]);
+
 function requireSuperAdmin(role: string, reply: FastifyReply): boolean {
   if (role !== "superAdmin") {
-    void reply.status(403).send({ error: "Superadmin access required" });
+    void reply.status(403).send({ error: { code: "FORBIDDEN", message: "Super admin access required" } });
     return false;
   }
   return true;
@@ -30,21 +35,23 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data, total, page });
   });
 
-  // ── Organization impersonation ───────────────────────────────────────────
-  fastify.post<{ Params: { id: string } }>("/admin/organizations/:id/login-as", async (request, reply) => {
-    if (!requireSuperAdmin(request.auth.role, reply)) return;
-    const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
-    if (!org) return reply.status(404).send({ error: "Organization not found" });
-    return reply.send({ data: { organization: org, impersonating: true } });
-  });
-
   // ── Ban ──────────────────────────────────────────────────────────────────
   fastify.post<{ Params: { id: string }; Body: { reason: string } }>(
     "/admin/organizations/:id/ban",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["reason"],
+          properties: { reason: { type: "string", minLength: 1, maxLength: 500 } },
+          additionalProperties: false,
+        },
+      },
+    },
     async (request, reply) => {
       if (!requireSuperAdmin(request.auth.role, reply)) return;
       const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
-      if (!org) return reply.status(404).send({ error: "Organization not found" });
+      if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
       const data = await fastify.prisma.organization.update({
         where: { id: request.params.id },
         data: { status: "banned", banReason: request.body.reason },
@@ -66,7 +73,7 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string } }>("/admin/organizations/:id/unban", async (request, reply) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
     const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
-    if (!org) return reply.status(404).send({ error: "Organization not found" });
+    if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
     const data = await fastify.prisma.organization.update({
       where: { id: request.params.id },
       data: { status: "active", banReason: null },
@@ -95,6 +102,23 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     };
   }>(
     "/admin/manual-subscriptions",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["organizationId", "planTier", "charges", "chargesFrequency", "gateway"],
+          properties: {
+            organizationId:   { type: "string", minLength: 1 },
+            planTier:         { type: "string", enum: ["starter", "growth", "scale", "enterprise"] },
+            charges:          { type: "number", minimum: 0 },
+            chargesFrequency: { type: "string", minLength: 1, maxLength: 50 },
+            gateway:          { type: "string", enum: ["stripe", "razorpay", "upi", "bank_transfer", "cash", "other"] },
+            durationDays:     { type: "number", minimum: 1, maximum: 3650 },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
     async (request, reply) => {
       if (!requireSuperAdmin(request.auth.role, reply)) return;
       const endsAt = request.body.durationDays
@@ -131,7 +155,7 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       where: { id: request.params.id },
       include: { _count: { select: { members: true, conversations: true } } },
     });
-    if (!org) return reply.status(404).send({ error: "Organization not found" });
+    if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
     const [contactCount, messageCount, campaignCount] = await Promise.all([
       fastify.prisma.contact.count({ where: { organizationId: org.id } }),
       fastify.prisma.message.count({ where: { organizationId: org.id } }),
@@ -143,10 +167,23 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
   // ── Update plan tier / status ────────────────────────────────────────────
   fastify.patch<{ Params: { id: string }; Body: { planTier?: string; status?: string; banReason?: string } }>(
     "/admin/organizations/:id",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            planTier:  { type: "string", enum: ["starter", "growth", "scale", "enterprise"] },
+            status:    { type: "string", enum: ["active", "inactive", "banned"] },
+            banReason: { type: "string", maxLength: 500 },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
     async (request, reply) => {
       if (!requireSuperAdmin(request.auth.role, reply)) return;
       const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
-      if (!org) return reply.status(404).send({ error: "Organization not found" });
+      if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
       const { planTier, status, banReason } = request.body;
       const data = await fastify.prisma.organization.update({
         where: { id: request.params.id },
@@ -169,17 +206,30 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // ── Impersonation token — creates Redis token + logs the session ─────────
+  // ── Impersonation token ──────────────────────────────────────────────────
+  // Token lifetime: 15 min (900s). Rate-limited per actor: 10 tokens/hour.
   fastify.post<{ Params: { id: string } }>("/admin/organizations/:id/impersonate", async (request, reply) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
+
+    // Per-actor rate limit: max 10 impersonation tokens per hour
+    const actorKey = `impersonate:actor:${request.auth.userId}`;
+    const count = await redis.incr(actorKey);
+    if (count === 1) await redis.expire(actorKey, 3600);
+    if (count > 10) {
+      return reply.status(429).send({ error: { code: "RATE_LIMITED", message: "Impersonation limit reached (10/hour)" } });
+    }
+
     const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
-    if (!org) return reply.status(404).send({ error: "Organization not found" });
+    if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
 
     const token = randomBytes(32).toString("hex");
-    const key = `impersonate:${token}`;
-    await redis.set(key, JSON.stringify({ organizationId: org.id, orgName: org.name, issuedBy: request.auth.userId }), "EX", 3600);
+    // 15 minutes — enough for a support session, short enough to limit blast radius
+    await redis.set(
+      `impersonate:${token}`,
+      JSON.stringify({ organizationId: org.id, orgName: org.name, issuedBy: request.auth.userId }),
+      "EX", 900
+    );
 
-    // Persist impersonation session for audit
     await fastify.prisma.impersonationLog.create({
       data: {
         actorId: request.auth.userId,
@@ -197,27 +247,34 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       action: "org.impersonate",
       targetType: "organization",
       targetId: org.id,
-      metadata: { orgName: org.name },
+      metadata: { orgName: org.name, expiresIn: 900 },
       request,
     });
 
-    return reply.send({ data: { token, expiresIn: 3600 } });
+    return reply.send({ data: { token, expiresIn: 900 } });
   });
 
   // ── End impersonation ────────────────────────────────────────────────────
   fastify.delete<{ Params: { id: string }; Body: { token: string } }>(
     "/admin/organizations/:id/impersonate",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["token"],
+          properties: { token: { type: "string", minLength: 1 } },
+          additionalProperties: false,
+        },
+      },
+    },
     async (request, reply) => {
       if (!requireSuperAdmin(request.auth.role, reply)) return;
       const { token } = request.body;
-      if (token) {
-        await redis.del(`impersonate:${token}`);
-        // Mark impersonation session as ended
-        await fastify.prisma.impersonationLog.updateMany({
-          where: { token, endedAt: null },
-          data: { endedAt: new Date() },
-        });
-      }
+      await redis.del(`impersonate:${token}`);
+      await fastify.prisma.impersonationLog.updateMany({
+        where: { token, endedAt: null },
+        data: { endedAt: new Date() },
+      });
       return reply.status(204).send();
     }
   );
@@ -227,20 +284,23 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
     const page = Math.max(1, parseInt(request.query.page ?? "1", 10));
     const where = request.query.userId ? { userId: request.query.userId } : {};
-    const logs = await fastify.prisma.loginLog.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * 50,
-      take: 50,
-    });
-    return reply.send({ data: logs, page });
+    const [logs, total] = await Promise.all([
+      fastify.prisma.loginLog.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * 50,
+        take: 50,
+      }),
+      fastify.prisma.loginLog.count({ where }),
+    ]);
+    return reply.send({ data: logs, total, page });
   });
 
   // ── Vendor activation ────────────────────────────────────────────────────
   fastify.post<{ Params: { orgId: string } }>("/admin/vendors/:orgId/activate", async (request, reply) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
     const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.orgId } });
-    if (!org) return reply.status(404).send({ error: "Organization not found" });
+    if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
     await fastify.prisma.user.updateMany({ where: { organizationId: request.params.orgId }, data: { isActive: true } });
     writeAdminAudit({
       prisma: fastify.prisma,
@@ -257,11 +317,8 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { orgId: string } }>("/admin/vendors/:orgId/deactivate", async (request, reply) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
     const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.orgId } });
-    if (!org) return reply.status(404).send({ error: "Organization not found" });
-    await fastify.prisma.user.updateMany({
-      where: { organizationId: request.params.orgId },
-      data: { isActive: false },
-    });
+    if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
+    await fastify.prisma.user.updateMany({ where: { organizationId: request.params.orgId }, data: { isActive: false } });
     writeAdminAudit({
       prisma: fastify.prisma,
       actorId: request.auth.userId,
@@ -275,18 +332,50 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── Platform config ──────────────────────────────────────────────────────
+  // Sensitive values (secrets, passwords) are masked in GET responses.
   fastify.get("/admin/platform-config", async (request, reply) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
-    const data = await fastify.prisma.platformConfig.findMany({ orderBy: { key: "asc" } });
+    const rows = await fastify.prisma.platformConfig.findMany({ orderBy: { key: "asc" } });
+    const data = rows.map((r) => ({
+      ...r,
+      value: r.value !== null && SENSITIVE_CONFIG_KEYS.has(r.key) ? "••••••••" : r.value,
+    }));
     return reply.send({ data });
   });
 
   fastify.put<{ Body: { configs: { key: string; value: string; dataType?: string }[] } }>(
     "/admin/platform-config",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["configs"],
+          properties: {
+            configs: {
+              type: "array",
+              maxItems: 50,
+              items: {
+                type: "object",
+                required: ["key", "value"],
+                properties: {
+                  key:      { type: "string", minLength: 1, maxLength: 100 },
+                  value:    { type: "string", maxLength: 2000 },
+                  dataType: { type: "string", maxLength: 50 },
+                },
+                additionalProperties: false,
+              },
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
     async (request, reply) => {
       if (!requireSuperAdmin(request.auth.role, reply)) return;
+      // Skip masked placeholder values — don't overwrite real secrets with "••••••••"
+      const toSave = request.body.configs.filter((c) => c.value !== "••••••••");
       await Promise.all(
-        request.body.configs.map((c) =>
+        toSave.map((c) =>
           fastify.prisma.platformConfig.upsert({
             where: { key: c.key },
             create: { key: c.key, value: c.value, dataType: c.dataType ?? "string" },
@@ -299,7 +388,7 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         actorId: request.auth.userId,
         action: "platform_config.update",
         targetType: "platform",
-        metadata: { keys: request.body.configs.map((c) => c.key) },
+        metadata: { keys: toSave.map((c) => c.key) },
         request,
       });
       return reply.send({ success: true });
@@ -307,22 +396,26 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
   );
 
   // ── Admin audit log ──────────────────────────────────────────────────────
-  fastify.get<{ Querystring: { page?: string; action?: string; actorId?: string } }>(
+  fastify.get<{ Querystring: { page?: string; limit?: string; action?: string; actorId?: string } }>(
     "/admin/audit-logs",
     async (request, reply) => {
       if (!requireSuperAdmin(request.auth.role, reply)) return;
       const page = Math.max(1, parseInt(request.query.page ?? "1", 10));
+      const limit = Math.min(100, Math.max(1, parseInt(request.query.limit ?? "50", 10)));
       const where = {
         ...(request.query.action ? { action: request.query.action } : {}),
         ...(request.query.actorId ? { actorId: request.query.actorId } : {}),
       };
-      const logs = await fastify.prisma.adminAuditLog.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * 50,
-        take: 50,
-      });
-      return reply.send({ data: logs, page });
+      const [logs, total] = await Promise.all([
+        fastify.prisma.adminAuditLog.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        fastify.prisma.adminAuditLog.count({ where }),
+      ]);
+      return reply.send({ data: logs, total, page });
     }
   );
 
@@ -332,12 +425,15 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       if (!requireSuperAdmin(request.auth.role, reply)) return;
       const page = Math.max(1, parseInt(request.query.page ?? "1", 10));
-      const logs = await fastify.prisma.impersonationLog.findMany({
-        orderBy: { startedAt: "desc" },
-        skip: (page - 1) * 50,
-        take: 50,
-      });
-      return reply.send({ data: logs, page });
+      const [logs, total] = await Promise.all([
+        fastify.prisma.impersonationLog.findMany({
+          orderBy: { startedAt: "desc" },
+          skip: (page - 1) * 50,
+          take: 50,
+        }),
+        fastify.prisma.impersonationLog.count(),
+      ]);
+      return reply.send({ data: logs, total, page });
     }
   );
 };
