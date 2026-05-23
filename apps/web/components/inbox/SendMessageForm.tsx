@@ -3,6 +3,8 @@
 import { JSX, FormEvent, useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { InteractiveMessagePicker } from "./InteractiveMessagePicker";
 import type { InteractivePayload } from "./InteractiveMessagePicker";
 
@@ -127,11 +129,7 @@ export function SendMessageForm({ conversationId, prefillText, onSent }: Props):
   }
 
   return (
-    <form
-      onSubmit={(e) => { void handleSubmit(e); }}
-      className="flex items-center gap-2 px-3 py-2 shrink-0"
-      style={{ backgroundColor: "var(--wa-sidebar)", borderTop: "1px solid var(--wa-border)" }}
-    >
+    <form onSubmit={(e) => { void handleSubmit(e); }} className="flex items-center gap-2 p-3 border-t border-gray-200 bg-white">
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -140,129 +138,74 @@ export function SendMessageForm({ conversationId, prefillText, onSent }: Props):
         onChange={(e) => { void handleFileSelected(e); }}
       />
 
-      {/* Left icons */}
-      <div className="flex items-center gap-1 shrink-0">
-        {/* Emoji placeholder */}
+      {/* Interactive message picker */}
+      <div className="relative">
         <button
           type="button"
-          disabled={!conversationId}
-          className="p-2 rounded-full transition-colors disabled:opacity-40"
-          style={{ color: "var(--wa-icon)" }}
-          title="Emoji"
+          onClick={() => { setInteractiveOpen((v) => !v); setAttachMenuOpen(false); }}
+          disabled={!conversationId || sending || uploading}
+          className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
+          title="Send interactive message"
         >
-          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18a8 8 0 110-16 8 8 0 010 16zm-3.5-7a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm7 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm-6.5 3.5c.69 1.076 1.78 1.75 3 1.75s2.31-.674 3-1.75H9z"/>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
           </svg>
         </button>
-
-        {/* Interactive message picker */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => { setInteractiveOpen((v) => !v); setAttachMenuOpen(false); }}
-            disabled={!conversationId || sending || uploading}
-            className="p-2 rounded-full transition-colors disabled:opacity-40"
-            style={{ color: "var(--wa-icon)" }}
-            title="Send interactive message"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-            </svg>
-          </button>
-          {interactiveOpen && (
-            <InteractiveMessagePicker
-              onSend={(payload) => { void handleInteractiveSend(payload); }}
-              onClose={() => setInteractiveOpen(false)}
-            />
-          )}
-        </div>
-
-        {/* Attachment menu */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setAttachMenuOpen((v) => !v)}
-            disabled={!conversationId || uploading}
-            className="p-2 rounded-full transition-colors disabled:opacity-40"
-            style={{ color: "var(--wa-icon)" }}
-            title="Attach file"
-          >
-            {uploading ? (
-              <svg className="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v4m0 8v4M4 12h4m8 0h4" />
-              </svg>
-            ) : (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-              </svg>
-            )}
-          </button>
-
-          {attachMenuOpen && (
-            <div
-              className="absolute bottom-full left-0 mb-2 w-44 rounded-xl shadow-lg overflow-hidden z-10"
-              style={{ backgroundColor: "var(--wa-sidebar)", border: "1px solid var(--wa-border)" }}
-            >
-              {(["image", "video", "document", "audio"] as const).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => openFilePicker(type)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm capitalize transition-colors"
-                  style={{ color: "var(--wa-text-primary)" }}
-                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = "var(--wa-hover)")}
-                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = "")}
-                >
-                  <AttachIcon type={type} />
-                  {type}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {interactiveOpen && (
+          <InteractiveMessagePicker
+            onSend={(payload) => { void handleInteractiveSend(payload); }}
+            onClose={() => setInteractiveOpen(false)}
+          />
+        )}
       </div>
 
-      {/* Text input */}
-      <input
-        className="flex-1 rounded-full px-4 py-2 text-sm outline-none transition-colors"
-        style={{
-          backgroundColor: "var(--wa-input)",
-          color: "var(--wa-text-primary)",
-        }}
-        placeholder={conversationId ? "Type a message" : "Select a conversation first"}
+      {/* Attachment menu */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setAttachMenuOpen((v) => !v)}
+          disabled={!conversationId || uploading}
+          className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
+          title="Attach file"
+        >
+          {uploading ? (
+            <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v4m0 8v4M4 12h4m8 0h4" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
+          )}
+        </button>
+
+        {attachMenuOpen && (
+          <div className="absolute bottom-full left-0 mb-1 w-44 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden z-10">
+            {(["image", "video", "document", "audio"] as const).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => openFilePicker(type)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 capitalize"
+              >
+                <AttachIcon type={type} />
+                {type}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <Input
+        className="flex-1"
+        placeholder={conversationId ? "Type a message…" : "Select a conversation first"}
         value={text}
         onChange={(e) => setText(e.target.value)}
         disabled={!conversationId || sending || uploading}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            void handleSubmit(e as unknown as React.FormEvent);
-          }
-        }}
       />
-
-      {/* Send / Mic button */}
-      <button
-        type="submit"
-        disabled={!conversationId || !text.trim() || sending || uploading}
-        className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition-all disabled:opacity-40"
-        style={{ backgroundColor: "var(--wa-green)" }}
-      >
-        {sending ? (
-          <svg className="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg>
-        ) : text.trim() ? (
-          <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-          </svg>
-        ) : (
-          <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-          </svg>
-        )}
-      </button>
+      <Button type="submit" disabled={!conversationId || !text.trim() || sending || uploading}>
+        {sending ? "Sending…" : "Send"}
+      </Button>
     </form>
   );
 }

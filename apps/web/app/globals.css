@@ -7,43 +7,6 @@
     --color-brand: #22c55e;
     --color-brand-dark: #15803d;
     --sidebar-width: 240px;
-
-    /* WhatsApp light theme */
-    --wa-green:          #25D366;
-    --wa-header:         #008069;
-    --wa-bg:             #EAE2D9;
-    --wa-sidebar:        #FFFFFF;
-    --wa-search:         #F0F2F5;
-    --wa-active:         #F0F2F5;
-    --wa-hover:          #F5F6F6;
-    --wa-border:         #E9EDEF;
-    --wa-bubble-out:     #D9FDD3;
-    --wa-bubble-in:      #FFFFFF;
-    --wa-timestamp:      #667781;
-    --wa-text-primary:   #111B21;
-    --wa-text-secondary: #667781;
-    --wa-icon:           #54656F;
-    --wa-input:          #F0F2F5;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --wa-green:          #00A884;
-      --wa-header:         #202C33;
-      --wa-bg:             #0B141A;
-      --wa-sidebar:        #111B21;
-      --wa-search:         #2A3942;
-      --wa-active:         #2A3942;
-      --wa-hover:          #2C3E46;
-      --wa-border:         #2A3942;
-      --wa-bubble-out:     #005C4B;
-      --wa-bubble-in:      #202C33;
-      --wa-timestamp:      #8696A0;
-      --wa-text-primary:   #E9EDEF;
-      --wa-text-secondary: #8696A0;
-      --wa-icon:           #AEBAC1;
-      --wa-input:          #2A3942;
-    }
   }
 
   body {
@@ -52,45 +15,5 @@
 
   * {
     @apply border-gray-200;
-  }
-
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-}
-
-@layer components {
-  .wa-bubble-out {
-    position: relative;
-    background-color: var(--wa-bubble-out);
-  }
-  .wa-bubble-out::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    right: -8px;
-    width: 0;
-    height: 0;
-    border-left: 8px solid var(--wa-bubble-out);
-    border-bottom: 8px solid transparent;
-  }
-
-  .wa-bubble-in {
-    position: relative;
-    background-color: var(--wa-bubble-in);
-  }
-  .wa-bubble-in::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: -8px;
-    width: 0;
-    height: 0;
-    border-right: 8px solid var(--wa-bubble-in);
-    border-bottom: 8px solid transparent;
-  }
-
-  .wa-chat-bg {
-    background-color: var(--wa-bg);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='%23A0937D' fill-opacity='0.08'%3E%3Ccircle cx='40' cy='40' r='3'/%3E%3Ccircle cx='0' cy='0' r='3'/%3E%3Ccircle cx='80' cy='0' r='3'/%3E%3Ccircle cx='0' cy='80' r='3'/%3E%3Ccircle cx='80' cy='80' r='3'/%3E%3Ccircle cx='20' cy='20' r='1.5'/%3E%3Ccircle cx='60' cy='20' r='1.5'/%3E%3Ccircle cx='20' cy='60' r='1.5'/%3E%3Ccircle cx='60' cy='60' r='1.5'/%3E%3C/g%3E%3C/svg%3E");
   }
 }
