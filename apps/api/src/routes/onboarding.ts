@@ -1,5 +1,4 @@
 import type { FastifyPluginAsync } from "fastify";
-import { createHash } from "crypto";
 import { syncPhoneNumbers } from "../lib/whatsapp.js";
 
 const WA_GRAPH = "https://graph.facebook.com/v25.0";
@@ -35,20 +34,29 @@ export const onboardingRouter: FastifyPluginAsync = async (fastify) => {
     }
     const { access_token } = await tokenRes.json() as { access_token: string };
 
-    // Resolve WABA ID — from body (postMessage) or Graph API fallback
+    // Resolve WABA ID — from body (postMessage) or debug_token granular_scopes fallback.
+    // /me/businesses requires business_management permission which embedded signup doesn't grant.
+    // debug_token returns the exact WABA IDs the user consented to via the config_id.
     let resolvedWabaId = wabaId ?? "";
     if (!resolvedWabaId) {
       try {
+        const appToken = `${appId}|${appSecret}`;
         const r = await fetch(
-          `${WA_GRAPH}/me/businesses?fields=whatsapp_business_accounts{id}&access_token=${access_token}`
+          `${WA_GRAPH}/debug_token?input_token=${access_token}&access_token=${encodeURIComponent(appToken)}`
         );
         if (r.ok) {
-          const d = await r.json() as { data?: Array<{ whatsapp_business_accounts?: { data?: Array<{ id: string }> } }> };
-          resolvedWabaId = d.data?.[0]?.whatsapp_business_accounts?.data?.[0]?.id ?? "";
-          if (resolvedWabaId) fastify.log.info({ resolvedWabaId }, "WABA ID resolved from Graph API");
+          const d = await r.json() as {
+            data?: { granular_scopes?: Array<{ scope: string; target_ids?: string[] }> };
+          };
+          const scope = d.data?.granular_scopes?.find((s) => s.scope === "whatsapp_business_messaging");
+          resolvedWabaId = scope?.target_ids?.[0] ?? "";
+          if (resolvedWabaId) fastify.log.info({ resolvedWabaId }, "WABA ID resolved from debug_token");
+          else fastify.log.warn({ granular_scopes: d.data?.granular_scopes }, "debug_token returned no WABA ID");
+        } else {
+          fastify.log.warn({ status: r.status }, "debug_token call failed");
         }
       } catch (err) {
-        fastify.log.warn({ err }, "Could not resolve WABA ID from Graph API");
+        fastify.log.warn({ err }, "Could not resolve WABA ID from debug_token");
       }
     }
 
@@ -69,14 +77,12 @@ export const onboardingRouter: FastifyPluginAsync = async (fastify) => {
         if (resolvedWabaId) {
           await syncPhoneNumbers(organizationId);
 
-          const callbackUrl = `${(process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/v1/webhooks/whatsapp`;
-          const verifyToken = createHash("sha1").update(organizationId).digest("hex");
+          // Subscribe WABA to the app's webhook (configured in Meta App Dashboard).
+          // No override_callback_uri — the app-level webhook handles all orgs; routing is by phone_number_id.
           await fetch(`${WA_GRAPH}/${resolvedWabaId}/subscribed_apps`, {
             method: "POST",
             headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              override_callback_uri: callbackUrl,
-              verify_token: verifyToken,
               subscribed_fields: ["messages", "message_template_quality_update", "message_template_status_update", "account_update"],
             }),
           });
