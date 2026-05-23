@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX, useEffect, useRef } from "react";
+import { JSX, useEffect, useRef, useCallback } from "react";
 import { useMessages } from "@/hooks/useMessages";
 import { IntentBadge } from "@/components/intent-badge";
 import { VoicePlayer } from "@/components/voice-player";
@@ -15,13 +15,155 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function MessageThread({ conversationId }: Props): JSX.Element {
-  const { data: messages, isLoading } = useMessages(conversationId);
-  const bottomRef = useRef<HTMLDivElement>(null);
+interface TemplateParsed {
+  templateName?: string;
+  header?: { format?: string; text?: string | null } | null;
+  body?: string | null;
+  footer?: string | null;
+  buttons?: Array<{ type?: string; text?: string }>;
+}
 
+function TemplateMessageBubble({ body }: { body: string }): JSX.Element {
+  let parsed: TemplateParsed = {};
+  try { parsed = JSON.parse(body) as TemplateParsed; } catch { /* raw fallback */ }
+
+  const headerText = parsed.header?.text;
+  const bodyText = parsed.body;
+  const footerText = parsed.footer;
+  const buttons = parsed.buttons ?? [];
+
+  return (
+    <div className="flex flex-col gap-1 min-w-[180px]">
+      {headerText && (
+        <p className="font-semibold text-gray-900 leading-snug">{headerText}</p>
+      )}
+      {bodyText && (
+        <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{bodyText}</p>
+      )}
+      {footerText && (
+        <p className="text-xs text-gray-400 mt-0.5">{footerText}</p>
+      )}
+      {buttons.length > 0 && (
+        <div className="flex flex-col gap-1 mt-2 border-t border-gray-200 pt-2">
+          {buttons.map((btn, i) => (
+            <div key={i} className="text-center text-xs text-[#00a884] font-medium py-1 border border-[#00a884]/30 rounded-lg">
+              {btn.text ?? "Button"}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface InteractiveParsed {
+  type?: string;
+  header?: { type?: string; text?: string } | null;
+  body?: { text?: string } | null;
+  footer?: { text?: string } | null;
+  action?: {
+    buttons?: Array<{ type?: string; reply?: { id?: string; title?: string } }>;
+    sections?: Array<{ title?: string; rows?: Array<{ id?: string; title?: string }> }>;
+  };
+}
+
+function InteractiveMessageBubble({ body }: { body: string }): JSX.Element {
+  let parsed: InteractiveParsed = {};
+  try { parsed = JSON.parse(body) as InteractiveParsed; } catch { /* raw fallback */ }
+
+  const headerText = parsed.header?.text;
+  const bodyText = parsed.body?.text;
+  const footerText = parsed.footer?.text;
+  const replyButtons = parsed.action?.buttons ?? [];
+  const listSections = parsed.action?.sections ?? [];
+
+  return (
+    <div className="flex flex-col gap-1 min-w-[180px]">
+      {headerText && (
+        <p className="font-semibold text-gray-900 leading-snug">{headerText}</p>
+      )}
+      {bodyText && (
+        <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{bodyText}</p>
+      )}
+      {footerText && (
+        <p className="text-xs text-gray-400 mt-0.5">{footerText}</p>
+      )}
+      {replyButtons.length > 0 && (
+        <div className="flex flex-col gap-1 mt-2 border-t border-gray-200 pt-2">
+          {replyButtons.map((btn, i) => (
+            <div key={i} className="text-center text-xs text-[#00a884] font-medium py-1 border border-[#00a884]/30 rounded-lg">
+              {btn.reply?.title ?? "Button"}
+            </div>
+          ))}
+        </div>
+      )}
+      {listSections.length > 0 && (
+        <div className="flex flex-col gap-1 mt-2 border-t border-gray-200 pt-2">
+          {listSections.flatMap((s) => s.rows ?? []).slice(0, 3).map((row, i) => (
+            <div key={i} className="text-xs text-[#00a884] font-medium py-0.5 px-1">{row.title}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MessageTicks({ status }: { status?: string | null }): JSX.Element | null {
+  if (status === "sending") {
+    return <span className="text-gray-400 text-[10px] ml-1">⏱</span>;
+  }
+  if (status === "failed") {
+    return <span className="text-red-400 text-[10px] ml-1">!</span>;
+  }
+  if (status === "sent") {
+    return (
+      <svg className="inline w-3 h-3 ml-1 text-gray-400" viewBox="0 0 16 11" fill="currentColor">
+        <path d="M11.071.653a.75.75 0 0 1 .033 1.06l-6.5 7a.75.75 0 0 1-1.09.003L.653 5.854a.75.75 0 0 1 1.06-1.061l2.326 2.326 5.972-6.433a.75.75 0 0 1 1.06-.033Z" />
+      </svg>
+    );
+  }
+  if (status === "delivered") {
+    return (
+      <svg className="inline w-4 h-3 ml-1 text-gray-400" viewBox="0 0 20 11" fill="currentColor">
+        <path d="M11.071.653a.75.75 0 0 1 .033 1.06l-6.5 7a.75.75 0 0 1-1.09.003L.653 5.854a.75.75 0 0 1 1.06-1.061l2.326 2.326 5.972-6.433a.75.75 0 0 1 1.06-.033Z" />
+        <path d="M15.071.653a.75.75 0 0 1 .033 1.06l-6.5 7a.75.75 0 0 1-1.09.003L5.153 6.354a.75.75 0 0 1 1.06-1.061l1.826 1.826 5.972-6.433a.75.75 0 0 1 1.06-.033Z" />
+      </svg>
+    );
+  }
+  if (status === "read") {
+    return (
+      <svg className="inline w-4 h-3 ml-1 text-[#53bdeb]" viewBox="0 0 20 11" fill="currentColor">
+        <path d="M11.071.653a.75.75 0 0 1 .033 1.06l-6.5 7a.75.75 0 0 1-1.09.003L.653 5.854a.75.75 0 0 1 1.06-1.061l2.326 2.326 5.972-6.433a.75.75 0 0 1 1.06-.033Z" />
+        <path d="M15.071.653a.75.75 0 0 1 .033 1.06l-6.5 7a.75.75 0 0 1-1.09.003L5.153 6.354a.75.75 0 0 1 1.06-1.061l1.826 1.826 5.972-6.433a.75.75 0 0 1 1.06-.033Z" />
+      </svg>
+    );
+  }
+  return null;
+}
+
+export function MessageThread({ conversationId }: Props): JSX.Element {
+  const { messages, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useMessages(conversationId);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prevScrollHeight = useRef<number>(0);
+
+  // Scroll to bottom on initial load and new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [conversationId]);
+
+  // Restore scroll position after older messages are prepended
+  useEffect(() => {
+    if (isFetchingNextPage || !scrollRef.current) return;
+    const el = scrollRef.current;
+    el.scrollTop = el.scrollHeight - prevScrollHeight.current;
+  }, [isFetchingNextPage]);
+
+  const loadEarlier = useCallback(() => {
+    if (!scrollRef.current) return;
+    prevScrollHeight.current = scrollRef.current.scrollHeight;
+    void fetchNextPage();
+  }, [fetchNextPage]);
 
   if (!conversationId) {
     return (
@@ -42,8 +184,19 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
   }
 
   return (
-    <div className="flex flex-col gap-2 p-4 overflow-y-auto flex-1">
-      {messages?.map((msg) => (
+    <div ref={scrollRef} className="flex flex-col gap-2 p-4 overflow-y-auto flex-1">
+      {hasNextPage && (
+        <div className="flex justify-center py-1">
+          <button
+            onClick={loadEarlier}
+            disabled={isFetchingNextPage}
+            className="text-xs text-[#00a884] font-medium px-3 py-1 rounded-full border border-[#00a884]/30 hover:bg-[#00a884]/5 disabled:opacity-50 transition-colors"
+          >
+            {isFetchingNextPage ? "Loading…" : "Load earlier messages"}
+          </button>
+        </div>
+      )}
+      {messages.map((msg) => (
         <div
           key={msg.id}
           className={`flex ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}
@@ -60,6 +213,10 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
               <VoicePlayer mediaUrl={msg.mediaUrl} messageId={msg.id} />
             ) : msg.mediaUrl != null && msg.contentType !== "text" ? (
               <MediaMessage mediaUrl={msg.mediaUrl} contentType={msg.contentType ?? "document"} />
+            ) : msg.contentType === "template" && msg.body ? (
+              <TemplateMessageBubble body={msg.body} />
+            ) : msg.contentType === "interactive" && msg.body ? (
+              <InteractiveMessageBubble body={msg.body} />
             ) : (
               <>
                 <p dangerouslySetInnerHTML={{ __html: msg.body ? formatWhatsAppText(msg.body) : "[media]" }} />
@@ -68,7 +225,10 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
                 )}
               </>
             )}
-            <p className="text-xs text-gray-400 mt-1 text-right">{formatTime(msg.sentAt)}</p>
+            <p className="text-xs text-gray-400 mt-1 text-right flex items-center justify-end gap-0.5">
+              {formatTime(msg.sentAt)}
+              {msg.direction === "outbound" && <MessageTicks status={msg.status} />}
+            </p>
           </div>
         </div>
       ))}

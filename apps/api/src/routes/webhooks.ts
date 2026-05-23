@@ -3,6 +3,7 @@ import type { MessageStatus } from "@prisma/client";
 import { createHmac, timingSafeEqual } from "crypto";
 import { verifyWebhookSignature } from "../lib/whatsapp.js";
 import { inboundMessageQueue } from "../lib/queue.js";
+import { getIo } from "../lib/io-ref.js";
 
 interface WaMediaObject {
   id: string;
@@ -97,11 +98,19 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
             continue;
           }
 
+          if (change.field !== "messages") continue;
+
+          // Resolve org once for both status updates and inbound messages
+          const { phone_number_id } = change.value.metadata;
+          const org = await fastify.prisma.organization.findFirst({
+            where: { phoneNumberId: phone_number_id },
+          });
+
           // Outbound message status updates (delivered / read) with ratchet protection
-          if (change.field === "messages" && change.value.statuses?.length) {
-            // terminal statuses that cannot be overwritten by a later webhook
+          if (change.value.statuses?.length) {
             const TERMINAL = new Set<string>(["read"]);
-            const STATUS_RANK: Record<string, number> = { sent: 0, delivered: 1, read: 2 };
+            const STATUS_RANK: Record<string, number> = { sending: -1, sent: 0, delivered: 1, read: 2 };
+            const io = getIo();
             for (const su of change.value.statuses) {
               const msg = await fastify.prisma.message.findFirst({
                 where: { whatsappMessageId: su.id },
@@ -109,7 +118,7 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
               });
               if (!msg) continue;
               if (TERMINAL.has(msg.status)) continue; // ratchet: never downgrade from read
-              const currentRank = STATUS_RANK[msg.status] ?? 0;
+              const currentRank = STATUS_RANK[msg.status] ?? -1;
               const newRank = STATUS_RANK[su.status] ?? -1;
               if (newRank <= currentRank) continue; // no downgrade
               const allowedStatuses: MessageStatus[] = ["sent", "delivered", "read", "failed"];
@@ -119,15 +128,16 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                 where: { id: msg.id },
                 data: { status: newStatus },
               });
+              if (org) {
+                io?.to(`org:${org.id}`).emit("message:status", {
+                  whatsappMessageId: su.id,
+                  status: newStatus,
+                });
+              }
             }
           }
 
-          if (change.field !== "messages" || !change.value.messages?.length) continue;
-
-          const { phone_number_id } = change.value.metadata;
-          const org = await fastify.prisma.organization.findFirst({
-            where: { phoneNumberId: phone_number_id },
-          });
+          if (!change.value.messages?.length) continue;
           if (!org) continue;
 
           for (const msg of change.value.messages) {
