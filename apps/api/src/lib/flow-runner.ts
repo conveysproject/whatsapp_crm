@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { sendTextMessage, sendMediaMessage, sendInteractiveMessage, type WaInteractivePayload } from "./whatsapp.js";
+import { phoneVariants } from "./phone-normalize.js";
 
 export type TriggerType = "inbound_message" | "contact_tag_added" | "conversation_assigned";
 
@@ -73,7 +74,7 @@ export async function runFlow(
         const stage = node.config["lifecycleStage"] as string;
         if (stage && payload.contactPhone) {
           await prisma.contact.updateMany({
-            where: { organizationId: payload.organizationId, phoneNumber: payload.contactPhone },
+            where: { organizationId: payload.organizationId, phoneNumber: { in: phoneVariants(payload.contactPhone) } },
             data: { lifecycleStage: stage as "lead" | "prospect" | "customer" | "loyal" | "churned" },
           });
         }
@@ -93,7 +94,7 @@ export async function runFlow(
         const tag = node.config["tag"] as string;
         if (tag && payload.contactPhone) {
           const contact = await prisma.contact.findFirst({
-            where: { organizationId: payload.organizationId, phoneNumber: payload.contactPhone },
+            where: { organizationId: payload.organizationId, phoneNumber: { in: phoneVariants(payload.contactPhone) } },
           });
           if (contact && !contact.tags.includes(tag)) {
             await prisma.contact.update({

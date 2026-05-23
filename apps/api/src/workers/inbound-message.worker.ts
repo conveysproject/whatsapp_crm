@@ -72,6 +72,17 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       where: { organizationId, whatsappContactId: whatsappContactPhone },
     });
 
+    // Phone format mismatch (Meta sends "919907072035", DB may store "+919907072035")
+    if (!conversation) {
+      const variants = phoneVariants(whatsappContactPhone).filter((v) => v !== whatsappContactPhone);
+      for (const variant of variants) {
+        conversation = await prisma.conversation.findFirst({
+          where: { organizationId, whatsappContactId: variant },
+        });
+        if (conversation) break;
+      }
+    }
+
     if (!conversation) {
       // GAP-S08: try exact match first, then fall back to phone variant lookup
       let existingContact = await prisma.contact.findFirst({

@@ -266,6 +266,25 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
         org.phoneNumberId, recipientPhone, template.name, template.language, components, accessToken
       );
 
+      // Build a renderable JSON body from the template components + variables
+      type WaComp = { type?: string; format?: string; text?: string; buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string }> };
+      const comps = (template.components ?? []) as WaComp[];
+      const headerComp = comps.find((c) => c.type?.toUpperCase() === "HEADER");
+      const bodyComp = comps.find((c) => c.type?.toUpperCase() === "BODY");
+      const footerComp = comps.find((c) => c.type?.toUpperCase() === "FOOTER");
+      const buttonsComp = comps.find((c) => c.type?.toUpperCase() === "BUTTONS");
+      let bodyText = bodyComp?.text ?? "";
+      variables.forEach((v, i) => {
+        bodyText = bodyText.replace(new RegExp(`\\{\\{${i + 1}\\}\\}`, "g"), v);
+      });
+      const renderedBody = JSON.stringify({
+        templateName: template.name,
+        header: headerComp ? { format: headerComp.format ?? "TEXT", text: headerComp.text ?? null } : null,
+        body: bodyText || template.name,
+        footer: footerComp?.text ?? null,
+        buttons: buttonsComp?.buttons ?? [],
+      });
+
       let conversation = await fastify.prisma.conversation.findFirst({
         where: { organizationId, contactId: contact.id },
         orderBy: { createdAt: "desc" },
@@ -283,7 +302,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
           organizationId,
           direction: "outbound",
           contentType: "template",
-          body: template.name,
+          body: renderedBody,
           whatsappMessageId: messageId,
           status: "sent",
         },
