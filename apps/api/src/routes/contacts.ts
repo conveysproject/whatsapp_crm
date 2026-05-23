@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { Prisma } from "@prisma/client";
 import type { LifecycleStage } from "@prisma/client";
 import { paginate, parsePaginationParams } from "../lib/pagination.js";
-import { indexContact, removeContact, searchContacts } from "../lib/search.js";
+
 import { generateContactsCsv } from "../lib/csv.js";
 import type { ContactId } from "@WBMSG/shared";
 import { maskPhone, maskEmail, canAccess, hasSubPermission } from "../lib/permissions.js";
@@ -132,8 +132,23 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.get<{ Querystring: { q?: string } }>("/contacts/search", async (request, reply) => {
     const { organizationId } = request.auth;
-    const query = (request.query as Record<string, string>)["q"] ?? "";
-    const results = await searchContacts(organizationId, query);
+    const q = ((request.query as Record<string, string>)["q"] ?? "").trim();
+    const results = await fastify.prisma.contact.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        ...(q ? {
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { phoneNumber: { contains: q } },
+            { email: { contains: q, mode: "insensitive" } },
+          ],
+        } : {}),
+      },
+      select: { id: true, organizationId: true, name: true, phoneNumber: true, email: true, lifecycleStage: true },
+      take: 20,
+      orderBy: { createdAt: "desc" },
+    });
     return reply.send({ data: results });
   });
 
@@ -225,14 +240,6 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       }
       throw err;
     }
-    void indexContact({
-      id: contact.id,
-      organizationId: contact.organizationId,
-      name: contact.name,
-      phoneNumber: contact.phoneNumber,
-      email: contact.email,
-      lifecycleStage: contact.lifecycleStage,
-    });
     return reply.status(201).send({ data: contact });
   });
 
@@ -260,14 +267,6 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           ...(request.body.countryId !== undefined && { countryId: request.body.countryId }),
         },
       });
-      await indexContact({
-        id: contact.id,
-        organizationId: contact.organizationId,
-        name: contact.name,
-        phoneNumber: contact.phoneNumber,
-        email: contact.email,
-        lifecycleStage: contact.lifecycleStage,
-      });
       return reply.send({ data: contact });
     }
   );
@@ -287,12 +286,10 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     if (!existing) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
     }
-    // GDPR soft delete — preserves audit trail; removes from search index immediately
     await fastify.prisma.contact.update({
       where: { id: request.params.id },
       data: { deletedAt: new Date() },
     });
-    await removeContact(request.params.id);
     return reply.status(204).send();
   });
 

@@ -86,9 +86,6 @@ importers:
       libphonenumber-js:
         specifier: ^1.13.2
         version: 1.13.2
-      meilisearch:
-        specifier: ^0.57.0
-        version: 0.57.0
       openai:
         specifier: ^6.34.0
         version: 6.34.0(ws@8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76)
@@ -6775,10 +6772,6 @@ packages:
 
   mdn-data@2.0.14:
     resolution: {integrity: sha512-dn6wd0uw5GsdswPFfsgMp5NSB0/aDe6fK94YJV/AJDYXL6HVLWBsxeq7js7Ad+mU2K9LAlwpk6kN2D5mwCPVow==}
-
-  meilisearch@0.57.0:
-    resolution: {integrity: sha512-J3ZdX6MjguEIG9Yo+duRZeVsbMdRuwM2OFvJUs8wZSeBADYZ2qc1eajlClKLRqS/mAhGh2bLiU5SbmhKXKuWSw==}
-    engines: {node: ^20.19.0 || >=22.12.0}
 
   memoize-one@5.2.1:
     resolution: {integrity: sha512-zYiwtZUcYyXKo/np96AGZAckk+FWWsUdJ3cHGGmld7+AhvcWmQyGCYUh1hc4Q/pkOhb65dQR/pqCyK0cOaHz4Q==}
@@ -16994,8 +16987,6 @@ snapshots:
   md5hex@1.0.0: {}
 
   mdn-data@2.0.14: {}
-
-  meilisearch@0.57.0: {}
 
   memoize-one@5.2.1: {}
 

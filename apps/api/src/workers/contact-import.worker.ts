@@ -1,6 +1,6 @@
 import { Worker, UnrecoverableError } from "bullmq";
 import Papa from "papaparse";
-import { Meilisearch } from "meilisearch";
+
 import type { LifecycleStage, Prisma } from "@prisma/client";
 import { redisConnection } from "../lib/queue.js";
 import { redis } from "../lib/redis.js";
@@ -21,10 +21,6 @@ interface ContactImportJob {
   updateExisting: boolean;
 }
 
-const meili = new Meilisearch({
-  host: process.env["MEILISEARCH_URL"] ?? "http://localhost:7700",
-  apiKey: process.env["MEILISEARCH_KEY"] ?? "",
-});
 
 function extractPhone(row: Record<string, string>, mapping: FieldMapping): string | null {
   const full = mapping.find((e) => e.dbField === "fullPhoneNumber");
@@ -182,22 +178,6 @@ export const contactImportWorker = new Worker<ContactImportJob>(
           }
         }
 
-        // Bulk Meilisearch index — non-fatal if it fails
-        try {
-          const phonesToIndex = [
-            ...toCreate.map((c) => c.phoneNumber),
-            ...toUpdate.map((u) => u.phone),
-          ];
-          if (phonesToIndex.length) {
-            const contacts = await prisma.contact.findMany({
-              where: { organizationId, phoneNumber: { in: phonesToIndex } },
-              select: { id: true, organizationId: true, name: true, phoneNumber: true, email: true, lifecycleStage: true },
-            });
-            await meili.index("contacts").addDocuments(contacts);
-          }
-        } catch {
-          // Search index lag is acceptable; contacts are in DB
-        }
       }
 
       await writeProgress(importId, i + batch.length, rows.length, created, updated, skipped, "processing");

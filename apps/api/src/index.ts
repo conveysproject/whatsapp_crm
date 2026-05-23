@@ -7,7 +7,7 @@ import prismaPlugin from "./plugins/prisma.js";
 import swaggerPlugin from "./plugins/swagger.js";
 import authPlugin from "./plugins/auth.js";
 import { routes } from "./routes/index.js";
-import { setupSearchIndexes } from "./lib/search.js";
+
 import multipart from "@fastify/multipart";
 import socketioPlugin from "./plugins/socketio.js";
 import { rateLimitPlugin } from "./plugins/rate-limit.js";
@@ -51,7 +51,6 @@ async function start() {
 
   await server.listen({ port: PORT, host: HOST });
   server.log.info(`API running on http://${HOST}:${PORT}`);
-  setupSearchIndexes().catch((err) => server.log.warn({ err }, "Meilisearch setup failed"));
   startMessageCleanupWorker();
   scheduleMessageCleanupCron().catch((err) => server.log.warn({ err }, "Message cleanup cron schedule failed"));
 }

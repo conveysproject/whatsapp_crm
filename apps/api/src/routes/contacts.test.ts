@@ -2,11 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
-vi.mock("../lib/search.js", () => ({
-  indexContact: vi.fn().mockResolvedValue(undefined),
-  removeContact: vi.fn().mockResolvedValue(undefined),
-  searchContacts: vi.fn().mockResolvedValue([]),
-}));
 
 const mockPrisma = {
   contact: {
