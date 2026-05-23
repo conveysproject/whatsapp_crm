@@ -200,16 +200,24 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     if (!limitCheck.allowed) {
       return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Contact limit of ${limitCheck.limit} reached` } });
     }
-    const contact = await fastify.prisma.contact.create({
-      data: {
-        organizationId,
-        phoneNumber: request.body.phoneNumber,
-        name: request.body.name ?? null,
-        email: request.body.email ?? null,
-        companyId: request.body.companyId ?? null,
-        countryId: request.body.countryId ?? null,
-      },
-    });
+    let contact;
+    try {
+      contact = await fastify.prisma.contact.create({
+        data: {
+          organizationId,
+          phoneNumber: request.body.phoneNumber,
+          name: request.body.name ?? null,
+          email: request.body.email ?? null,
+          companyId: request.body.companyId ?? null,
+          countryId: request.body.countryId ?? null,
+        },
+      });
+    } catch (err: unknown) {
+      if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2002") {
+        return reply.status(409).send({ error: { code: "DUPLICATE_PHONE", message: "A contact with this phone number already exists in your organization." } });
+      }
+      throw err;
+    }
     await indexContact({
       id: contact.id,
       organizationId: contact.organizationId,
