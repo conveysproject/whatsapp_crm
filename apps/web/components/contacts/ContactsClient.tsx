@@ -136,9 +136,10 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
   }, [selectedLabelId, selectedStage, dateFrom, dateTo, fetchByLabel, query]);
 
   function handleCreated(contact: Contact) {
-    setContacts((prev) => [contact, ...prev]);
+    setContacts((prev) => [contact as ContactWithLabels, ...prev]);
     setShowModal(false);
     toast("Contact created", { variant: "success" });
+    void fetchByLabel(selectedLabelId);
   }
 
   const activeFiltersCount = [selectedLabelId, selectedStage, dateFrom, dateTo].filter(Boolean).length;
