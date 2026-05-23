@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type JSX } from "react";
+import { Suspense, useEffect, useState, type JSX } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
@@ -8,7 +8,14 @@ import Link from "next/link";
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 const REDIRECT_URI = process.env["NEXT_PUBLIC_META_REDIRECT_URI"] ?? "";
 
-export default function WabaCallbackPage(): JSX.Element {
+const Spinner = (
+  <div className="text-center">
+    <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+    <p className="text-sm text-gray-600">Connecting your WhatsApp account…</p>
+  </div>
+);
+
+function WabaCallbackContent(): JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { getToken } = useAuth();
@@ -70,10 +77,13 @@ export default function WabaCallbackPage(): JSX.Element {
     );
   }
 
+  return Spinner;
+}
+
+export default function WabaCallbackPage(): JSX.Element {
   return (
-    <div className="text-center">
-      <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-      <p className="text-sm text-gray-600">Connecting your WhatsApp account…</p>
-    </div>
+    <Suspense fallback={Spinner}>
+      <WabaCallbackContent />
+    </Suspense>
   );
 }
