@@ -31,23 +31,6 @@ services:
       timeout: 5s
       retries: 5
 
-  meilisearch:
-    image: getmeili/meilisearch:v1.8
-    container_name: WBMSG_meilisearch
-    restart: unless-stopped
-    environment:
-      MEILI_MASTER_KEY: dev-master-key
-      MEILI_ENV: development
-    ports:
-      - "7700:7700"
-    volumes:
-      - meilisearch_data:/meili_data
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:7700/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   ml-service:
     build:
       context: ./services/ml
@@ -81,4 +64,3 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  meilisearch_data:
