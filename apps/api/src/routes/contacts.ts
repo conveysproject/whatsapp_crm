@@ -218,7 +218,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       }
       throw err;
     }
-    await indexContact({
+    void indexContact({
       id: contact.id,
       organizationId: contact.organizationId,
       name: contact.name,
