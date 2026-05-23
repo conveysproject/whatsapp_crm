@@ -11,8 +11,15 @@ const isPublicRoute = createRouteMatcher([
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
 const isAdminSignIn = createRouteMatcher(["/admin/sign-in(.*)"]);
 
-// Routes that are part of the setup flow itself — don't redirect these to /business-details
-const isSetupRoute = createRouteMatcher(["/business-details(.*)"]);
+// Routes that are part of the setup/onboarding flow — skip the tc_registered gate
+const isSetupRoute = createRouteMatcher([
+  "/business-details(.*)",
+  "/connect-waba(.*)",
+  "/provision-number(.*)",
+  "/checklist(.*)",
+  "/invite-team(.*)",
+  "/onboarding(.*)",
+]);
 
 // API routes run server-side and manage their own auth — skip the cookie gate
 const isApiRoute = createRouteMatcher(["/api/(.*)"]);
