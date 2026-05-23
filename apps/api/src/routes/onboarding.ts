@@ -6,9 +6,9 @@ const WA_GRAPH = "https://graph.facebook.com/v25.0";
 
 export const onboardingRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
-    Body: { code?: string; embedded?: boolean; phoneNumberId?: string; wabaId?: string; isSMB?: boolean };
+    Body: { code?: string; embedded?: boolean; phoneNumberId?: string; wabaId?: string; isSMB?: boolean; redirectUri?: string };
   }>("/waba-callback", async (request, reply) => {
-    const { code, embedded, phoneNumberId, wabaId, isSMB } = request.body;
+    const { code, embedded, phoneNumberId, wabaId, isSMB, redirectUri } = request.body;
     if (!code) return reply.status(400).send({ error: "code required" });
 
     const { organizationId } = request.auth;
@@ -16,15 +16,11 @@ export const onboardingRouter: FastifyPluginAsync = async (fastify) => {
     const appId = process.env["META_APP_ID"] ?? "";
     const appSecret = process.env["META_APP_SECRET"] ?? "";
 
-    // Step 1: Exchange code for access_token
+    // redirect_uri must exactly match what the OAuth dialog used.
+    // Callback page sends it explicitly; META_REDIRECT_URI env var is the fallback.
+    const resolvedRedirectUri = redirectUri ?? process.env["META_REDIRECT_URI"] ?? "";
     const params = new URLSearchParams({ client_id: appId, client_secret: appSecret, code });
-    // Embedded Signup: omit redirect_uri — Meta's own docs show no redirect_uri
-    // for JS SDK popup code exchange. Facebook URLs cannot be added to Valid OAuth
-    // Redirect URIs, and the popup flow doesn't redirect to the app domain.
-    // Non-embedded (server-side redirect) flow must send META_REDIRECT_URI.
-    if (!embedded && process.env["META_REDIRECT_URI"]) {
-      params.set("redirect_uri", process.env["META_REDIRECT_URI"]);
-    }
+    if (resolvedRedirectUri) params.set("redirect_uri", resolvedRedirectUri);
     const metaUrl = `${WA_GRAPH}/oauth/access_token?${params.toString()}`;
     fastify.log.info({ embedded, appId }, "Meta token exchange attempt");
     const tokenRes = await fetch(metaUrl);

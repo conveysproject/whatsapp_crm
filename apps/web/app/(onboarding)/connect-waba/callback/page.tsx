@@ -3,7 +3,8 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+const API_URL = process.env["API_URL"] ?? process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+const REDIRECT_URI = process.env["NEXT_PUBLIC_META_REDIRECT_URI"] ?? "";
 
 export default async function WabaCallbackPage({
   searchParams,
@@ -31,7 +32,7 @@ export default async function WabaCallbackPage({
       "Content-Type": "application/json",
       Authorization: `Bearer ${token ?? ""}`,
     },
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({ code, embedded: true, redirectUri: REDIRECT_URI }),
     cache: "no-store",
   });
 
@@ -39,11 +40,14 @@ export default async function WabaCallbackPage({
     redirect("/provision-number");
   }
 
-  const body = await res.json().catch(() => ({})) as { detail?: { error?: { message?: string } }; error?: { code?: string; message?: string } | string };
-  const errorObj = body?.error;
-  const detail = body?.detail?.error?.message
-    ?? (typeof errorObj === "string" ? errorObj : errorObj?.message)
-    ?? `HTTP ${res.status}`;
+  const body = await res.json().catch(() => ({})) as {
+    detail?: { error?: { message?: string } };
+    error?: { message?: string } | string;
+  };
+  const detail =
+    body?.detail?.error?.message ??
+    (typeof body?.error === "string" ? body.error : body?.error?.message) ??
+    `HTTP ${res.status}`;
 
   return (
     <div className="text-center">
