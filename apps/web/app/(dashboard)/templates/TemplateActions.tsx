@@ -69,33 +69,23 @@ function SendModal({ templateId, templateName, onClose }: { templateId: string; 
   }, []);
 
   const fetchContacts = useCallback((q: string, lId: string): void => {
+    // Don't fetch until user has typed or picked a label
+    if (!q.trim() && !lId) {
+      setContacts([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setContactsError(false);
 
-    let url: string;
-    if (lId) {
-      url = `/api/v1/contacts?labelId=${encodeURIComponent(lId)}&limit=50`;
-    } else if (q.trim()) {
-      url = `/api/v1/contacts/search?q=${encodeURIComponent(q.trim())}`;
-    } else {
-      url = `/api/v1/contacts?limit=50`;
-    }
+    const params = new URLSearchParams({ limit: "20" });
+    if (q.trim()) params.set("q", q.trim());
+    if (lId) params.set("labelId", lId);
 
-    fetch(url)
+    fetch(`/api/v1/contacts?${params.toString()}`)
       .then((r) => r.json())
-      .then((body: { data: Contact[] }) => {
-        let rows: Contact[] = body.data ?? [];
-        // client-side text filter when label + search are both active
-        if (lId && q.trim()) {
-          const lower = q.trim().toLowerCase();
-          rows = rows.filter(
-            (c) =>
-              (c.name ?? "").toLowerCase().includes(lower) ||
-              c.phoneNumber.includes(lower)
-          );
-        }
-        setContacts(rows.slice(0, 20));
-      })
+      .then((body: { data: Contact[] }) => setContacts(body.data ?? []))
       .catch(() => setContactsError(true))
       .finally(() => setLoading(false));
   }, []);
@@ -203,7 +193,9 @@ function SendModal({ templateId, templateName, onClose }: { templateId: string; 
                 </div>
               )}
               {!loading && !contactsError && contacts.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-6">No contacts found.</p>
+                <p className="text-xs text-gray-400 text-center py-6">
+                  {search.trim() || labelId ? "No contacts found." : "Type a name or phone number to search."}
+                </p>
               )}
               {!loading && !contactsError && contacts.map((c) => {
                 const checked = selected.has(c.id);

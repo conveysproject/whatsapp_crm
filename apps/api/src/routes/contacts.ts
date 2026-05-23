@@ -142,6 +142,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const query = request.query as Record<string, string>;
     const { cursor, limit } = parsePaginationParams(query);
     const labelId = query["labelId"];
+    const q = query["q"]?.trim() ?? "";
 
     const countryId = query["countryId"] ? parseInt(query["countryId"], 10) : undefined;
 
@@ -152,6 +153,12 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
         ...(cursor ? { id: { gt: cursor } } : {}),
         ...(labelId ? { labels: { some: { labelId } } } : {}),
         ...(countryId && !isNaN(countryId) ? { countryId } : {}),
+        ...(q ? {
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { phoneNumber: { contains: q } },
+          ],
+        } : {}),
       },
       include: { labels: { include: { label: true } }, country: true },
       take: limit + 1,
