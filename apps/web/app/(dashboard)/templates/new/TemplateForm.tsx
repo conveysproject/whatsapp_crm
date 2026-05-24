@@ -62,6 +62,9 @@ const MARKETING_SUB_TYPES: { value: SubType; label: string; description: string 
   { value: 'coupon', label: 'Coupon Code', description: 'Share a discount code with a copy button for easy redemption.' },
   { value: 'lto', label: 'Limited-Time Offer', description: 'Create urgency with a time-sensitive promotion and countdown timer.' },
   { value: 'carousel', label: 'Carousel', description: 'Showcase multiple products or services in a scrollable card format.' },
+  { value: 'catalogue', label: 'Catalogue', description: 'Send messages that drive sales by connecting your product catalogue.' },
+  { value: 'flows', label: 'Flows', description: 'Send a form to capture customer interests, appointment requests or run surveys.' },
+  { value: 'calling_permissions', label: 'Calling permissions request', description: 'Ask customers if you can call them on WhatsApp.' },
 ];
 
 function Step1({ state, onChange }: { state: TemplateFormState; onChange: (p: Partial<TemplateFormState>) => void }): JSX.Element {
@@ -266,6 +269,9 @@ function Step3({ state, onChange, errors }: {
   const subTypeLabel = state.subType === 'lto' ? 'Limited-Time Offer'
     : state.subType === 'coupon' ? 'Coupon Code'
     : state.subType === 'carousel' ? 'Carousel'
+    : state.subType === 'catalogue' ? 'Catalogue'
+    : state.subType === 'flows' ? 'Flows'
+    : state.subType === 'calling_permissions' ? 'Calling permissions request'
     : 'Default';
 
   return (
