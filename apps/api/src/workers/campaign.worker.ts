@@ -2,6 +2,7 @@ import { Worker } from "bullmq";
 import { redisConnection } from "../lib/queue.js";
 import { prisma } from "../lib/prisma.js";
 import { sendTextMessage, sendTemplateMessage } from "../lib/whatsapp.js";
+import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
 import { evaluateSegment, type SegmentFilter } from "../lib/segment-evaluator.js";
 import { getIo } from "../lib/io-ref.js";
 
@@ -53,13 +54,17 @@ export const campaignWorker = new Worker<CampaignJob>(
     const templateBody = campaign.templateId ?? "";
     const intervalMs = (campaign.messageInterval ?? 1) * 1000;
 
-    // For template campaigns, load the approved template from DB
-    let metaTemplate: { name: string; language: string; metaTemplateId: string | null } | null = null;
+    // For template campaigns, load the approved template from DB including components
+    type MetaTemplate = { name: string; language: string; metaTemplateId: string | null; components: unknown[] };
+    let metaTemplate: MetaTemplate | null = null;
     if (isTemplateCampaign && campaign.templateId) {
-      metaTemplate = await prisma.template.findUnique({
+      const row = await prisma.template.findUnique({
         where: { id: campaign.templateId },
-        select: { name: true, language: true, metaTemplateId: true },
+        select: { name: true, language: true, metaTemplateId: true, components: true },
       });
+      if (row) {
+        metaTemplate = { ...row, components: (row.components ?? []) as unknown[] };
+      }
     }
     const total = phones.length;
     let sent = 0;
@@ -98,14 +103,15 @@ export const campaignWorker = new Worker<CampaignJob>(
       try {
         let messageId: string;
         if (isTemplateCampaign && metaTemplate?.metaTemplateId) {
-          // Build a body component with personalised text if the template has a body variable
-          const fullName = contact
-            ? [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.phoneNumber
-            : phone;
-          const components = [{
-            type: "body" as const,
-            parameters: [{ type: "text" as const, text: fullName }],
-          }];
+          const stored = (metaTemplate.components ?? []) as unknown[];
+          const bodyVarCount = (() => {
+            const bodyComp = (stored as Array<{ type?: string; text?: string }>).find(
+              (c) => c.type?.toUpperCase() === "BODY"
+            );
+            return bodyComp?.text ? (bodyComp.text.match(/\{\{\d+\}\}/g) ?? []).length : 0;
+          })();
+          const bodyVars = contact ? contactBodyVars(contact, bodyVarCount) : [];
+          const components = buildTemplateComponents(stored, { body: bodyVars });
           ({ messageId } = await sendTemplateMessage(
             phoneNumberId, phone, metaTemplate.name, metaTemplate.language, components, accessToken
           ));

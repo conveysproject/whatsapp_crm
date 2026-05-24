@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { TemplateCategory, TemplateStatus } from "@prisma/client";
 import { submitTemplateToMeta } from "../lib/meta-templates.js";
 import { sendTemplateMessage } from "../lib/whatsapp.js";
+import { buildTemplateComponents } from "../lib/template-components.js";
 import type { TemplateId, ContactId } from "@WBMSG/shared";
 import { canAccess, hasSubPermission } from "../lib/permissions.js";
 
@@ -256,11 +257,10 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       const recipientPhone = contact.phoneNumber;
       const accessToken = org.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
 
-      // Build body component parameters from caller-supplied variables
+      // Build components dynamically from stored template definition + caller-supplied variables
       const variables = request.body.variables ?? [];
-      const components = variables.length > 0
-        ? [{ type: "body" as const, parameters: variables.map((v) => ({ type: "text" as const, text: v })) }]
-        : [];
+      const storedComponents = (template.components ?? []) as unknown[];
+      const components = buildTemplateComponents(storedComponents, { body: variables });
 
       const { messageId } = await sendTemplateMessage(
         org.phoneNumberId, recipientPhone, template.name, template.language, components, accessToken
