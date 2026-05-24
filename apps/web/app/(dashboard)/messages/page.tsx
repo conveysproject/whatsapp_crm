@@ -38,6 +38,27 @@ export default function MessageLogPage(): JSX.Element {
     failed: "text-red-600",
   };
 
+  const getBodyDisplay = (body: string | null): { label: string | null; text: string } => {
+    if (!body) return { label: null, text: "—" };
+    try {
+      const parsed = JSON.parse(body) as {
+        templateName?: string;
+        body?: string;
+        header?: { text?: string };
+        footer?: string;
+      };
+      if (parsed.templateName) {
+        return {
+          label: parsed.templateName,
+          text: parsed.body ?? parsed.header?.text ?? body,
+        };
+      }
+    } catch {
+      // not JSON — fall through
+    }
+    return { label: null, text: body };
+  };
+
   const getContactDisplay = (msg: MessageLog): string => {
     const contact = msg.conversation?.contact;
     if (!contact) return "Unknown";
@@ -78,7 +99,19 @@ export default function MessageLogPage(): JSX.Element {
           <div key={msg.id} className="flex items-start justify-between p-4 gap-4">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">{getContactDisplay(msg)}</p>
-              <p className="text-sm text-gray-600 truncate mt-0.5">{msg.body ?? ""}</p>
+              {(() => {
+                const { label, text } = getBodyDisplay(msg.body);
+                return (
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {label && (
+                      <span className="shrink-0 text-xs bg-brand-50 text-brand-700 border border-brand-200 rounded px-1.5 py-0.5 font-medium">
+                        {label}
+                      </span>
+                    )}
+                    <p className="text-sm text-gray-600 truncate">{text}</p>
+                  </div>
+                );
+              })()}
             </div>
             <div className="text-right flex-shrink-0">
               <span className={`text-xs font-medium capitalize ${statusColor[msg.status] ?? "text-gray-500"}`}>{msg.status}</span>

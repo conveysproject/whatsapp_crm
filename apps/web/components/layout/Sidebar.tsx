@@ -15,7 +15,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: "/dashboard",           label: "Dashboard",   icon: "◻",  exact: true },
   { href: "/inbox",               label: "Inbox",       icon: "✉" },
-  { href: "/messages",            label: "Messages",    icon: "💬" },
+  { href: "/messages",            label: "Message Log", icon: "💬" },
   { href: "/contacts",            label: "Contacts",    icon: "👤" },
   { href: "/companies",           label: "Companies",   icon: "🏢" },
   { href: "/campaigns",           label: "Campaigns",   icon: "📢" },
