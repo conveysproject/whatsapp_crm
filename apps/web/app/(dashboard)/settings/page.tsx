@@ -44,12 +44,16 @@ export default async function SettingsPage(): Promise<JSX.Element> {
       <div className="grid grid-cols-2 gap-3">
         {[
           { href: "/settings/members", label: "Members", desc: "Manage team access" },
+          { href: "/settings/team", label: "Team", desc: "Roles and permissions" },
           { href: "/settings/whatsapp-account", label: "WhatsApp Account", desc: "Connect your WABA" },
           { href: "/settings/branding", label: "Branding", desc: "Logo, colors, favicon" },
           { href: "/settings/labels", label: "Labels", desc: "Color-coded contact tags" },
+          { href: "/settings/notifications", label: "Notifications", desc: "Sound and alert preferences" },
           { href: "/settings/vendor-settings", label: "Advanced Settings", desc: "Bot timing, API token" },
+          { href: "/settings/webhook-actions", label: "Webhook Actions", desc: "Trigger external webhooks" },
           { href: "/settings/media-library", label: "Media Library", desc: "Reusable images, docs, audio" },
           { href: "/settings/routing", label: "Routing Rules", desc: "Auto-assign conversations" },
+          { href: "/settings/ai", label: "AI Settings", desc: "Chatbot and automation config" },
           { href: "/settings/billing", label: "Billing", desc: "Subscription and usage" },
           { href: "/settings/custom-fields", label: "Custom Fields", desc: "Extra data fields for contacts" },
         ].map(({ href, label, desc }) => (

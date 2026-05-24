@@ -13,15 +13,18 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: "◻",  exact: true },
-  { href: "/inbox",     label: "Inbox",     icon: "✉" },
-  { href: "/contacts",  label: "Contacts",  icon: "👤" },
-  { href: "/companies", label: "Companies", icon: "🏢" },
-  { href: "/campaigns", label: "Campaigns", icon: "📢" },
-  { href: "/templates", label: "Templates", icon: "📋" },
-  { href: "/flows",     label: "Flows",     icon: "⚡" },
-  { href: "/deals",     label: "Deals",     icon: "💼" },
-  { href: "/settings",  label: "Settings",  icon: "⚙" },
+  { href: "/dashboard",           label: "Dashboard",   icon: "◻",  exact: true },
+  { href: "/inbox",               label: "Inbox",       icon: "✉" },
+  { href: "/messages",            label: "Messages",    icon: "💬" },
+  { href: "/contacts",            label: "Contacts",    icon: "👤" },
+  { href: "/companies",           label: "Companies",   icon: "🏢" },
+  { href: "/campaigns",           label: "Campaigns",   icon: "📢" },
+  { href: "/templates",           label: "Templates",   icon: "📋" },
+  { href: "/flows",               label: "Flows",       icon: "⚡" },
+  { href: "/deals",               label: "Deals",       icon: "💼" },
+  { href: "/analytics/predictive", label: "Analytics",   icon: "📊" },
+  { href: "/trust-score",         label: "Trust Score", icon: "🛡" },
+  { href: "/settings",            label: "Settings",    icon: "⚙" },
 ];
 
 export function Sidebar(): JSX.Element {
