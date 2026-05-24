@@ -131,6 +131,17 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
           }
         }
 
+        const resolvedHeader = stored.find((c) => c.type?.toUpperCase() === "HEADER");
+        if (
+          resolvedHeader &&
+          ["IMAGE", "VIDEO", "DOCUMENT"].includes((resolvedHeader.format ?? "").toUpperCase()) &&
+          !resolvedHeader.example?.header_url?.[0]
+        ) {
+          return reply.status(400).send({
+            error: { code: "MEDIA_REQUIRED", message: `Template "${template.name}" has an ${resolvedHeader.format} header that requires a media URL. Re-sync your templates or contact support.` },
+          });
+        }
+
         const bodyComp = stored.find((c) => c.type?.toUpperCase() === "BODY");
         const varCount = bodyComp?.text ? (bodyComp.text.match(/\{\{\d+\}\}/g) ?? []).length : 0;
         const contact = conversation.contact;

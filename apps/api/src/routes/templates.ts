@@ -269,14 +269,14 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
         !storedHeader.example?.header_url?.[0];
 
       if (headerNeedsMedia && template.metaTemplateId) {
+        // Try to fetch the example header_url from Meta — it's present for
+        // user-created templates but absent for Meta's own test templates.
         const metaRes = await fetch(
           `https://graph.facebook.com/v25.0/${template.metaTemplateId}?fields=components`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         );
-        const metaRaw = await metaRes.text();
-        fastify.log.info({ metaTemplateId: template.metaTemplateId, status: metaRes.status, body: metaRaw }, "DEBUG meta template fetch");
         if (metaRes.ok) {
-          const metaData = JSON.parse(metaRaw) as { components?: StoredComp[] };
+          const metaData = await metaRes.json() as { components?: StoredComp[] };
           const metaHeader = (metaData.components ?? []).find((c) => c.type?.toUpperCase() === "HEADER");
           if (metaHeader?.example?.header_url?.[0]) {
             storedComponents = storedComponents.map((c) =>
@@ -288,6 +288,23 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
             });
           }
         }
+      }
+
+      // After best-effort fetch, if we still have no media source, reject early.
+      // Meta always requires a media parameter for IMAGE/VIDEO/DOCUMENT headers —
+      // it never falls back to the template's stored sample image automatically.
+      const resolvedHeader = storedComponents.find((c) => c.type?.toUpperCase() === "HEADER");
+      if (
+        resolvedHeader &&
+        ["IMAGE", "VIDEO", "DOCUMENT"].includes((resolvedHeader.format ?? "").toUpperCase()) &&
+        !resolvedHeader.example?.header_url?.[0]
+      ) {
+        return reply.status(400).send({
+          error: {
+            code: "MEDIA_REQUIRED",
+            message: `This template has an ${resolvedHeader.format} header that requires a media URL. Re-sync your templates or provide a mediaUrl when sending.`,
+          },
+        });
       }
 
       const bodyComp = storedComponents.find((c) => c.type?.toUpperCase() === "BODY");
