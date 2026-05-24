@@ -829,12 +829,20 @@ model ContactCustomField {
   id             String                    @id @default(uuid())
   organizationId String                    @map("organization_id")
   inputName      String                    @map("input_name")
+  fieldKey       String                    @map("field_key")
   inputType      String                    @default("text") @map("input_type")
+  description    String?
+  placeholder    String?
+  defaultValue   String?                   @map("default_value")
+  options        String[]
+  isRequired     Boolean                   @default(false) @map("is_required")
+  isReadOnly     Boolean                   @default(false) @map("is_read_only")
   isActive       Boolean                   @default(true) @map("is_active")
   createdAt      DateTime                  @default(now()) @map("created_at")
   updatedAt      DateTime                  @updatedAt @map("updated_at")
   values         ContactCustomFieldValue[]
 
+  @@unique([organizationId, fieldKey])
   @@index([organizationId])
   @@map("contact_custom_fields")
 }
