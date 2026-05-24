@@ -12,7 +12,11 @@ interface StoredComponent {
   type?: string;
   format?: string;
   text?: string;
-  example?: { header_text?: string[]; body_text?: string[][] };
+  example?: {
+    header_text?: string[];   // TEXT header variable example values
+    header_url?: string[];    // IMAGE/VIDEO/DOCUMENT header example URL (non-carousel)
+    body_text?: string[][];   // body variable example values
+  };
   buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string; example?: string[] }>;
   cards?: Array<{ components?: StoredCardComponent[] }>;
 }
@@ -78,14 +82,21 @@ export function buildTemplateComponents(
         }
         // Static text header → no component needed
       } else if (["IMAGE", "VIDEO", "DOCUMENT"].includes(format)) {
+        const mediaType = format.toLowerCase() as "image" | "video" | "document";
         if (vars.headerMediaId) {
-          const mediaType = format.toLowerCase() as "image" | "video" | "document";
           result.push({
             type: "header",
             parameters: [{ type: mediaType, [mediaType]: { id: vars.headerMediaId } } as never],
           });
+        } else if (comp.example?.header_url?.[0]) {
+          // Fall back to the example URL stored in the template definition.
+          // Meta's API accepts { link: url } for IMAGE/VIDEO/DOCUMENT header parameters.
+          result.push({
+            type: "header",
+            parameters: [{ type: mediaType, [mediaType]: { link: comp.example.header_url[0] } } as never],
+          });
         }
-        // No media provided → skip header (will fail if template requires it, but safer than wrong param)
+        // No media at all → omit; Meta will error if the header is variable, accept if static
       }
 
     } else if (type === "BODY") {
