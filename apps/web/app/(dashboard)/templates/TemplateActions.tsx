@@ -22,11 +22,11 @@ interface SendResult {
   ok: boolean;
 }
 
-type ModalStep = "pick" | "confirm" | "sending" | "result";
+type ModalStep = "pick" | "media" | "confirm" | "sending" | "result";
 
 const MAX_SELECT = 20;
 
-export function TemplateActions({ templateId, templateName }: { templateId: string; templateName: string }): JSX.Element {
+export function TemplateActions({ templateId, templateName, headerFormat }: { templateId: string; templateName: string; headerFormat?: string }): JSX.Element {
   const [open, setOpen] = useState(false);
 
   function openModal(): void { setOpen(true); }
@@ -43,12 +43,12 @@ export function TemplateActions({ templateId, templateName }: { templateId: stri
       >
         Send to Contact
       </button>
-      {open && <SendModal templateId={templateId} templateName={templateName} onClose={closeModal} />}
+      {open && <SendModal templateId={templateId} templateName={templateName} headerFormat={headerFormat} onClose={closeModal} />}
     </>
   );
 }
 
-function SendModal({ templateId, templateName, onClose }: { templateId: string; templateName: string; onClose: () => void }): JSX.Element {
+function SendModal({ templateId, templateName, headerFormat, onClose }: { templateId: string; templateName: string; headerFormat?: string; onClose: () => void }): JSX.Element {
   const [step, setStep] = useState<ModalStep>("pick");
   const [search, setSearch] = useState("");
   const [labelId, setLabelId] = useState("");
@@ -58,6 +58,7 @@ function SendModal({ templateId, templateName, onClose }: { templateId: string; 
   const [loading, setLoading] = useState(false);
   const [contactsError, setContactsError] = useState(false);
   const [results, setResults] = useState<SendResult[]>([]);
+  const [mediaUrl, setMediaUrl] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load labels once on open
@@ -117,7 +118,7 @@ function SendModal({ templateId, templateName, onClose }: { templateId: string; 
         fetch(`/api/v1/templates/${templateId}/send-to-contact`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contactId: c.id, variables: [] }),
+          body: JSON.stringify({ contactId: c.id, variables: [], ...(mediaUrl ? { mediaUrl } : {}) }),
         }).then((r) => ({ c, ok: r.ok }))
       )
     );
@@ -235,14 +236,45 @@ function SendModal({ templateId, templateName, onClose }: { templateId: string; 
                 </button>
                 <button
                   disabled={selected.size === 0}
-                  onClick={() => setStep("confirm")}
+                  onClick={() => setStep(headerFormat ? "media" : "confirm")}
                   className="px-4 py-2 text-sm bg-green-600 text-white rounded disabled:opacity-40 hover:bg-green-700"
                 >
-                  Send →
+                  Next →
                 </button>
               </div>
             </div>
           </>
+        )}
+
+        {/* Media URL step — only shown for IMAGE/VIDEO/DOCUMENT header templates */}
+        {step === "media" && (
+          <div className="px-5 py-6 flex flex-col gap-4">
+            <p className="text-sm text-gray-700">
+              This template has a{" "}
+              <span className="font-semibold">{headerFormat}</span> header. Provide
+              the URL of the {(headerFormat ?? "").toLowerCase()} to include:
+            </p>
+            <input
+              autoFocus
+              type="url"
+              placeholder={`https://example.com/image.jpg`}
+              value={mediaUrl}
+              onChange={(e) => setMediaUrl(e.target.value)}
+              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+            />
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setStep("pick")} className="flex-1 py-2 text-sm border rounded hover:bg-gray-50">
+                Back
+              </button>
+              <button
+                disabled={!mediaUrl.trim()}
+                onClick={() => setStep("confirm")}
+                className="flex-1 py-2 text-sm bg-green-600 text-white rounded disabled:opacity-40 hover:bg-green-700"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Confirm step */}
@@ -258,7 +290,7 @@ function SendModal({ templateId, templateName, onClose }: { templateId: string; 
               ))}
             </ul>
             <div className="flex gap-2 pt-2">
-              <button onClick={() => setStep("pick")} className="flex-1 py-2 text-sm border rounded hover:bg-gray-50">
+              <button onClick={() => setStep(headerFormat ? "media" : "pick")} className="flex-1 py-2 text-sm border rounded hover:bg-gray-50">
                 Back
               </button>
               <button

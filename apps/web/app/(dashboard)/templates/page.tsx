@@ -6,12 +6,18 @@ import { Button } from "@/components/ui/Button";
 import { TemplateActions } from "./TemplateActions";
 import { TemplateSyncButton } from "./TemplateSyncButton";
 
+interface TemplateComponent {
+  type?: string;
+  format?: string;
+}
+
 interface Template {
   id: string;
   name: string;
   category: string;
   language: string;
   status: "pending" | "approved" | "rejected";
+  components: TemplateComponent[];
 }
 
 async function getTemplates(token: string): Promise<Template[]> {
@@ -61,7 +67,17 @@ export default async function TemplatesPage(): Promise<JSX.Element> {
               </div>
               <div className="flex items-center gap-3">
                 <Badge variant={statusVariant[t.status] ?? "gray"}>{t.status}</Badge>
-                <TemplateActions templateId={t.id} templateName={t.name} />
+                <TemplateActions
+                  templateId={t.id}
+                  templateName={t.name}
+                  headerFormat={
+                    (t.components ?? []).find(
+                      (c) =>
+                        c.type?.toUpperCase() === "HEADER" &&
+                        ["IMAGE", "VIDEO", "DOCUMENT"].includes((c.format ?? "").toUpperCase())
+                    )?.format?.toUpperCase()
+                  }
+                />
               </div>
             </div>
           ))

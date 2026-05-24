@@ -16,6 +16,7 @@ interface TemplateBody {
 interface SendToContactBody {
   contactId: ContactId;
   variables: string[];
+  mediaUrl?: string;
 }
 
 export const templatesRouter: FastifyPluginAsync = async (fastify) => {
@@ -288,6 +289,16 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
             });
           }
         }
+      }
+
+      // If caller supplied a mediaUrl, inject it into the header component so
+      // buildTemplateComponents picks it up via example.header_url.
+      if (request.body.mediaUrl) {
+        storedComponents = storedComponents.map((c) =>
+          c.type?.toUpperCase() === "HEADER"
+            ? { ...c, example: { ...(c.example ?? {}), header_url: [request.body.mediaUrl!] } }
+            : c
+        );
       }
 
       // After best-effort fetch, if we still have no media source, reject early.
