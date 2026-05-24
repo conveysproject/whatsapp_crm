@@ -224,15 +224,17 @@ export function SendMessageForm({ conversationId, prefillText, onSent }: Props):
 
       <Input
         className="flex-1"
-        placeholder={conversationId ? "Type a message… or / for templates" : "Select a conversation first"}
+        placeholder={conversationId ? "Type a message… or /template" : "Select a conversation first"}
         value={text}
         onChange={(e) => {
           const val = e.target.value;
-          setText(val);
-          if (val === "/") {
-            setTemplateSearch("");
+          if (val.startsWith("/template")) {
+            const search = val.slice("/template".length).trimStart();
+            setTemplateSearch(search);
             setTemplateOpen(true);
             setText("");
+          } else {
+            setText(val);
           }
         }}
         disabled={!conversationId || sending || uploading}
