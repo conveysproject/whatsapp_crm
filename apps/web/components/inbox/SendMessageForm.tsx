@@ -32,6 +32,7 @@ export function SendMessageForm({ conversationId, prefillText, onSent }: Props):
   const [interactiveOpen, setInteractiveOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingMediaTypeRef = useRef<string>("document");
   const { getToken } = useAuth();
@@ -222,23 +223,64 @@ export function SendMessageForm({ conversationId, prefillText, onSent }: Props):
         )}
       </div>
 
-      <Input
-        className="flex-1"
-        placeholder={conversationId ? "Type a message… or /template" : "Select a conversation first"}
-        value={text}
-        onChange={(e) => {
-          const val = e.target.value;
-          if (val.startsWith("/template")) {
-            const search = val.slice("/template".length).trimStart();
-            setTemplateSearch(search);
-            setTemplateOpen(true);
-            setText("");
-          } else {
+      {/* Slash command palette */}
+      <div className="relative flex-1">
+        {slashMenuOpen && conversationId && (() => {
+          const query = text.slice(1).toLowerCase();
+          const COMMANDS = [
+            { id: "template", icon: "⚡", label: "template", desc: "Send a WhatsApp template message" },
+          ];
+          const matched = COMMANDS.filter((c) => c.label.startsWith(query));
+          if (!matched.length) return null;
+          return (
+            <div className="absolute bottom-full left-0 mb-2 w-72 bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden z-20">
+              <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Commands</p>
+              {matched.map((cmd) => (
+                <button
+                  key={cmd.id}
+                  type="button"
+                  onClick={() => {
+                    setSlashMenuOpen(false);
+                    setText("");
+                    if (cmd.id === "template") {
+                      setTemplateSearch("");
+                      setTemplateOpen(true);
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                >
+                  <span className="text-lg">{cmd.icon}</span>
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">/{cmd.label}</p>
+                    <p className="text-xs text-gray-500">{cmd.desc}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          );
+        })()}
+
+        <Input
+          className="w-full"
+          placeholder={conversationId ? "Type a message… or /" : "Select a conversation first"}
+          value={text}
+          onChange={(e) => {
+            const val = e.target.value;
             setText(val);
-          }
-        }}
-        disabled={!conversationId || sending || uploading}
-      />
+            if (val.startsWith("/")) {
+              setSlashMenuOpen(true);
+              setAttachMenuOpen(false);
+              setInteractiveOpen(false);
+            } else {
+              setSlashMenuOpen(false);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setSlashMenuOpen(false);
+          }}
+          disabled={!conversationId || sending || uploading}
+        />
+      </div>
       <Button type="submit" disabled={!conversationId || !text.trim() || sending || uploading}>
         {sending ? "Sending…" : "Send"}
       </Button>
