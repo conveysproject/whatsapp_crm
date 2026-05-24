@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX, FormEvent, useState, useEffect } from "react";
+import { JSX, FormEvent, useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
@@ -90,7 +90,8 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
     disableBot: false,
   });
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
-  const [showOtherInfo, setShowOtherInfo] = useState(false);
+  const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
+  const groupDropdownRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -135,10 +136,20 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
     if (!open) {
       setForm({ firstName: "", lastName: "", phoneNumber: "", email: "", countryId: "", languageCode: "", groupIds: [], whatsappOptOut: false, disableBot: false });
       setCustomFieldValues({});
-      setShowOtherInfo(false);
+      setGroupDropdownOpen(false);
       setError(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (groupDropdownRef.current && !groupDropdownRef.current.contains(e.target as Node)) {
+        setGroupDropdownOpen(false);
+      }
+    }
+    if (groupDropdownOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [groupDropdownOpen]);
 
   if (!open) return null;
 
@@ -276,22 +287,59 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
             {groups.length > 0 && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700">Groups</label>
-                <div className="flex flex-wrap gap-2">
-                  {groups.map((g) => (
-                    <button
-                      key={g.id}
-                      type="button"
-                      onClick={() => toggleGroup(g.id)}
-                      className={[
-                        "text-xs px-3 py-1.5 rounded-full border transition-colors",
-                        form.groupIds.includes(g.id)
-                          ? "bg-brand-600 text-white border-brand-600"
-                          : "border-gray-300 text-gray-600 hover:border-brand-400",
-                      ].join(" ")}
-                    >
-                      {g.title}
-                    </button>
-                  ))}
+                <div ref={groupDropdownRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setGroupDropdownOpen((v) => !v)}
+                    className="w-full min-h-[38px] rounded-lg border border-gray-300 px-3 py-2 text-sm text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                  >
+                    <div className="flex flex-wrap gap-1.5 flex-1">
+                      {form.groupIds.length === 0 ? (
+                        <span className="text-gray-400">Select groups…</span>
+                      ) : (
+                        form.groupIds.map((id) => {
+                          const g = groups.find((gr) => gr.id === id);
+                          return g ? (
+                            <span key={id} className="inline-flex items-center gap-1 bg-brand-50 text-brand-700 border border-brand-200 rounded-full text-xs px-2 py-0.5">
+                              {g.title}
+                              <span
+                                role="button"
+                                aria-label={`Remove ${g.title}`}
+                                onClick={(e) => { e.stopPropagation(); toggleGroup(id); }}
+                                className="hover:text-brand-900 cursor-pointer leading-none"
+                              >
+                                &times;
+                              </span>
+                            </span>
+                          ) : null;
+                        })
+                      )}
+                    </div>
+                    <span className={`text-gray-400 shrink-0 transition-transform ${groupDropdownOpen ? "rotate-180" : ""}`}>▾</span>
+                  </button>
+                  {groupDropdownOpen && (
+                    <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {groups.map((g) => {
+                        const selected = form.groupIds.includes(g.id);
+                        return (
+                          <button
+                            key={g.id}
+                            type="button"
+                            onClick={() => toggleGroup(g.id)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 text-sm text-left"
+                          >
+                            <span className={[
+                              "w-4 h-4 shrink-0 rounded border flex items-center justify-center transition-colors",
+                              selected ? "bg-brand-600 border-brand-600" : "border-gray-300",
+                            ].join(" ")}>
+                              {selected && <span className="text-white text-[10px] leading-none">✓</span>}
+                            </span>
+                            <span className="text-gray-700">{g.title}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -310,31 +358,20 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
             </div>
 
             {customFields.length > 0 && (
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowOtherInfo((v) => !v)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors"
-                >
-                  <span>Other Information</span>
-                  <span className={`text-gray-400 transition-transform ${showOtherInfo ? "rotate-180" : ""}`}>▾</span>
-                </button>
-                {showOtherInfo && (
-                  <div className="px-4 py-3 space-y-3">
-                    {customFields.map((cf) => (
-                      <div key={cf.id} className="flex flex-col gap-1">
-                        <label className="text-xs font-medium text-gray-600">{cf.inputName}</label>
-                        <input
-                          type={cf.inputType === "number" ? "number" : cf.inputType === "date" ? "date" : "text"}
-                          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                          placeholder={cf.inputName}
-                          value={customFieldValues[cf.inputName] ?? ""}
-                          onChange={(e) => setCustomFieldValues((v) => ({ ...v, [cf.inputName]: e.target.value }))}
-                        />
-                      </div>
-                    ))}
+              <div className="flex flex-col gap-3">
+                <p className="text-sm font-medium text-gray-700">Other Information</p>
+                {customFields.map((cf) => (
+                  <div key={cf.id} className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-gray-600">{cf.inputName}</label>
+                    <input
+                      type={cf.inputType === "number" ? "number" : cf.inputType === "date" ? "date" : "text"}
+                      className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      placeholder={cf.inputName}
+                      value={customFieldValues[cf.inputName] ?? ""}
+                      onChange={(e) => setCustomFieldValues((v) => ({ ...v, [cf.inputName]: e.target.value }))}
+                    />
                   </div>
-                )}
+                ))}
               </div>
             )}
 
