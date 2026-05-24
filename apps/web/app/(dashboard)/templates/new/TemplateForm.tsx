@@ -207,6 +207,14 @@ function Step2({ state, onChange }: { state: TemplateFormState; onChange: (p: Pa
             </div>
           )}
         </div>
+        {state.category !== 'authentication' && (
+          <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2.5 text-xs text-gray-500 space-y-1">
+            <p>Variables are placeholders used to dynamically insert specific information into your template. You can use either a name or number as a variable.</p>
+            <p className="font-medium text-gray-600 pt-0.5">Examples:</p>
+            <p>Name: <code className="font-mono bg-white border border-gray-200 rounded px-1">{'{{order_id}}'}</code></p>
+            <p>Number: <code className="font-mono bg-white border border-gray-200 rounded px-1">{'{{1}}'}</code></p>
+          </div>
+        )}
       </SectionCard>
 
       {showHeader && (
