@@ -1,5 +1,5 @@
 "use client";
-import type { JSX } from "react";
+import { type JSX } from "react";
 import type { TemplateFormState, ButtonDef, OtpType } from "../templateFormTypes";
 import { LIMITS } from "../templateFormTypes";
 
@@ -141,15 +141,30 @@ export function ButtonsSection({ state, onChange }: Props): JSX.Element {
     onChange({ buttons: [...state.buttons, newButton(type)] });
   }
 
-  const canAdd = state.buttons.length < LIMITS.totalButtons;
+  const total = state.buttons.length;
+  const atMax = total >= LIMITS.totalButtons;
+  const phoneCount = state.buttons.filter((b) => b.type === 'phone_number').length;
+  const copyCount = state.buttons.filter((b) => b.type === 'copy_code').length;
+  const urlCount = state.buttons.filter((b) => b.type === 'url').length;
+
+  function AddBtn({ label, onClick, disabled }: { label: string; onClick: () => void; disabled: boolean }): JSX.Element {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        {label}
+      </button>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-gray-700">
-          Buttons <span className="text-xs text-gray-400 font-normal">optional — up to {LIMITS.totalButtons}</span>
-        </label>
-      </div>
+      <label className="text-sm font-medium text-gray-700">
+        Buttons <span className="text-xs text-gray-400 font-normal">optional — up to {LIMITS.totalButtons}</span>
+      </label>
 
       {isCoupon && (
         <div className="rounded-lg border border-dashed border-brand-300 bg-brand-50 px-3 py-2 text-sm text-brand-700">
@@ -166,29 +181,23 @@ export function ButtonsSection({ state, onChange }: Props): JSX.Element {
         <ButtonRow key={btn.id} btn={btn} onChange={(b) => updateButton(btn.id, b)} onRemove={() => removeButton(btn.id)} />
       ))}
 
-      {canAdd && (
-        <div className="flex gap-2 flex-wrap">
-          {!isLto && (
-            <button type="button" onClick={() => addButton('quick_reply')} className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:border-gray-400 transition-colors">
-              + Quick Reply
-            </button>
-          )}
-          {!isCoupon && (
-            <button type="button" onClick={() => addButton('url')} className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:border-gray-400 transition-colors">
-              + URL
-            </button>
-          )}
-          {!isCoupon && !isLto && (
-            <>
-              <button type="button" onClick={() => addButton('phone_number')} className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:border-gray-400 transition-colors">
-                + Phone Number
-              </button>
-              <button type="button" onClick={() => addButton('copy_code')} className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:border-gray-400 transition-colors">
-                + Copy Code
-              </button>
-            </>
-          )}
-        </div>
+      <div className="flex gap-2 flex-wrap">
+        {!isLto && (
+          <AddBtn label="+ Quick Reply" onClick={() => addButton('quick_reply')} disabled={atMax} />
+        )}
+        {!isCoupon && (
+          <AddBtn label="+ URL" onClick={() => addButton('url')} disabled={atMax || urlCount >= LIMITS.urlButtons} />
+        )}
+        {!isCoupon && !isLto && (
+          <>
+            <AddBtn label="+ Phone Number" onClick={() => addButton('phone_number')} disabled={atMax || phoneCount >= LIMITS.phoneNumberButtons} />
+            <AddBtn label="+ Copy Code" onClick={() => addButton('copy_code')} disabled={atMax || copyCount >= LIMITS.copyCodeButtons} />
+          </>
+        )}
+      </div>
+
+      {atMax && (
+        <p className="text-xs text-red-500">You have reached the maximum {LIMITS.totalButtons} buttons allowed by Meta.</p>
       )}
     </div>
   );

@@ -178,4 +178,7 @@ export const LIMITS = {
   carouselCards: { min: 2, max: 10 },
   carouselButtonsPerCard: 2,
   totalButtons: 10,
+  phoneNumberButtons: 1,
+  copyCodeButtons: 1,
+  urlButtons: 2,
 } as const;
