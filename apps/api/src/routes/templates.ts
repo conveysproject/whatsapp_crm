@@ -273,14 +273,15 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
           `https://graph.facebook.com/v25.0/${template.metaTemplateId}?fields=components`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         );
+        const metaRaw = await metaRes.text();
+        fastify.log.info({ metaTemplateId: template.metaTemplateId, status: metaRes.status, body: metaRaw }, "DEBUG meta template fetch");
         if (metaRes.ok) {
-          const metaData = await metaRes.json() as { components?: StoredComp[] };
+          const metaData = JSON.parse(metaRaw) as { components?: StoredComp[] };
           const metaHeader = (metaData.components ?? []).find((c) => c.type?.toUpperCase() === "HEADER");
           if (metaHeader?.example?.header_url?.[0]) {
             storedComponents = storedComponents.map((c) =>
               c.type?.toUpperCase() === "HEADER" ? { ...c, example: metaHeader.example } : c
             );
-            // Persist so subsequent sends don't need the extra round-trip
             await fastify.prisma.template.update({
               where: { id: template.id },
               data: { components: storedComponents as object[] },
