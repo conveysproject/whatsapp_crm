@@ -5,10 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/contacts",         label: "All Contacts", exact: true },
-  { href: "/contacts/groups",  label: "Groups" },
-  { href: "/contacts/segments",label: "Segments" },
-  { href: "/contacts/import",  label: "Import" },
+  { href: "/contacts",                    label: "All Contacts",  exact: true },
+  { href: "/contacts/groups",             label: "Groups" },
+  { href: "/contacts/segments",           label: "Segments" },
+  { href: "/contacts/import",             label: "Import" },
+  { href: "/settings/custom-fields",      label: "Custom Fields" },
 ];
 
 export default function ContactsLayout({ children }: { children: ReactNode }): JSX.Element {

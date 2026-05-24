@@ -55,7 +55,6 @@ export default async function SettingsPage(): Promise<JSX.Element> {
           { href: "/settings/routing", label: "Routing Rules", desc: "Auto-assign conversations" },
           { href: "/settings/ai", label: "AI Settings", desc: "Chatbot and automation config" },
           { href: "/settings/billing", label: "Billing", desc: "Subscription and usage" },
-          { href: "/settings/custom-fields", label: "Custom Fields", desc: "Extra data fields for contacts" },
         ].map(({ href, label, desc }) => (
           <Link key={href} href={href} className="block border rounded-lg p-4 hover:bg-gray-50 transition-colors">
             <p className="text-sm font-medium text-gray-900">{label}</p>

@@ -14,7 +14,17 @@ interface CustomField {
   createdAt: string;
 }
 
-const INPUT_TYPES = ["text", "number", "date", "select", "boolean"] as const;
+const INPUT_TYPES = [
+  { value: "text",           label: "Text" },
+  { value: "number",         label: "Number" },
+  { value: "email",          label: "Email" },
+  { value: "url",            label: "URL" },
+  { value: "date",           label: "Date" },
+  { value: "time",           label: "Time" },
+  { value: "datetime-local", label: "Date and Time Local" },
+  { value: "select",         label: "Select" },
+  { value: "boolean",        label: "Boolean" },
+] as const;
 
 export default function CustomFieldsPage(): JSX.Element {
   const { getToken } = useAuth();
@@ -88,7 +98,7 @@ export default function CustomFieldsPage(): JSX.Element {
             <div key={f.id} className="flex items-center justify-between px-4 py-3 gap-3">
               <div>
                 <p className="text-sm font-medium text-gray-900">{f.inputName}</p>
-                <p className="text-xs text-gray-500 capitalize">{f.inputType}</p>
+                <p className="text-xs text-gray-500">{INPUT_TYPES.find((t) => t.value === f.inputType)?.label ?? f.inputType}</p>
               </div>
               <button
                 onClick={() => { void handleDelete(f.id); }}
@@ -125,7 +135,7 @@ export default function CustomFieldsPage(): JSX.Element {
                   className="w-full border rounded px-3 py-1.5 text-sm"
                 >
                   {INPUT_TYPES.map((t) => (
-                    <option key={t} value={t} className="capitalize">{t}</option>
+                    <option key={t.value} value={t.value}>{t.label}</option>
                   ))}
                 </select>
               </div>
