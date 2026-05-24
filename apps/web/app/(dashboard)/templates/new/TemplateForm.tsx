@@ -140,45 +140,6 @@ function Step1({ state, onChange }: { state: TemplateFormState; onChange: (p: Pa
         </div>
       )}
 
-      {/* Language + Name */}
-      <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Language <span className="text-red-500">*</span></label>
-          <select
-            value={state.language}
-            onChange={(e) => onChange({ language: e.target.value })}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          >
-            {LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code}>{l.label} ({l.code})</option>
-            ))}
-          </select>
-        </div>
-        {state.category !== 'authentication' && (
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Variable format</label>
-            <select
-              value={state.parameterFormat}
-              onChange={(e) => onChange({ parameterFormat: e.target.value as 'positional' | 'named' })}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-            >
-              <option value="positional">Positional — {'{{1}}'}, {'{{2}}'}</option>
-              <option value="named">Named — {'{{first_name}}'}</option>
-            </select>
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-gray-700">Template name <span className="text-red-500">*</span></label>
-        <input
-          value={state.name}
-          onChange={(e) => onChange({ name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })}
-          placeholder="e.g. order_confirmation"
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-        />
-        <p className="text-xs text-gray-400">Lowercase letters, numbers, and underscores only. Max 512 chars.</p>
-      </div>
     </div>
   );
 }
@@ -203,6 +164,50 @@ function Step2({ state, onChange }: { state: TemplateFormState; onChange: (p: Pa
         <h2 className="text-xl font-semibold text-gray-900">Edit template</h2>
         <p className="text-sm text-gray-500 mt-1">Build your message content. Variables, buttons, and media can be added here.</p>
       </div>
+
+      <SectionCard title="Template name and language">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Name your template <span className="text-red-500">*</span></label>
+          <div className="relative">
+            <input
+              value={state.name}
+              onChange={(e) => onChange({ name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })}
+              placeholder="Enter a template name"
+              maxLength={512}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 pr-14"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">{state.name.length}/512</span>
+          </div>
+          <p className="text-xs text-gray-400">Lowercase letters, numbers, and underscores only.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-4 pt-1">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Select language <span className="text-red-500">*</span></label>
+            <select
+              value={state.language}
+              onChange={(e) => onChange({ language: e.target.value })}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>{l.label} ({l.code})</option>
+              ))}
+            </select>
+          </div>
+          {state.category !== 'authentication' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-700">Variable format</label>
+              <select
+                value={state.parameterFormat}
+                onChange={(e) => onChange({ parameterFormat: e.target.value as 'positional' | 'named' })}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                <option value="positional">Positional — {'{{1}}'}, {'{{2}}'}</option>
+                <option value="named">Named — {'{{first_name}}'}</option>
+              </select>
+            </div>
+          )}
+        </div>
+      </SectionCard>
 
       {showHeader && (
         <SectionCard title="Header">
@@ -309,7 +314,7 @@ export function TemplateForm(): JSX.Element {
   }, [state]);
 
   function handleNext(): void {
-    if (step === 1 && !state.name) {
+    if (step === 2 && !state.name) {
       setErrors(['Template name is required.']);
       return;
     }
@@ -401,7 +406,7 @@ export function TemplateForm(): JSX.Element {
             <button
               type="button"
               onClick={handleNext}
-              disabled={step === 1 && !state.name}
+              disabled={step === 2 && !state.name}
               className="px-5 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors"
             >
               Next
