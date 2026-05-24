@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { InteractiveMessagePicker } from "./InteractiveMessagePicker";
 import type { InteractivePayload } from "./InteractiveMessagePicker";
+import { TemplatePicker } from "./TemplatePicker";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -29,6 +30,8 @@ export function SendMessageForm({ conversationId, prefillText, onSent }: Props):
   const [uploading, setUploading] = useState(false);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [interactiveOpen, setInteractiveOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateSearch, setTemplateSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingMediaTypeRef = useRef<string>("document");
   const { getToken } = useAuth();
@@ -138,11 +141,34 @@ export function SendMessageForm({ conversationId, prefillText, onSent }: Props):
         onChange={(e) => { void handleFileSelected(e); }}
       />
 
+      {/* Template picker */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => { setTemplateOpen((v) => !v); setTemplateSearch(""); setAttachMenuOpen(false); setInteractiveOpen(false); }}
+          disabled={!conversationId || sending || uploading}
+          className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${templateOpen ? "text-green-600 bg-green-50" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
+          title="Send template (or type /)"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </button>
+        {templateOpen && conversationId && (
+          <TemplatePicker
+            conversationId={conversationId}
+            initialSearch={templateSearch}
+            onSent={() => { void queryClient.invalidateQueries({ queryKey: ["messages", conversationId] }); onSent?.(); }}
+            onClose={() => setTemplateOpen(false)}
+          />
+        )}
+      </div>
+
       {/* Interactive message picker */}
       <div className="relative">
         <button
           type="button"
-          onClick={() => { setInteractiveOpen((v) => !v); setAttachMenuOpen(false); }}
+          onClick={() => { setInteractiveOpen((v) => !v); setAttachMenuOpen(false); setTemplateOpen(false); }}
           disabled={!conversationId || sending || uploading}
           className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
           title="Send interactive message"
@@ -198,9 +224,17 @@ export function SendMessageForm({ conversationId, prefillText, onSent }: Props):
 
       <Input
         className="flex-1"
-        placeholder={conversationId ? "Type a message…" : "Select a conversation first"}
+        placeholder={conversationId ? "Type a message… or / for templates" : "Select a conversation first"}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          const val = e.target.value;
+          setText(val);
+          if (val === "/") {
+            setTemplateSearch("");
+            setTemplateOpen(true);
+            setText("");
+          }
+        }}
         disabled={!conversationId || sending || uploading}
       />
       <Button type="submit" disabled={!conversationId || !text.trim() || sending || uploading}>

@@ -1,13 +1,15 @@
 import type { FastifyPluginAsync } from "fastify";
-import { sendTextMessage, sendMediaMessage, sendInteractiveMessage } from "../lib/whatsapp.js";
+import { sendTextMessage, sendMediaMessage, sendInteractiveMessage, sendTemplateMessage } from "../lib/whatsapp.js";
 import type { WaInteractivePayload } from "../lib/whatsapp.js";
+import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
 import type { ConversationId } from "@WBMSG/shared";
 import { canAccess } from "../lib/permissions.js";
 
 type SendMessageBody =
   | { contentType?: "text"; text: string }
   | { contentType: "image" | "video" | "document" | "audio"; mediaId: string; mimeType?: string; filename?: string; caption?: string }
-  | { contentType: "interactive"; interactive: WaInteractivePayload };
+  | { contentType: "interactive"; interactive: WaInteractivePayload }
+  | { contentType: "template"; templateId: string };
 
 export const messagesRouter: FastifyPluginAsync = async (fastify) => {
   // ── Message log (all messages with date filter) ──────────────────────────
@@ -69,6 +71,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
         where: { id: request.params.id, organizationId },
         include: {
           organization: { select: { phoneNumberId: true, wabaAccessToken: true } },
+          contact: { select: { firstName: true, lastName: true, phoneNumber: true, email: true } },
         },
       });
       if (!conversation) {
@@ -86,6 +89,61 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
         ?? "";
 
       const contentType = body.contentType ?? "text";
+
+      // ── Template branch — resolve before creating draft ────────────────────
+      if (contentType === "template") {
+        const tplBody = body as { contentType: "template"; templateId: string };
+        const template = await fastify.prisma.template.findFirst({
+          where: { id: tplBody.templateId, organizationId },
+        });
+        if (!template) {
+          return reply.status(404).send({ error: { code: "TEMPLATE_NOT_FOUND", message: "Template not found" } });
+        }
+        if (template.status !== "approved") {
+          return reply.status(400).send({ error: { code: "TEMPLATE_NOT_APPROVED", message: "Only approved templates can be sent" } });
+        }
+
+        const stored = (template.components ?? []) as unknown[];
+        const bodyComp = (stored as Array<{ type?: string; text?: string }>).find((c) => c.type?.toUpperCase() === "BODY");
+        const varCount = bodyComp?.text ? (bodyComp.text.match(/\{\{\d+\}\}/g) ?? []).length : 0;
+        const contact = conversation.contact;
+        const bodyVars = contact
+          ? contactBodyVars({ firstName: contact.firstName, lastName: contact.lastName, phoneNumber: contact.phoneNumber, email: contact.email }, varCount)
+          : [];
+        const components = buildTemplateComponents(stored, { body: bodyVars });
+
+        // Build rendered body JSON for inbox display (same as send-to-contact)
+        type WaComp = { type?: string; format?: string; text?: string; buttons?: Array<{ type?: string; text?: string }> };
+        const comps = stored as WaComp[];
+        const headerComp = comps.find((c) => c.type?.toUpperCase() === "HEADER");
+        const footerComp = comps.find((c) => c.type?.toUpperCase() === "FOOTER");
+        const buttonsComp = comps.find((c) => c.type?.toUpperCase() === "BUTTONS");
+        let bodyText = bodyComp?.text ?? "";
+        bodyVars.forEach((v, i) => { bodyText = bodyText.replace(new RegExp(`\\{\\{${i + 1}\\}\\}`, "g"), v); });
+        const renderedBody = JSON.stringify({
+          templateName: template.name,
+          header: headerComp ? { format: headerComp.format ?? "TEXT", text: headerComp.text ?? null } : null,
+          body: bodyText || template.name,
+          footer: footerComp?.text ?? null,
+          buttons: buttonsComp?.buttons ?? [],
+        });
+
+        const draft = await fastify.prisma.message.create({
+          data: { conversationId: conversation.id, organizationId, direction: "outbound", contentType: "template", body: renderedBody, status: "sending" },
+        });
+
+        let messageId: string;
+        try {
+          ({ messageId } = await sendTemplateMessage(phoneNumberId, conversation.whatsappContactId, template.name, template.language, components, accessToken));
+        } catch (err) {
+          await fastify.prisma.message.update({ where: { id: draft.id }, data: { status: "failed" } });
+          throw err;
+        }
+
+        const message = await fastify.prisma.message.update({ where: { id: draft.id }, data: { status: "sent", whatsappMessageId: messageId } });
+        await fastify.prisma.conversation.update({ where: { id: conversation.id }, data: { lastMessageAt: new Date() } });
+        return reply.status(201).send({ data: message });
+      }
 
       // Determine storedBody before WA call so we can create the record first
       let storedBody: string | null = null;
