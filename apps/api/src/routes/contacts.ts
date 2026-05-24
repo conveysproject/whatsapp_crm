@@ -18,10 +18,16 @@ function csvEscape(value: string): string {
 
 interface ContactBody {
   phoneNumber: string;
+  firstName?: string;
+  lastName?: string;
   name?: string;
   email?: string;
   companyId?: string;
   countryId?: number;
+  languageCode?: string;
+  whatsappOptOut?: boolean;
+  disableBot?: boolean;
+  groupIds?: string[];
 }
 
 interface ContactPatchBody {
@@ -224,16 +230,34 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     }
     let contact;
     try {
+      const { firstName, lastName, name, phoneNumber, email, companyId, countryId, languageCode, whatsappOptOut, disableBot, groupIds } = request.body;
       contact = await fastify.prisma.contact.create({
         data: {
           organizationId,
-          phoneNumber: request.body.phoneNumber,
-          name: request.body.name ?? null,
-          email: request.body.email ?? null,
-          companyId: request.body.companyId ?? null,
-          countryId: request.body.countryId ?? null,
+          phoneNumber,
+          firstName: firstName ?? null,
+          lastName: lastName ?? null,
+          name: name ?? (firstName || lastName ? [firstName, lastName].filter(Boolean).join(" ") : null),
+          email: email ?? null,
+          companyId: companyId ?? null,
+          countryId: countryId ?? null,
+          languageCode: languageCode ?? null,
+          whatsappOptOut: whatsappOptOut ?? false,
+          disableBot: disableBot ?? false,
         },
       });
+      if (groupIds && groupIds.length > 0) {
+        const validGroups = await fastify.prisma.contactGroup.findMany({
+          where: { id: { in: groupIds }, organizationId },
+          select: { id: true },
+        });
+        if (validGroups.length > 0) {
+          await fastify.prisma.groupContact.createMany({
+            data: validGroups.map((g) => ({ contactGroupId: g.id, contactId: contact.id })),
+            skipDuplicates: true,
+          });
+        }
+      }
     } catch (err: unknown) {
       if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2002") {
         return reply.status(409).send({ error: { code: "DUPLICATE_PHONE", message: "A contact with this phone number already exists in your organization." } });
