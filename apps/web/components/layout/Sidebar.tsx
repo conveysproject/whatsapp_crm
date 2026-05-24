@@ -16,7 +16,6 @@ interface NavItem {
   label: string;
   icon: string;
   exact?: boolean;
-  alwaysExpanded?: boolean;
   children?: NavChild[];
 }
 
@@ -25,7 +24,6 @@ const NAV: NavItem[] = [
   {
     label: "Inbox",
     icon: "✉",
-    alwaysExpanded: true,
     children: [
       { href: "/inbox",    label: "Conversations", exact: true },
       { href: "/messages", label: "Message Log" },
@@ -61,18 +59,16 @@ function isChildActive(children: NavChild[], pathname: string): boolean {
 export function Sidebar(): JSX.Element {
   const pathname = usePathname();
 
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {};
-    NAV.forEach((item) => {
-      if (item.children) {
-        initial[item.label] = item.alwaysExpanded ?? isChildActive(item.children, pathname);
-      }
-    });
-    return initial;
-  });
+  const [manualExpanded, setManualExpanded] = useState<Record<string, boolean>>({});
 
-  function toggle(label: string) {
-    setExpanded((prev) => ({ ...prev, [label]: !prev[label] }));
+  function isOpen(item: NavItem): boolean {
+    if (!item.children) return false;
+    return !!(manualExpanded[item.label] || isChildActive(item.children, pathname));
+  }
+
+  function toggle(label: string, children: NavChild[]) {
+    const currentlyOpen = !!(manualExpanded[label] || isChildActive(children, pathname));
+    setManualExpanded((prev) => ({ ...prev, [label]: !currentlyOpen }));
   }
 
   return (
@@ -84,28 +80,25 @@ export function Sidebar(): JSX.Element {
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {NAV.map((item) => {
           if (item.children) {
-            const open = item.alwaysExpanded || expanded[item.label];
+            const open = isOpen(item);
             const parentActive = isChildActive(item.children, pathname);
 
             return (
               <div key={item.label}>
                 <button
-                  onClick={() => !item.alwaysExpanded && toggle(item.label)}
+                  onClick={() => toggle(item.label, item.children!)}
                   className={[
                     "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                     parentActive
                       ? "bg-brand-50 text-brand-700"
                       : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
-                    item.alwaysExpanded ? "cursor-default" : "cursor-pointer",
                   ].join(" ")}
                 >
                   <span className="w-5 text-center shrink-0">{item.icon}</span>
                   <span className="flex-1 text-left">{item.label}</span>
-                  {!item.alwaysExpanded && (
-                    <span className={`text-xs text-gray-400 transition-transform ${open ? "rotate-90" : ""}`}>
-                      ›
-                    </span>
-                  )}
+                  <span className={`text-xs text-gray-400 transition-transform duration-200 ${open ? "rotate-90" : ""}`}>
+                    ›
+                  </span>
                 </button>
 
                 {open && (
