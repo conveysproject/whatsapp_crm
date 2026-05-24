@@ -72,7 +72,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       data: {
         organizationId,
         name: request.body.name,
-        category: request.body.category,
+        category: request.body.category.toLowerCase() as TemplateCategory,
         language: request.body.language,
         components: request.body.components,
         status: "pending" as TemplateStatus,

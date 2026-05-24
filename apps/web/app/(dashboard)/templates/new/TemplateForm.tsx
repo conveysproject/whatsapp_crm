@@ -363,7 +363,7 @@ export function TemplateForm(): JSX.Element {
         headers: { Authorization: `Bearer ${token ?? ''}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: state.name,
-          category: state.category.toUpperCase(),
+          category: state.category,
           language: state.language,
           components,
         }),
