@@ -26,7 +26,7 @@ type ModalStep = "pick" | "media" | "confirm" | "sending" | "result";
 
 const MAX_SELECT = 20;
 
-export function TemplateActions({ templateId, templateName, headerFormat }: { templateId: string; templateName: string; headerFormat?: string }): JSX.Element {
+export function TemplateActions({ templateId, templateName, headerFormat, imageCardCount = 0 }: { templateId: string; templateName: string; headerFormat?: string; imageCardCount?: number }): JSX.Element {
   const [open, setOpen] = useState(false);
 
   function openModal(): void { setOpen(true); }
@@ -43,12 +43,12 @@ export function TemplateActions({ templateId, templateName, headerFormat }: { te
       >
         Send to Contact
       </button>
-      {open && <SendModal templateId={templateId} templateName={templateName} headerFormat={headerFormat} onClose={closeModal} />}
+      {open && <SendModal templateId={templateId} templateName={templateName} headerFormat={headerFormat} imageCardCount={imageCardCount} onClose={closeModal} />}
     </>
   );
 }
 
-function SendModal({ templateId, templateName, headerFormat, onClose }: { templateId: string; templateName: string; headerFormat?: string; onClose: () => void }): JSX.Element {
+function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0, onClose }: { templateId: string; templateName: string; headerFormat?: string; imageCardCount?: number; onClose: () => void }): JSX.Element {
   const [step, setStep] = useState<ModalStep>("pick");
   const [search, setSearch] = useState("");
   const [labelId, setLabelId] = useState("");
@@ -59,6 +59,7 @@ function SendModal({ templateId, templateName, headerFormat, onClose }: { templa
   const [contactsError, setContactsError] = useState(false);
   const [results, setResults] = useState<SendResult[]>([]);
   const [mediaUrl, setMediaUrl] = useState("");
+  const [cardMediaUrls, setCardMediaUrls] = useState<string[]>(() => Array(imageCardCount).fill(""));
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load labels once on open
@@ -118,7 +119,12 @@ function SendModal({ templateId, templateName, headerFormat, onClose }: { templa
         fetch(`/api/v1/templates/${templateId}/send-to-contact`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contactId: c.id, variables: [], ...(mediaUrl ? { mediaUrl } : {}) }),
+          body: JSON.stringify({
+            contactId: c.id,
+            variables: [],
+            ...(mediaUrl ? { mediaUrl } : {}),
+            ...(cardMediaUrls.some((u) => u) ? { cardMediaUrls } : {}),
+          }),
         }).then((r) => ({ c, ok: r.ok }))
       )
     );
@@ -236,7 +242,7 @@ function SendModal({ templateId, templateName, headerFormat, onClose }: { templa
                 </button>
                 <button
                   disabled={selected.size === 0}
-                  onClick={() => setStep(headerFormat ? "media" : "confirm")}
+                  onClick={() => setStep(headerFormat || imageCardCount > 0 ? "media" : "confirm")}
                   className="px-4 py-2 text-sm bg-green-600 text-white rounded disabled:opacity-40 hover:bg-green-700"
                 >
                   Next →
@@ -246,28 +252,59 @@ function SendModal({ templateId, templateName, headerFormat, onClose }: { templa
           </>
         )}
 
-        {/* Media URL step — only shown for IMAGE/VIDEO/DOCUMENT header templates */}
+        {/* Media URL step — shown for IMAGE/VIDEO/DOCUMENT header templates and carousels */}
         {step === "media" && (
           <div className="px-5 py-6 flex flex-col gap-4">
-            <p className="text-sm text-gray-700">
-              This template has a{" "}
-              <span className="font-semibold">{headerFormat}</span> header. Provide
-              the URL of the {(headerFormat ?? "").toLowerCase()} to include:
-            </p>
-            <input
-              autoFocus
-              type="url"
-              placeholder={`https://example.com/image.jpg`}
-              value={mediaUrl}
-              onChange={(e) => setMediaUrl(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
-            />
+            {imageCardCount > 0 ? (
+              <>
+                <p className="text-sm text-gray-700">
+                  This carousel has <span className="font-semibold">{imageCardCount}</span> image card{imageCardCount !== 1 ? "s" : ""}. Provide a publicly accessible image URL for each:
+                </p>
+                <div className="space-y-2 max-h-52 overflow-y-auto">
+                  {Array.from({ length: imageCardCount }, (_, i) => (
+                    <div key={i}>
+                      <label className="block text-xs text-gray-500 mb-1">Card {i + 1} image URL</label>
+                      <input
+                        autoFocus={i === 0}
+                        type="url"
+                        placeholder="https://example.com/image.jpg"
+                        value={cardMediaUrls[i] ?? ""}
+                        onChange={(e) => {
+                          const next = [...cardMediaUrls];
+                          next[i] = e.target.value;
+                          setCardMediaUrls(next);
+                        }}
+                        className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-700">
+                  This template has a <span className="font-semibold">{headerFormat}</span> header. Provide a publicly accessible URL:
+                </p>
+                <input
+                  autoFocus
+                  type="url"
+                  placeholder="https://example.com/image.jpg"
+                  value={mediaUrl}
+                  onChange={(e) => setMediaUrl(e.target.value)}
+                  className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                />
+              </>
+            )}
             <div className="flex gap-2 pt-2">
               <button onClick={() => setStep("pick")} className="flex-1 py-2 text-sm border rounded hover:bg-gray-50">
                 Back
               </button>
               <button
-                disabled={!mediaUrl.trim()}
+                disabled={
+                  imageCardCount > 0
+                    ? cardMediaUrls.slice(0, imageCardCount).some((u) => !u.trim())
+                    : !mediaUrl.trim()
+                }
                 onClick={() => setStep("confirm")}
                 className="flex-1 py-2 text-sm bg-green-600 text-white rounded disabled:opacity-40 hover:bg-green-700"
               >
@@ -290,7 +327,7 @@ function SendModal({ templateId, templateName, headerFormat, onClose }: { templa
               ))}
             </ul>
             <div className="flex gap-2 pt-2">
-              <button onClick={() => setStep(headerFormat ? "media" : "pick")} className="flex-1 py-2 text-sm border rounded hover:bg-gray-50">
+              <button onClick={() => setStep(headerFormat || imageCardCount > 0 ? "media" : "pick")} className="flex-1 py-2 text-sm border rounded hover:bg-gray-50">
                 Back
               </button>
               <button

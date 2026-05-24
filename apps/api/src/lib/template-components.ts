@@ -50,6 +50,7 @@ export function buildTemplateComponents(
     buttons?: string[];      // dynamic suffix for URL buttons, or payload for QUICK_REPLY
     cards?: Array<{          // per-card overrides for carousel templates
       headerMediaId?: string;
+      headerMediaUrl?: string; // publicly accessible URL for IMAGE/VIDEO/DOCUMENT header
       body?: string[];
       buttons?: string[];
     }>;
@@ -161,14 +162,19 @@ export function buildTemplateComponents(
           if (ccType === "HEADER" && ["IMAGE", "VIDEO", "DOCUMENT"].includes(ccFormat)) {
             const mediaType = ccFormat.toLowerCase() as "image" | "video" | "document";
             const mediaId = cardVars?.headerMediaId;
+            const mediaUrl = cardVars?.headerMediaUrl;
             if (mediaId) {
               cardComps.push({
                 type: "header",
                 parameters: [{ type: mediaType, [mediaType]: { id: mediaId } } as never],
               });
+            } else if (mediaUrl) {
+              cardComps.push({
+                type: "header",
+                parameters: [{ type: mediaType, [mediaType]: { link: mediaUrl } } as never],
+              });
             }
-            // No mediaId → omit header parameter; header_handle from template examples
-            // are not valid send-time media IDs and cause a format-mismatch error
+            // No media → omit; caller must supply mediaId or mediaUrl for carousel image cards
           } else if (ccType === "BODY" && cc.text) {
             const varCount = countVars(cc.text);
             if (varCount > 0) {

@@ -17,6 +17,7 @@ interface SendToContactBody {
   contactId: ContactId;
   variables: string[];
   mediaUrl?: string;
+  cardMediaUrls?: string[];
 }
 
 export const templatesRouter: FastifyPluginAsync = async (fastify) => {
@@ -324,7 +325,11 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       const bodyVars = callerVars.length > 0
         ? callerVars
         : contactBodyVars({ firstName: contact.firstName, lastName: contact.lastName, phoneNumber: contact.phoneNumber, email: contact.email }, varCount);
-      const components = buildTemplateComponents(storedComponents as unknown[], { body: bodyVars });
+      const cardVars = request.body.cardMediaUrls?.map((url) => ({ headerMediaUrl: url }));
+      const components = buildTemplateComponents(storedComponents as unknown[], {
+        body: bodyVars,
+        ...(cardVars ? { cards: cardVars } : {}),
+      });
 
       const { messageId } = await sendTemplateMessage(
         org.phoneNumberId, recipientPhone, template.name, template.language, components, accessToken

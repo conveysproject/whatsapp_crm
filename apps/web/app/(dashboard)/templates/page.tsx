@@ -6,9 +6,19 @@ import { Button } from "@/components/ui/Button";
 import { TemplateActions } from "./TemplateActions";
 import { TemplateSyncButton } from "./TemplateSyncButton";
 
+interface TemplateSubComponent {
+  type?: string;
+  format?: string;
+}
+
+interface TemplateCard {
+  components?: TemplateSubComponent[];
+}
+
 interface TemplateComponent {
   type?: string;
   format?: string;
+  cards?: TemplateCard[];
 }
 
 interface Template {
@@ -76,6 +86,17 @@ export default async function TemplatesPage(): Promise<JSX.Element> {
                         c.type?.toUpperCase() === "HEADER" &&
                         ["IMAGE", "VIDEO", "DOCUMENT"].includes((c.format ?? "").toUpperCase())
                     )?.format?.toUpperCase()
+                  }
+                  imageCardCount={
+                    (t.components ?? [])
+                      .find((c) => c.type?.toUpperCase() === "CAROUSEL")
+                      ?.cards?.filter((card) =>
+                        (card.components ?? []).some(
+                          (cc) =>
+                            cc.type?.toUpperCase() === "HEADER" &&
+                            ["IMAGE", "VIDEO", "DOCUMENT"].includes((cc.format ?? "").toUpperCase())
+                        )
+                      ).length ?? 0
                   }
                 />
               </div>
