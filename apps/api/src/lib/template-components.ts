@@ -203,8 +203,13 @@ export function buildTemplateComponents(
         return { card_index: cardIndex, components: cardComps };
       });
 
-      if (builtCards.length > 0) {
-        result.push({ type: "carousel", cards: builtCards });
+      // Only include cards that have dynamic parameters. Meta requires non-empty
+      // components arrays, so cards with no variables must be omitted.
+      // If ALL cards are static, omit the carousel entirely — Meta renders the
+      // template's own stored media, the same way static non-carousel templates work.
+      const dynamicCards = builtCards.filter((card) => card.components.length > 0);
+      if (dynamicCards.length > 0) {
+        result.push({ type: "carousel", cards: dynamicCards });
       }
     }
     // FOOTER → always static, never needs parameters
