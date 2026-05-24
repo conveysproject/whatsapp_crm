@@ -20,6 +20,7 @@ interface SendResult {
   contactId: string;
   name: string | null;
   ok: boolean;
+  error?: string;
 }
 
 type ModalStep = "pick" | "media" | "confirm" | "sending" | "result";
@@ -125,13 +126,18 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
             ...(mediaUrl ? { mediaUrl } : {}),
             ...(cardMediaUrls.some((u) => u) ? { cardMediaUrls } : {}),
           }),
-        }).then((r) => ({ c, ok: r.ok }))
+        }).then(async (r) => {
+          if (r.ok) return { c, ok: true as const, error: undefined };
+          const body = await r.json().catch(() => ({})) as { error?: { message?: string } };
+          return { c, ok: false as const, error: body.error?.message ?? "Failed to send" };
+        })
       )
     );
     const res: SendResult[] = settled.map((s, i) => ({
       contactId: targets[i].id,
       name: targets[i].name,
       ok: s.status === "fulfilled" && s.value.ok,
+      error: s.status === "fulfilled" ? s.value.error : "Request failed",
     }));
     setResults(res);
     setStep("result");
@@ -361,10 +367,15 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
                 <p className="text-sm text-gray-700">
                   Sent to {results.filter((r) => r.ok).length}/{results.length} contacts.
                 </p>
-                <ul className="text-xs space-y-1 max-h-40 overflow-y-auto">
+                <ul className="text-xs space-y-2 max-h-48 overflow-y-auto">
                   {results.map((r) => (
-                    <li key={r.contactId} className={r.ok ? "text-green-600" : "text-red-500"}>
-                      {r.ok ? "✓" : "✗"} {r.name ?? "Unnamed"}
+                    <li key={r.contactId}>
+                      <span className={r.ok ? "text-green-600" : "text-red-500"}>
+                        {r.ok ? "✓" : "✗"} {r.name ?? "Unnamed"}
+                      </span>
+                      {!r.ok && r.error && (
+                        <span className="block pl-4 text-red-400 mt-0.5">{r.error}</span>
+                      )}
                     </li>
                   ))}
                 </ul>
