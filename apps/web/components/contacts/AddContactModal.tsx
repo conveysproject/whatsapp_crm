@@ -21,7 +21,18 @@ interface Props {
 
 interface Country { id: number; name: string; isoCode: string | null; phoneCode: number | null }
 interface ContactGroup { id: string; title: string }
-interface CustomField { id: string; inputName: string; inputType: string }
+interface CustomField {
+  id: string;
+  inputName: string;
+  fieldKey: string;
+  inputType: string;
+  description: string | null;
+  placeholder: string | null;
+  defaultValue: string | null;
+  options: string[];
+  isRequired: boolean;
+  isReadOnly: boolean;
+}
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -151,6 +162,21 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [groupDropdownOpen]);
 
+  // Seed default values when custom fields load
+  useEffect(() => {
+    if (customFields.length > 0) {
+      setCustomFieldValues((prev) => {
+        const next = { ...prev };
+        customFields.forEach((cf) => {
+          if (!(cf.inputName in next) && cf.defaultValue) {
+            next[cf.inputName] = cf.defaultValue;
+          }
+        });
+        return next;
+      });
+    }
+  }, [customFields]);
+
   if (!open) return null;
 
   function toggleGroup(id: string) {
@@ -163,6 +189,13 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!form.phoneNumber.trim()) { setError("Mobile number is required."); return; }
+    const missingRequired = customFields.filter(
+      (cf) => cf.isRequired && !customFieldValues[cf.inputName]?.trim()
+    );
+    if (missingRequired.length > 0) {
+      setError(`Required fields missing: ${missingRequired.map((f) => f.inputName).join(", ")}`);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -362,14 +395,42 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
                 <p className="text-sm font-medium text-gray-700">Other Information</p>
                 {customFields.map((cf) => (
                   <div key={cf.id} className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-gray-600">{cf.inputName}</label>
-                    <input
-                      type={cf.inputType === "number" ? "number" : cf.inputType === "date" ? "date" : "text"}
-                      className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                      placeholder={cf.inputName}
-                      value={customFieldValues[cf.inputName] ?? ""}
-                      onChange={(e) => setCustomFieldValues((v) => ({ ...v, [cf.inputName]: e.target.value }))}
-                    />
+                    <label className="text-xs font-medium text-gray-600">
+                      {cf.inputName}
+                      {cf.isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                    </label>
+                    {cf.inputType === "boolean" ? (
+                      <Toggle
+                        checked={customFieldValues[cf.inputName] === "true"}
+                        onChange={(v) =>
+                          setCustomFieldValues((vals) => ({ ...vals, [cf.inputName]: v ? "true" : "false" }))
+                        }
+                        label=""
+                      />
+                    ) : cf.inputType === "select" ? (
+                      <select
+                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        value={customFieldValues[cf.inputName] ?? ""}
+                        onChange={(e) => setCustomFieldValues((v) => ({ ...v, [cf.inputName]: e.target.value }))}
+                        disabled={cf.isReadOnly}
+                      >
+                        <option value="">Select…</option>
+                        {cf.options.map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type={cf.inputType === "number" ? "number" : cf.inputType === "date" ? "date" : cf.inputType === "time" ? "time" : cf.inputType === "datetime-local" ? "datetime-local" : cf.inputType === "email" ? "email" : cf.inputType === "url" ? "url" : "text"}
+                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        placeholder={cf.placeholder ?? cf.inputName}
+                        value={customFieldValues[cf.inputName] ?? ""}
+                        onChange={(e) => setCustomFieldValues((v) => ({ ...v, [cf.inputName]: e.target.value }))}
+                        disabled={cf.isReadOnly}
+                        required={cf.isRequired}
+                      />
+                    )}
+                    {cf.description && <p className="text-xs text-gray-400">{cf.description}</p>}
                   </div>
                 ))}
               </div>
