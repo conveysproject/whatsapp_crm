@@ -2,7 +2,6 @@
 import { useState, useMemo, type JSX } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { BasicSection } from "./sections/BasicSection";
 import { HeaderSection } from "./sections/HeaderSection";
 import { BodySection } from "./sections/BodySection";
 import { FooterSection } from "./sections/FooterSection";
@@ -12,8 +11,179 @@ import { CarouselSection } from "./sections/CarouselSection";
 import { VariableExamplesSection } from "./sections/VariableExamplesSection";
 import { TemplatePreview } from "@/components/templates/TemplatePreview";
 import { buildComponents, validateForm } from "./buildComponents";
-import { INITIAL_STATE } from "./templateFormTypes";
-import type { TemplateFormState } from "./templateFormTypes";
+import { INITIAL_STATE, LANGUAGES } from "./templateFormTypes";
+import type { TemplateFormState, TemplateCategory, SubType } from "./templateFormTypes";
+
+// ─── Stepper ────────────────────────────────────────────────────────────────
+
+const STEPS = ['Set up template', 'Edit template', 'Submit for Review'];
+
+function Stepper({ current }: { current: number }): JSX.Element {
+  return (
+    <div className="flex items-center gap-0">
+      {STEPS.map((label, i) => {
+        const n = i + 1;
+        const done = n < current;
+        const active = n === current;
+        return (
+          <div key={n} className="flex items-center">
+            <div className="flex items-center gap-2">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-colors ${
+                done ? 'bg-brand-600 border-brand-600 text-white'
+                  : active ? 'border-brand-600 text-brand-600 bg-white'
+                  : 'border-gray-300 text-gray-400 bg-white'
+              }`}>
+                {done ? '✓' : n}
+              </div>
+              <span className={`text-sm font-medium whitespace-nowrap ${active ? 'text-brand-700' : done ? 'text-gray-600' : 'text-gray-400'}`}>
+                {label}
+              </span>
+            </div>
+            {i < STEPS.length - 1 && (
+              <div className={`w-8 h-px mx-3 ${n < current ? 'bg-brand-600' : 'bg-gray-300'}`} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Step 1: Set up template ─────────────────────────────────────────────────
+
+const CATEGORIES: { value: TemplateCategory; icon: string; label: string; description: string }[] = [
+  { value: 'marketing', icon: '📢', label: 'Marketing', description: 'Promotions, offers, announcements' },
+  { value: 'utility', icon: '🔔', label: 'Utility', description: 'Order updates, account alerts, transactional' },
+  { value: 'authentication', icon: '🔑', label: 'Authentication', description: 'OTPs and verification codes' },
+];
+
+const MARKETING_SUB_TYPES: { value: SubType; label: string; description: string }[] = [
+  { value: 'standard', label: 'Default', description: 'Send messages with media and customised buttons to engage your customers.' },
+  { value: 'coupon', label: 'Coupon Code', description: 'Share a discount code with a copy button for easy redemption.' },
+  { value: 'lto', label: 'Limited-Time Offer', description: 'Create urgency with a time-sensitive promotion and countdown timer.' },
+  { value: 'carousel', label: 'Carousel', description: 'Showcase multiple products or services in a scrollable card format.' },
+];
+
+function Step1({ state, onChange }: { state: TemplateFormState; onChange: (p: Partial<TemplateFormState>) => void }): JSX.Element {
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900">Set up your template</h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Choose the category that best describes your message template, then select the type of message you want to send.
+        </p>
+      </div>
+
+      {/* Category tabs */}
+      <div>
+        <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat.value}
+              type="button"
+              onClick={() => onChange({ category: cat.value, subType: 'standard' })}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors border-r last:border-r-0 border-gray-200 ${
+                state.category === cat.value
+                  ? 'bg-gray-100 text-gray-900'
+                  : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <span>{cat.icon}</span>
+              {cat.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Sub-type radio list (marketing only) */}
+      {state.category === 'marketing' && (
+        <div className="space-y-2">
+          {MARKETING_SUB_TYPES.map((st) => (
+            <label
+              key={st.value}
+              className={`flex items-start gap-3 rounded-lg border p-4 cursor-pointer transition-colors ${
+                state.subType === st.value
+                  ? 'border-brand-500 bg-brand-50'
+                  : 'border-gray-200 hover:border-gray-300 bg-white'
+              }`}
+            >
+              <input
+                type="radio"
+                name="subType"
+                value={st.value}
+                checked={state.subType === st.value}
+                onChange={() => onChange({ subType: st.value })}
+                className="mt-0.5 accent-brand-600"
+              />
+              <div>
+                <p className="text-sm font-medium text-gray-900">{st.label}</p>
+                <p className="text-sm text-gray-500">{st.description}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {/* Auth info */}
+      {state.category === 'authentication' && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 space-y-1">
+          <p className="font-medium">Authentication templates</p>
+          <p className="text-blue-700">Fixed body text with a one-time verification code. Supports Copy Code, One-Tap, and Zero-Tap OTP buttons.</p>
+        </div>
+      )}
+
+      {/* Utility info */}
+      {state.category === 'utility' && (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 space-y-1">
+          <p className="font-medium">Utility templates</p>
+          <p>Transactional messages like order confirmations, shipping updates, and account notifications. All button types supported except OTP.</p>
+        </div>
+      )}
+
+      {/* Language + Name */}
+      <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Language <span className="text-red-500">*</span></label>
+          <select
+            value={state.language}
+            onChange={(e) => onChange({ language: e.target.value })}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>{l.label} ({l.code})</option>
+            ))}
+          </select>
+        </div>
+        {state.category !== 'authentication' && (
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Variable format</label>
+            <select
+              value={state.parameterFormat}
+              onChange={(e) => onChange({ parameterFormat: e.target.value as 'positional' | 'named' })}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              <option value="positional">Positional — {'{{1}}'}, {'{{2}}'}</option>
+              <option value="named">Named — {'{{first_name}}'}</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-gray-700">Template name <span className="text-red-500">*</span></label>
+        <input
+          value={state.name}
+          onChange={(e) => onChange({ name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })}
+          placeholder="e.g. order_confirmation"
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+        <p className="text-xs text-gray-400">Lowercase letters, numbers, and underscores only. Max 512 chars.</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Step 2: Edit template ────────────────────────────────────────────────────
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }): JSX.Element {
   return (
@@ -24,10 +194,109 @@ function SectionCard({ title, children }: { title: string; children: React.React
   );
 }
 
+function Step2({ state, onChange }: { state: TemplateFormState; onChange: (p: Partial<TemplateFormState>) => void }): JSX.Element {
+  const showHeader = state.category !== 'authentication' && state.subType !== 'carousel';
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900">Edit template</h2>
+        <p className="text-sm text-gray-500 mt-1">Build your message content. Variables, buttons, and media can be added here.</p>
+      </div>
+
+      {showHeader && (
+        <SectionCard title="Header">
+          <HeaderSection state={state} onChange={onChange} />
+        </SectionCard>
+      )}
+
+      <SectionCard title="Body">
+        <BodySection state={state} onChange={onChange} />
+      </SectionCard>
+
+      {state.subType === 'lto' && <LtoSection state={state} onChange={onChange} />}
+
+      {state.subType === 'carousel' && (
+        <SectionCard title="Carousel cards">
+          <CarouselSection state={state} onChange={onChange} />
+        </SectionCard>
+      )}
+
+      <SectionCard title="Footer">
+        <FooterSection state={state} onChange={onChange} />
+      </SectionCard>
+
+      <SectionCard title="Buttons">
+        <ButtonsSection state={state} onChange={onChange} />
+      </SectionCard>
+    </div>
+  );
+}
+
+// ─── Step 3: Submit for Review ───────────────────────────────────────────────
+
+function ReviewRow({ label, value }: { label: string; value: string }): JSX.Element {
+  return (
+    <div className="flex items-start gap-4 py-3 border-b border-gray-100 last:border-0">
+      <span className="w-36 shrink-0 text-sm text-gray-500">{label}</span>
+      <span className="text-sm text-gray-900 font-medium">{value}</span>
+    </div>
+  );
+}
+
+function Step3({ state, onChange, errors }: {
+  state: TemplateFormState;
+  onChange: (p: Partial<TemplateFormState>) => void;
+  errors: string[];
+}): JSX.Element {
+  const categoryLabel = state.category.charAt(0).toUpperCase() + state.category.slice(1);
+  const subTypeLabel = state.subType === 'lto' ? 'Limited-Time Offer'
+    : state.subType === 'coupon' ? 'Coupon Code'
+    : state.subType === 'carousel' ? 'Carousel'
+    : 'Default';
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900">Submit for Review</h2>
+        <p className="text-sm text-gray-500 mt-1">Review your template details before submitting to Meta. Review usually takes 24 hours.</p>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">Summary</h3>
+        <ReviewRow label="Name" value={state.name || '—'} />
+        <ReviewRow label="Category" value={categoryLabel} />
+        {state.category === 'marketing' && <ReviewRow label="Type" value={subTypeLabel} />}
+        <ReviewRow label="Language" value={state.language} />
+        <ReviewRow label="Variable format" value={state.parameterFormat} />
+        {state.bodyText && <ReviewRow label="Body (preview)" value={state.bodyText.substring(0, 80) + (state.bodyText.length > 80 ? '…' : '')} />}
+        {state.buttons.length > 0 && <ReviewRow label="Buttons" value={`${state.buttons.length} button${state.buttons.length !== 1 ? 's' : ''}`} />}
+      </div>
+
+      <VariableExamplesSection state={state} onChange={onChange} />
+
+      {errors.length > 0 && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-4 space-y-1">
+          <p className="text-sm font-medium text-red-700">Please fix these before submitting:</p>
+          {errors.map((e, i) => <p key={i} className="text-sm text-red-600">• {e}</p>)}
+        </div>
+      )}
+
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <p className="font-medium">Before you submit</p>
+        <p className="mt-1 text-amber-700">Meta reviews all templates before approval. Templates that violate policies may be rejected. Review typically takes a few minutes to 24 hours.</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Root ────────────────────────────────────────────────────────────────────
+
 export function TemplateForm(): JSX.Element {
   const { getToken } = useAuth();
   const router = useRouter();
   const [state, setState] = useState<TemplateFormState>(INITIAL_STATE);
+  const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -38,6 +307,15 @@ export function TemplateForm(): JSX.Element {
   const components = useMemo(() => {
     try { return buildComponents(state); } catch { return []; }
   }, [state]);
+
+  function handleNext(): void {
+    if (step === 1 && !state.name) {
+      setErrors(['Template name is required.']);
+      return;
+    }
+    setErrors([]);
+    setStep((s) => Math.min(s + 1, 3));
+  }
 
   async function handleSubmit(submitToMeta: boolean): Promise<void> {
     const errs = validateForm(state);
@@ -75,81 +353,88 @@ export function TemplateForm(): JSX.Element {
     }
   }
 
-  const showHeader = state.category !== 'authentication' && state.subType !== 'carousel';
-  const showCarousel = state.subType === 'carousel';
-  const showLto = state.subType === 'lto';
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-8 items-start">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-gray-900">New Template</h1>
+    <div className="flex flex-col -m-6 min-h-[calc(100vh-4rem)]">
+      {/* Stepper bar */}
+      <div className="bg-white border-b border-gray-200 px-8 py-4">
+        <Stepper current={step} />
+      </div>
+
+      {/* Content + Preview */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_360px] overflow-hidden">
+        {/* Left: form */}
+        <div className="overflow-y-auto p-8">
+          {step === 1 && <Step1 state={state} onChange={patch} />}
+          {step === 2 && <Step2 state={state} onChange={patch} />}
+          {step === 3 && <Step3 state={state} onChange={patch} errors={errors} />}
         </div>
 
-        <SectionCard title="Basics">
-          <BasicSection state={state} onChange={patch} />
-        </SectionCard>
-
-        {showHeader && (
-          <SectionCard title="Header">
-            <HeaderSection state={state} onChange={patch} />
-          </SectionCard>
-        )}
-
-        <SectionCard title="Body">
-          <BodySection state={state} onChange={patch} />
-        </SectionCard>
-
-        {showLto && (
-          <LtoSection state={state} onChange={patch} />
-        )}
-
-        {showCarousel && (
-          <SectionCard title="Carousel cards">
-            <CarouselSection state={state} onChange={patch} />
-          </SectionCard>
-        )}
-
-        <SectionCard title="Footer">
-          <FooterSection state={state} onChange={patch} />
-        </SectionCard>
-
-        <SectionCard title="Buttons">
-          <ButtonsSection state={state} onChange={patch} />
-        </SectionCard>
-
-        <VariableExamplesSection state={state} onChange={patch} />
-
-        {errors.length > 0 && (
-          <div className="rounded-lg bg-red-50 border border-red-200 p-3 space-y-1">
-            {errors.map((e, i) => <p key={i} className="text-sm text-red-600">{e}</p>)}
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => { void handleSubmit(false); }}
-            disabled={saving || !state.name}
-            className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:border-gray-400 disabled:opacity-50 transition-colors"
-          >
-            {saving ? 'Saving…' : 'Save Draft'}
-          </button>
-          <button
-            type="button"
-            onClick={() => { void handleSubmit(true); }}
-            disabled={saving || !state.name}
-            className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors"
-          >
-            {saving ? 'Saving…' : 'Save & Submit to Meta'}
-          </button>
+        {/* Right: preview */}
+        <div className="border-l border-gray-200 bg-gray-50 p-6 overflow-y-auto">
+          <p className="text-sm font-semibold text-gray-900 mb-4">Template preview</p>
+          <TemplatePreview components={components} templateName={state.name || undefined} />
         </div>
       </div>
 
-      <div className="sticky top-4 space-y-2">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Preview</p>
-        <TemplatePreview components={components} templateName={state.name || undefined} />
+      {/* Bottom action bar */}
+      <div className="bg-white border-t border-gray-200 px-8 py-4 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => router.push('/templates')}
+          className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:border-gray-400 transition-colors"
+        >
+          Discard
+        </button>
+
+        <div className="flex items-center gap-3">
+          {step > 1 && (
+            <button
+              type="button"
+              onClick={() => { setErrors([]); setStep((s) => s - 1); }}
+              className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:border-gray-400 transition-colors"
+            >
+              Back
+            </button>
+          )}
+
+          {step < 3 ? (
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={step === 1 && !state.name}
+              className="px-5 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors"
+            >
+              Next
+            </button>
+          ) : (
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { void handleSubmit(false); }}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:border-gray-400 disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Saving…' : 'Save Draft'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { void handleSubmit(true); }}
+                disabled={saving}
+                className="px-5 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Submitting…' : 'Submit for Review'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Inline errors for steps 1 & 2 */}
+      {errors.length > 0 && step < 3 && (
+        <div className="fixed bottom-20 right-8 max-w-sm rounded-lg bg-red-50 border border-red-200 p-3 shadow-lg space-y-1 z-50">
+          {errors.map((e, i) => <p key={i} className="text-sm text-red-600">{e}</p>)}
+        </div>
+      )}
     </div>
   );
 }
