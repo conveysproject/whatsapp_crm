@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { TemplateCategory, TemplateStatus } from "@prisma/client";
 import { submitTemplateToMeta } from "../lib/meta-templates.js";
 import { sendTemplateMessage } from "../lib/whatsapp.js";
-import { buildTemplateComponents } from "../lib/template-components.js";
+import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
 import type { TemplateId, ContactId } from "@WBMSG/shared";
 import { canAccess, hasSubPermission } from "../lib/permissions.js";
 
@@ -257,10 +257,14 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       const recipientPhone = contact.phoneNumber;
       const accessToken = org.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
 
-      // Build components dynamically from stored template definition + caller-supplied variables
-      const variables = request.body.variables ?? [];
       const storedComponents = (template.components ?? []) as unknown[];
-      const components = buildTemplateComponents(storedComponents, { body: variables });
+      const bodyComp = (storedComponents as Array<{ type?: string; text?: string }>).find((c) => c.type?.toUpperCase() === "BODY");
+      const varCount = bodyComp?.text ? (bodyComp.text.match(/\{\{\d+\}\}/g) ?? []).length : 0;
+      const callerVars = request.body.variables ?? [];
+      const bodyVars = callerVars.length > 0
+        ? callerVars
+        : contactBodyVars({ firstName: contact.firstName, lastName: contact.lastName, phoneNumber: contact.phoneNumber, email: contact.email }, varCount);
+      const components = buildTemplateComponents(storedComponents, { body: bodyVars });
 
       const { messageId } = await sendTemplateMessage(
         org.phoneNumberId, recipientPhone, template.name, template.language, components, accessToken
@@ -270,11 +274,11 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       type WaComp = { type?: string; format?: string; text?: string; buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string }> };
       const comps = (template.components ?? []) as WaComp[];
       const headerComp = comps.find((c) => c.type?.toUpperCase() === "HEADER");
-      const bodyComp = comps.find((c) => c.type?.toUpperCase() === "BODY");
+      const renderedBodyComp = comps.find((c) => c.type?.toUpperCase() === "BODY");
       const footerComp = comps.find((c) => c.type?.toUpperCase() === "FOOTER");
       const buttonsComp = comps.find((c) => c.type?.toUpperCase() === "BUTTONS");
-      let bodyText = bodyComp?.text ?? "";
-      variables.forEach((v, i) => {
+      let bodyText = renderedBodyComp?.text ?? "";
+      bodyVars.forEach((v, i) => {
         bodyText = bodyText.replace(new RegExp(`\\{\\{${i + 1}\\}\\}`, "g"), v);
       });
       const renderedBody = JSON.stringify({

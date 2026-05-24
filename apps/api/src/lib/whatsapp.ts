@@ -88,10 +88,11 @@ export interface WaInteractivePayload {
 }
 
 export interface WaTemplateComponent {
-  type: "header" | "body" | "button";
+  type: "header" | "body" | "button" | "carousel";
   sub_type?: string;
   index?: number;
-  parameters?: Array<{ type: "text" | "image" | "document"; text?: string }>;
+  parameters?: Array<{ type: "text" | "image" | "video" | "document"; text?: string }>;
+  cards?: Array<{ card_index: number; components: WaTemplateComponent[] }>;
 }
 
 export async function sendTemplateMessage(

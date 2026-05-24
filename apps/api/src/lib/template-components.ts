@@ -1,10 +1,20 @@
 import type { WaTemplateComponent } from "./whatsapp.js";
 
+interface StoredCardComponent {
+  type?: string;
+  format?: string;
+  text?: string;
+  example?: { header_handle?: string[]; header_text?: string[]; body_text?: string[][] };
+  buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string; example?: string[] }>;
+}
+
 interface StoredComponent {
   type?: string;
   format?: string;
   text?: string;
+  example?: { header_text?: string[]; body_text?: string[][] };
   buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string; example?: string[] }>;
+  cards?: Array<{ components?: StoredCardComponent[] }>;
 }
 
 /** Count distinct {{n}} placeholders in a string. */
@@ -34,6 +44,11 @@ export function buildTemplateComponents(
     headerMediaId?: string;  // media ID for HEADER IMAGE/VIDEO/DOCUMENT
     body?: string[];         // text values for BODY variables  {{1}}, {{2}} …
     buttons?: string[];      // dynamic suffix for URL buttons, or payload for QUICK_REPLY
+    cards?: Array<{          // per-card overrides for carousel templates
+      headerMediaId?: string;
+      body?: string[];
+      buttons?: string[];
+    }>;
   } = {}
 ): WaTemplateComponent[] {
   const components = stored as StoredComponent[];
@@ -48,13 +63,18 @@ export function buildTemplateComponents(
       if (format === "TEXT" && comp.text) {
         const varCount = countVars(comp.text);
         if (varCount > 0) {
-          const params = (vars.header ?? []).slice(0, varCount);
-          // Pad with empty string if caller didn't supply enough values
-          while (params.length < varCount) params.push("");
-          result.push({
-            type: "header",
-            parameters: params.map((t) => ({ type: "text" as const, text: t })),
-          });
+          const callerVals = (vars.header ?? []).slice(0, varCount);
+          const exampleVals = comp.example?.header_text ?? [];
+          const params = Array.from({ length: varCount }, (_, i) =>
+            callerVals[i] ?? exampleVals[i] ?? ""
+          );
+          // Skip if any parameter is empty — Meta rejects empty string values
+          if (params.every((p) => p !== "")) {
+            result.push({
+              type: "header",
+              parameters: params.map((t) => ({ type: "text" as const, text: t })),
+            });
+          }
         }
         // Static text header → no component needed
       } else if (["IMAGE", "VIDEO", "DOCUMENT"].includes(format)) {
@@ -72,12 +92,18 @@ export function buildTemplateComponents(
       if (comp.text) {
         const varCount = countVars(comp.text);
         if (varCount > 0) {
-          const params = (vars.body ?? []).slice(0, varCount);
-          while (params.length < varCount) params.push("");
-          result.push({
-            type: "body",
-            parameters: params.map((t) => ({ type: "text" as const, text: t })),
-          });
+          const callerVals = (vars.body ?? []).slice(0, varCount);
+          const exampleVals = comp.example?.body_text?.[0] ?? [];
+          const params = Array.from({ length: varCount }, (_, i) =>
+            callerVals[i] ?? exampleVals[i] ?? ""
+          );
+          // Skip if any parameter is empty — Meta rejects empty string values
+          if (params.every((p) => p !== "")) {
+            result.push({
+              type: "body",
+              parameters: params.map((t) => ({ type: "text" as const, text: t })),
+            });
+          }
         }
         // Static body → no component needed
       }
@@ -110,6 +136,65 @@ export function buildTemplateComponents(
         }
         // PHONE_NUMBER / COPY_CODE / VOICE_CALL → static, no parameters needed
       });
+
+    } else if (type === "CAROUSEL") {
+      const rawCards = comp.cards ?? [];
+      const builtCards = rawCards.map((card, cardIndex) => {
+        const cardComps: WaTemplateComponent[] = [];
+        const cardVars = vars.cards?.[cardIndex];
+
+        for (const cc of (card.components ?? [])) {
+          const ccType = (cc.type ?? "").toUpperCase();
+          const ccFormat = (cc.format ?? "IMAGE").toUpperCase();
+
+          if (ccType === "HEADER" && ["IMAGE", "VIDEO", "DOCUMENT"].includes(ccFormat)) {
+            const mediaType = ccFormat.toLowerCase() as "image" | "video" | "document";
+            const mediaId = cardVars?.headerMediaId;
+            if (mediaId) {
+              cardComps.push({
+                type: "header",
+                parameters: [{ type: mediaType, [mediaType]: { id: mediaId } } as never],
+              });
+            }
+            // No mediaId → omit header parameter; header_handle from template examples
+            // are not valid send-time media IDs and cause a format-mismatch error
+          } else if (ccType === "BODY" && cc.text) {
+            const varCount = countVars(cc.text);
+            if (varCount > 0) {
+              const callerVals = cardVars?.body ?? [];
+              const exampleVals = cc.example?.body_text?.[0] ?? [];
+              const params = Array.from({ length: varCount }, (_, i) =>
+                callerVals[i] ?? exampleVals[i] ?? ""
+              );
+              if (params.every((p) => p !== "")) {
+                cardComps.push({
+                  type: "body",
+                  parameters: params.map((t) => ({ type: "text" as const, text: t })),
+                });
+              }
+            }
+          } else if (ccType === "BUTTONS") {
+            (cc.buttons ?? []).forEach((btn, idx) => {
+              const btnType = (btn.type ?? "").toUpperCase();
+              const cardBtnVals = cardVars?.buttons ?? [];
+              if (btnType === "URL") {
+                const hasDynamic = btn.url?.includes("{{1}}") || (btn.example && btn.example.length > 0);
+                if (hasDynamic && cardBtnVals[idx] !== undefined) {
+                  cardComps.push({ type: "button", sub_type: "url", index: idx, parameters: [{ type: "text" as const, text: cardBtnVals[idx]! }] });
+                }
+              } else if (btnType === "QUICK_REPLY" && cardBtnVals[idx] !== undefined) {
+                cardComps.push({ type: "button", sub_type: "quick_reply", index: idx, parameters: [{ type: "payload" as never, payload: cardBtnVals[idx]! } as never] });
+              }
+            });
+          }
+        }
+
+        return { card_index: cardIndex, components: cardComps };
+      });
+
+      if (builtCards.length > 0) {
+        result.push({ type: "carousel", cards: builtCards });
+      }
     }
     // FOOTER → always static, never needs parameters
   }
