@@ -265,6 +265,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
         ? callerVars
         : contactBodyVars({ firstName: contact.firstName, lastName: contact.lastName, phoneNumber: contact.phoneNumber, email: contact.email }, varCount);
       const components = buildTemplateComponents(storedComponents, { body: bodyVars });
+      fastify.log.info({ storedComponents, builtComponents: components }, "DEBUG template send");
 
       const { messageId } = await sendTemplateMessage(
         org.phoneNumberId, recipientPhone, template.name, template.language, components, accessToken
