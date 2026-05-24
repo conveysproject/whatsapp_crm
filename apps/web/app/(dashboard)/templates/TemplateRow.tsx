@@ -121,7 +121,7 @@ export function TemplateRow({ template: t }: { template: TemplateData }): JSX.El
         </div>
 
         {/* Updated On */}
-        <span className="w-32 shrink-0 text-sm text-gray-500">
+        <span className="w-32 shrink-0 text-sm text-gray-500" suppressHydrationWarning>
           {new Date(t.updatedAt).toLocaleDateString()}
         </span>
 
@@ -185,7 +185,7 @@ export function TemplateRow({ template: t }: { template: TemplateData }): JSX.El
                   {qualityDotClass && <span className={`w-2 h-2 rounded-full ${qualityDotClass}`} />}
                   <span className="text-sm text-gray-800">{t.qualityScore}</span>
                   {t.qualityDate && (
-                    <span className="text-xs text-gray-400">({new Date(t.qualityDate).toLocaleDateString()})</span>
+                    <span className="text-xs text-gray-400" suppressHydrationWarning>({new Date(t.qualityDate).toLocaleDateString()})</span>
                   )}
                 </div>
                 {t.qualityReasons && t.qualityReasons.length > 0 && (
@@ -214,7 +214,7 @@ export function TemplateRow({ template: t }: { template: TemplateData }): JSX.El
               <DetailField label="Library template" value={t.libraryTemplateName} />
             )}
             {t.lastEditedTime && (
-              <DetailField label="Last edited" value={new Date(t.lastEditedTime).toLocaleString()} />
+              <DetailField label="Last edited" value={<span suppressHydrationWarning>{new Date(t.lastEditedTime).toLocaleString()}</span>} />
             )}
             {t.metaTemplateId && (
               <div className="flex flex-col gap-0.5">
@@ -226,7 +226,7 @@ export function TemplateRow({ template: t }: { template: TemplateData }): JSX.El
             )}
             <DetailField
               label="Synced"
-              value={new Date(t.updatedAt).toLocaleString()}
+              value={<span suppressHydrationWarning>{new Date(t.updatedAt).toLocaleString()}</span>}
             />
           </div>
         </div>
