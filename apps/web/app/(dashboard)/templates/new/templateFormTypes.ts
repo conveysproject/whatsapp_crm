@@ -1,6 +1,6 @@
 export type TemplateCategory = 'marketing' | 'utility' | 'authentication';
 export type ParameterFormat = 'positional' | 'named';
-export type SubType = 'standard' | 'coupon' | 'lto' | 'carousel' | 'catalogue' | 'flows' | 'calling_permissions';
+export type SubType = 'standard' | 'coupon' | 'lto' | 'carousel';
 export type HeaderType = 'none' | 'text' | 'image' | 'video' | 'document' | 'location';
 export type OtpType = 'copy_code' | 'one_tap' | 'zero_tap';
 export type ButtonType = 'quick_reply' | 'url' | 'phone_number' | 'copy_code';
