@@ -52,9 +52,9 @@ function Stepper({ current }: { current: number }): JSX.Element {
 // ─── Step 1: Set up template ─────────────────────────────────────────────────
 
 const CATEGORIES: { value: TemplateCategory; icon: string; label: string; description: string }[] = [
-  { value: 'marketing', icon: '📢', label: 'Marketing', description: 'Promotions, offers, announcements' },
-  { value: 'utility', icon: '🔔', label: 'Utility', description: 'Order updates, account alerts, transactional' },
-  { value: 'authentication', icon: '🔑', label: 'Authentication', description: 'OTPs and verification codes' },
+  { value: 'marketing', icon: '📢', label: 'Marketing', description: 'Promotions, offers, awareness, retargeting' },
+  { value: 'utility', icon: '🔔', label: 'Utility', description: 'Non-promotional — order updates, alerts, account notices' },
+  { value: 'authentication', icon: '🔑', label: 'Authentication', description: 'Identity verification with a one-time passcode' },
 ];
 
 const MARKETING_SUB_TYPES: { value: SubType; label: string; description: string }[] = [
@@ -124,19 +124,39 @@ function Step1({ state, onChange }: { state: TemplateFormState; onChange: (p: Pa
         </div>
       )}
 
-      {/* Auth info */}
-      {state.category === 'authentication' && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 space-y-1">
-          <p className="font-medium">Authentication templates</p>
-          <p className="text-blue-700">Fixed body text with a one-time verification code. Supports Copy Code, One-Tap, and Zero-Tap OTP buttons.</p>
+      {/* Utility info */}
+      {state.category === 'utility' && (
+        <div className="space-y-3">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 space-y-2">
+            <p className="font-medium text-gray-900">What qualifies as Utility</p>
+            <p>Non-promotional messages that are either <span className="font-medium">requested by the user</span> (order/account/transaction-specific) or <span className="font-medium">essential to the user</span> (fraud alerts, safety notices, legal disclosures).</p>
+            <div className="pt-1 space-y-1">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Common use cases</p>
+              <p className="text-xs text-gray-600">Order confirmations · Shipping updates · Payment reminders · Account alerts · Opt-in/opt-out confirmations · Feedback on a specific order</p>
+            </div>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 space-y-1">
+            <p className="font-medium">Watch out</p>
+            <p>Any promotional intent (upselling, offers, cross-selling) will cause Meta to reclassify the template as Marketing — even if you chose Utility. Generic surveys not tied to a specific order will also be rejected.</p>
+          </div>
         </div>
       )}
 
-      {/* Utility info */}
-      {state.category === 'utility' && (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 space-y-1">
-          <p className="font-medium">Utility templates</p>
-          <p>Transactional messages like order confirmations, shipping updates, and account notifications. All button types supported except OTP.</p>
+      {/* Auth info */}
+      {state.category === 'authentication' && (
+        <div className="space-y-3">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 space-y-2">
+            <p className="font-medium text-blue-900">What qualifies as Authentication</p>
+            <p>Verifying a user&apos;s identity with a one-time passcode — at account creation, login, account recovery, or transaction verification.</p>
+            <div className="pt-1 space-y-1">
+              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">Restrictions (enforced by Meta)</p>
+              <p className="text-xs text-blue-700">Body text is preset — you cannot customise it · No URLs, media, or emojis · Variable parameters max 15 characters · OTP button required (Copy Code, One-Tap, or Zero-Tap)</p>
+            </div>
+          </div>
+          <div className="rounded-lg border border-blue-100 bg-white p-3 text-xs text-gray-600">
+            <p className="font-medium text-gray-700 mb-1">How it looks to your customer</p>
+            <p className="font-mono bg-gray-50 border border-gray-200 rounded px-2 py-1.5 text-gray-800">{`{{1}} is your verification code. For your security, do not share this code.`}</p>
+          </div>
         </div>
       )}
 
