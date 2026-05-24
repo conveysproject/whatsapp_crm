@@ -103,26 +103,25 @@ export async function sendTemplateMessage(
   components: WaTemplateComponent[],
   accessToken: string
 ): Promise<WaSendResult> {
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to,
+    type: "template",
+    template: {
+      name: templateName,
+      language: { code: languageCode },
+      ...(components.length > 0 && { components }),
+    },
+  };
+  console.log("WA_SEND_PAYLOAD", JSON.stringify(payload));
   const res = await fetch(`${WA_BASE}/${phoneNumberId}/messages`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      recipient_type: "individual",
-      to,
-      type: "template",
-      template: {
-        name: templateName,
-        language: { code: languageCode },
-        // Omit components entirely when empty — an empty array tells Meta
-        // "I provided components but skipped the header", which it rejects.
-        // Omitting the key lets Meta use the template's own stored media/defaults.
-        ...(components.length > 0 && { components }),
-      },
-    }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json() as unknown;
