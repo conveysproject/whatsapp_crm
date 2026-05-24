@@ -375,10 +375,15 @@ export function TemplateForm(): JSX.Element {
       }
       const { data } = await res.json() as { data: { id: string } };
       if (submitToMeta) {
-        await fetch(`${apiUrl}/v1/templates/${data.id}/submit`, {
+        const submitRes = await fetch(`${apiUrl}/v1/templates/${data.id}/submit`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token ?? ''}` },
         });
+        if (!submitRes.ok) {
+          const submitBody = await submitRes.json() as { error?: { message?: string } };
+          setErrors([submitBody.error?.message ?? 'Failed to submit template to Meta']);
+          return;
+        }
       }
       router.push('/templates');
     } finally {
