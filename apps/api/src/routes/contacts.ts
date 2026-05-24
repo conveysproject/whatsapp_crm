@@ -228,7 +228,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     if (!limitCheck.allowed) {
       return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Contact limit of ${limitCheck.limit} reached` } });
     }
-    let contact;
+    let contact: Awaited<ReturnType<typeof fastify.prisma.contact.create>>;
     try {
       const { firstName, lastName, name, phoneNumber, email, companyId, countryId, languageCode, whatsappOptOut, disableBot, groupIds } = request.body;
       contact = await fastify.prisma.contact.create({
