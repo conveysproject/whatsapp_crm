@@ -67,11 +67,36 @@ const MARKETING_SUB_TYPES: { value: SubType; label: string; description: string 
 function Step1({ state, onChange }: { state: TemplateFormState; onChange: (p: Partial<TemplateFormState>) => void }): JSX.Element {
   return (
     <div className="space-y-6 max-w-2xl">
-      <div>
-        <h2 className="text-xl font-semibold text-gray-900">Set up your template</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Choose the category that best describes your message template, then select the type of message you want to send.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">Set up your template</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Choose the category that best describes your message template, then select the type of message you want to send.
+          </p>
+        </div>
+        <a
+          href="https://business.facebook.com/business/help/2055875911147364"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:border-gray-400 hover:text-gray-800 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth="2"/><path d="M12 16v-4m0-4h.01" strokeWidth="2" strokeLinecap="round"/></svg>
+          Help
+        </a>
+      </div>
+
+      {/* Meta management banner */}
+      <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 flex items-center justify-between gap-4 text-sm text-gray-600">
+        <p>Authentication and Flow templates can be sent from here, but must be created or edited directly on Meta.</p>
+        <a
+          href="https://business.facebook.com/wa/manage/message-templates/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 hover:border-gray-400 transition-colors whitespace-nowrap"
+        >
+          Manage on Meta
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </a>
       </div>
 
       {/* Category tabs */}
