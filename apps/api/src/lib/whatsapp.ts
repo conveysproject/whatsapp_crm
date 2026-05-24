@@ -103,25 +103,23 @@ export async function sendTemplateMessage(
   components: WaTemplateComponent[],
   accessToken: string
 ): Promise<WaSendResult> {
-  const payload = {
-    messaging_product: "whatsapp",
-    recipient_type: "individual",
-    to,
-    type: "template",
-    template: {
-      name: templateName,
-      language: { code: languageCode },
-      ...(components.length > 0 && { components }),
-    },
-  };
-  console.log("WA_SEND_PAYLOAD", JSON.stringify(payload));
   const res = await fetch(`${WA_BASE}/${phoneNumberId}/messages`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "template",
+      template: {
+        name: templateName,
+        language: { code: languageCode },
+        ...(components.length > 0 && { components }),
+      },
+    }),
   });
   if (!res.ok) {
     const err = await res.json() as unknown;

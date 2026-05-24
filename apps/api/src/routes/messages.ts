@@ -103,14 +103,41 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
           return reply.status(400).send({ error: { code: "TEMPLATE_NOT_APPROVED", message: "Only approved templates can be sent" } });
         }
 
-        const stored = (template.components ?? []) as unknown[];
-        const bodyComp = (stored as Array<{ type?: string; text?: string }>).find((c) => c.type?.toUpperCase() === "BODY");
+        type StoredComp = { type?: string; format?: string; text?: string; example?: { header_url?: string[]; header_text?: string[]; body_text?: string[][] } };
+        let stored = (template.components ?? []) as StoredComp[];
+
+        const storedHeader = stored.find((c) => c.type?.toUpperCase() === "HEADER");
+        const headerNeedsMedia = storedHeader &&
+          ["IMAGE", "VIDEO", "DOCUMENT"].includes((storedHeader.format ?? "").toUpperCase()) &&
+          !storedHeader.example?.header_url?.[0];
+
+        if (headerNeedsMedia && template.metaTemplateId) {
+          const metaRes = await fetch(
+            `https://graph.facebook.com/v25.0/${template.metaTemplateId}?fields=components`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          if (metaRes.ok) {
+            const metaData = await metaRes.json() as { components?: StoredComp[] };
+            const metaHeader = (metaData.components ?? []).find((c) => c.type?.toUpperCase() === "HEADER");
+            if (metaHeader?.example?.header_url?.[0]) {
+              stored = stored.map((c) =>
+                c.type?.toUpperCase() === "HEADER" ? { ...c, example: metaHeader.example } : c
+              );
+              await fastify.prisma.template.update({
+                where: { id: template.id },
+                data: { components: stored as object[] },
+              });
+            }
+          }
+        }
+
+        const bodyComp = stored.find((c) => c.type?.toUpperCase() === "BODY");
         const varCount = bodyComp?.text ? (bodyComp.text.match(/\{\{\d+\}\}/g) ?? []).length : 0;
         const contact = conversation.contact;
         const bodyVars = contact
           ? contactBodyVars({ firstName: contact.firstName, lastName: contact.lastName, phoneNumber: contact.phoneNumber, email: contact.email }, varCount)
           : [];
-        const components = buildTemplateComponents(stored, { body: bodyVars });
+        const components = buildTemplateComponents(stored as unknown[], { body: bodyVars });
 
         // Build rendered body JSON for inbox display (same as send-to-contact)
         type WaComp = { type?: string; format?: string; text?: string; buttons?: Array<{ type?: string; text?: string }> };

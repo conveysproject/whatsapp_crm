@@ -257,14 +257,45 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       const recipientPhone = contact.phoneNumber;
       const accessToken = org.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
 
-      const storedComponents = (template.components ?? []) as unknown[];
-      const bodyComp = (storedComponents as Array<{ type?: string; text?: string }>).find((c) => c.type?.toUpperCase() === "BODY");
+      type StoredComp = { type?: string; format?: string; text?: string; example?: { header_url?: string[]; header_text?: string[]; body_text?: string[][] } };
+      let storedComponents = (template.components ?? []) as StoredComp[];
+
+      // If the template has an IMAGE/VIDEO/DOCUMENT header with no stored example URL,
+      // fetch the full template from Meta to get header_url. Meta requires the image
+      // parameter on every send — it does not fall back to its own stored sample.
+      const storedHeader = storedComponents.find((c) => c.type?.toUpperCase() === "HEADER");
+      const headerNeedsMedia = storedHeader &&
+        ["IMAGE", "VIDEO", "DOCUMENT"].includes((storedHeader.format ?? "").toUpperCase()) &&
+        !storedHeader.example?.header_url?.[0];
+
+      if (headerNeedsMedia && template.metaTemplateId) {
+        const metaRes = await fetch(
+          `https://graph.facebook.com/v25.0/${template.metaTemplateId}?fields=components`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (metaRes.ok) {
+          const metaData = await metaRes.json() as { components?: StoredComp[] };
+          const metaHeader = (metaData.components ?? []).find((c) => c.type?.toUpperCase() === "HEADER");
+          if (metaHeader?.example?.header_url?.[0]) {
+            storedComponents = storedComponents.map((c) =>
+              c.type?.toUpperCase() === "HEADER" ? { ...c, example: metaHeader.example } : c
+            );
+            // Persist so subsequent sends don't need the extra round-trip
+            await fastify.prisma.template.update({
+              where: { id: template.id },
+              data: { components: storedComponents as object[] },
+            });
+          }
+        }
+      }
+
+      const bodyComp = storedComponents.find((c) => c.type?.toUpperCase() === "BODY");
       const varCount = bodyComp?.text ? (bodyComp.text.match(/\{\{\d+\}\}/g) ?? []).length : 0;
       const callerVars = request.body.variables ?? [];
       const bodyVars = callerVars.length > 0
         ? callerVars
         : contactBodyVars({ firstName: contact.firstName, lastName: contact.lastName, phoneNumber: contact.phoneNumber, email: contact.email }, varCount);
-      const components = buildTemplateComponents(storedComponents, { body: bodyVars });
+      const components = buildTemplateComponents(storedComponents as unknown[], { body: bodyVars });
 
       const { messageId } = await sendTemplateMessage(
         org.phoneNumberId, recipientPhone, template.name, template.language, components, accessToken
