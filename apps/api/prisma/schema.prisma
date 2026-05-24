@@ -603,6 +603,26 @@ model Template {
   components     Json             @default("[]")
   metaTemplateId String?          @map("meta_template_id")
   status         TemplateStatus   @default(pending)
+
+  // Extracted from components at sync time
+  headerFormat   String?          @map("header_format")
+  headerText     String?          @map("header_text")
+  bodyText       String?          @map("body_text")
+  footerText     String?          @map("footer_text")
+  buttonCount    Int?             @map("button_count")
+
+  // Additional fields from Meta API
+  qualityScore         String?   @map("quality_score")
+  qualityDate          DateTime? @map("quality_date")
+  qualityReasons       Json?     @map("quality_reasons")
+  rejectedReason       String?   @map("rejected_reason")
+  correctCategory      String?   @map("correct_category")
+  parameterFormat      String?   @map("parameter_format")
+  messageSendTtlSeconds Int?     @map("message_send_ttl_seconds")
+  ctaUrlTrackingOptedOut Boolean? @map("cta_url_tracking_opted_out")
+  libraryTemplateName  String?   @map("library_template_name")
+  lastEditedTime       DateTime? @map("last_edited_time")
+
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
 

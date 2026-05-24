@@ -1,36 +1,11 @@
 import { JSX } from "react";
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { TemplateActions } from "./TemplateActions";
 import { TemplateSyncButton } from "./TemplateSyncButton";
+import { TemplateRow, type TemplateData } from "./TemplateRow";
 
-interface TemplateSubComponent {
-  type?: string;
-  format?: string;
-}
-
-interface TemplateCard {
-  components?: TemplateSubComponent[];
-}
-
-interface TemplateComponent {
-  type?: string;
-  format?: string;
-  cards?: TemplateCard[];
-}
-
-interface Template {
-  id: string;
-  name: string;
-  category: string;
-  language: string;
-  status: "pending" | "approved" | "rejected";
-  components: TemplateComponent[];
-}
-
-async function getTemplates(token: string): Promise<Template[]> {
+async function getTemplates(token: string): Promise<TemplateData[]> {
   try {
     const apiUrl = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
     const res = await fetch(`${apiUrl}/v1/templates`, {
@@ -38,15 +13,9 @@ async function getTemplates(token: string): Promise<Template[]> {
       cache: "no-store",
     });
     if (!res.ok) return [];
-    return (await res.json() as { data: Template[] }).data;
+    return (await res.json() as { data: TemplateData[] }).data;
   } catch { return []; }
 }
-
-const statusVariant: Record<string, "yellow" | "green" | "red"> = {
-  pending: "yellow",
-  approved: "green",
-  rejected: "red",
-};
 
 export default async function TemplatesPage(): Promise<JSX.Element> {
   const { getToken } = await auth.protect();
@@ -67,41 +36,7 @@ export default async function TemplatesPage(): Promise<JSX.Element> {
         {templates.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-gray-400">No templates yet.</p>
         ) : (
-          templates.map((t) => (
-            <div key={t.id} className="flex items-center justify-between px-4 py-3">
-              <div>
-                <p className="text-sm font-medium text-gray-900">{t.name}</p>
-                <p className="text-xs text-gray-500">
-                  {t.category} · {t.language}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Badge variant={statusVariant[t.status] ?? "gray"}>{t.status}</Badge>
-                <TemplateActions
-                  templateId={t.id}
-                  templateName={t.name}
-                  headerFormat={
-                    (t.components ?? []).find(
-                      (c) =>
-                        c.type?.toUpperCase() === "HEADER" &&
-                        ["IMAGE", "VIDEO", "DOCUMENT"].includes((c.format ?? "").toUpperCase())
-                    )?.format?.toUpperCase()
-                  }
-                  imageCardCount={
-                    (t.components ?? [])
-                      .find((c) => c.type?.toUpperCase() === "CAROUSEL")
-                      ?.cards?.filter((card) =>
-                        (card.components ?? []).some(
-                          (cc) =>
-                            cc.type?.toUpperCase() === "HEADER" &&
-                            ["IMAGE", "VIDEO", "DOCUMENT"].includes((cc.format ?? "").toUpperCase())
-                        )
-                      ).length ?? 0
-                  }
-                />
-              </div>
-            </div>
-          ))
+          templates.map((t) => <TemplateRow key={t.id} template={t} />)
         )}
       </div>
     </div>

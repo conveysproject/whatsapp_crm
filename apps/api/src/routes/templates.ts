@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { TemplateCategory, TemplateStatus } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { submitTemplateToMeta } from "../lib/meta-templates.js";
 import { sendTemplateMessage } from "../lib/whatsapp.js";
 import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
@@ -18,6 +19,23 @@ interface SendToContactBody {
   variables: string[];
   mediaUrl?: string;
   cardMediaUrls?: string[];
+}
+
+type SyncComp = { type?: string; format?: string; text?: string; buttons?: unknown[] };
+
+function extractTemplateFields(components: object[]) {
+  const comps = components as SyncComp[];
+  const header = comps.find((c) => c.type?.toUpperCase() === "HEADER");
+  const body = comps.find((c) => c.type?.toUpperCase() === "BODY");
+  const footer = comps.find((c) => c.type?.toUpperCase() === "FOOTER");
+  const buttons = comps.find((c) => c.type?.toUpperCase() === "BUTTONS");
+  return {
+    headerFormat: header?.format?.toUpperCase() ?? (header ? "TEXT" : "NONE"),
+    headerText: header?.format?.toUpperCase() === "TEXT" ? (header.text ?? null) : null,
+    bodyText: body?.text ?? null,
+    footerText: footer?.text ?? null,
+    buttonCount: (buttons?.buttons as unknown[])?.length ?? 0,
+  };
 }
 
 export const templatesRouter: FastifyPluginAsync = async (fastify) => {
@@ -188,12 +206,33 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: { code: "NO_WABA", message: "No WhatsApp Business Account configured" } });
     }
     const accessToken = org.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
+    const metaFields = [
+      "id", "name", "status", "category", "language", "components",
+      "quality_score", "rejected_reason", "correct_category",
+      "cta_url_link_tracking_opted_out", "message_send_ttl_seconds",
+      "parameter_format", "library_template_name", "last_edited_time",
+    ].join(",");
     const res = await fetch(
-      `https://graph.facebook.com/v25.0/${org.whatsappBusinessAccountId}/message_templates?limit=100`,
+      `https://graph.facebook.com/v25.0/${org.whatsappBusinessAccountId}/message_templates?limit=100&fields=${metaFields}`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
     if (!res.ok) return reply.status(400).send({ error: { code: "META_ERROR", message: "Failed to fetch templates from Meta" } });
-    const json = await res.json() as { data: { id: string; name: string; status: string; category: string; language: string; components: unknown[] }[] };
+
+    type MetaQualityScore = { score?: string; date?: string; reasons?: string[] };
+    type MetaTemplate = {
+      id: string; name: string; status: string; category: string; language: string;
+      components: unknown[];
+      quality_score?: MetaQualityScore;
+      rejected_reason?: string;
+      correct_category?: string;
+      cta_url_link_tracking_opted_out?: boolean;
+      message_send_ttl_seconds?: number;
+      parameter_format?: string;
+      library_template_name?: string;
+      last_edited_time?: string;
+    };
+    const json = await res.json() as { data: MetaTemplate[] };
+
     let synced = 0;
     for (const t of json.data ?? []) {
       const lang = t.language ?? "en";
@@ -202,10 +241,31 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       });
       const statusVal = (t.status?.toLowerCase() ?? "pending") as "approved" | "pending" | "rejected";
       const componentsVal = (t.components ?? []) as object[];
+      const extracted = extractTemplateFields(componentsVal);
+
+      const metaData = {
+        status: statusVal,
+        components: componentsVal,
+        metaTemplateId: t.id,
+        ...extracted,
+        qualityScore: t.quality_score?.score ?? null,
+        qualityDate: t.quality_score?.date ? new Date(t.quality_score.date) : null,
+        qualityReasons: t.quality_score?.reasons
+          ? (t.quality_score.reasons as unknown as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+        rejectedReason: t.rejected_reason ?? null,
+        correctCategory: t.correct_category ?? null,
+        parameterFormat: t.parameter_format ?? null,
+        messageSendTtlSeconds: t.message_send_ttl_seconds ?? null,
+        ctaUrlTrackingOptedOut: t.cta_url_link_tracking_opted_out ?? null,
+        libraryTemplateName: t.library_template_name ?? null,
+        lastEditedTime: t.last_edited_time ? new Date(t.last_edited_time) : null,
+      };
+
       if (existing) {
         await fastify.prisma.template.update({
           where: { id: existing.id },
-          data: { status: statusVal, components: componentsVal, metaTemplateId: t.id },
+          data: metaData,
         });
       } else {
         await fastify.prisma.template.create({
@@ -214,9 +274,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
             name: t.name,
             category: ((t.category?.toLowerCase() ?? "utility") as "utility" | "marketing" | "authentication"),
             language: lang,
-            status: statusVal,
-            components: componentsVal,
-            metaTemplateId: t.id,
+            ...metaData,
           },
         });
       }
