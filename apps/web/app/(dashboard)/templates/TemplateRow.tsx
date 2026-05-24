@@ -90,61 +90,66 @@ export function TemplateRow({ template: t }: { template: TemplateData }): JSX.El
   return (
     <div className="divide-y divide-gray-50">
       {/* Compact row */}
-      <div className="flex items-center gap-3 px-4 py-3">
-        {/* Name + rejection hint */}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-900 truncate">{t.name}</p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-500">{t.category} · {t.language}</span>
-            {t.correctCategory && t.correctCategory.toLowerCase() !== t.category && (
-              <span className="text-xs text-amber-600">→ {t.correctCategory.toLowerCase()}</span>
-            )}
-            {t.status === "rejected" && t.rejectedReason && (
-              <span className="text-xs text-red-400 truncate max-w-xs">{t.rejectedReason.replace(/_/g, " ").toLowerCase()}</span>
+      <div className="flex items-center px-4 py-3">
+        {/* Name */}
+        <div className="flex-1 min-w-0 pr-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate">{t.name}</p>
+            {headerFormat && (
+              <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono">
+                {headerFormat}
+              </span>
             )}
           </div>
+          {t.status === "rejected" && t.rejectedReason && (
+            <p className="text-xs text-red-400 truncate">{t.rejectedReason.replace(/_/g, " ").toLowerCase()}</p>
+          )}
         </div>
 
-        {/* Header format badge */}
-        {headerFormat && (
-          <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono">
-            {headerFormat}
-          </span>
-        )}
+        {/* Language */}
+        <span className="w-20 shrink-0 text-sm text-gray-600">{t.language}</span>
 
-        {/* Status + quality dot */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        {/* Category */}
+        <span className="w-28 shrink-0 text-sm text-gray-600 capitalize">{t.category.toLowerCase()}</span>
+
+        {/* Status */}
+        <div className="w-24 shrink-0 flex items-center gap-1.5">
           <Badge variant={statusVariant[t.status] ?? "gray"}>{t.status}</Badge>
           {qualityDotClass && (
             <span className={`inline-block w-2 h-2 rounded-full ${qualityDotClass}`} title={`Quality: ${t.qualityScore}`} />
           )}
         </div>
 
-        {/* Actions */}
-        <TemplateActions
-          templateId={t.id}
-          templateName={t.name}
-          headerFormat={
-            (t.components ?? []).find(
-              (c) =>
-                c.type?.toUpperCase() === "HEADER" &&
-                ["IMAGE", "VIDEO", "DOCUMENT"].includes((c.format ?? "").toUpperCase())
-            )?.format?.toUpperCase()
-          }
-          imageCardCount={imageCardCount}
-        />
+        {/* Updated On */}
+        <span className="w-32 shrink-0 text-sm text-gray-500">
+          {new Date(t.updatedAt).toLocaleDateString()}
+        </span>
 
-        {/* Expand chevron */}
-        {hasDetail && (
-          <button
-            onClick={() => setExpanded((v) => !v)}
-            className="shrink-0 text-gray-400 hover:text-gray-600 transition-transform duration-150"
-            style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}
-            aria-label={expanded ? "Collapse" : "Expand"}
-          >
-            ›
-          </button>
-        )}
+        {/* Action */}
+        <div className="w-20 shrink-0 flex items-center justify-end gap-1">
+          <TemplateActions
+            templateId={t.id}
+            templateName={t.name}
+            headerFormat={
+              (t.components ?? []).find(
+                (c) =>
+                  c.type?.toUpperCase() === "HEADER" &&
+                  ["IMAGE", "VIDEO", "DOCUMENT"].includes((c.format ?? "").toUpperCase())
+              )?.format?.toUpperCase()
+            }
+            imageCardCount={imageCardCount}
+          />
+          {hasDetail && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="text-gray-400 hover:text-gray-600 transition-transform duration-150"
+              style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}
+              aria-label={expanded ? "Collapse" : "Expand"}
+            >
+              ›
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Detail panel */}
