@@ -117,7 +117,10 @@ export async function sendTemplateMessage(
       template: {
         name: templateName,
         language: { code: languageCode },
-        components,
+        // Omit components entirely when empty — an empty array tells Meta
+        // "I provided components but skipped the header", which it rejects.
+        // Omitting the key lets Meta use the template's own stored media/defaults.
+        ...(components.length > 0 && { components }),
       },
     }),
   });
