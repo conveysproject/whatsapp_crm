@@ -14,6 +14,26 @@ export function BodySection({ state, onChange }: Props): JSX.Element {
   const isLto = state.subType === 'lto';
   const maxChars = isLto ? LIMITS.ltoBodyText : LIMITS.bodyText;
 
+  function insertFormat(marker: string): void {
+    if (!ref.current) return;
+    const ta = ref.current;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = state.bodyText.substring(start, end);
+    const inner = selected || 'text';
+    const wrapped = `${marker}${inner}${marker}`;
+    const next = state.bodyText.substring(0, start) + wrapped + state.bodyText.substring(end);
+    onChange({ bodyText: next });
+    setTimeout(() => {
+      ta.focus();
+      if (selected) {
+        ta.setSelectionRange(start, start + wrapped.length);
+      } else {
+        ta.setSelectionRange(start + marker.length, start + marker.length + inner.length);
+      }
+    }, 0);
+  }
+
   function insertVariable(): void {
     if (!ref.current) return;
     const ta = ref.current;
@@ -71,19 +91,38 @@ export function BodySection({ state, onChange }: Props): JSX.Element {
           + Insert variable
         </button>
       </div>
-      <textarea
-        ref={ref}
-        value={state.bodyText}
-        onChange={(e) => onChange({ bodyText: e.target.value })}
-        rows={5}
-        maxLength={maxChars}
-        placeholder={`Message body. Use ${state.parameterFormat === 'positional' ? '{{1}}, {{2}}' : '{{first_name}}'} for variables.`}
-        className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
-      />
+      <div className="rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-brand-500 overflow-hidden">
+        {/* Formatting toolbar */}
+        <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-gray-200 bg-gray-50">
+          {[
+            { label: 'B', marker: '*', title: 'Bold', className: 'font-bold' },
+            { label: 'I', marker: '_', title: 'Italic', className: 'italic' },
+            { label: 'S', marker: '~', title: 'Strikethrough', className: 'line-through' },
+            { label: '</', marker: '```', title: 'Code', className: 'font-mono text-xs' },
+          ].map(({ label, marker, title, className }) => (
+            <button
+              key={marker}
+              type="button"
+              title={title}
+              onMouseDown={(e) => { e.preventDefault(); insertFormat(marker); }}
+              className="w-7 h-7 flex items-center justify-center rounded text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition-colors"
+            >
+              <span className={className}>{label}</span>
+            </button>
+          ))}
+        </div>
+        <textarea
+          ref={ref}
+          value={state.bodyText}
+          onChange={(e) => onChange({ bodyText: e.target.value })}
+          rows={5}
+          maxLength={maxChars}
+          placeholder={`Message body. Use ${state.parameterFormat === 'positional' ? '{{1}}, {{2}}' : '{{first_name}}'} for variables.`}
+          className="w-full px-3 py-2 text-sm focus:outline-none resize-none bg-white"
+        />
+      </div>
       <div className="flex justify-between items-center">
-        <p className="text-xs text-gray-400">
-          Supports *bold*, _italic_, ~strikethrough~, ```code```
-        </p>
+        <p className="text-xs text-gray-400">Select text then click a format button, or click to insert with placeholder.</p>
         <p className={`text-xs ${state.bodyText.length > maxChars * 0.9 ? 'text-amber-500' : 'text-gray-400'}`}>
           {state.bodyText.length}/{maxChars}
         </p>
