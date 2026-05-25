@@ -34,8 +34,6 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onCreated: (contact: Contact) => void;
-  editContact?: EditableContact;
-  onUpdated?: (contact: Contact) => void;
 }
 
 interface Country { id: number; name: string; isoCode: string | null; phoneCode: number | null }
@@ -106,24 +104,20 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
   );
 }
 
-export function AddContactModal({ open, onClose, onCreated, editContact, onUpdated }: Props): JSX.Element | null {
+export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Element | null {
   const { getToken } = useAuth();
   const [form, setForm] = useState({
-    firstName: editContact?.firstName ?? "",
-    lastName: editContact?.lastName ?? "",
-    phoneNumber: editContact?.phoneNumber ?? "",
-    email: editContact?.email ?? "",
-    countryId: editContact?.countryId != null ? String(editContact.countryId) : "",
-    languageCode: editContact?.languageCode ?? "",
-    groupIds: editContact?.groupIds ?? ([] as string[]),
-    whatsappOptOut: editContact?.whatsappOptOut ?? false,
-    disableBot: editContact?.disableBot ?? false,
+    firstName: "",
+    lastName: "",
+    phoneNumber: "",
+    email: "",
+    countryId: "",
+    languageCode: "",
+    groupIds: [] as string[],
+    whatsappOptOut: false,
+    disableBot: false,
   });
-  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>(
-    editContact?.customFields
-      ? Object.fromEntries(Object.entries(editContact.customFields).map(([k, v]) => [k, String(v)]))
-      : {}
-  );
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
   const groupDropdownRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -185,7 +179,6 @@ export function AddContactModal({ open, onClose, onCreated, editContact, onUpdat
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [groupDropdownOpen]);
 
-  // Seed default values when custom fields load
   useEffect(() => {
     if (customFields.length > 0) {
       setCustomFieldValues((prev) => {
@@ -234,28 +227,20 @@ export function AddContactModal({ open, onClose, onCreated, editContact, onUpdat
         whatsappOptOut: form.whatsappOptOut,
         disableBot: form.disableBot,
       };
-
       const hasCustom = Object.values(customFieldValues).some((v) => v.trim());
       if (hasCustom) {
         body["customFields"] = Object.fromEntries(
           Object.entries(customFieldValues).filter(([, v]) => v.trim())
         );
       }
-
-      const isEdit = !!editContact;
-      const url = isEdit ? `${API_URL}/v1/contacts/${editContact.id}` : `${API_URL}/v1/contacts`;
-      if (isEdit) {
-        delete body["phoneNumber"];
-        body["groupIds"] = form.groupIds;
-      }
-      const res = await fetch(url, {
-        method: isEdit ? "PATCH" : "POST",
+      const res = await fetch(`${API_URL}/v1/contacts`, {
+        method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
         body: JSON.stringify(body),
       });
       const json = await res.json() as { data?: Contact; error?: { message: string } };
-      if (!res.ok) { setError(json.error?.message ?? (isEdit ? "Failed to update contact." : "Failed to create contact.")); return; }
-      if (isEdit) { onUpdated?.(json.data!); } else { onCreated(json.data!); }
+      if (!res.ok) { setError(json.error?.message ?? "Failed to create contact."); return; }
+      onCreated(json.data!);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -268,7 +253,7 @@ export function AddContactModal({ open, onClose, onCreated, editContact, onUpdat
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
-          <h2 className="text-lg font-semibold text-gray-900">{editContact ? "Edit Contact" : "Add New Contact"}</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Add New Contact</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
 
@@ -305,21 +290,20 @@ export function AddContactModal({ open, onClose, onCreated, editContact, onUpdat
               >
                 <option value="">Select country</option>
                 {countries.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={String(c.id)}>{c.name}</option>
                 ))}
               </select>
             </div>
 
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium text-gray-700">
-                Mobile Number {!editContact && <span className="text-red-500">*</span>}
+                Mobile Number <span className="text-red-500">*</span>
               </label>
               <input
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-500"
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 placeholder="919876543210"
                 value={form.phoneNumber}
                 onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value }))}
-                disabled={!!editContact}
               />
               <p className="text-xs text-gray-400">Number should be with country code without 0 or +</p>
             </div>
@@ -474,7 +458,7 @@ export function AddContactModal({ open, onClose, onCreated, editContact, onUpdat
           <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 shrink-0">
             <Button variant="secondary" type="button" onClick={onClose}>Close</Button>
             <Button type="submit" disabled={saving}>
-              {saving ? (editContact ? "Saving…" : "Creating…") : (editContact ? "Save Changes" : "Submit")}
+              {saving ? "Creating…" : "Submit"}
             </Button>
           </div>
         </form>
