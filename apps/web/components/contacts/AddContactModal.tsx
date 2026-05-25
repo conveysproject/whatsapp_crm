@@ -9,8 +9,15 @@ export interface Contact {
   id: string;
   phoneNumber: string;
   name: string | null;
+  firstName: string | null;
+  lastName: string | null;
   email: string | null;
   lifecycleStage: string;
+  languageCode: string | null;
+  createdAt: string;
+  whatsappOptOut: boolean;
+  country: { name: string } | null;
+  groupContacts?: { contactGroup: { id: string; title: string } }[];
 }
 
 export interface EditableContact {

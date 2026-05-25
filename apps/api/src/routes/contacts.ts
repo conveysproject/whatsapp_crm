@@ -188,7 +188,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           ],
         } : {}),
       },
-      include: { labels: { include: { label: true } }, country: true },
+      include: { labels: { include: { label: true } }, country: true, groupContacts: { include: { contactGroup: { select: { id: true, title: true } } } } },
       take: limit + 1,
       orderBy: { id: "asc" },
     });
@@ -336,6 +336,32 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       return reply.send({ data: contact });
     }
   );
+
+  // ── Find conversation by contact ────────────────────────────────────────
+  fastify.get<{ Params: { id: string } }>("/contacts/:id/conversation", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const conversation = await fastify.prisma.conversation.findFirst({
+      where: { contactId: request.params.id, organizationId },
+      orderBy: { lastMessageAt: "desc" },
+      select: { id: true },
+    });
+    return reply.send({ data: conversation ?? null });
+  });
+
+  // ── Bulk delete ──────────────────────────────────────────────────────────
+  fastify.delete<{ Body: { contactIds: string[] } }>("/contacts/bulk", async (request, reply) => {
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_contacts")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
+    }
+    const { contactIds } = request.body;
+    if (!contactIds?.length) return reply.send({ deleted: 0 });
+    const result = await fastify.prisma.contact.updateMany({
+      where: { id: { in: contactIds }, organizationId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+    return reply.send({ deleted: result.count });
+  });
 
   fastify.delete<{ Params: { id: ContactId } }>("/contacts/:id", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
