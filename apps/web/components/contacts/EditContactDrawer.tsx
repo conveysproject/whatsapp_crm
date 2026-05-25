@@ -251,6 +251,18 @@ export function EditContactDrawer({ open, contact, onClose, onUpdated }: Props):
       setError(`Required fields missing: ${missingRequired.map((f) => f.inputName).join(", ")}`);
       return;
     }
+    const invalidFormat = customFields.filter((cf) => {
+      const val = customFieldValues[cf.inputName]?.trim();
+      if (!val) return false;
+      if (cf.inputType === "email") return !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+      if (cf.inputType === "url") { try { new URL(val); return false; } catch { return true; } }
+      if (cf.inputType === "number") return isNaN(Number(val));
+      return false;
+    });
+    if (invalidFormat.length > 0) {
+      setError(`Invalid format: ${invalidFormat.map((f) => f.inputName).join(", ")}`);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
