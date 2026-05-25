@@ -15,12 +15,15 @@ export interface Contact {
 
 export interface EditableContact {
   id: string;
+  name: string | null;
   firstName: string | null;
   lastName: string | null;
   phoneNumber: string;
   email: string | null;
   countryId: number | null;
   languageCode: string | null;
+  lifecycleStage: string;
+  tags: string[];
   whatsappOptOut: boolean;
   disableBot: boolean;
   groupIds: string[];

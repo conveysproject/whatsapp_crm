@@ -153,7 +153,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return;
-    const json = await res.json() as { data: EditableContact & { customFields?: Record<string, string> | null } };
+    const json = await res.json() as { data: EditableContact };
     setEditContact(json.data);
     setShowModal(true);
   }
