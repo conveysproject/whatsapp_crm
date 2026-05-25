@@ -340,11 +340,36 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
   // ── Find conversation by contact ────────────────────────────────────────
   fastify.get<{ Params: { id: string } }>("/contacts/:id/conversation", async (request, reply) => {
     const { organizationId } = request.auth;
-    const conversation = await fastify.prisma.conversation.findFirst({
+
+    // Try by contactId first (fast path)
+    let conversation = await fastify.prisma.conversation.findFirst({
       where: { contactId: request.params.id, organizationId },
       orderBy: { lastMessageAt: "desc" },
       select: { id: true },
     });
+
+    // Fall back to phone-number match (handles recreated contacts where contactId was nulled)
+    if (!conversation) {
+      const contact = await fastify.prisma.contact.findFirst({
+        where: { id: request.params.id, organizationId, deletedAt: null },
+        select: { id: true, phoneNumber: true },
+      });
+      if (contact) {
+        conversation = await fastify.prisma.conversation.findFirst({
+          where: { organizationId, whatsappContactId: contact.phoneNumber },
+          orderBy: { lastMessageAt: "desc" },
+          select: { id: true },
+        });
+        // Re-link conversation to current contact so future lookups are fast
+        if (conversation) {
+          await fastify.prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { contactId: contact.id },
+          });
+        }
+      }
+    }
+
     return reply.send({ data: conversation ?? null });
   });
 
@@ -356,10 +381,19 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     }
     const { contactIds } = request.body;
     if (!contactIds?.length) return reply.send({ deleted: 0 });
-    const result = await fastify.prisma.contact.updateMany({
-      where: { id: { in: contactIds }, organizationId, deletedAt: null },
-      data: { deletedAt: new Date() },
-    });
+    const [result] = await fastify.prisma.$transaction([
+      fastify.prisma.contact.updateMany({
+        where: { id: { in: contactIds }, organizationId, deletedAt: null },
+        data: { deletedAt: new Date() },
+      }),
+      fastify.prisma.conversation.updateMany({
+        where: { contactId: { in: contactIds } },
+        data: { contactId: null },
+      }),
+      fastify.prisma.groupContact.deleteMany({
+        where: { contactId: { in: contactIds } },
+      }),
+    ]);
     return reply.send({ deleted: result.count });
   });
 
@@ -378,10 +412,22 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     if (!existing) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
     }
-    await fastify.prisma.contact.update({
-      where: { id: request.params.id },
-      data: { deletedAt: new Date() },
-    });
+    await fastify.prisma.$transaction([
+      // Soft-delete the contact
+      fastify.prisma.contact.update({
+        where: { id: request.params.id },
+        data: { deletedAt: new Date() },
+      }),
+      // Null out contactId on conversations so they don't dangle
+      fastify.prisma.conversation.updateMany({
+        where: { contactId: request.params.id },
+        data: { contactId: null },
+      }),
+      // Remove from all groups
+      fastify.prisma.groupContact.deleteMany({
+        where: { contactId: request.params.id },
+      }),
+    ]);
     return reply.status(204).send();
   });
 
