@@ -28,6 +28,7 @@ interface ContactBody {
   whatsappOptOut?: boolean;
   disableBot?: boolean;
   groupIds?: string[];
+  customFields?: Record<string, unknown>;
 }
 
 interface ContactPatchBody {
@@ -241,7 +242,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     }
     let contact: Awaited<ReturnType<typeof fastify.prisma.contact.create>>;
     try {
-      const { firstName, lastName, name, phoneNumber, email, companyId, countryId, languageCode, whatsappOptOut, disableBot, groupIds } = request.body;
+      const { firstName, lastName, name, phoneNumber, email, companyId, countryId, languageCode, whatsappOptOut, disableBot, groupIds, customFields } = request.body;
       contact = await fastify.prisma.contact.create({
         data: {
           organizationId,
@@ -255,6 +256,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           languageCode: languageCode ?? null,
           whatsappOptOut: whatsappOptOut ?? false,
           disableBot: disableBot ?? false,
+          ...(customFields ? { customFields: customFields as Prisma.InputJsonValue } : {}),
         },
       });
       if (groupIds && groupIds.length > 0) {
