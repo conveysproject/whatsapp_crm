@@ -321,7 +321,7 @@ export function EditContactDrawer({ open, contact, onClose, onUpdated }: Props):
         </div>
 
         {/* Form */}
-        <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col flex-1 overflow-hidden">
+        <form noValidate onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto px-6 py-2 space-y-1">
 
             {/* ── Identity ─────────────────────────────────────── */}

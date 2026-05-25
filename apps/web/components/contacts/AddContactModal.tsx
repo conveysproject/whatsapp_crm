@@ -301,7 +301,7 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
 
-        <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col flex-1 overflow-hidden">
+        <form noValidate onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
 
             <div className="grid grid-cols-2 gap-3">
