@@ -349,7 +349,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={(e) => { void handleEditClick(e, c.id); }}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-brand-600 p-1 rounded"
+                        className="text-gray-400 hover:text-brand-600 p-1 rounded"
                         title="Edit contact"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -366,6 +366,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
       </div>
 
       <AddContactModal
+        key={editContact?.id ?? "new"}
         open={showModal}
         onClose={() => { setShowModal(false); setEditContact(undefined); }}
         onCreated={handleCreated}

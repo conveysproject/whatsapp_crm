@@ -106,17 +106,21 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 export function AddContactModal({ open, onClose, onCreated, editContact, onUpdated }: Props): JSX.Element | null {
   const { getToken } = useAuth();
   const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    phoneNumber: "",
-    email: "",
-    countryId: "",
-    languageCode: "",
-    groupIds: [] as string[],
-    whatsappOptOut: false,
-    disableBot: false,
+    firstName: editContact?.firstName ?? "",
+    lastName: editContact?.lastName ?? "",
+    phoneNumber: editContact?.phoneNumber ?? "",
+    email: editContact?.email ?? "",
+    countryId: editContact?.countryId != null ? String(editContact.countryId) : "",
+    languageCode: editContact?.languageCode ?? "",
+    groupIds: editContact?.groupIds ?? ([] as string[]),
+    whatsappOptOut: editContact?.whatsappOptOut ?? false,
+    disableBot: editContact?.disableBot ?? false,
   });
-  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>(
+    editContact?.customFields
+      ? Object.fromEntries(Object.entries(editContact.customFields).map(([k, v]) => [k, String(v)]))
+      : {}
+  );
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
   const groupDropdownRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -165,27 +169,8 @@ export function AddContactModal({ open, onClose, onCreated, editContact, onUpdat
       setCustomFieldValues({});
       setGroupDropdownOpen(false);
       setError(null);
-    } else if (editContact) {
-      setForm({
-        firstName: editContact.firstName ?? "",
-        lastName: editContact.lastName ?? "",
-        phoneNumber: editContact.phoneNumber,
-        email: editContact.email ?? "",
-        countryId: editContact.countryId != null ? String(editContact.countryId) : "",
-        languageCode: editContact.languageCode ?? "",
-        groupIds: editContact.groupIds,
-        whatsappOptOut: editContact.whatsappOptOut,
-        disableBot: editContact.disableBot,
-      });
-      if (editContact.customFields) {
-        setCustomFieldValues(
-          Object.fromEntries(
-            Object.entries(editContact.customFields).map(([k, v]) => [k, String(v)])
-          )
-        );
-      }
     }
-  }, [open, editContact]);
+  }, [open]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
