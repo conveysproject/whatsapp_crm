@@ -32,11 +32,17 @@ interface ContactBody {
 
 interface ContactPatchBody {
   name?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   lifecycleStage?: string;
   tags?: string[];
   customFields?: Record<string, unknown>;
   countryId?: number | null;
+  languageCode?: string | null;
+  whatsappOptOut?: boolean;
+  disableBot?: boolean;
+  groupIds?: string[];
 }
 
 export const contactsRouter: FastifyPluginAsync = async (fastify) => {
@@ -203,7 +209,11 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId, permissions } = request.auth;
     const contact = await fastify.prisma.contact.findFirst({
       where: { id: request.params.id, organizationId, deletedAt: null },
-      include: { labels: { include: { label: true } }, country: true },
+      include: {
+        labels: { include: { label: true } },
+        country: true,
+        groupContacts: { select: { contactGroupId: true } },
+      },
     });
     if (!contact) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
@@ -214,6 +224,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       ...contact,
       phoneNumber: hidePhone ? maskPhone(contact.phoneNumber) : contact.phoneNumber,
       email: hideEmail && contact.email ? maskEmail(contact.email) : contact.email,
+      groupIds: contact.groupContacts.map((g) => g.contactGroupId),
     };
     return reply.send({ data });
   });
@@ -280,17 +291,46 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       if (!existing) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
       }
+      const { firstName, lastName } = request.body;
+      const derivedName =
+        request.body.name ??
+        (firstName !== undefined || lastName !== undefined
+          ? [firstName ?? existing.firstName, lastName ?? existing.lastName].filter(Boolean).join(" ") || null
+          : undefined);
+
       const contact = await fastify.prisma.contact.update({
         where: { id: request.params.id },
         data: {
-          name: request.body.name,
-          email: request.body.email,
-          lifecycleStage: request.body.lifecycleStage as LifecycleStage | undefined,
-          tags: request.body.tags,
-          customFields: request.body.customFields as Prisma.InputJsonValue | undefined,
-          ...(request.body.countryId !== undefined && { countryId: request.body.countryId }),
+          ...(derivedName !== undefined ? { name: derivedName } : {}),
+          ...(firstName !== undefined ? { firstName } : {}),
+          ...(lastName !== undefined ? { lastName } : {}),
+          ...(request.body.email !== undefined ? { email: request.body.email } : {}),
+          ...(request.body.lifecycleStage !== undefined ? { lifecycleStage: request.body.lifecycleStage as LifecycleStage } : {}),
+          ...(request.body.tags !== undefined ? { tags: request.body.tags } : {}),
+          ...(request.body.customFields !== undefined ? { customFields: request.body.customFields as Prisma.InputJsonValue } : {}),
+          ...(request.body.countryId !== undefined ? { countryId: request.body.countryId } : {}),
+          ...(request.body.languageCode !== undefined ? { languageCode: request.body.languageCode } : {}),
+          ...(request.body.whatsappOptOut !== undefined ? { whatsappOptOut: request.body.whatsappOptOut } : {}),
+          ...(request.body.disableBot !== undefined ? { disableBot: request.body.disableBot } : {}),
         },
       });
+
+      if (request.body.groupIds !== undefined) {
+        await fastify.prisma.groupContact.deleteMany({ where: { contactId: contact.id } });
+        if (request.body.groupIds.length > 0) {
+          const validGroups = await fastify.prisma.contactGroup.findMany({
+            where: { id: { in: request.body.groupIds }, organizationId },
+            select: { id: true },
+          });
+          if (validGroups.length > 0) {
+            await fastify.prisma.groupContact.createMany({
+              data: validGroups.map((g) => ({ contactGroupId: g.id, contactId: contact.id })),
+              skipDuplicates: true,
+            });
+          }
+        }
+      }
+
       return reply.send({ data: contact });
     }
   );

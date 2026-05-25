@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Toast, useToast } from "@/components/ui/Toast";
 import { LabelBadge, type LabelItem } from "@/components/ui/LabelBadge";
-import { AddContactModal, type Contact } from "./AddContactModal";
+import { AddContactModal, type Contact, type EditableContact } from "./AddContactModal";
 
 const stageVariant: Record<string, "green" | "blue" | "yellow" | "red" | "gray"> = {
   customer: "green",
@@ -36,6 +36,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [editContact, setEditContact] = useState<EditableContact | undefined>(undefined);
   const [showFilters, setShowFilters] = useState(false);
   const [labels, setLabels] = useState<LabelItem[]>([]);
   const [selectedLabelId, setSelectedLabelId] = useState<string>("");
@@ -138,8 +139,30 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
   function handleCreated(contact: Contact) {
     setContacts((prev) => [contact as ContactWithLabels, ...prev]);
     setShowModal(false);
+    setEditContact(undefined);
     toast("Contact created", { variant: "success" });
     void fetchByLabel(selectedLabelId);
+  }
+
+  async function handleEditClick(e: React.MouseEvent, contactId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    const token = await getToken();
+    if (!token) return;
+    const res = await fetch(`${API_URL}/v1/contacts/${contactId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const json = await res.json() as { data: EditableContact & { customFields?: Record<string, string> | null } };
+    setEditContact(json.data);
+    setShowModal(true);
+  }
+
+  function handleUpdated(contact: Contact) {
+    setContacts((prev) => prev.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)));
+    setShowModal(false);
+    setEditContact(undefined);
+    toast("Contact updated", { variant: "success" });
   }
 
   const activeFiltersCount = [selectedLabelId, selectedStage, dateFrom, dateTo].filter(Boolean).length;
@@ -275,6 +298,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Email</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Stage</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Labels</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -322,6 +346,17 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                         ))}
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={(e) => { void handleEditClick(e, c.id); }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-brand-600 p-1 rounded"
+                        title="Edit contact"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -332,8 +367,10 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
 
       <AddContactModal
         open={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={() => { setShowModal(false); setEditContact(undefined); }}
         onCreated={handleCreated}
+        editContact={editContact}
+        onUpdated={handleUpdated}
       />
 
       <Toast

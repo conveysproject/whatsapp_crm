@@ -13,10 +13,26 @@ export interface Contact {
   lifecycleStage: string;
 }
 
+export interface EditableContact {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  phoneNumber: string;
+  email: string | null;
+  countryId: number | null;
+  languageCode: string | null;
+  whatsappOptOut: boolean;
+  disableBot: boolean;
+  groupIds: string[];
+  customFields?: Record<string, string> | null;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
   onCreated: (contact: Contact) => void;
+  editContact?: EditableContact;
+  onUpdated?: (contact: Contact) => void;
 }
 
 interface Country { id: number; name: string; isoCode: string | null; phoneCode: number | null }
@@ -87,7 +103,7 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
   );
 }
 
-export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Element | null {
+export function AddContactModal({ open, onClose, onCreated, editContact, onUpdated }: Props): JSX.Element | null {
   const { getToken } = useAuth();
   const [form, setForm] = useState({
     firstName: "",
@@ -149,8 +165,27 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
       setCustomFieldValues({});
       setGroupDropdownOpen(false);
       setError(null);
+    } else if (editContact) {
+      setForm({
+        firstName: editContact.firstName ?? "",
+        lastName: editContact.lastName ?? "",
+        phoneNumber: editContact.phoneNumber,
+        email: editContact.email ?? "",
+        countryId: editContact.countryId != null ? String(editContact.countryId) : "",
+        languageCode: editContact.languageCode ?? "",
+        groupIds: editContact.groupIds,
+        whatsappOptOut: editContact.whatsappOptOut,
+        disableBot: editContact.disableBot,
+      });
+      if (editContact.customFields) {
+        setCustomFieldValues(
+          Object.fromEntries(
+            Object.entries(editContact.customFields).map(([k, v]) => [k, String(v)])
+          )
+        );
+      }
     }
-  }, [open]);
+  }, [open, editContact]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -219,14 +254,20 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
         );
       }
 
-      const res = await fetch(`${API_URL}/v1/contacts`, {
-        method: "POST",
+      const isEdit = !!editContact;
+      const url = isEdit ? `${API_URL}/v1/contacts/${editContact.id}` : `${API_URL}/v1/contacts`;
+      if (isEdit) {
+        delete body["phoneNumber"];
+        body["groupIds"] = form.groupIds;
+      }
+      const res = await fetch(url, {
+        method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
         body: JSON.stringify(body),
       });
       const json = await res.json() as { data?: Contact; error?: { message: string } };
-      if (!res.ok) { setError(json.error?.message ?? "Failed to create contact."); return; }
-      onCreated(json.data!);
+      if (!res.ok) { setError(json.error?.message ?? (isEdit ? "Failed to update contact." : "Failed to create contact.")); return; }
+      if (isEdit) { onUpdated?.(json.data!); } else { onCreated(json.data!); }
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -239,7 +280,7 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
-          <h2 className="text-lg font-semibold text-gray-900">Add New Contact</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{editContact ? "Edit Contact" : "Add New Contact"}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
 
@@ -282,12 +323,15 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-gray-700">Mobile Number <span className="text-red-500">*</span></label>
+              <label className="text-sm font-medium text-gray-700">
+                Mobile Number {!editContact && <span className="text-red-500">*</span>}
+              </label>
               <input
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-500"
                 placeholder="919876543210"
                 value={form.phoneNumber}
                 onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value }))}
+                disabled={!!editContact}
               />
               <p className="text-xs text-gray-400">Number should be with country code without 0 or +</p>
             </div>
@@ -442,7 +486,7 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
           <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 shrink-0">
             <Button variant="secondary" type="button" onClick={onClose}>Close</Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Creating…" : "Submit"}
+              {saving ? (editContact ? "Saving…" : "Creating…") : (editContact ? "Save Changes" : "Submit")}
             </Button>
           </div>
         </form>
