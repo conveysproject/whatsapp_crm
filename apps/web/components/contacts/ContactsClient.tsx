@@ -39,6 +39,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
   const [showModal, setShowModal] = useState(false);
   const [showEditDrawer, setShowEditDrawer] = useState(false);
   const [editContact, setEditContact] = useState<EditableContact | undefined>(undefined);
+  const [loadingEditContact, setLoadingEditContact] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [labels, setLabels] = useState<LabelItem[]>([]);
   const [selectedLabelId, setSelectedLabelId] = useState<string>("");
@@ -148,15 +149,18 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
   async function handleEditClick(e: React.MouseEvent, contactId: string) {
     e.preventDefault();
     e.stopPropagation();
+    setEditContact(undefined);
+    setShowEditDrawer(true);
+    setLoadingEditContact(true);
     const token = await getToken();
-    if (!token) return;
+    if (!token) { setLoadingEditContact(false); return; }
     const res = await fetch(`${API_URL}/v1/contacts/${contactId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return;
+    if (!res.ok) { setLoadingEditContact(false); return; }
     const json = await res.json() as { data: EditableContact };
     setEditContact(json.data);
-    setShowEditDrawer(true);
+    setLoadingEditContact(false);
   }
 
   function handleUpdated(contact: Contact) {
@@ -375,6 +379,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
       <EditContactDrawer
         key={editContact?.id}
         open={showEditDrawer}
+        loading={loadingEditContact}
         contact={editContact}
         onClose={() => { setShowEditDrawer(false); setEditContact(undefined); }}
         onUpdated={handleUpdated}

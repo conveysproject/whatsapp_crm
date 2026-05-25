@@ -97,6 +97,7 @@ interface CustomField {
 
 interface Props {
   open: boolean;
+  loading?: boolean;
   contact: EditableContact | undefined;
   onClose: () => void;
   onUpdated: (contact: Contact) => void;
@@ -140,7 +141,7 @@ function FieldSkeleton(): JSX.Element {
   return <div className="h-9 rounded-lg bg-gray-100 animate-pulse" />;
 }
 
-export function EditContactDrawer({ open, contact, onClose, onUpdated }: Props): JSX.Element {
+export function EditContactDrawer({ open, loading = false, contact, onClose, onUpdated }: Props): JSX.Element {
   const { getToken } = useAuth();
 
   const initials = [contact?.firstName, contact?.lastName]
@@ -336,6 +337,17 @@ export function EditContactDrawer({ open, contact, onClose, onUpdated }: Props):
         <form noValidate onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto px-6 py-2 space-y-1">
 
+            {loading ? (
+              <div className="space-y-4 py-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="space-y-1.5">
+                    <div className="h-3 w-24 rounded bg-gray-100 animate-pulse" />
+                    <div className="h-9 rounded-lg bg-gray-100 animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+            <>
             {/* ── Identity ─────────────────────────────────────── */}
             <SectionHeader title="Identity" />
             <div className="space-y-3 pb-3">
@@ -575,12 +587,14 @@ export function EditContactDrawer({ open, contact, onClose, onUpdated }: Props):
                 {error}
               </div>
             )}
+            </>
+            )}
           </div>
 
           {/* Footer */}
           <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 shrink-0">
             <Button variant="secondary" type="button" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || loading}>
               {saving ? "Saving…" : "Save Changes"}
             </Button>
           </div>
