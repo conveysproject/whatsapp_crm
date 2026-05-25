@@ -148,7 +148,7 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
   );
 }
 
-export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Element | null {
+export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Element {
   const { getToken } = useAuth();
   const [form, setForm] = useState({
     firstName: "",
@@ -237,8 +237,6 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
     }
   }, [customFields]);
 
-  if (!open) return null;
-
   function toggleGroup(id: string) {
     setForm((f) => ({
       ...f,
@@ -305,9 +303,12 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]">
+    <>
+      <div
+        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-200 ${open ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        onClick={onClose}
+      />
+      <div className={`fixed inset-y-0 right-0 z-50 w-[480px] max-w-full bg-white shadow-2xl flex flex-col transition-transform duration-200 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
           <h2 className="text-lg font-semibold text-gray-900">Add New Contact</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
@@ -519,6 +520,6 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
           </div>
         </form>
       </div>
-    </div>
+    </>
   );
 }
