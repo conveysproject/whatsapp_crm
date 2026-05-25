@@ -170,7 +170,10 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
   const { data: countries = [] } = useQuery<Country[]>({
     queryKey: ["countries"],
     queryFn: async () => {
-      const res = await fetch(`${API_URL}/v1/countries`);
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/countries`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
       if (!res.ok) return [];
       return (await res.json() as { data: Country[] }).data;
     },
