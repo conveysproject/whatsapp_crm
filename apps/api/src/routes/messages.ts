@@ -31,7 +31,8 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
     if (from || to) {
       where.createdAt = {
         ...(from ? { gte: new Date(from) } : {}),
-        ...(to ? { lte: new Date(to) } : {}),
+        // Use start of next day so "to=2026-05-26" includes all messages on May 26
+        ...(to ? { lt: new Date(new Date(to).getTime() + 86400000) } : {}),
       };
     }
     if (direction) where.direction = direction;

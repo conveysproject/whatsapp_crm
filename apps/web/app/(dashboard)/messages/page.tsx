@@ -114,8 +114,8 @@ function parseBody(contentType: string, body: string | null): JSX.Element {
 
 export default function MessageLogPage(): JSX.Element {
   const { getToken } = useAuth();
-  const today = new Date().toISOString().split("T")[0]!;
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0]!;
+  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local timezone
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toLocaleDateString("en-CA");
 
   const [from, setFrom] = useState(weekAgo);
   const [to, setTo] = useState(today);
