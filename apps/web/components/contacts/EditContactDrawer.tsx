@@ -180,10 +180,7 @@ export function EditContactDrawer({ open, contact, onClose, onUpdated }: Props):
   const { data: countries, isLoading: loadingCountries } = useQuery<Country[]>({
     queryKey: ["countries"],
     queryFn: async () => {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/countries`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
-      });
+      const res = await fetch(`${API_URL}/v1/countries`);
       if (!res.ok) return [];
       return (await res.json() as { data: Country[] }).data;
     },
