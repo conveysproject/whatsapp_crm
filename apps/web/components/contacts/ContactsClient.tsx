@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Toast, useToast } from "@/components/ui/Toast";
 import { LabelBadge, type LabelItem } from "@/components/ui/LabelBadge";
 import { AddContactModal, type Contact, type EditableContact } from "./AddContactModal";
+import { EditContactDrawer } from "./EditContactDrawer";
 
 const stageVariant: Record<string, "green" | "blue" | "yellow" | "red" | "gray"> = {
   customer: "green",
@@ -36,6 +37,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showEditDrawer, setShowEditDrawer] = useState(false);
   const [editContact, setEditContact] = useState<EditableContact | undefined>(undefined);
   const [showFilters, setShowFilters] = useState(false);
   const [labels, setLabels] = useState<LabelItem[]>([]);
@@ -139,7 +141,6 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
   function handleCreated(contact: Contact) {
     setContacts((prev) => [contact as ContactWithLabels, ...prev]);
     setShowModal(false);
-    setEditContact(undefined);
     toast("Contact created", { variant: "success" });
     void fetchByLabel(selectedLabelId);
   }
@@ -155,12 +156,12 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
     if (!res.ok) return;
     const json = await res.json() as { data: EditableContact };
     setEditContact(json.data);
-    setShowModal(true);
+    setShowEditDrawer(true);
   }
 
   function handleUpdated(contact: Contact) {
     setContacts((prev) => prev.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)));
-    setShowModal(false);
+    setShowEditDrawer(false);
     setEditContact(undefined);
     toast("Contact updated", { variant: "success" });
   }
@@ -366,11 +367,16 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
       </div>
 
       <AddContactModal
-        key={editContact?.id ?? "new"}
         open={showModal}
-        onClose={() => { setShowModal(false); setEditContact(undefined); }}
+        onClose={() => setShowModal(false)}
         onCreated={handleCreated}
-        editContact={editContact}
+      />
+
+      <EditContactDrawer
+        key={editContact?.id}
+        open={showEditDrawer}
+        contact={editContact}
+        onClose={() => { setShowEditDrawer(false); setEditContact(undefined); }}
         onUpdated={handleUpdated}
       />
 
