@@ -22,6 +22,25 @@ type TimelineItem =
   | { type: "message"; id: string; body: string | null; direction: string; createdAt: string }
   | { type: "deal"; id: string; title: string; stage: string; createdAt: string };
 
+function getMessagePreview(body: string | null): string {
+  if (!body) return "(media)";
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    if (typeof parsed.templateName === "string") {
+      const bodyText = parsed.body;
+      if (typeof bodyText === "string" && bodyText) return bodyText;
+      return parsed.templateName;
+    }
+    const bodyObj = parsed.body;
+    if (bodyObj && typeof bodyObj === "object" && "text" in bodyObj && typeof (bodyObj as Record<string, unknown>).text === "string") {
+      return (bodyObj as { text: string }).text;
+    }
+    return body;
+  } catch {
+    return body;
+  }
+}
+
 export function ContactTimeline({ contactId }: { contactId: string }): JSX.Element {
   const [tab, setTab] = useState<Tab>("all");
 
@@ -88,7 +107,7 @@ export function ContactTimeline({ contactId }: { contactId: string }): JSX.Eleme
             <div>
               {item.type === "message" && (
                 <p className="text-gray-700">
-                  {item.body ? (item.body.length > 100 ? item.body.slice(0, 100) + "..." : item.body) : "(media)"}
+                  {(() => { const p = getMessagePreview(item.body); return p.length > 120 ? p.slice(0, 120) + "…" : p; })()}
                   <span className="ml-1 text-gray-400">({item.direction})</span>
                 </p>
               )}
