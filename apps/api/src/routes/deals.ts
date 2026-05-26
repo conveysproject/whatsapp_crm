@@ -16,6 +16,7 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
     const query = request.query as Record<string, string>;
     const where: Record<string, unknown> = { organizationId };
     if (query["pipelineId"]) where["pipelineId"] = query["pipelineId"];
+    if (query["contactId"]) where["contactId"] = query["contactId"];
 
     const deals = await fastify.prisma.deal.findMany({
       where,

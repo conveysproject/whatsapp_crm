@@ -41,10 +41,16 @@ export function ContactDetailPanel({ contactId, initialSummary }: Props): JSX.El
         ))}
       </div>
 
-      {/* Tab content */}
-      {tab === "timeline" && <ContactTimeline contactId={contactId} />}
-      {tab === "summary"  && <AiSummaryCard contactId={contactId} initialSummary={initialSummary} />}
-      {tab === "deals"    && <ContactDealsTab contactId={contactId} />}
+      {/* Tab content — always mounted to preserve internal state */}
+      <div className={tab === "timeline" ? undefined : "hidden"}>
+        <ContactTimeline contactId={contactId} />
+      </div>
+      <div className={tab === "summary" ? undefined : "hidden"}>
+        <AiSummaryCard contactId={contactId} initialSummary={initialSummary} />
+      </div>
+      <div className={tab === "deals" ? undefined : "hidden"}>
+        <ContactDealsTab contactId={contactId} />
+      </div>
     </div>
   );
 }

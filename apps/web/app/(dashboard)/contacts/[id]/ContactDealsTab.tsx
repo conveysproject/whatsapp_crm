@@ -26,7 +26,7 @@ export function ContactDealsTab({ contactId }: { contactId: string }): JSX.Eleme
   const { getToken } = useAuth();
 
   const { data = [], isLoading } = useQuery<Deal[]>({
-    queryKey: ["contact-deals", contactId],
+    queryKey: ["contact-deals-tab", contactId],
     queryFn: async () => {
       const token = await getToken();
       const res = await fetch(`${API_URL}/v1/deals?contactId=${contactId}`, {
