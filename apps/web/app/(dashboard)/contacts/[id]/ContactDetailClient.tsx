@@ -1,11 +1,14 @@
 "use client";
 
-import { JSX, useState } from "react";
+import { JSX, useState, useMemo } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { ContactDetailHeader } from "./ContactDetailHeader";
 import { ContactDetailSidebar } from "./ContactDetailSidebar";
 import { ContactDetailPanel } from "./ContactDetailPanel";
 import { EditContactDrawer } from "@/components/contacts/EditContactDrawer";
 import type { Contact as DrawerContact, EditableContact } from "@/components/contacts/AddContactModal";
+
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 export interface Contact {
   id: string;
@@ -31,27 +34,28 @@ export interface Contact {
 export function ContactDetailClient({ contact: initial }: { contact: Contact }): JSX.Element {
   const [contact, setContact] = useState<Contact>(initial);
   const [showEdit, setShowEdit] = useState(false);
+  const { getToken } = useAuth();
 
   function handleBlockChange(waBlockedAt: string | null): void {
     setContact((prev) => ({ ...prev, waBlockedAt }));
   }
 
-  function handleDrawerUpdated(updated: DrawerContact): void {
-    setContact((prev) => ({
-      ...prev,
-      firstName: updated.firstName,
-      lastName: updated.lastName,
-      name: updated.name,
-      email: updated.email,
-      lifecycleStage: updated.lifecycleStage,
-      languageCode: updated.languageCode,
-      whatsappOptOut: updated.whatsappOptOut,
-      groupIds: updated.groupContacts?.map((gc) => gc.contactGroup.id) ?? prev.groupIds,
-    }));
-    setShowEdit(false);
+  async function handleDrawerUpdated(): Promise<void> {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/contacts/${contact.id}`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (res.ok) {
+        const json = await res.json() as { data: Contact };
+        setContact(json.data);
+      }
+    } finally {
+      setShowEdit(false);
+    }
   }
 
-  const editableContact: EditableContact = {
+  const editableContact = useMemo<EditableContact>(() => ({
     id: contact.id,
     name: contact.name,
     firstName: contact.firstName,
@@ -66,7 +70,7 @@ export function ContactDetailClient({ contact: initial }: { contact: Contact }):
     disableBot: contact.disableBot,
     groupIds: contact.groupIds,
     customFields: contact.customFields,
-  };
+  }), [contact]);
 
   return (
     <div className="flex flex-col h-full">
@@ -89,7 +93,7 @@ export function ContactDetailClient({ contact: initial }: { contact: Contact }):
         open={showEdit}
         contact={editableContact}
         onClose={() => setShowEdit(false)}
-        onUpdated={handleDrawerUpdated}
+        onUpdated={handleDrawerUpdated as (c: DrawerContact) => void}
       />
     </div>
   );
