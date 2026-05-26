@@ -147,10 +147,12 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevScrollHeight = useRef<number>(0);
 
-  // Scroll to bottom on initial load and new messages
+  const lastMessageId = messages[messages.length - 1]?.id;
+
+  // Scroll to bottom on initial load and whenever a new message arrives
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversationId]);
+  }, [conversationId, lastMessageId]);
 
   // Restore scroll position after older messages are prepended
   useEffect(() => {
