@@ -10,6 +10,7 @@ interface TemplateComponent {
   type?: string;
   format?: string;
   text?: string;
+  example?: { header_url?: string[] };
   buttons?: Array<{ type?: string; text?: string }>;
 }
 
@@ -55,11 +56,20 @@ function getPreview(components: TemplateComponent[]): { header: string | null; b
   };
 }
 
+function needsMediaUrl(components: TemplateComponent[]): boolean {
+  const header = components.find((c) => c.type?.toUpperCase() === "HEADER");
+  return !!header &&
+    ["IMAGE", "VIDEO", "DOCUMENT"].includes((header.format ?? "").toUpperCase()) &&
+    !header.example?.header_url?.[0];
+}
+
 export function TemplatePicker({ conversationId, contactId, initialSearch = "", onSent, onClose }: Props): JSX.Element {
   const { getToken } = useAuth();
   const [search, setSearch] = useState(initialSearch);
   const [sending, setSending] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [pendingTemplate, setPendingTemplate] = useState<Template | null>(null);
+  const [mediaUrl, setMediaUrl] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { searchRef.current?.focus(); }, []);
@@ -81,7 +91,17 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
     (t.components.find((c) => c.type?.toUpperCase() === "BODY")?.text ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
-  async function sendTemplate(templateId: string) {
+  function handleTemplateClick(t: Template) {
+    if (needsMediaUrl(t.components)) {
+      setPendingTemplate(t);
+      setMediaUrl("");
+      setSendError(null);
+    } else {
+      void sendTemplate(t.id, "");
+    }
+  }
+
+  async function sendTemplate(templateId: string, url: string) {
     setSending(templateId);
     setSendError(null);
     try {
@@ -90,12 +110,12 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
         ? await fetch(`${API_URL}/v1/templates/${templateId}/send-to-contact`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ contactId, variables: [] }),
+            body: JSON.stringify({ contactId, variables: [], ...(url ? { mediaUrl: url } : {}) }),
           })
         : await fetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ contentType: "template", templateId }),
+            body: JSON.stringify({ contentType: "template", templateId, ...(url ? { mediaUrl: url } : {}) }),
           });
       if (!res.ok) {
         const json = await res.json().catch(() => ({})) as { error?: { message?: string } };
@@ -106,6 +126,7 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
       onClose();
     } finally {
       setSending(null);
+      setPendingTemplate(null);
     }
   }
 
@@ -142,6 +163,36 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
         <div className="px-4 py-2 bg-red-50 border-b border-red-100 text-xs text-red-600">{sendError}</div>
       )}
 
+      {/* Media URL prompt — shown when selected template needs an image/video/document URL */}
+      {pendingTemplate && (
+        <div className="px-4 py-3 border-b border-gray-100 bg-amber-50 space-y-2">
+          <p className="text-xs font-medium text-amber-800">
+            This template has an {pendingTemplate.components.find((c) => c.type?.toUpperCase() === "HEADER")?.format?.toLowerCase()} header — paste a public URL:
+          </p>
+          <input
+            autoFocus
+            type="url"
+            value={mediaUrl}
+            onChange={(e) => setMediaUrl(e.target.value)}
+            placeholder="https://example.com/image.jpg"
+            className="w-full text-sm border border-amber-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+            onKeyDown={(e) => { if (e.key === "Enter" && mediaUrl.trim()) void sendTemplate(pendingTemplate.id, mediaUrl.trim()); if (e.key === "Escape") setPendingTemplate(null); }}
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => void sendTemplate(pendingTemplate.id, mediaUrl.trim())}
+              disabled={!mediaUrl.trim() || !!sending}
+              className="flex-1 text-xs font-medium bg-green-600 text-white rounded-lg py-1.5 hover:bg-green-700 disabled:opacity-50 transition-colors"
+            >
+              {sending ? "Sending…" : "Send"}
+            </button>
+            <button onClick={() => setPendingTemplate(null)} className="text-xs text-gray-500 hover:text-gray-700 px-3">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* List */}
       <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
         {isLoading ? (
@@ -157,7 +208,7 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
             return (
               <button
                 key={t.id}
-                onClick={() => { void sendTemplate(t.id); }}
+                onClick={() => handleTemplateClick(t)}
                 disabled={!!sending}
                 className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors disabled:opacity-60 group"
               >

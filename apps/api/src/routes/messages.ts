@@ -9,7 +9,7 @@ type SendMessageBody =
   | { contentType?: "text"; text: string }
   | { contentType: "image" | "video" | "document" | "audio"; mediaId: string; mimeType?: string; filename?: string; caption?: string }
   | { contentType: "interactive"; interactive: WaInteractivePayload }
-  | { contentType: "template"; templateId: string };
+  | { contentType: "template"; templateId: string; mediaUrl?: string };
 
 export const messagesRouter: FastifyPluginAsync = async (fastify) => {
   // ── Message log (all messages with date filter) ──────────────────────────
@@ -93,7 +93,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
 
       // ── Template branch — resolve before creating draft ────────────────────
       if (contentType === "template") {
-        const tplBody = body as { contentType: "template"; templateId: string };
+        const tplBody = body as { contentType: "template"; templateId: string; mediaUrl?: string };
         const template = await fastify.prisma.template.findFirst({
           where: { id: tplBody.templateId, organizationId },
         });
@@ -132,6 +132,15 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
           }
         }
 
+        // Inject caller-supplied mediaUrl into the stored header so buildTemplateComponents picks it up
+        if (tplBody.mediaUrl) {
+          stored = stored.map((c) =>
+            c.type?.toUpperCase() === "HEADER"
+              ? { ...c, example: { ...(c.example ?? {}), header_url: [tplBody.mediaUrl!] } }
+              : c
+          );
+        }
+
         const resolvedHeader = stored.find((c) => c.type?.toUpperCase() === "HEADER");
         if (
           resolvedHeader &&
@@ -139,7 +148,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
           !resolvedHeader.example?.header_url?.[0]
         ) {
           return reply.status(400).send({
-            error: { code: "MEDIA_REQUIRED", message: `Template "${template.name}" has an ${resolvedHeader.format} header that requires a media URL. Re-sync your templates or contact support.` },
+            error: { code: "MEDIA_REQUIRED", message: `Template "${template.name}" has an ${resolvedHeader.format} header. Please provide a media URL.` },
           });
         }
 
