@@ -65,7 +65,7 @@ export function ContactDetailSidebar({ contact, onUpdate }: Props): JSX.Element 
   const groupDropdownRef = useRef<HTMLDivElement>(null);
 
   // Supporting data
-  const { data: countries = [] } = useQuery<Country[]>({
+  const { data: countries = [], isLoading: loadingCountries } = useQuery<Country[]>({
     queryKey: ["countries"],
     queryFn: async () => {
       const res = await fetch(`${API_URL}/v1/countries`);
@@ -167,30 +167,47 @@ export function ContactDetailSidebar({ contact, onUpdate }: Props): JSX.Element 
 
   async function saveNotes(): Promise<void> {
     setNotesSaving(true);
-    const token = await getToken();
-    await fetch(`${API_URL}/v1/contacts/${contact.id}/notes`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token ?? ""}`,
-      },
-      body: JSON.stringify({ notes }),
-    });
-    onUpdate({ notes });
-    setNotesSaving(false);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/contacts/${contact.id}/notes`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
+        body: JSON.stringify({ notes }),
+      });
+      if (res.ok) {
+        onUpdate({ notes });
+      } else {
+        setFieldError("Failed to save notes. Please try again.");
+      }
+    } catch {
+      setFieldError("Failed to save notes. Please try again.");
+    } finally {
+      setNotesSaving(false);
+    }
   }
 
   async function updateAssignee(userId: string): Promise<void> {
-    const token = await getToken();
-    await fetch(`${API_URL}/v1/contacts/${contact.id}/assign`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token ?? ""}`,
-      },
-      body: JSON.stringify({ userId: userId || null }),
-    });
-    onUpdate({ assignedUserId: userId || null });
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/contacts/${contact.id}/assign`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
+        body: JSON.stringify({ userId: userId || null }),
+      });
+      if (res.ok) {
+        onUpdate({ assignedUserId: userId || null });
+      } else {
+        setFieldError("Failed to update assignee. Please try again.");
+      }
+    } catch {
+      setFieldError("Failed to update assignee. Please try again.");
+    }
   }
 
   const inputCls =
@@ -249,7 +266,7 @@ export function ContactDetailSidebar({ contact, onUpdate }: Props): JSX.Element 
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-500">Country</label>
-            {countries.length === 0 ? (
+            {loadingCountries ? (
               <FieldSkeleton />
             ) : (
               <select
