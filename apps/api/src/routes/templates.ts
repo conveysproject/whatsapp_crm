@@ -296,7 +296,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       }
 
       const contact = await fastify.prisma.contact.findFirst({
-        where: { id: request.body.contactId, organizationId },
+        where: { id: request.body.contactId, organizationId, deletedAt: null },
       });
       if (!contact) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });

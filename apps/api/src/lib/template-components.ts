@@ -70,8 +70,9 @@ export function buildTemplateComponents(
         if (varCount > 0) {
           const callerVals = (vars.header ?? []).slice(0, varCount);
           const exampleVals = comp.example?.header_text ?? [];
+          // || not ?? — empty string "" must fall through to the example value
           const params = Array.from({ length: varCount }, (_, i) =>
-            callerVals[i] ?? exampleVals[i] ?? ""
+            callerVals[i] || exampleVals[i] || ""
           );
           // Skip if any parameter is empty — Meta rejects empty string values
           if (params.every((p) => p !== "")) {
@@ -106,8 +107,9 @@ export function buildTemplateComponents(
         if (varCount > 0) {
           const callerVals = (vars.body ?? []).slice(0, varCount);
           const exampleVals = comp.example?.body_text?.[0] ?? [];
+          // || not ?? — empty string "" must fall through to the example value
           const params = Array.from({ length: varCount }, (_, i) =>
-            callerVals[i] ?? exampleVals[i] ?? ""
+            callerVals[i] || exampleVals[i] || ""
           );
           // Skip if any parameter is empty — Meta rejects empty string values
           if (params.every((p) => p !== "")) {
@@ -181,7 +183,7 @@ export function buildTemplateComponents(
               const callerVals = cardVars?.body ?? [];
               const exampleVals = cc.example?.body_text?.[0] ?? [];
               const params = Array.from({ length: varCount }, (_, i) =>
-                callerVals[i] ?? exampleVals[i] ?? ""
+                callerVals[i] || exampleVals[i] || ""
               );
               if (params.every((p) => p !== "")) {
                 cardComps.push({
