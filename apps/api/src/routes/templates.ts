@@ -383,8 +383,23 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       const bodyVars = callerVars.length > 0
         ? callerVars
         : contactBodyVars({ firstName: contact.firstName, lastName: contact.lastName, phoneNumber: contact.phoneNumber, email: contact.email }, varCount);
+
+      // Derive header variable values for TEXT headers with {{n}} placeholders.
+      // buildTemplateComponents falls back to example.header_text but many templates
+      // have no stored example — Meta rejects the send if the parameter is missing.
+      const headerTextComp = storedComponents.find(
+        (c) => c.type?.toUpperCase() === "HEADER" && (c.format ?? "TEXT").toUpperCase() === "TEXT"
+      );
+      const headerVarCount = headerTextComp?.text
+        ? (headerTextComp.text.match(/\{\{\d+\}\}/g) ?? []).length
+        : 0;
+      const headerVars = headerVarCount > 0
+        ? contactBodyVars({ firstName: contact.firstName, lastName: contact.lastName, phoneNumber: contact.phoneNumber, email: contact.email }, headerVarCount)
+        : [];
+
       const cardVars = request.body.cardMediaUrls?.map((url) => ({ headerMediaUrl: url }));
       const components = buildTemplateComponents(storedComponents as unknown[], {
+        header: headerVars,
         body: bodyVars,
         ...(cardVars ? { cards: cardVars } : {}),
       });

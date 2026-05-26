@@ -158,7 +158,18 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
         const bodyVars = contact
           ? contactBodyVars({ firstName: contact.firstName, lastName: contact.lastName, phoneNumber: contact.phoneNumber, email: contact.email }, varCount)
           : [];
-        const components = buildTemplateComponents(stored as unknown[], { body: bodyVars });
+
+        const headerTextComp = stored.find(
+          (c) => c.type?.toUpperCase() === "HEADER" && (c.format ?? "TEXT").toUpperCase() === "TEXT"
+        );
+        const headerVarCount = headerTextComp?.text
+          ? (headerTextComp.text.match(/\{\{\d+\}\}/g) ?? []).length
+          : 0;
+        const headerVars = contact && headerVarCount > 0
+          ? contactBodyVars({ firstName: contact.firstName, lastName: contact.lastName, phoneNumber: contact.phoneNumber, email: contact.email }, headerVarCount)
+          : [];
+
+        const components = buildTemplateComponents(stored as unknown[], { header: headerVars, body: bodyVars });
 
         // Build rendered body JSON for inbox display (same as send-to-contact)
         type WaComp = { type?: string; format?: string; text?: string; buttons?: Array<{ type?: string; text?: string }> };
