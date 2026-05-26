@@ -54,16 +54,21 @@ export function ContactDetailHeader({ contact, onBlockChange }: Props): JSX.Elem
 
   async function toggleBlock(): Promise<void> {
     setBlocking(true);
-    const token = await getToken();
-    const endpoint = isBlocked ? "unblock" : "block";
-    const res = await fetch(`${API_URL}/v1/contacts/${contact.id}/${endpoint}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token ?? ""}` },
-    });
-    if (res.ok) {
-      onBlockChange(isBlocked ? null : new Date().toISOString());
+    try {
+      const token = await getToken();
+      const endpoint = isBlocked ? "unblock" : "block";
+      const res = await fetch(`${API_URL}/v1/contacts/${contact.id}/${endpoint}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (res.ok) {
+        onBlockChange(isBlocked ? null : new Date().toISOString());
+      } else {
+        console.error(`Failed to ${endpoint} contact: ${res.status}`);
+      }
+    } finally {
+      setBlocking(false);
     }
-    setBlocking(false);
   }
 
   return (
