@@ -7,7 +7,7 @@ export function Toggle({
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
-  label: string;
+  label?: string;
 }): JSX.Element {
   return (
     <label className="flex items-center gap-3 cursor-pointer select-none">

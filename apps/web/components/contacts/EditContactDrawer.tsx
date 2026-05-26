@@ -34,7 +34,6 @@ interface Props {
   onUpdated: (contact: Contact) => void;
 }
 
-
 export function EditContactDrawer({ open, loading = false, contact, onClose, onUpdated }: Props): JSX.Element {
   const { getToken } = useAuth();
 
