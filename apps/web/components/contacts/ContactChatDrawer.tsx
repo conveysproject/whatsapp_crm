@@ -59,7 +59,7 @@ export function ContactChatDrawer({ contactId, contactName, onClose }: Props): J
           <div className="flex-1 flex items-center justify-center text-sm text-gray-400">Loading…</div>
         ) : (
           <>
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden flex flex-col">
               <MessageThread conversationId={conversationId} />
             </div>
             <SendMessageForm conversationId={conversationId} />
