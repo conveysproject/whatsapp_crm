@@ -52,13 +52,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <OnboardingProvider status={status}>
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex h-screen overflow-hidden bg-gray-50">
         <Sidebar />
-        <div className="flex flex-col flex-1 min-w-0">
+        <div className="flex flex-col flex-1 min-w-0 min-h-0">
           <ImpersonationBanner />
           <TopBar orgName={orgSlug ?? undefined} />
           <SetupBanner />
-          <main className="flex-1 p-6 overflow-auto">
+          <main className="flex-1 p-6 overflow-auto min-h-0">
             <BreadcrumbNav />
             {children}
           </main>
