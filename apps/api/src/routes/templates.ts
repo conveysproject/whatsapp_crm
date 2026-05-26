@@ -317,7 +317,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       const recipientPhone = contact.phoneNumber;
       const accessToken = org.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
 
-      type StoredComp = { type?: string; format?: string; text?: string; example?: { header_url?: string[]; header_text?: string[]; body_text?: string[][] } };
+      type StoredComp = { type?: string; format?: string; text?: string; example?: { header_url?: string[]; header_text?: string[]; body_text?: string[][] }; cards?: Array<{ components?: StoredComp[] }> };
       let storedComponents = (template.components ?? []) as StoredComp[];
 
       // If the template has an IMAGE/VIDEO/DOCUMENT header with no stored example URL,
@@ -375,6 +375,24 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
             message: `This template has an ${resolvedHeader.format} header that requires a media URL. Re-sync your templates or provide a mediaUrl when sending.`,
           },
         });
+      }
+
+      const carouselComp = storedComponents.find((c) => (c.type ?? "").toUpperCase() === "CAROUSEL");
+      if (carouselComp) {
+        const imageCardCount = (carouselComp.cards ?? []).filter((card) =>
+          (card.components ?? []).some((cc) =>
+            (cc.type ?? "").toUpperCase() === "HEADER" &&
+            ["IMAGE", "VIDEO", "DOCUMENT"].includes((cc.format ?? "").toUpperCase())
+          )
+        ).length;
+        if (imageCardCount > 0 && (request.body.cardMediaUrls ?? []).length !== imageCardCount) {
+          return reply.status(400).send({
+            error: {
+              code: "MEDIA_REQUIRED",
+              message: `This template has a carousel with ${imageCardCount} image card(s). Provide cardMediaUrls with exactly ${imageCardCount} entries.`,
+            },
+          });
+        }
       }
 
       const bodyComp = storedComponents.find((c) => c.type?.toUpperCase() === "BODY");

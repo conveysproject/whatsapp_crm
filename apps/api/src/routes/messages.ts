@@ -9,7 +9,7 @@ type SendMessageBody =
   | { contentType?: "text"; text: string }
   | { contentType: "image" | "video" | "document" | "audio"; mediaId: string; mimeType?: string; filename?: string; caption?: string }
   | { contentType: "interactive"; interactive: WaInteractivePayload }
-  | { contentType: "template"; templateId: string; mediaUrl?: string };
+  | { contentType: "template"; templateId: string; mediaUrl?: string; cardMediaUrls?: string[] };
 
 export const messagesRouter: FastifyPluginAsync = async (fastify) => {
   // ── Message log (all messages with date filter) ──────────────────────────
@@ -93,7 +93,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
 
       // ── Template branch — resolve before creating draft ────────────────────
       if (contentType === "template") {
-        const tplBody = body as { contentType: "template"; templateId: string; mediaUrl?: string };
+        const tplBody = body as { contentType: "template"; templateId: string; mediaUrl?: string; cardMediaUrls?: string[] };
         const template = await fastify.prisma.template.findFirst({
           where: { id: tplBody.templateId, organizationId },
         });
@@ -104,7 +104,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
           return reply.status(400).send({ error: { code: "TEMPLATE_NOT_APPROVED", message: "Only approved templates can be sent" } });
         }
 
-        type StoredComp = { type?: string; format?: string; text?: string; example?: { header_url?: string[]; header_text?: string[]; body_text?: string[][] } };
+        type StoredComp = { type?: string; format?: string; text?: string; example?: { header_url?: string[]; header_text?: string[]; body_text?: string[][] }; cards?: Array<{ components?: StoredComp[] }> };
         let stored = (template.components ?? []) as StoredComp[];
 
         const storedHeader = stored.find((c) => c.type?.toUpperCase() === "HEADER");
@@ -152,6 +152,24 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
           });
         }
 
+        const carouselComp = stored.find((c) => (c.type ?? "").toUpperCase() === "CAROUSEL");
+        if (carouselComp) {
+          const imageCardCount = (carouselComp.cards ?? []).filter((card) =>
+            (card.components ?? []).some((cc) =>
+              (cc.type ?? "").toUpperCase() === "HEADER" &&
+              ["IMAGE", "VIDEO", "DOCUMENT"].includes((cc.format ?? "").toUpperCase())
+            )
+          ).length;
+          if (imageCardCount > 0 && (tplBody.cardMediaUrls ?? []).length !== imageCardCount) {
+            return reply.status(400).send({
+              error: {
+                code: "MEDIA_REQUIRED",
+                message: `Template "${template.name}" has a carousel with ${imageCardCount} image card(s). Provide cardMediaUrls with exactly ${imageCardCount} entries.`,
+              },
+            });
+          }
+        }
+
         const bodyComp = stored.find((c) => c.type?.toUpperCase() === "BODY");
         const varCount = bodyComp?.text ? (bodyComp.text.match(/\{\{\d+\}\}/g) ?? []).length : 0;
         const contact = conversation.contact;
@@ -169,7 +187,12 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
           ? contactBodyVars({ firstName: contact.firstName, lastName: contact.lastName, phoneNumber: contact.phoneNumber, email: contact.email }, headerVarCount)
           : [];
 
-        const components = buildTemplateComponents(stored as unknown[], { header: headerVars, body: bodyVars });
+        const cardVars = tplBody.cardMediaUrls?.map((url) => ({ headerMediaUrl: url }));
+        const components = buildTemplateComponents(stored as unknown[], {
+          header: headerVars,
+          body: bodyVars,
+          ...(cardVars ? { cards: cardVars } : {}),
+        });
 
         // Build rendered body JSON for inbox display (same as send-to-contact)
         type WaComp = { type?: string; format?: string; text?: string; buttons?: Array<{ type?: string; text?: string }> };
