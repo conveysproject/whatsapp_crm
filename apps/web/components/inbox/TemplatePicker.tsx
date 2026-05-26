@@ -23,7 +23,8 @@ interface Template {
 }
 
 interface Props {
-  conversationId: string;
+  conversationId?: string;
+  contactId?: string;
   initialSearch?: string;
   onSent: () => void;
   onClose: () => void;
@@ -54,10 +55,11 @@ function getPreview(components: TemplateComponent[]): { header: string | null; b
   };
 }
 
-export function TemplatePicker({ conversationId, initialSearch = "", onSent, onClose }: Props): JSX.Element {
+export function TemplatePicker({ conversationId, contactId, initialSearch = "", onSent, onClose }: Props): JSX.Element {
   const { getToken } = useAuth();
   const [search, setSearch] = useState(initialSearch);
   const [sending, setSending] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { searchRef.current?.focus(); }, []);
@@ -81,13 +83,25 @@ export function TemplatePicker({ conversationId, initialSearch = "", onSent, onC
 
   async function sendTemplate(templateId: string) {
     setSending(templateId);
+    setSendError(null);
     try {
       const token = await getToken();
-      await fetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ contentType: "template", templateId }),
-      });
+      const res = contactId
+        ? await fetch(`${API_URL}/v1/templates/${templateId}/send-to-contact`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ contactId, variables: [] }),
+          })
+        : await fetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ contentType: "template", templateId }),
+          });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        setSendError(json.error?.message ?? "Failed to send");
+        return;
+      }
       onSent();
       onClose();
     } finally {
@@ -123,6 +137,10 @@ export function TemplatePicker({ conversationId, initialSearch = "", onSent, onC
           />
         </div>
       </div>
+
+      {sendError && (
+        <div className="px-4 py-2 bg-red-50 border-b border-red-100 text-xs text-red-600">{sendError}</div>
+      )}
 
       {/* List */}
       <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
