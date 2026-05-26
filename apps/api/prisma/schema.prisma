@@ -553,6 +553,7 @@ model Segment {
   organizationId String           @map("organization_id")
   name           String
   filters        Json             @default("[]")
+  match          String           @default("all")
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
   contacts       SegmentContact[]
