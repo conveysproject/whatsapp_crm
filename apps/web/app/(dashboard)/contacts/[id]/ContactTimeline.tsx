@@ -22,23 +22,80 @@ type TimelineItem =
   | { type: "message"; id: string; body: string | null; direction: string; createdAt: string }
   | { type: "deal"; id: string; title: string; stage: string; createdAt: string };
 
-function getMessagePreview(body: string | null): string {
-  if (!body) return "(media)";
+interface TemplateParsed {
+  templateName?: string;
+  header?: { format?: string; text?: string | null } | null;
+  body?: string | null;
+  footer?: string | null;
+  buttons?: Array<{ type?: string; text?: string }>;
+}
+
+interface InteractiveParsed {
+  header?: { text?: string } | null;
+  body?: { text?: string } | null;
+  footer?: { text?: string } | null;
+  action?: {
+    buttons?: Array<{ reply?: { title?: string } }>;
+    sections?: Array<{ rows?: Array<{ title?: string }> }>;
+  };
+}
+
+function parseBody(body: string | null): { kind: "template"; parsed: TemplateParsed } | { kind: "interactive"; parsed: InteractiveParsed } | { kind: "text"; text: string } {
+  if (!body) return { kind: "text", text: "" };
   try {
     const parsed = JSON.parse(body) as Record<string, unknown>;
-    if (typeof parsed.templateName === "string") {
-      const bodyText = parsed.body;
-      if (typeof bodyText === "string" && bodyText) return bodyText;
-      return parsed.templateName;
-    }
-    const bodyObj = parsed.body;
-    if (bodyObj && typeof bodyObj === "object" && "text" in bodyObj && typeof (bodyObj as Record<string, unknown>).text === "string") {
-      return (bodyObj as { text: string }).text;
-    }
-    return body;
-  } catch {
-    return body;
+    if (typeof parsed.templateName === "string") return { kind: "template", parsed: parsed as TemplateParsed };
+    if (parsed.body && typeof parsed.body === "object") return { kind: "interactive", parsed: parsed as InteractiveParsed };
+  } catch { /* not JSON */ }
+  return { kind: "text", text: body };
+}
+
+function MessageBody({ body }: { body: string | null }): JSX.Element {
+  const parsed = parseBody(body);
+
+  if (parsed.kind === "template") {
+    const { header, body: bodyText, footer, buttons = [] } = parsed.parsed;
+    return (
+      <div className="flex flex-col gap-1">
+        {header?.text && <p className="font-semibold text-gray-900 text-sm leading-snug">{header.text}</p>}
+        {bodyText && <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{bodyText}</p>}
+        {footer && <p className="text-xs text-gray-400">{footer}</p>}
+        {buttons.length > 0 && (
+          <div className="flex flex-col gap-1 mt-1 border-t border-gray-200 pt-1">
+            {buttons.map((btn, i) => (
+              <div key={i} className="text-center text-xs text-[#00a884] font-medium py-0.5 border border-[#00a884]/30 rounded-lg">
+                {btn.text ?? "Button"}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   }
+
+  if (parsed.kind === "interactive") {
+    const { header, body: bodyObj, footer, action } = parsed.parsed;
+    const replyButtons = action?.buttons ?? [];
+    return (
+      <div className="flex flex-col gap-1">
+        {header?.text && <p className="font-semibold text-gray-900 text-sm leading-snug">{header.text}</p>}
+        {bodyObj?.text && <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{bodyObj.text}</p>}
+        {footer?.text && <p className="text-xs text-gray-400">{footer.text}</p>}
+        {replyButtons.length > 0 && (
+          <div className="flex flex-col gap-1 mt-1 border-t border-gray-200 pt-1">
+            {replyButtons.map((btn, i) => (
+              <div key={i} className="text-center text-xs text-[#00a884] font-medium py-0.5 border border-[#00a884]/30 rounded-lg">
+                {btn.reply?.title ?? "Button"}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const text = parsed.text;
+  return <p className="text-sm text-gray-700">{text.length > 120 ? text.slice(0, 120) + "…" : text || "(media)"}</p>;
 }
 
 export function ContactTimeline({ contactId }: { contactId: string }): JSX.Element {
@@ -106,10 +163,10 @@ export function ContactTimeline({ contactId }: { contactId: string }): JSX.Eleme
             <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${dotColor[item.type] ?? "bg-gray-400"}`} />
             <div>
               {item.type === "message" && (
-                <p className="text-gray-700">
-                  {(() => { const p = getMessagePreview(item.body); return p.length > 120 ? p.slice(0, 120) + "…" : p; })()}
-                  <span className="ml-1 text-gray-400">({item.direction})</span>
-                </p>
+                <div>
+                  <MessageBody body={item.body} />
+                  <span className="text-xs text-gray-400 capitalize">{item.direction}</span>
+                </div>
               )}
               {item.type === "deal" && (
                 <p className="text-gray-700">
