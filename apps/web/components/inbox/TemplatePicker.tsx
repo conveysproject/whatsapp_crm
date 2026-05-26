@@ -58,9 +58,7 @@ function getPreview(components: TemplateComponent[]): { header: string | null; b
 
 function needsMediaUrl(components: TemplateComponent[]): boolean {
   const header = components.find((c) => c.type?.toUpperCase() === "HEADER");
-  return !!header &&
-    ["IMAGE", "VIDEO", "DOCUMENT"].includes((header.format ?? "").toUpperCase()) &&
-    !header.example?.header_url?.[0];
+  return !!header && ["IMAGE", "VIDEO", "DOCUMENT"].includes((header.format ?? "").toUpperCase());
 }
 
 export function TemplatePicker({ conversationId, contactId, initialSearch = "", onSent, onClose }: Props): JSX.Element {
@@ -93,8 +91,9 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
 
   function handleTemplateClick(t: Template) {
     if (needsMediaUrl(t.components)) {
+      const header = t.components.find((c) => c.type?.toUpperCase() === "HEADER");
       setPendingTemplate(t);
-      setMediaUrl("");
+      setMediaUrl(header?.example?.header_url?.[0] ?? "");
       setSendError(null);
     } else {
       void sendTemplate(t.id, "");
