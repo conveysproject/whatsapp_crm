@@ -30,9 +30,10 @@ function avatarColor(seed: string): string {
 interface Props {
   contact: Pick<Contact, "id" | "phoneNumber" | "firstName" | "lastName" | "name" | "waBlockedAt">;
   onBlockChange: (waBlockedAt: string | null) => void;
+  onEdit: () => void;
 }
 
-export function ContactDetailHeader({ contact, onBlockChange }: Props): JSX.Element {
+export function ContactDetailHeader({ contact, onBlockChange, onEdit }: Props): JSX.Element {
   const { getToken } = useAuth();
   const [showTemplate, setShowTemplate] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -87,6 +88,13 @@ export function ContactDetailHeader({ contact, onBlockChange }: Props): JSX.Elem
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
+        >
+          Edit
+        </button>
         <button
           type="button"
           onClick={() => setShowTemplate(true)}

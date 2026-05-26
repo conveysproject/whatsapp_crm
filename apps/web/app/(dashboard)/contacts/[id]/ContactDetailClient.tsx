@@ -4,6 +4,8 @@ import { JSX, useState } from "react";
 import { ContactDetailHeader } from "./ContactDetailHeader";
 import { ContactDetailSidebar } from "./ContactDetailSidebar";
 import { ContactDetailPanel } from "./ContactDetailPanel";
+import { EditContactDrawer } from "@/components/contacts/EditContactDrawer";
+import type { Contact as DrawerContact, EditableContact } from "@/components/contacts/AddContactModal";
 
 export interface Contact {
   id: string;
@@ -28,27 +30,67 @@ export interface Contact {
 
 export function ContactDetailClient({ contact: initial }: { contact: Contact }): JSX.Element {
   const [contact, setContact] = useState<Contact>(initial);
+  const [showEdit, setShowEdit] = useState(false);
 
-  function handleUpdate(partial: Partial<Contact>): void {
-    setContact((prev) => ({ ...prev, ...partial }));
+  function handleBlockChange(waBlockedAt: string | null): void {
+    setContact((prev) => ({ ...prev, waBlockedAt }));
   }
+
+  function handleDrawerUpdated(updated: DrawerContact): void {
+    setContact((prev) => ({
+      ...prev,
+      firstName: updated.firstName,
+      lastName: updated.lastName,
+      name: updated.name,
+      email: updated.email,
+      lifecycleStage: updated.lifecycleStage,
+      languageCode: updated.languageCode,
+      whatsappOptOut: updated.whatsappOptOut,
+      groupIds: updated.groupContacts?.map((gc) => gc.contactGroup.id) ?? prev.groupIds,
+    }));
+    setShowEdit(false);
+  }
+
+  const editableContact: EditableContact = {
+    id: contact.id,
+    name: contact.name,
+    firstName: contact.firstName,
+    lastName: contact.lastName,
+    phoneNumber: contact.phoneNumber,
+    email: contact.email,
+    countryId: contact.countryId,
+    languageCode: contact.languageCode,
+    lifecycleStage: contact.lifecycleStage,
+    tags: contact.tags,
+    whatsappOptOut: contact.whatsappOptOut,
+    disableBot: contact.disableBot,
+    groupIds: contact.groupIds,
+    customFields: contact.customFields,
+  };
 
   return (
     <div className="flex flex-col h-full">
       <ContactDetailHeader
         contact={contact}
-        onBlockChange={(waBlockedAt) => handleUpdate({ waBlockedAt })}
+        onBlockChange={handleBlockChange}
+        onEdit={() => setShowEdit(true)}
       />
       <div className="flex flex-1 min-h-0">
         <aside className="w-80 shrink-0 border-r border-gray-200 bg-white overflow-y-auto">
           <div className="p-4">
-            <ContactDetailSidebar contact={contact} onUpdate={handleUpdate} />
+            <ContactDetailSidebar contact={contact} />
           </div>
         </aside>
         <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
           <ContactDetailPanel contactId={contact.id} initialSummary={contact.pastAiSummary} />
         </main>
       </div>
+      <EditContactDrawer
+        open={showEdit}
+        contact={editableContact}
+        onClose={() => setShowEdit(false)}
+        onUpdated={handleDrawerUpdated}
+      />
     </div>
   );
 }
