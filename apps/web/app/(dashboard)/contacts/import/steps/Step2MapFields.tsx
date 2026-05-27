@@ -60,13 +60,6 @@ export function Step2MapFields(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (state.mapping.length === 0 && state.columns.length > 0) {
-      setState({ mapping: state.columns.map((col) => ({ csvColumn: col, dbField: autoSuggest(col) })) });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
     void (async () => {
       const token = await getToken();
       const headers = { Authorization: `Bearer ${token ?? ""}` };
@@ -78,11 +71,25 @@ export function Step2MapFields(): JSX.Element {
         const body = await groupsRes.json() as { data: GroupOption[] };
         setGroups(body.data);
       }
+      let fetchedCFs: CustomFieldMeta[] = [];
       if (cfRes.ok) {
         const body = await cfRes.json() as { data: CustomFieldMeta[] };
-        setCustomFields(body.data);
+        fetchedCFs = body.data;
+        setCustomFields(fetchedCFs);
+      }
+      if (state.mapping.length === 0 && state.columns.length > 0) {
+        const cfByName = new Map(fetchedCFs.map((cf) => [cf.inputName.toLowerCase().replace(/[\s_-]/g, ""), cf.id]));
+        setState({
+          mapping: state.columns.map((col) => {
+            const lower = col.toLowerCase().replace(/[\s_-]/g, "");
+            const cfId = cfByName.get(lower);
+            if (cfId) return { csvColumn: col, dbField: `customField:${cfId}` as DbField };
+            return { csvColumn: col, dbField: autoSuggest(col) };
+          }),
+        });
       }
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getToken]);
 
   function updateMapping(csvColumn: string, dbField: DbField) {
