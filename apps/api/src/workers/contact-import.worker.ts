@@ -220,17 +220,18 @@ export const contactImportWorker = new Worker<ContactImportJob>(
       if (validRows.length) {
         const batchPhones = validRows.map((r) => r.phone);
         // Exact match — all phones are stored as plain digits (no +)
+        // Include soft-deleted contacts so we can restore them; do NOT filter by deletedAt here
         const existingContacts = await prisma.contact.findMany({
           where: { organizationId, phoneNumber: { in: batchPhones } },
-          select: { id: true, phoneNumber: true },
+          select: { id: true, phoneNumber: true, deletedAt: true },
         });
-        const existingMap = new Map(existingContacts.map((c) => [c.phoneNumber, c.id]));
+        const existingMap = new Map(existingContacts.map((c) => [c.phoneNumber, { id: c.id, softDeleted: c.deletedAt !== null }]));
 
         const toCreate: Prisma.ContactCreateManyInput[] = [];
-        const toUpdate: Array<{ id: string; phone: string; data: Prisma.ContactUpdateInput }> = [];
+        const toUpdate: Array<{ id: string; phone: string; restored: boolean; data: Prisma.ContactUpdateInput }> = [];
 
         for (const { phone, row } of validRows) {
-          const existingId = existingMap.get(phone);
+          const existing = existingMap.get(phone);
           const tags = mergeTagsUnion(extractField(row, fieldMapping, "tags"), batchTags);
           const { firstName, lastName, name } = extractFirstLastName(row, fieldMapping);
           const email = extractField(row, fieldMapping, "email") ?? null;
@@ -243,12 +244,18 @@ export const contactImportWorker = new Worker<ContactImportJob>(
             ? customFields as unknown as Prisma.InputJsonValue
             : undefined;
 
-          if (existingId && updateExisting) {
+          if (existing && (updateExisting || existing.softDeleted)) {
+            // Always restore soft-deleted contacts; update active contacts only when updateExisting is set
             toUpdate.push({
-              id: existingId, phone,
-              data: { firstName, lastName, name, email, lifecycleStage: stage, tags, ...(countryId !== null && { countryId }), ...(customFieldsValue !== undefined && { customFields: customFieldsValue }) },
+              id: existing.id, phone, restored: existing.softDeleted,
+              data: {
+                firstName, lastName, name, email, lifecycleStage: stage, tags,
+                ...(existing.softDeleted && { deletedAt: null }),
+                ...(countryId !== null && { countryId }),
+                ...(customFieldsValue !== undefined && { customFields: customFieldsValue }),
+              },
             });
-          } else if (!existingId) {
+          } else if (!existing) {
             toCreate.push({
               organizationId, phoneNumber: phone, firstName, lastName, name, email, lifecycleStage: stage, tags,
               ...(countryId !== null && { countryId }),
@@ -264,10 +271,10 @@ export const contactImportWorker = new Worker<ContactImportJob>(
           created += result.count;
         }
 
-        for (const { id, data } of toUpdate) {
+        for (const { id, restored, data } of toUpdate) {
           try {
             await prisma.contact.update({ where: { id }, data });
-            updated++;
+            if (restored) created++; else updated++;
           } catch {
             skipped++;
             if (errorSamples.length < 50) errorSamples.push({ row: 0, reason: `Update failed for contact ${id}` });
