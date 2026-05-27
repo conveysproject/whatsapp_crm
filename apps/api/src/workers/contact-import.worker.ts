@@ -6,7 +6,7 @@ import { redisConnection } from "../lib/queue.js";
 import { redis } from "../lib/redis.js";
 import { prisma } from "../lib/prisma.js";
 import { getIo } from "../lib/io-ref.js";
-import { normalizeFullPhone, normalizeSplitPhone } from "../lib/phone-normalize.js";
+import { normalizeFullPhone, normalizeSplitPhone, phoneVariants } from "../lib/phone-normalize.js";
 import type { FieldMapping } from "@WBMSG/shared";
 
 const IMPORT_LOCK_TTL_SECONDS = 3600; // max 1 hour per import
@@ -207,11 +207,21 @@ export const contactImportWorker = new Worker<ContactImportJob>(
 
       if (validRows.length) {
         const batchPhones = validRows.map((r) => r.phone);
+        // Look up by all phone variants (e.g. +91XXX and 91XXX) to catch contacts
+        // stored without normalization
+        const variantToCanonical = new Map<string, string>();
+        for (const phone of batchPhones) {
+          for (const v of phoneVariants(phone)) variantToCanonical.set(v, phone);
+        }
         const existingContacts = await prisma.contact.findMany({
-          where: { organizationId, phoneNumber: { in: batchPhones } },
+          where: { organizationId, phoneNumber: { in: [...variantToCanonical.keys()] } },
           select: { id: true, phoneNumber: true },
         });
-        const existingMap = new Map(existingContacts.map((c) => [c.phoneNumber, c.id]));
+        const existingMap = new Map<string, string>();
+        for (const c of existingContacts) {
+          const canonical = variantToCanonical.get(c.phoneNumber) ?? c.phoneNumber;
+          existingMap.set(canonical, c.id);
+        }
 
         const toCreate: Prisma.ContactCreateManyInput[] = [];
         const toUpdate: Array<{ id: string; phone: string; data: Prisma.ContactUpdateInput }> = [];

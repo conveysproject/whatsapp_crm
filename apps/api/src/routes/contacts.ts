@@ -7,6 +7,7 @@ import { paginate, parsePaginationParams } from "../lib/pagination.js";
 import type { ContactId } from "@WBMSG/shared";
 import { maskPhone, maskEmail, canAccess, hasSubPermission } from "../lib/permissions.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
+import { normalizeFullPhone } from "../lib/phone-normalize.js";
 
 function csvEscape(value: string): string {
   const str = value.replace(/"/g, '""');
@@ -349,7 +350,8 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     }
     let contact: Awaited<ReturnType<typeof fastify.prisma.contact.create>>;
     try {
-      const { firstName, lastName, name, phoneNumber, email, companyId, countryId, languageCode, whatsappOptOut, disableBot, groupIds, customFields } = request.body;
+      const { firstName, lastName, name, phoneNumber: rawPhone, email, companyId, countryId, languageCode, whatsappOptOut, disableBot, groupIds, customFields } = request.body;
+      const phoneNumber = normalizeFullPhone(rawPhone) ?? rawPhone;
       contact = await fastify.prisma.contact.create({
         data: {
           organizationId,
