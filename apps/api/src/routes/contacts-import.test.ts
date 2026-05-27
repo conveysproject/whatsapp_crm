@@ -246,3 +246,68 @@ describe("DELETE /v1/contacts/import/session/:sessionId", () => {
     expect(mockRedisDel).toHaveBeenCalledWith("import:csv:some-session-id");
   });
 });
+
+describe("POST /v1/contacts/import/start — batchGroupIds", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("passes batchGroupIds to prisma.contactImport.create and contactImportQueue.add", async () => {
+    const { contactImportQueue } = await import("../lib/queue.js");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/contacts/import/start",
+      headers: { "content-type": "application/json" },
+      payload: JSON.stringify({
+        sessionId: "sess-abc",
+        fieldMapping: [],
+        batchTags: ["vip"],
+        batchGroupIds: ["group-a", "group-b"],
+        lifecycleStage: "lead",
+        updateExisting: false,
+        totalRows: 10,
+      }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.contactImport.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ batchGroupIds: ["group-a", "group-b"] }),
+      })
+    );
+    expect(vi.mocked(contactImportQueue.add)).toHaveBeenCalledWith(
+      "process",
+      expect.objectContaining({ batchGroupIds: ["group-a", "group-b"] })
+    );
+  });
+
+  it("defaults batchGroupIds to [] when not provided", async () => {
+    const { contactImportQueue } = await import("../lib/queue.js");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/contacts/import/start",
+      headers: { "content-type": "application/json" },
+      payload: JSON.stringify({
+        sessionId: "sess-abc",
+        fieldMapping: [],
+        batchTags: [],
+        lifecycleStage: "lead",
+        updateExisting: false,
+        totalRows: 5,
+      }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.contactImport.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ batchGroupIds: [] }),
+      })
+    );
+    expect(vi.mocked(contactImportQueue.add)).toHaveBeenCalledWith(
+      "process",
+      expect.objectContaining({ batchGroupIds: [] })
+    );
+  });
+});

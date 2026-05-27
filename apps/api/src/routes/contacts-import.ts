@@ -205,13 +205,14 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
       sessionId: string;
       fieldMapping: FieldMapping;
       batchTags: string[];
+      batchGroupIds?: string[];
       lifecycleStage: string;
       updateExisting: boolean;
       totalRows: number;
     };
   }>("/contacts/import/start", async (request, reply) => {
     const { organizationId } = request.auth;
-    const { sessionId, fieldMapping, batchTags, lifecycleStage, updateExisting, totalRows } = request.body;
+    const { sessionId, fieldMapping, batchTags, batchGroupIds = [], lifecycleStage, updateExisting, totalRows } = request.body;
 
     const importRecord = await fastify.prisma.contactImport.create({
       data: {
@@ -220,6 +221,7 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
         totalRows,
         fieldMapping: fieldMapping as unknown as Prisma.InputJsonValue,
         batchTags,
+        batchGroupIds,
         lifecycleStage: lifecycleStage as LifecycleStage,
         updateExisting,
       },
@@ -231,6 +233,7 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
       organizationId,
       fieldMapping,
       batchTags,
+      batchGroupIds,
       lifecycleStage,
       updateExisting,
     });
