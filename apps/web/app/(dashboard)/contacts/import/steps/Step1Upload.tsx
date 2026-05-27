@@ -46,7 +46,7 @@ export function Step1Upload(): JSX.Element {
         return;
       }
       const body = await res.json() as { data: { sessionId: string; columns: string[]; sampleRows: Record<string, string>[] } };
-      setState({ sessionId: body.data.sessionId, columns: body.data.columns, sampleRows: body.data.sampleRows });
+      setState({ sessionId: body.data.sessionId, columns: body.data.columns, sampleRows: body.data.sampleRows, mapping: [] });
       setUploadedFileName(file.name);
     } catch {
       setError("An unexpected error occurred.");
