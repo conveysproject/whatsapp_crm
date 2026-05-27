@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { CampaignStatus } from "@prisma/client";
 import { campaignQueue } from "../lib/queue.js";
 import type { CampaignId, SegmentId, TemplateId } from "@WBMSG/shared";
-import { evaluateSegment, type SegmentFilter } from "../lib/segment-evaluator.js";
+import { evaluateSegment, type FilterRule } from "../lib/segment-evaluator.js";
 import { maskPhone, maskEmail, canAccess } from "../lib/permissions.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 
@@ -336,10 +336,11 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
       if (segmentId) {
         const segment = await fastify.prisma.segment.findFirst({ where: { id: segmentId, organizationId } });
         if (segment) {
-          const phones = await evaluateSegment(fastify.prisma, organizationId, segment.filters as unknown as SegmentFilter[]);
-          totalReach = phones.length;
+          const result = await evaluateSegment(fastify.prisma, organizationId, segment.filters as unknown as FilterRule[]);
+          totalReach = result.count;
+          const previewPhones = result.contacts.slice(0, limit).map((c) => c.phoneNumber);
           previewContacts = await fastify.prisma.contact.findMany({
-            where: { organizationId, phoneNumber: { in: phones.slice(0, limit) } },
+            where: { organizationId, phoneNumber: { in: previewPhones } },
             select: { id: true, firstName: true, lastName: true, phoneNumber: true, email: true },
           });
         } else {

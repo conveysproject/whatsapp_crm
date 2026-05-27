@@ -3,7 +3,7 @@ import { redisConnection } from "../lib/queue.js";
 import { prisma } from "../lib/prisma.js";
 import { sendTextMessage, sendTemplateMessage } from "../lib/whatsapp.js";
 import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
-import { evaluateSegment, type SegmentFilter } from "../lib/segment-evaluator.js";
+import { evaluateSegment, type FilterRule } from "../lib/segment-evaluator.js";
 import { getIo } from "../lib/io-ref.js";
 
 interface CampaignJob {
@@ -42,11 +42,12 @@ export const campaignWorker = new Worker<CampaignJob>(
 
     await prisma.campaign.update({ where: { id: campaignId }, data: { status: "running" } });
 
-    const phones = await evaluateSegment(
+    const evalResult = await evaluateSegment(
       prisma,
       organizationId,
-      segment.filters as unknown as SegmentFilter[]
+      segment.filters as unknown as FilterRule[]
     );
+    const phones = evalResult.contacts.map((c) => c.phoneNumber);
 
     const phoneNumberId = org?.phoneNumberId ?? process.env["WA_PHONE_NUMBER_ID"] ?? "";
     const accessToken = org?.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";

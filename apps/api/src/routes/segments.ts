@@ -1,10 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
-import { evaluateSegment, type SegmentFilter } from "../lib/segment-evaluator.js";
+import { evaluateSegment, type FilterRule } from "../lib/segment-evaluator.js";
 import type { SegmentId } from "@WBMSG/shared";
 
 interface SegmentBody {
   name: string;
-  filters: SegmentFilter[];
+  filters: FilterRule[];
 }
 
 export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
@@ -81,11 +81,12 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
     if (!segment) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
     }
-    const phones = await evaluateSegment(
+    const result = await evaluateSegment(
       fastify.prisma,
       organizationId,
-      segment.filters as unknown as SegmentFilter[]
+      segment.filters as unknown as FilterRule[]
     );
-    return reply.send({ data: { phones, count: phones.length } });
+    const phones = result.contacts.map((c) => c.phoneNumber);
+    return reply.send({ data: { phones, count: result.count } });
   });
 };
