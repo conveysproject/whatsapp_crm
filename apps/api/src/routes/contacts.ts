@@ -163,7 +163,6 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
         where,
         include: {
           groupContacts: { include: { contactGroup: { select: { title: true } } } },
-          customFieldValues: { select: { fieldId: true, fieldValue: true } },
         },
         orderBy: { createdAt: "asc" },
       }),
@@ -177,7 +176,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const header = [...fixedHeaders, ...cfHeaders].map(csvEscape).join(",");
 
     const rows = contacts.map((c) => {
-      const cfValueMap = new Map(c.customFieldValues.map((v) => [v.fieldId, v.fieldValue ?? ""]));
+      const cfBlob = (c.customFields ?? {}) as Record<string, unknown>;
       const cells = [
         csvEscape(`="${c.phoneNumber}"`),
         csvEscape(c.firstName ?? ""),
@@ -189,7 +188,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
         csvEscape(c.groupContacts.map((gc) => gc.contactGroup.title).join("|")),
         csvEscape((c.notes ?? "").replace(/[\r\n]+/g, " ")),
         csvEscape(c.createdAt.toISOString()),
-        ...customFields.map((cf) => csvEscape(cfValueMap.get(cf.id) ?? "")),
+        ...customFields.map((cf) => csvEscape(String(cfBlob[cf.id] ?? ""))),
       ];
       return cells.join(",");
     });

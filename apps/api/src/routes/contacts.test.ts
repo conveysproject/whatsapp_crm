@@ -122,7 +122,7 @@ describe("GET /v1/contacts/export", () => {
   it("returns CSV with correct headers and data", async () => {
     mockPrisma.contactCustomField.findMany.mockResolvedValue([]);
     mockPrisma.contact.findMany.mockResolvedValue([
-      { id: "c-1", organizationId: "org-1", phoneNumber: "+919000000001", firstName: "Alice", lastName: null, email: "alice@example.com", countryCode: "IN", lifecycleStage: "lead", tags: [], notes: null, createdAt: new Date(), groupContacts: [], customFieldValues: [] },
+      { id: "c-1", organizationId: "org-1", phoneNumber: "+919000000001", firstName: "Alice", lastName: null, email: "alice@example.com", countryCode: "IN", lifecycleStage: "lead", tags: [], notes: null, createdAt: new Date(), groupContacts: [], customFields: {} },
     ]);
     const res = await app.inject({ method: "GET", url: "/v1/contacts/export" });
     expect(res.statusCode).toBe(200);
@@ -407,7 +407,7 @@ describe("GET /v1/contacts/export (new rich CSV)", () => {
     notes: "VIP customer\nnew line",
     createdAt: new Date("2026-01-15T10:30:00.000Z"),
     groupContacts: [{ contactGroup: { title: "VIP Customers" } }, { contactGroup: { title: "Delhi" } }],
-    customFieldValues: [],
+    customFields: {},
     ...overrides,
   });
 
@@ -462,7 +462,7 @@ describe("GET /v1/contacts/export (new rich CSV)", () => {
       { id: "cf-2", inputName: "Industry", isActive: true },
     ]);
     mockPrisma.contact.findMany.mockResolvedValue([
-      makeContact({ customFieldValues: [{ fieldId: "cf-1", fieldValue: "Large" }] }),
+      makeContact({ customFields: { "cf-1": "Large" } }),
     ]);
     const res = await app.inject({ method: "GET", url: "/v1/contacts/export" });
     expect(res.body).toContain("Company Size");
