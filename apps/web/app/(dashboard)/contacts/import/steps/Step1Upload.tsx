@@ -70,12 +70,23 @@ export function Step1Upload(): JSX.Element {
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 space-y-1">
-        <p className="font-medium">Upload instructions</p>
+        <div className="flex items-center justify-between">
+          <p className="font-medium">Upload instructions</p>
+          <a
+            href="/sample-contacts-import.csv"
+            download
+            className="text-xs text-brand-600 font-medium hover:text-brand-800 underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            Download sample CSV
+          </a>
+        </div>
         <ul className="list-disc list-inside space-y-0.5 text-blue-700">
           <li>Max 50 MB allowed (up to 500,000 contacts)</li>
           <li>CSV must include a phone number column (full international format, or separate number + country code columns)</li>
           <li>Duplicate phone numbers in the file: only the first row is imported</li>
-          <li>You will configure lifecycle stage, tags, and groups in the next step</li>
+          <li>Multiple tags in one column: separate with a pipe character (e.g. <span className="font-mono">vip|premium</span>)</li>
+          <li>Custom field columns won't auto-map — select the matching field in the dropdown after upload</li>
         </ul>
       </div>
 
