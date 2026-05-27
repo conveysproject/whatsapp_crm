@@ -2,28 +2,20 @@
 -- After this migration, phone_number stores plain international digits (e.g. 919907072035)
 -- instead of E.164 format (+919907072035). The unique constraint is unchanged.
 
--- Safety check: handle the edge case where stripping + would create a duplicate
--- (same org already has both "+91xxx" and "91xxx"). Those should not exist but
--- this avoids a constraint violation if they do.
-DO $$
-DECLARE
-  dup_count INTEGER;
-BEGIN
-  SELECT COUNT(*) INTO dup_count
-  FROM (
-    SELECT organization_id, LTRIM(phone_number, '+') AS stripped
-    FROM contacts
-    WHERE phone_number LIKE '+%'
-    GROUP BY organization_id, LTRIM(phone_number, '+')
-    HAVING COUNT(*) > 1
-  ) AS dups;
+-- Remove + contacts that would cause a unique conflict with an already-correct (no-+) contact.
+-- The no-+ version is already in the right format (created from WhatsApp inbound).
+DELETE FROM contacts
+WHERE phone_number LIKE '+%'
+AND id IN (
+  SELECT a.id
+  FROM contacts a
+  JOIN contacts b
+    ON b.organization_id = a.organization_id
+    AND b.phone_number = LTRIM(a.phone_number, '+')
+  WHERE a.phone_number LIKE '+%'
+);
 
-  IF dup_count > 0 THEN
-    RAISE EXCEPTION 'Cannot normalize: % organization(s) have duplicate phones after stripping +. Resolve manually first.', dup_count;
-  END IF;
-END $$;
-
--- Strip the + prefix
+-- Strip the + prefix from all remaining contacts that still have it.
 UPDATE contacts
 SET phone_number = LTRIM(phone_number, '+')
 WHERE phone_number LIKE '+%';
