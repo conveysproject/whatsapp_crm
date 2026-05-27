@@ -2,6 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
+const mockEvaluateSegment = vi.fn();
+vi.mock("../lib/segment-evaluator.js", () => ({
+  evaluateSegment: mockEvaluateSegment,
+}));
 
 const mockPrisma = {
   contact: {
@@ -19,9 +23,19 @@ const mockPrisma = {
     createMany: vi.fn(),
     deleteMany: vi.fn(),
   },
+  conversation: {
+    updateMany: vi.fn(),
+  },
   vendorSetting: {
     findFirst: vi.fn().mockResolvedValue(null),
   },
+  contactCustomField: {
+    findMany: vi.fn().mockResolvedValue([]),
+  },
+  segment: {
+    findFirst: vi.fn().mockResolvedValue(null),
+  },
+  $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
 };
 
 const mockAuth = {
@@ -92,7 +106,9 @@ describe("DELETE /v1/contacts/:id", () => {
 
   it("deletes and returns 204", async () => {
     mockPrisma.contact.findFirst.mockResolvedValue({ id: "c-1", organizationId: "org-1" });
-    mockPrisma.contact.delete.mockResolvedValue({});
+    mockPrisma.contact.update.mockResolvedValue({});
+    mockPrisma.conversation.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.groupContact.deleteMany.mockResolvedValue({ count: 0 });
     const res = await app.inject({ method: "DELETE", url: "/v1/contacts/c-1" });
     expect(res.statusCode).toBe(204);
   });
@@ -244,5 +260,131 @@ describe("GET /v1/contacts/export (format param)", () => {
     const res = await app.inject({ method: "GET", url: "/v1/contacts/export?format=json" });
     expect(res.statusCode).toBe(200);
     expect(res.json<{ data: unknown[] }>().data).toEqual([]);
+  });
+});
+
+describe("GET /v1/contacts/export/count", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns 403 without manage_contacts permission", async () => {
+    mockAuth.role = "member" as const;
+    mockAuth.permissions = { some_other_key: "allow" }; // non-empty = full enforcement, manage_contacts absent
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/export/count" });
+    expect(res.statusCode).toBe(403);
+    mockAuth.role = "admin" as const;
+    mockAuth.permissions = {};
+  });
+
+  it("returns 403 when export_contacts sub-permission is explicitly denied", async () => {
+    mockAuth.role = "member" as const;
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts@export_contacts": "deny" };
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/export/count" });
+    expect(res.statusCode).toBe(403);
+    mockAuth.role = "admin" as const;
+    mockAuth.permissions = {};
+  });
+
+  it("returns count for org with no filters", async () => {
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.contact.count.mockResolvedValue(42);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/export/count" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { count: number } }>().data.count).toBe(42);
+    mockAuth.permissions = {};
+  });
+
+  it("applies lifecycleStage filter", async () => {
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.contact.count.mockResolvedValue(5);
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/contacts/export/count?lifecycleStage=lead&lifecycleStage=prospect",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.contact.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ lifecycleStage: { in: ["lead", "prospect"] } }),
+      })
+    );
+    mockAuth.permissions = {};
+  });
+
+  it("applies tags filter (hasEvery)", async () => {
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.contact.count.mockResolvedValue(3);
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/contacts/export/count?tags=vip&tags=premium",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.contact.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ tags: { hasEvery: ["vip", "premium"] } }),
+      })
+    );
+    mockAuth.permissions = {};
+  });
+
+  it("resolves segmentId via evaluateSegment and filters by IDs", async () => {
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.segment.findFirst.mockResolvedValue({
+      id: "seg-1", organizationId: "org-1", filters: [], match: "all",
+    });
+    mockEvaluateSegment.mockResolvedValue({
+      count: 1,
+      contacts: [{ id: "c-1", firstName: null, lastName: null, phoneNumber: "+919", lifecycleStage: null }],
+    });
+    mockPrisma.contact.count.mockResolvedValue(1);
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/contacts/export/count?segmentId=seg-1",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.contact.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { in: ["c-1"] } }),
+      })
+    );
+    mockAuth.permissions = {};
+  });
+
+  it("applies groupIds filter (OR across groups)", async () => {
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.contact.count.mockResolvedValue(7);
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/contacts/export/count?groupIds=g-1&groupIds=g-2",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.contact.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          groupContacts: { some: { contactGroupId: { in: ["g-1", "g-2"] } } },
+        }),
+      })
+    );
+    mockAuth.permissions = {};
+  });
+
+  it("applies custom field filter via ContactCustomFieldValue relation", async () => {
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.contact.count.mockResolvedValue(2);
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/contacts/export/count?cf%5Bcf-1%5D=Gold",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.contact.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            { customFieldValues: { some: { fieldId: "cf-1", fieldValue: { contains: "Gold", mode: "insensitive" } } } },
+          ]),
+        }),
+      })
+    );
+    mockAuth.permissions = {};
   });
 });

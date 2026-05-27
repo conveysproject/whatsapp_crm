@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import type { LifecycleStage } from "@prisma/client";
+import { evaluateSegment, type FilterRule, type MatchMode } from "../lib/segment-evaluator.js";
 import { paginate, parsePaginationParams } from "../lib/pagination.js";
 
 import { generateContactsCsv } from "../lib/csv.js";
@@ -14,6 +15,54 @@ function csvEscape(value: string): string {
     return `"${str}"`;
   }
   return str;
+}
+
+async function buildExportWhere(
+  prisma: PrismaClient,
+  organizationId: string,
+  rawUrl: string,
+): Promise<Prisma.ContactWhereInput> {
+  const rawSearch = rawUrl.split("?")[1] ?? "";
+  const usp = new URLSearchParams(rawSearch);
+
+  const lifecycleStages = usp.getAll("lifecycleStage");
+  const tags = usp.getAll("tags");
+  const segmentId = usp.get("segmentId") ?? undefined;
+  const groupIds = usp.getAll("groupIds");
+
+  const cfFilters: Record<string, string> = {};
+  for (const [key, value] of usp) {
+    const m = key.match(/^cf\[(.+)\]$/);
+    if (m?.[1]) cfFilters[m[1]] = value;
+  }
+
+  let segmentContactIds: string[] | undefined;
+  if (segmentId) {
+    const segment = await prisma.segment.findFirst({ where: { id: segmentId, organizationId } });
+    if (segment) {
+      const result = await evaluateSegment(
+        prisma,
+        organizationId,
+        segment.filters as unknown as FilterRule[],
+        (segment.match ?? "all") as MatchMode,
+      );
+      segmentContactIds = result.contacts.map((c) => c.id);
+    }
+  }
+
+  const cfClauses: Prisma.ContactWhereInput[] = Object.entries(cfFilters).map(([fieldId, value]) => ({
+    customFieldValues: { some: { fieldId, fieldValue: { contains: value, mode: "insensitive" } } },
+  }));
+
+  return {
+    organizationId,
+    deletedAt: null,
+    ...(lifecycleStages.length > 0 && { lifecycleStage: { in: lifecycleStages as LifecycleStage[] } }),
+    ...(tags.length > 0 && { tags: { hasEvery: tags } }),
+    ...(segmentContactIds !== undefined && { id: { in: segmentContactIds } }),
+    ...(groupIds.length > 0 && { groupContacts: { some: { contactGroupId: { in: groupIds } } } }),
+    ...(cfClauses.length > 0 && { AND: cfClauses }),
+  };
 }
 
 interface ContactBody {
@@ -47,6 +96,19 @@ interface ContactPatchBody {
 }
 
 export const contactsRouter: FastifyPluginAsync = async (fastify) => {
+  fastify.get("/contacts/export/count", async (request, reply) => {
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_contacts")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
+    }
+    if (!hasSubPermission(permissions, "manage_contacts", "export_contacts")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "export_contacts permission required" } });
+    }
+    const where = await buildExportWhere(fastify.prisma, organizationId, request.raw.url ?? "");
+    const count = await fastify.prisma.contact.count({ where });
+    return reply.send({ data: { count } });
+  });
+
   fastify.get<{ Querystring: { format?: string } }>("/contacts/export", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
     // GAP-S04: manage_contacts + export_contacts sub-permission required
