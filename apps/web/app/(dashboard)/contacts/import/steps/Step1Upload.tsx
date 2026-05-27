@@ -86,7 +86,7 @@ export function Step1Upload(): JSX.Element {
           <li>CSV must include a phone number column (full international format, or separate number + country code columns)</li>
           <li>Duplicate phone numbers in the file: only the first row is imported</li>
           <li>Multiple tags in one column: separate with a pipe character (e.g. <span className="font-mono">vip|premium</span>)</li>
-          <li>Custom field columns won't auto-map — select the matching field in the dropdown after upload</li>
+          <li>Custom field columns will not auto-map — select the matching field in the dropdown after upload</li>
         </ul>
       </div>
 
