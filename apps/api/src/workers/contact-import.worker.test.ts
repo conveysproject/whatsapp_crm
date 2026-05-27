@@ -66,6 +66,17 @@ describe("extractCustomFields", () => {
     expect(result).toEqual({ "cf-1": "Mumbai", "cf-2": "Pro" });
   });
 
+  it("keys by inputName when cfInputNameMap is provided", () => {
+    const row = { City: "Mumbai", Plan: "Pro" };
+    const mapping = [
+      { csvColumn: "City", dbField: "customField:cf-1" as const },
+      { csvColumn: "Plan", dbField: "customField:cf-2" as const },
+    ];
+    const cfInputNameMap = new Map([["cf-1", "City Field"], ["cf-2", "Plan Field"]]);
+    const result = extractCustomFields(row, mapping, cfInputNameMap);
+    expect(result).toEqual({ "City Field": "Mumbai", "Plan Field": "Pro" });
+  });
+
   it("skips empty custom field values", () => {
     const row = { City: "", Plan: "Pro" };
     const mapping = [

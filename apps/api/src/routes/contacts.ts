@@ -188,7 +188,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
         csvEscape(c.groupContacts.map((gc) => gc.contactGroup.title).join("|")),
         csvEscape((c.notes ?? "").replace(/[\r\n]+/g, " ")),
         csvEscape(c.createdAt.toISOString()),
-        ...customFields.map((cf) => csvEscape(String(cfBlob[cf.id] ?? ""))),
+        ...customFields.map((cf) => csvEscape(String(cfBlob[cf.inputName] ?? cfBlob[cf.id] ?? ""))),
       ];
       return cells.join(",");
     });

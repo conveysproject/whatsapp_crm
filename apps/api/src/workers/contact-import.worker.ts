@@ -60,14 +60,16 @@ export function extractFirstLastName(
 
 export function extractCustomFields(
   row: Record<string, string>,
-  mapping: FieldMapping
+  mapping: FieldMapping,
+  cfInputNameMap: Map<string, string> = new Map()
 ): Record<string, string> {
   const result: Record<string, string> = {};
   for (const entry of mapping) {
     if ((entry.dbField as string).startsWith("customField:")) {
       const id = (entry.dbField as string).slice("customField:".length);
+      const key = cfInputNameMap.get(id) ?? id;
       const value = (row[entry.csvColumn] ?? "").trim();
-      if (value) result[id] = value;
+      if (value) result[key] = value;
     }
   }
   return result;
@@ -171,6 +173,13 @@ export const contactImportWorker = new Worker<ContactImportJob>(
       if (c.isoCode) countryLookup.set(c.isoCode.toLowerCase(), c.id);
       countryLookup.set(c.name.toLowerCase(), c.id);
     }
+
+    // Build custom field id → inputName map so CSV imports key by inputName (consistent with UI)
+    const customFieldMeta = await prisma.contactCustomField.findMany({
+      where: { organizationId, isActive: true },
+      select: { id: true, inputName: true },
+    });
+    const cfInputNameMap = new Map(customFieldMeta.map((cf) => [cf.id, cf.inputName]));
     let created = 0;
     let updated = 0;
     let skipped = 0;
@@ -216,7 +225,7 @@ export const contactImportWorker = new Worker<ContactImportJob>(
           const stage = (csvLifecycle || lifecycleStage) as LifecycleStage;
           const countryRaw = extractField(row, fieldMapping, "country");
           const countryId = countryRaw ? (countryLookup.get(countryRaw.toLowerCase()) ?? null) : null;
-          const customFields = extractCustomFields(row, fieldMapping);
+          const customFields = extractCustomFields(row, fieldMapping, cfInputNameMap);
           const customFieldsValue = Object.keys(customFields).length > 0
             ? customFields as unknown as Prisma.InputJsonValue
             : undefined;
