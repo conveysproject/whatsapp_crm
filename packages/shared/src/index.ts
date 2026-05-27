@@ -18,10 +18,14 @@ export type DbField =
   | "fullPhoneNumber"
   | "phoneNumber"
   | "countryCode"
+  | "firstName"
+  | "lastName"
+  | "fullName"
   | "name"
   | "email"
   | "lifecycleStage"
   | "tags"
+  | `customField:${string}`
   | "skip";
 
 export interface FieldMappingEntry {
