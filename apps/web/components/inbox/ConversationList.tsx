@@ -71,8 +71,8 @@ export function ConversationList({ selectedId, onSelect }: Props): JSX.Element {
         {conversations?.map((conv) => {
           const displayName =
             conv.contact
-              ? [conv.contact.firstName, conv.contact.lastName].filter(Boolean).join(" ") || conv.contact.phoneNumber
-              : conv.whatsappContactId ?? "Unknown";
+              ? [conv.contact.firstName, conv.contact.lastName].filter(Boolean).join(" ") || `+${conv.contact.phoneNumber}`
+              : conv.whatsappContactId ? `+${conv.whatsappContactId}` : "Unknown";
 
           return (
             <button

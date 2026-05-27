@@ -48,7 +48,7 @@ describe("extractFirstLastName", () => {
   });
 
   it("returns nulls when no name fields mapped", () => {
-    const row = { Phone: "+911234567890" };
+    const row = { Phone: "911234567890" };
     const mapping = [{ csvColumn: "Phone", dbField: "fullPhoneNumber" as const }];
     const result = extractFirstLastName(row, mapping);
     expect(result).toEqual({ firstName: null, lastName: null, name: null });
@@ -88,7 +88,7 @@ describe("extractCustomFields", () => {
   });
 
   it("returns empty object when no custom fields mapped", () => {
-    const row = { Phone: "+911234567890" };
+    const row = { Phone: "911234567890" };
     const mapping = [{ csvColumn: "Phone", dbField: "fullPhoneNumber" as const }];
     const result = extractCustomFields(row, mapping);
     expect(result).toEqual({});

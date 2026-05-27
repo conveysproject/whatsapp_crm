@@ -1,17 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { normalizeFullPhone, normalizeSplitPhone, isValidE164 } from "./phone-normalize.js";
+import { normalizeFullPhone, normalizeSplitPhone, isValidPhone } from "./phone-normalize.js";
 
 describe("normalizeFullPhone", () => {
-  it("returns E.164 when given full number with plus", () => {
-    expect(normalizeFullPhone("+919748072737")).toBe("+919748072737");
+  it("returns digits-only when given full number with plus", () => {
+    expect(normalizeFullPhone("+919748072737")).toBe("919748072737");
   });
 
-  it("prepends + when missing", () => {
-    expect(normalizeFullPhone("919748072737")).toBe("+919748072737");
+  it("returns digits-only when plus is missing", () => {
+    expect(normalizeFullPhone("919748072737")).toBe("919748072737");
   });
 
   it("strips spaces and dashes", () => {
-    expect(normalizeFullPhone("+91 97480 72737")).toBe("+919748072737");
+    expect(normalizeFullPhone("+91 97480 72737")).toBe("919748072737");
+  });
+
+  it("strips Excel =\"...\" wrapper", () => {
+    expect(normalizeFullPhone('="919748072737"')).toBe("919748072737");
   });
 
   it("returns null for empty string", () => {
@@ -21,15 +25,19 @@ describe("normalizeFullPhone", () => {
   it("returns null for non-numeric garbage", () => {
     expect(normalizeFullPhone("not-a-phone")).toBeNull();
   });
+
+  it("returns null for local number without country code", () => {
+    expect(normalizeFullPhone("9748072737")).toBeNull();
+  });
 });
 
 describe("normalizeSplitPhone", () => {
-  it("combines country code and phone into E.164", () => {
-    expect(normalizeSplitPhone("91", "9748072737")).toBe("+919748072737");
+  it("combines country code and phone into digits-only", () => {
+    expect(normalizeSplitPhone("91", "9748072737")).toBe("919748072737");
   });
 
   it("strips non-digits from both parts", () => {
-    expect(normalizeSplitPhone("+91", "(974) 807-2737")).toBe("+919748072737");
+    expect(normalizeSplitPhone("+91", "(974) 807-2737")).toBe("919748072737");
   });
 
   it("returns null when country code is empty", () => {
@@ -41,20 +49,20 @@ describe("normalizeSplitPhone", () => {
   });
 });
 
-describe("isValidE164", () => {
-  it("accepts valid E.164", () => {
-    expect(isValidE164("+919748072737")).toBe(true);
+describe("isValidPhone", () => {
+  it("accepts valid international digits", () => {
+    expect(isValidPhone("919748072737")).toBe(true);
   });
 
-  it("rejects missing plus", () => {
-    expect(isValidE164("919748072737")).toBe(false);
+  it("rejects local number without country code", () => {
+    expect(isValidPhone("9748072737")).toBe(false);
   });
 
   it("rejects too short", () => {
-    expect(isValidE164("+1234")).toBe(false);
+    expect(isValidPhone("1234")).toBe(false);
   });
 
-  it("rejects too long", () => {
-    expect(isValidE164("+" + "2".repeat(17))).toBe(false);
+  it("rejects empty string", () => {
+    expect(isValidPhone("")).toBe(false);
   });
 });

@@ -6,10 +6,11 @@ import { redisConnection } from "../lib/queue.js";
 import { redis } from "../lib/redis.js";
 import { prisma } from "../lib/prisma.js";
 import { getIo } from "../lib/io-ref.js";
-import { normalizeFullPhone, normalizeSplitPhone, phoneVariants } from "../lib/phone-normalize.js";
+import { normalizeFullPhone, normalizeSplitPhone } from "../lib/phone-normalize.js";
 import type { FieldMapping } from "@WBMSG/shared";
 
-const IMPORT_LOCK_TTL_SECONDS = 3600; // max 1 hour per import
+const IMPORT_LOCK_TTL_SECONDS = 3600;
+const ERROR_CSV_TTL_SECONDS = 86400; // 24 hours
 
 interface ContactImportJob {
   importId: string;
@@ -116,11 +117,12 @@ async function writeProgress(
   created: number,
   updated: number,
   skipped: number,
-  status: string
+  status: string,
+  errorCount?: number
 ): Promise<void> {
   await redis.set(
     `import:progress:${importId}`,
-    JSON.stringify({ processed, total, created, updated, skipped, status }),
+    JSON.stringify({ processed, total, created, updated, skipped, status, errorCount: errorCount ?? 0 }),
     "EX",
     7200
   );
@@ -132,7 +134,6 @@ export const contactImportWorker = new Worker<ContactImportJob>(
     const { importId, sessionId, organizationId, fieldMapping, batchTags, batchGroupIds, lifecycleStage, updateExisting } = job.data;
     console.log(`[contact-import] job started importId=${importId}`);
 
-    // GAP-S66: per-org concurrent import lock
     const lockKey = `import:lock:${organizationId}`;
     const acquired = await redis.set(lockKey, importId, "EX", IMPORT_LOCK_TTL_SECONDS, "NX");
     if (!acquired) {
@@ -149,7 +150,7 @@ export const contactImportWorker = new Worker<ContactImportJob>(
       });
       await redis.set(
         `import:progress:${importId}`,
-        JSON.stringify({ status: "failed", processed: 0, total: 0, created: 0, updated: 0, skipped: 0 }),
+        JSON.stringify({ status: "failed", processed: 0, total: 0, created: 0, updated: 0, skipped: 0, errorCount: 0 }),
         "EX", 7200
       );
       throw new UnrecoverableError("CSV session expired — no retries");
@@ -163,10 +164,10 @@ export const contactImportWorker = new Worker<ContactImportJob>(
     });
 
     const rows = parsed.data;
+    const csvHeaders = parsed.meta.fields ?? [];
     const BATCH_SIZE = 500;
     const seenPhones = new Set<string>();
 
-    // Build country lookup: isoCode (2-letter) and lower-cased name → country.id
     const allCountries = await prisma.country.findMany({ select: { id: true, isoCode: true, name: true } });
     const countryLookup = new Map<string, number>();
     for (const c of allCountries) {
@@ -174,16 +175,18 @@ export const contactImportWorker = new Worker<ContactImportJob>(
       countryLookup.set(c.name.toLowerCase(), c.id);
     }
 
-    // Build custom field id → inputName map so CSV imports key by inputName (consistent with UI)
     const customFieldMeta = await prisma.contactCustomField.findMany({
       where: { organizationId, isActive: true },
       select: { id: true, inputName: true },
     });
     const cfInputNameMap = new Map(customFieldMeta.map((cf) => [cf.id, cf.inputName]));
+
     let created = 0;
     let updated = 0;
     let skipped = 0;
     const errorSamples: Array<{ row: number; reason: string }> = [];
+    // Full failed rows for error CSV download
+    const failedRows: Array<Record<string, string> & { "Error Reason": string }> = [];
 
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);
@@ -194,11 +197,15 @@ export const contactImportWorker = new Worker<ContactImportJob>(
         const phone = extractPhone(row, fieldMapping);
         if (!phone) {
           skipped++;
-          if (errorSamples.length < 50) errorSamples.push({ row: i + j + 1, reason: "Invalid or missing phone number" });
+          const reason = "Missing or invalid country code — number must include full country code (e.g. 919907072035)";
+          if (errorSamples.length < 50) errorSamples.push({ row: i + j + 1, reason });
+          failedRows.push({ ...row, "Error Reason": reason });
           continue;
         }
         if (seenPhones.has(phone)) {
           skipped++;
+          const reason = "Duplicate phone number in file";
+          failedRows.push({ ...row, "Error Reason": reason });
           continue;
         }
         seenPhones.add(phone);
@@ -207,21 +214,12 @@ export const contactImportWorker = new Worker<ContactImportJob>(
 
       if (validRows.length) {
         const batchPhones = validRows.map((r) => r.phone);
-        // Look up by all phone variants (e.g. +91XXX and 91XXX) to catch contacts
-        // stored without normalization
-        const variantToCanonical = new Map<string, string>();
-        for (const phone of batchPhones) {
-          for (const v of phoneVariants(phone)) variantToCanonical.set(v, phone);
-        }
+        // Exact match — all phones are stored as plain digits (no +)
         const existingContacts = await prisma.contact.findMany({
-          where: { organizationId, phoneNumber: { in: [...variantToCanonical.keys()] } },
+          where: { organizationId, phoneNumber: { in: batchPhones } },
           select: { id: true, phoneNumber: true },
         });
-        const existingMap = new Map<string, string>();
-        for (const c of existingContacts) {
-          const canonical = variantToCanonical.get(c.phoneNumber) ?? c.phoneNumber;
-          existingMap.set(canonical, c.id);
-        }
+        const existingMap = new Map(existingContacts.map((c) => [c.phoneNumber, c.id]));
 
         const toCreate: Prisma.ContactCreateManyInput[] = [];
         const toUpdate: Array<{ id: string; phone: string; data: Prisma.ContactUpdateInput }> = [];
@@ -271,7 +269,6 @@ export const contactImportWorker = new Worker<ContactImportJob>(
           }
         }
 
-        // Batch group assignment
         if (batchGroupIds.length > 0) {
           const batchContacts = await prisma.contact.findMany({
             where: { organizationId, phoneNumber: { in: validRows.map((r) => r.phone) } },
@@ -279,20 +276,25 @@ export const contactImportWorker = new Worker<ContactImportJob>(
           });
           await assignBatchGroups(prisma, batchContacts.map((c) => c.id), batchGroupIds);
         }
-
       }
 
-      await writeProgress(importId, i + batch.length, rows.length, created, updated, skipped, "processing");
+      await writeProgress(importId, i + batch.length, rows.length, created, updated, skipped, "processing", failedRows.length);
       await prisma.contactImport.update({
         where: { id: importId },
         data: { processedRows: created + updated + skipped, createdCount: created, updatedCount: updated, skippedCount: skipped },
       });
-      // GAP-S66: emit real-time progress via Socket.io
       const io = getIo();
       if (io) {
         const pct = rows.length > 0 ? Math.round(((i + batch.length) / rows.length) * 100) : 0;
         io.to(`org:${organizationId}`).emit("import:progress", { importId, processed: i + batch.length, total: rows.length, percentage: pct });
       }
+    }
+
+    // Store error CSV in Redis for 24h download
+    if (failedRows.length > 0) {
+      const errorCsvHeaders = [...csvHeaders, "Error Reason"];
+      const errorCsv = Papa.unparse(failedRows, { columns: errorCsvHeaders });
+      await redis.set(`import:errors:${importId}`, errorCsv, "EX", ERROR_CSV_TTL_SECONDS);
     }
 
     await prisma.contactImport.update({
@@ -304,8 +306,7 @@ export const contactImportWorker = new Worker<ContactImportJob>(
       },
     });
 
-    await writeProgress(importId, rows.length, rows.length, created, updated, skipped, "completed");
-    // Release per-org lock
+    await writeProgress(importId, rows.length, rows.length, created, updated, skipped, "completed", failedRows.length);
     await redis.del(`import:lock:${organizationId}`);
     getIo()?.to(`org:${organizationId}`).emit("import:completed", { importId });
   },
@@ -333,9 +334,8 @@ contactImportWorker.on("failed", async (job, err) => {
     })
     .catch(() => undefined);
   await redis
-    .set(`import:progress:${importId}`, JSON.stringify({ status: "failed" }), "EX", 7200)
+    .set(`import:progress:${importId}`, JSON.stringify({ status: "failed", errorCount: 0 }), "EX", 7200)
     .catch(() => undefined);
-  // GAP-S66: release per-org lock on failure
   await redis.del(`import:lock:${organizationId}`).catch(() => undefined);
 });
 

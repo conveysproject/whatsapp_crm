@@ -3,7 +3,7 @@ import { syncPhoneNumbers } from "../lib/whatsapp.js";
 import { prisma } from "../lib/prisma.js";
 import { storeTrainingEmbeddings } from "../lib/ai-rag.js";
 import { canAccess } from "../lib/permissions.js";
-import { phoneVariants } from "../lib/phone-normalize.js";
+import { normalizeFullPhone } from "../lib/phone-normalize.js";
 
 interface SettingEntry {
   key: string;
@@ -42,12 +42,13 @@ async function runSettingsSideEffects(organizationId: string, settings: SettingE
   // test_recipient_contact saved → auto-create contact if not found
   if ("test_recipient_contact" in keyMap && keyMap["test_recipient_contact"]) {
     const phone = keyMap["test_recipient_contact"]!;
+    const normalizedPhone = normalizeFullPhone(phone) ?? phone;
     const existing = await prisma.contact.findFirst({
-      where: { organizationId, phoneNumber: { in: phoneVariants(phone) }, deletedAt: null },
+      where: { organizationId, phoneNumber: normalizedPhone, deletedAt: null },
     });
     if (!existing) {
       await prisma.contact.create({
-        data: { organizationId, phoneNumber: phone, name: "Test Contact" },
+        data: { organizationId, phoneNumber: normalizedPhone, name: "Test Contact" },
       });
     }
   }

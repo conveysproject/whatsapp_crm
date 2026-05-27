@@ -438,6 +438,73 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // ── Orphaned conversation cleanup ────────────────────────────────────────
+  // Conversations with contactId = NULL are left behind when contacts are deleted.
+  // Messages have no cascade on the conversation FK so they must be deleted first.
+  fastify.get("/admin/conversations/cleanup", async (request, reply) => {
+    if (!requireSuperAdmin(request.auth.role, reply)) return;
+    const [conversations, messages] = await Promise.all([
+      fastify.prisma.conversation.count({ where: { contactId: null } }),
+      fastify.prisma.message.count({ where: { conversation: { contactId: null } } }),
+    ]);
+    return reply.send({ data: { dryRun: true, conversations, messages } });
+  });
+
+  fastify.delete("/admin/conversations/cleanup", async (request, reply) => {
+    if (!requireSuperAdmin(request.auth.role, reply)) return;
+    const BATCH = 500;
+    let deletedConversations = 0;
+    let deletedMessages = 0;
+    let keepGoing = true;
+    while (keepGoing) {
+      const batch = await fastify.prisma.conversation.findMany({
+        where: { contactId: null },
+        select: { id: true },
+        take: BATCH,
+      });
+      if (batch.length === 0) break;
+      const ids = batch.map((c) => c.id);
+      const [msgResult] = await fastify.prisma.$transaction([
+        fastify.prisma.message.deleteMany({ where: { conversationId: { in: ids } } }),
+        fastify.prisma.conversation.deleteMany({ where: { id: { in: ids } } }),
+      ]);
+      deletedMessages += msgResult.count;
+      deletedConversations += batch.length;
+      if (batch.length < BATCH) keepGoing = false;
+    }
+    writeAdminAudit({
+      prisma: fastify.prisma,
+      actorId: request.auth.userId,
+      action: "conversations.cleanup",
+      targetType: "platform",
+      metadata: { deletedConversations, deletedMessages },
+      request,
+    });
+    return reply.send({ data: { deletedConversations, deletedMessages } });
+  });
+
+  // ── Activity log purge ────────────────────────────────────────────────────
+  fastify.delete<{ Querystring: { retentionDays?: string } }>(
+    "/admin/activity-logs/purge",
+    async (request, reply) => {
+      if (!requireSuperAdmin(request.auth.role, reply)) return;
+      const retentionDays = Math.max(1, parseInt(request.query.retentionDays ?? "90", 10) || 90);
+      const cutoff = new Date(Date.now() - retentionDays * 86400000);
+      const result = await fastify.prisma.activityLog.deleteMany({
+        where: { createdAt: { lt: cutoff } },
+      });
+      writeAdminAudit({
+        prisma: fastify.prisma,
+        actorId: request.auth.userId,
+        action: "activity_logs.purge",
+        targetType: "platform",
+        metadata: { retentionDays, cutoff: cutoff.toISOString(), deleted: result.count },
+        request,
+      });
+      return reply.send({ data: { deleted: result.count, cutoff: cutoff.toISOString(), retentionDays } });
+    }
+  );
+
   // ── Org cleanup helpers ──────────────────────────────────────────────────
   async function findGhostOrgs(prisma: typeof fastify.prisma) {
     const orgs = await prisma.organization.findMany({

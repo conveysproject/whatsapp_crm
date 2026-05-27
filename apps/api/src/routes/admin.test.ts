@@ -19,6 +19,9 @@ const mockPrisma = {
     findMany: vi.fn(),
     upsert: vi.fn(),
   },
+  adminAuditLog: {
+    create: vi.fn().mockResolvedValue({}),
+  },
 };
 
 // SuperAdmin auth

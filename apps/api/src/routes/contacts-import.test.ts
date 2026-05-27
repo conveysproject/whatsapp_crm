@@ -96,7 +96,7 @@ describe("POST /v1/contacts/import/upload", () => {
       'Content-Disposition: form-data; name="upload"; filename="contacts.csv"',
       "Content-Type: text/csv",
       "",
-      "Name,Phone\r\nAlice,+919000000001",
+      "Name,Phone\r\nAlice,919000000001",
       `--${boundary}--`,
     ].join("\r\n");
     const res = await app.inject({
@@ -129,9 +129,9 @@ describe("POST /v1/contacts/import/analyze", () => {
   });
 
   it("counts unique phones, duplicates in CSV, and existing contacts", async () => {
-    const csv = "Full Phone\n+919000000001\n+919000000002\n+919000000001";
+    const csv = "Full Phone\n919000000001\n919000000002\n919000000001";
     mockRedisGet.mockResolvedValueOnce(csv);
-    mockPrisma.contact.findMany.mockResolvedValueOnce([{ phoneNumber: "+919000000001" }]);
+    mockPrisma.contact.findMany.mockResolvedValueOnce([{ phoneNumber: "919000000001" }]);
 
     const res = await app.inject({
       method: "POST",
@@ -152,7 +152,7 @@ describe("POST /v1/contacts/import/analyze", () => {
   });
 
   it("falls back from fullPhone to splitPhone when fullPhone cell is empty", async () => {
-    const csv = "Full Phone,Phone Number,Country Code\n+919000000001,,\n,9000000002,91";
+    const csv = "Full Phone,Phone Number,Country Code\n919000000001,,\n,9000000002,91";
     mockRedisGet.mockResolvedValueOnce(csv);
     mockPrisma.contact.findMany.mockResolvedValueOnce([]);
 

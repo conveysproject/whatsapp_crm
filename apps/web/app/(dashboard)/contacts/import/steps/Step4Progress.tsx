@@ -127,6 +127,15 @@ export function Step4Progress(): JSX.Element {
               ? "No contacts were imported — all rows were skipped or had invalid phone numbers."
               : "Your contacts have been imported successfully."}
           </p>
+          {(progress.errorCount ?? 0) > 0 && (
+            <a
+              href={`${process.env["NEXT_PUBLIC_API_URL"]}/v1/contacts/import/${state.importJobId}/errors?token=${encodeURIComponent(state.importToken ?? "")}`}
+              download
+              className="inline-flex items-center gap-1.5 text-sm text-red-600 hover:text-red-800 font-medium underline"
+            >
+              Download {progress.errorCount} failed row{(progress.errorCount ?? 0) !== 1 ? "s" : ""} as CSV
+            </a>
+          )}
           <div className="flex gap-3">
             <Button onClick={() => router.push("/contacts")}>View Contacts</Button>
             <Button variant="secondary" onClick={reset}>Import Another File</Button>

@@ -383,7 +383,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                             </div>
                           </td>
                           <td className="px-4 py-3.5 text-gray-700">{c.lastName ?? "—"}</td>
-                          <td className="px-4 py-3.5 text-gray-600 font-mono text-xs tracking-wide">{c.phoneNumber}</td>
+                          <td className="px-4 py-3.5 text-gray-600 font-mono text-xs tracking-wide">+{c.phoneNumber}</td>
                           <td className="px-4 py-3.5">
                             {c.languageCode
                               ? <span className="inline-flex items-center h-5 px-2 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600">{c.languageCode}</span>
@@ -411,7 +411,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                                   </div>
                                   <div>
                                     <p className="font-semibold text-gray-900 text-sm">{displayName}</p>
-                                    <p className="text-xs text-gray-400 font-mono">{c.phoneNumber}</p>
+                                    <p className="text-xs text-gray-400 font-mono">+{c.phoneNumber}</p>
                                   </div>
                                 </div>
 

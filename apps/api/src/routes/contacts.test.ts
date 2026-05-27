@@ -63,7 +63,7 @@ describe("GET /v1/contacts", () => {
 
   it("returns contacts for the authenticated org", async () => {
     mockPrisma.contact.findMany.mockResolvedValue([
-      { id: "c-1", organizationId: "org-1", phoneNumber: "+919000000001", name: "Alice" },
+      { id: "c-1", organizationId: "org-1", phoneNumber: "919000000001", name: "Alice" },
     ]);
     const res = await app.inject({ method: "GET", url: "/v1/contacts" });
     expect(res.statusCode).toBe(200);
@@ -81,12 +81,12 @@ describe("POST /v1/contacts", () => {
   afterEach(async () => { await app.close(); });
 
   it("creates a contact and returns 201", async () => {
-    const created = { id: "c-2", organizationId: "org-1", phoneNumber: "+919000000002", name: "Bob", email: null, lifecycleStage: "lead" };
+    const created = { id: "c-2", organizationId: "org-1", phoneNumber: "919000000002", name: "Bob", email: null, lifecycleStage: "lead" };
     mockPrisma.contact.create.mockResolvedValue(created);
     const res = await app.inject({
       method: "POST",
       url: "/v1/contacts",
-      payload: { phoneNumber: "+919000000002", name: "Bob" },
+      payload: { phoneNumber: "919000000002", name: "Bob" },
     });
     expect(res.statusCode).toBe(201);
     expect(res.json<{ data: { id: string } }>().data.id).toBe("c-2");
@@ -122,7 +122,7 @@ describe("GET /v1/contacts/export", () => {
   it("returns CSV with correct headers and data", async () => {
     mockPrisma.contactCustomField.findMany.mockResolvedValue([]);
     mockPrisma.contact.findMany.mockResolvedValue([
-      { id: "c-1", organizationId: "org-1", phoneNumber: "+919000000001", firstName: "Alice", lastName: null, email: "alice@example.com", countryCode: "IN", lifecycleStage: "lead", tags: [], notes: null, createdAt: new Date(), groupContacts: [], customFields: {} },
+      { id: "c-1", organizationId: "org-1", phoneNumber: "919000000001", firstName: "Alice", lastName: null, email: "alice@example.com", countryCode: "IN", lifecycleStage: "lead", tags: [], notes: null, createdAt: new Date(), groupContacts: [], customFields: {} },
     ]);
     const res = await app.inject({ method: "GET", url: "/v1/contacts/export" });
     expect(res.statusCode).toBe(200);
@@ -249,7 +249,7 @@ describe("GET /v1/contacts/export (format param)", () => {
 
   it("returns CSV content type", async () => {
     mockPrisma.contact.findMany.mockResolvedValue([
-      { id: "c-1", firstName: "Priya", lastName: "Shah", phoneNumber: "+919000000001", email: "priya@example.com", countryCode: "IN", createdAt: new Date("2025-01-01") },
+      { id: "c-1", firstName: "Priya", lastName: "Shah", phoneNumber: "919000000001", email: "priya@example.com", countryCode: "IN", createdAt: new Date("2025-01-01") },
     ]);
     const res = await app.inject({ method: "GET", url: "/v1/contacts/export?format=csv" });
     expect(res.statusCode).toBe(200);
@@ -335,7 +335,7 @@ describe("GET /v1/contacts/export/count", () => {
     });
     mockEvaluateSegment.mockResolvedValue({
       count: 1,
-      contacts: [{ id: "c-1", firstName: null, lastName: null, phoneNumber: "+919", lifecycleStage: null }],
+      contacts: [{ id: "c-1", firstName: null, lastName: null, phoneNumber: "919", lifecycleStage: null }],
     });
     mockPrisma.contact.count.mockResolvedValue(1);
     const res = await app.inject({
@@ -400,7 +400,7 @@ describe("GET /v1/contacts/export (new rich CSV)", () => {
     id: "c-1",
     firstName: "Priya",
     lastName: "Shah",
-    phoneNumber: "+919000000001",
+    phoneNumber: "919000000001",
     email: "priya@example.com",
     countryCode: "IN",
     lifecycleStage: "lead",

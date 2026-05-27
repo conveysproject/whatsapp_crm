@@ -49,6 +49,7 @@ export interface ImportProgress {
   updated: number;
   skipped: number;
   status: "pending" | "processing" | "completed" | "failed";
+  errorCount?: number;
 }
 
 export type IntentType = "question" | "complaint" | "order" | "compliment" | "other";

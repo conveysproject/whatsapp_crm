@@ -110,7 +110,7 @@ export function ContactDetailSidebar({ contact }: Props): JSX.Element {
 
         <div className="flex flex-col gap-1">
           <span className={labelCls}>Phone</span>
-          <span className="text-sm font-mono text-gray-900">{contact.phoneNumber}</span>
+          <span className="text-sm font-mono text-gray-900">+{contact.phoneNumber}</span>
         </div>
 
         <div className="flex flex-col gap-1">

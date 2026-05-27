@@ -182,6 +182,7 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
       const existingPhones = new Set<string>();
       for (let i = 0; i < uniquePhones.length; i += CHUNK) {
         const chunk = uniquePhones.slice(i, i + CHUNK);
+        // Phones are stored as plain digits — exact match
         const found = await fastify.prisma.contact.findMany({
           where: { organizationId, phoneNumber: { in: chunk } },
           select: { phoneNumber: true },
@@ -248,6 +249,34 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
       const { sessionId } = request.params;
       await redis.del(`import:csv:${sessionId}`);
       return reply.status(204).send();
+    }
+  );
+
+  // Error CSV download — same HMAC token as the SSE progress endpoint
+  fastify.get<{ Params: { jobId: string }; Querystring: { token?: string } }>(
+    "/contacts/import/:jobId/errors",
+    { config: { public: true } },
+    async (request, reply) => {
+      const { jobId } = request.params;
+      const { token } = request.query;
+
+      if (!token) {
+        return reply.status(401).send({ error: { code: "MISSING_TOKEN", message: "Missing import token" } });
+      }
+      const orgId = verifyImportToken(token, jobId);
+      if (!orgId) {
+        return reply.status(401).send({ error: { code: "INVALID_TOKEN", message: "Invalid or expired import token" } });
+      }
+
+      const csv = await redis.get(`import:errors:${jobId}`);
+      if (!csv) {
+        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "No error file found for this import, or it has expired." } });
+      }
+
+      return reply
+        .header("Content-Type", "text/csv; charset=utf-8")
+        .header("Content-Disposition", `attachment; filename="import-errors-${jobId.slice(0, 8)}.csv"`)
+        .send(csv);
     }
   );
 

@@ -9,7 +9,6 @@ import { handleBotMessage } from "../lib/bot-runner.js";
 import { getMediaUrl, downloadMediaBytes, markAsRead } from "../lib/whatsapp.js";
 import { dispatchWebhook } from "../lib/webhook-dispatch.js";
 import { isFeatureEnabled } from "../lib/plan-limits.js";
-import { phoneVariants } from "../lib/phone-normalize.js";
 import Expo from "expo-server-sdk";
 
 const expo = new Expo();
@@ -72,37 +71,12 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       where: { organizationId, whatsappContactId: whatsappContactPhone },
     });
 
-    // Phone format mismatch (Meta sends "919907072035", DB may store "+919907072035")
     if (!conversation) {
-      const variants = phoneVariants(whatsappContactPhone).filter((v) => v !== whatsappContactPhone);
-      for (const variant of variants) {
-        conversation = await prisma.conversation.findFirst({
-          where: { organizationId, whatsappContactId: variant },
-        });
-        if (conversation) break;
-      }
-    }
-
-    if (!conversation) {
-      // GAP-S08: try exact match first, then fall back to phone variant lookup
-      let existingContact = await prisma.contact.findFirst({
+      // Phones stored as plain digits — WhatsApp sends same format — exact match
+      const existingContact = await prisma.contact.findFirst({
         where: { organizationId, phoneNumber: whatsappContactPhone, deletedAt: null },
-        select: { id: true, phoneNumber: true },
+        select: { id: true },
       });
-      if (!existingContact) {
-        const variants = phoneVariants(whatsappContactPhone).filter((v) => v !== whatsappContactPhone);
-        for (const variant of variants) {
-          existingContact = await prisma.contact.findFirst({
-            where: { organizationId, phoneNumber: variant, deletedAt: null },
-            select: { id: true, phoneNumber: true },
-          });
-          if (existingContact) {
-            // Canonicalize stored phone to match incoming format
-            void prisma.contact.update({ where: { id: existingContact.id }, data: { phoneNumber: whatsappContactPhone } }).catch(() => {});
-            break;
-          }
-        }
-      }
       conversation = await prisma.conversation.create({
         data: {
           organizationId,
