@@ -41,11 +41,13 @@ export default function SegmentDetailPage(): JSX.Element {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
       const token = await getToken();
       const res = await fetch(`${API_URL}/v1/segments/${id}`, {
         headers: { Authorization: `Bearer ${token ?? ""}` },
       });
+      if (cancelled) return;
       if (res.ok) {
         const s = (await res.json() as { data: Segment }).data;
         setSegment(s);
@@ -54,6 +56,7 @@ export default function SegmentDetailPage(): JSX.Element {
       }
       setLoading(false);
     })();
+    return () => { cancelled = true; };
   }, [id, getToken]);
 
   async function handleSave() {
@@ -65,9 +68,8 @@ export default function SegmentDetailPage(): JSX.Element {
         headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
         body: JSON.stringify({ filters, match }),
       });
-      if (patchRes.ok) {
-        setSegment((await patchRes.json() as { data: Segment }).data);
-      }
+      if (!patchRes.ok) return;
+      setSegment((await patchRes.json() as { data: Segment }).data);
       // Evaluate to refresh matching contacts
       const evalRes = await fetch(`${API_URL}/v1/segments/${id}/evaluate`, {
         method: "POST",
