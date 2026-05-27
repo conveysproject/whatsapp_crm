@@ -4,14 +4,26 @@ import { JSX, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
-import { SegmentBuilder, type FilterRule } from "@/components/segments/SegmentBuilder";
+import { SegmentBuilder, type FilterRule, type MatchMode } from "@/components/segments/SegmentBuilder";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
-interface Contact { id: string; name: string | null; phoneNumber: string; lifecycleStage: string; }
-interface Segment { id: string; name: string; filters: FilterRule[]; }
+interface ContactPreview {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  phoneNumber: string;
+  lifecycleStage: string | null;
+}
+
+interface Segment {
+  id: string;
+  name: string;
+  filters: FilterRule[];
+  match: MatchMode;
+}
 
 const stageVariant: Record<string, "green" | "blue" | "yellow" | "red" | "gray"> = {
   customer: "green", prospect: "blue", lead: "yellow", churned: "red", loyal: "green",
@@ -21,24 +33,25 @@ export default function SegmentDetailPage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const { getToken } = useAuth();
   const [segment, setSegment] = useState<Segment | null>(null);
-  const [contacts, setContacts] = useState<Contact[]>([]);
   const [filters, setFilters] = useState<FilterRule[]>([]);
+  const [match, setMatch] = useState<MatchMode>("all");
+  const [contacts, setContacts] = useState<ContactPreview[]>([]);
+  const [matchCount, setMatchCount] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     void (async () => {
       const token = await getToken();
-      const [sRes, cRes] = await Promise.all([
-        fetch(`${API_URL}/v1/segments/${id}`, { headers: { Authorization: `Bearer ${token ?? ""}` } }),
-        fetch(`${API_URL}/v1/segments/${id}/contacts`, { headers: { Authorization: `Bearer ${token ?? ""}` } }),
-      ]);
-      if (sRes.ok) {
-        const s = (await sRes.json() as { data: Segment }).data;
+      const res = await fetch(`${API_URL}/v1/segments/${id}`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (res.ok) {
+        const s = (await res.json() as { data: Segment }).data;
         setSegment(s);
-        setFilters(s.filters as FilterRule[]);
+        setFilters(s.filters);
+        setMatch(s.match ?? "all");
       }
-      if (cRes.ok) setContacts((await cRes.json() as { data: Contact[] }).data);
       setLoading(false);
     })();
   }, [id, getToken]);
@@ -47,12 +60,24 @@ export default function SegmentDetailPage(): JSX.Element {
     setSaving(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/segments/${id}`, {
+      const patchRes = await fetch(`${API_URL}/v1/segments/${id}`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ filters }),
+        body: JSON.stringify({ filters, match }),
       });
-      if (res.ok) setSegment((await res.json() as { data: Segment }).data);
+      if (patchRes.ok) {
+        setSegment((await patchRes.json() as { data: Segment }).data);
+      }
+      // Evaluate to refresh matching contacts
+      const evalRes = await fetch(`${API_URL}/v1/segments/${id}/evaluate`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (evalRes.ok) {
+        const result = (await evalRes.json() as { data: { count: number; contacts: ContactPreview[] } }).data;
+        setMatchCount(result.count);
+        setContacts(result.contacts);
+      }
     } finally {
       setSaving(false);
     }
@@ -70,15 +95,29 @@ export default function SegmentDetailPage(): JSX.Element {
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
         <h2 className="font-medium text-gray-800">Filters</h2>
-        <SegmentBuilder initial={filters} onChange={setFilters} />
-        <Button onClick={() => { void handleSave(); }} disabled={saving}>
-          {saving ? "Saving…" : "Save Filters"}
-        </Button>
+        <SegmentBuilder
+          initial={filters}
+          match={match}
+          onChange={setFilters}
+          onMatchChange={setMatch}
+        />
+        <div className="flex items-center gap-3">
+          <Button onClick={() => { void handleSave(); }} disabled={saving}>
+            {saving ? "Saving…" : "Save Filters"}
+          </Button>
+          {matchCount !== null && (
+            <span className="text-sm text-green-600 font-medium">
+              {matchCount} contact{matchCount !== 1 ? "s" : ""} match this segment
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100">
-          <h2 className="font-medium text-gray-800">Matching Contacts ({contacts.length})</h2>
+          <h2 className="font-medium text-gray-800">
+            Matching Contacts {matchCount !== null ? `(${matchCount})` : ""}
+          </h2>
         </div>
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
@@ -90,17 +129,25 @@ export default function SegmentDetailPage(): JSX.Element {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {contacts.length === 0 ? (
-              <tr><td colSpan={3} className="px-4 py-6 text-center text-gray-400">No contacts match this segment.</td></tr>
+              <tr>
+                <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
+                  {matchCount === null ? "Save filters to see matching contacts." : "No contacts match this segment."}
+                </td>
+              </tr>
             ) : contacts.map((c) => (
               <tr key={c.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2">
                   <Link href={`/contacts/${c.id}`} className="font-medium text-gray-900 hover:text-brand-600">
-                    {c.name ?? "—"}
+                    {[c.firstName, c.lastName].filter(Boolean).join(" ") || "—"}
                   </Link>
                 </td>
                 <td className="px-4 py-2 text-gray-600">{c.phoneNumber}</td>
                 <td className="px-4 py-2">
-                  <Badge variant={stageVariant[c.lifecycleStage] ?? "gray"}>{c.lifecycleStage}</Badge>
+                  {c.lifecycleStage ? (
+                    <Badge variant={stageVariant[c.lifecycleStage] ?? "gray"}>{c.lifecycleStage}</Badge>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
                 </td>
               </tr>
             ))}
