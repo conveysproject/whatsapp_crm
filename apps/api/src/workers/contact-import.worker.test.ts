@@ -1,8 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   extractFirstLastName,
   extractCustomFields,
+  assignBatchGroups,
 } from "./contact-import.worker.js";
+import type { PrismaClient } from "@prisma/client";
+
+const mockCreateMany = vi.fn().mockResolvedValue({ count: 2 });
+const mockPrisma = {
+  groupContact: { createMany: mockCreateMany },
+} as unknown as PrismaClient;
 
 describe("extractFirstLastName", () => {
   it("extracts separate firstName and lastName columns", () => {
@@ -74,5 +81,30 @@ describe("extractCustomFields", () => {
     const mapping = [{ csvColumn: "Phone", dbField: "fullPhoneNumber" as const }];
     const result = extractCustomFields(row, mapping);
     expect(result).toEqual({});
+  });
+});
+
+describe("assignBatchGroups", () => {
+  it("creates groupContact records for each contact × group pair", async () => {
+    await assignBatchGroups(mockPrisma, ["contact-1", "contact-2"], ["group-a"]);
+    expect(mockCreateMany).toHaveBeenCalledWith({
+      data: [
+        { contactId: "contact-1", contactGroupId: "group-a" },
+        { contactId: "contact-2", contactGroupId: "group-a" },
+      ],
+      skipDuplicates: true,
+    });
+  });
+
+  it("does nothing when batchGroupIds is empty", async () => {
+    mockCreateMany.mockClear();
+    await assignBatchGroups(mockPrisma, ["contact-1"], []);
+    expect(mockCreateMany).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when contactIds is empty", async () => {
+    mockCreateMany.mockClear();
+    await assignBatchGroups(mockPrisma, [], ["group-a"]);
+    expect(mockCreateMany).not.toHaveBeenCalled();
   });
 });

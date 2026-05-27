@@ -73,6 +73,18 @@ export function extractCustomFields(
   return result;
 }
 
+export async function assignBatchGroups(
+  db: typeof prisma,
+  contactIds: string[],
+  batchGroupIds: string[]
+): Promise<void> {
+  if (batchGroupIds.length === 0 || contactIds.length === 0) return;
+  const pairs = contactIds.flatMap((contactId) =>
+    batchGroupIds.map((contactGroupId) => ({ contactId, contactGroupId }))
+  );
+  await db.groupContact.createMany({ data: pairs, skipDuplicates: true });
+}
+
 function extractPhone(row: Record<string, string>, mapping: FieldMapping): string | null {
   const full = mapping.find((e) => e.dbField === "fullPhoneNumber");
   const phone = mapping.find((e) => e.dbField === "phoneNumber");
@@ -238,6 +250,15 @@ export const contactImportWorker = new Worker<ContactImportJob>(
             skipped++;
             if (errorSamples.length < 50) errorSamples.push({ row: 0, reason: `Update failed for contact ${id}` });
           }
+        }
+
+        // Batch group assignment
+        if (batchGroupIds.length > 0) {
+          const batchContacts = await prisma.contact.findMany({
+            where: { organizationId, phoneNumber: { in: validRows.map((r) => r.phone) } },
+            select: { id: true },
+          });
+          await assignBatchGroups(prisma, batchContacts.map((c) => c.id), batchGroupIds);
         }
 
       }
