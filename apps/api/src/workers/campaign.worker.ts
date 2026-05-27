@@ -9,7 +9,8 @@ import { getIo } from "../lib/io-ref.js";
 interface CampaignJob {
   campaignId: string;
   organizationId: string;
-  segmentId: string;
+  segmentId?: string;
+  groupIds?: string[];
 }
 
 function sleep(ms: number): Promise<void> {
@@ -27,27 +28,60 @@ function resolveTemplateVars(
     .replace(/\{\{email\}\}/gi, contact.email ?? "");
 }
 
+async function resolveTargetPhones(
+  campaignId: string,
+  organizationId: string,
+  segmentId?: string,
+  groupIds?: string[]
+): Promise<string[]> {
+  // Mode 1: segment
+  if (segmentId) {
+    const segment = await prisma.segment.findFirst({ where: { id: segmentId, organizationId } });
+    if (!segment) throw new Error(`Segment ${segmentId} not found`);
+    const result = await evaluateSegment(prisma, organizationId, segment.filters as unknown as FilterRule[]);
+    return result.contacts.map((c) => c.phoneNumber);
+  }
+
+  // Mode 2: explicit groupIds from job payload
+  const effectiveGroupIds = groupIds && groupIds.length > 0 ? groupIds : null;
+
+  // Mode 3: groups stored on the campaign (set at create/schedule time)
+  const storedGroups = effectiveGroupIds
+    ? null
+    : await prisma.campaignGroup.findMany({ where: { campaignId }, select: { contactGroupId: true } });
+
+  const resolvedGroupIds = effectiveGroupIds ?? storedGroups?.map((g) => g.contactGroupId) ?? [];
+
+  if (resolvedGroupIds.length > 0) {
+    const groupContacts = await prisma.groupContact.findMany({
+      where: { contactGroupId: { in: resolvedGroupIds } },
+      include: { contact: { select: { phoneNumber: true } } },
+    });
+    return [...new Set(groupContacts.map((gc) => gc.contact.phoneNumber))];
+  }
+
+  // Mode 4: all org contacts
+  const allContacts = await prisma.contact.findMany({
+    where: { organizationId, whatsappOptOut: false },
+    select: { phoneNumber: true },
+  });
+  return allContacts.map((c) => c.phoneNumber);
+}
+
 export const campaignWorker = new Worker<CampaignJob>(
   "campaigns",
   async (job) => {
-    const { campaignId, organizationId, segmentId } = job.data;
+    const { campaignId, organizationId, segmentId, groupIds } = job.data;
 
-    const [campaign, segment, org] = await Promise.all([
+    const [campaign, org] = await Promise.all([
       prisma.campaign.findFirst({ where: { id: campaignId }, include: { segments: { take: 1 } } }),
-      prisma.segment.findFirst({ where: { id: segmentId, organizationId } }),
       prisma.organization.findUnique({ where: { id: organizationId }, select: { phoneNumberId: true, wabaAccessToken: true } }),
     ]);
     if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
-    if (!segment) throw new Error(`Segment ${segmentId} not found`);
 
     await prisma.campaign.update({ where: { id: campaignId }, data: { status: "running" } });
 
-    const evalResult = await evaluateSegment(
-      prisma,
-      organizationId,
-      segment.filters as unknown as FilterRule[]
-    );
-    const phones = evalResult.contacts.map((c) => c.phoneNumber);
+    const phones = await resolveTargetPhones(campaignId, organizationId, segmentId, groupIds);
 
     const phoneNumberId = org?.phoneNumberId ?? process.env["WA_PHONE_NUMBER_ID"] ?? "";
     const accessToken = org?.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
@@ -55,7 +89,6 @@ export const campaignWorker = new Worker<CampaignJob>(
     const templateBody = campaign.templateId ?? "";
     const intervalMs = (campaign.messageInterval ?? 1) * 1000;
 
-    // For template campaigns, load the approved template from DB including components
     type MetaTemplate = { name: string; language: string; metaTemplateId: string | null; components: unknown[] };
     let metaTemplate: MetaTemplate | null = null;
     if (isTemplateCampaign && campaign.templateId) {
@@ -83,6 +116,16 @@ export const campaignWorker = new Worker<CampaignJob>(
       const current = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
       if (current?.status === "paused" || current?.status === "aborted") {
         getIo()?.to(`org:${organizationId}`).emit("campaign:aborted", { campaignId });
+        break;
+      }
+
+      // Enforce campaign-level message expiry (expiresAt field on Campaign model)
+      if (campaign.expiresAt && new Date() > campaign.expiresAt) {
+        await prisma.campaignRecipient.updateMany({
+          where: { campaignId, status: "pending" },
+          data: { status: "expired" },
+        });
+        getIo()?.to(`org:${organizationId}`).emit("campaign:expired", { campaignId });
         break;
       }
 
@@ -133,13 +176,10 @@ export const campaignWorker = new Worker<CampaignJob>(
         failed++;
       }
 
-      // Emit progress every 50 messages
       if ((i + 1) % 50 === 0) emitProgress();
-
       await sleep(intervalMs);
     }
 
-    // Final progress emission
     emitProgress();
 
     const finalStatus = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { status: true } });
