@@ -44,8 +44,8 @@ function validateMapping(mapping: FieldMappingEntry[]): string | null {
 function getRequiredNotMapped(mapping: FieldMappingEntry[], customFields: CustomFieldMeta[]): string[] {
   const mappedIds = new Set(
     mapping
-      .filter((e) => (e.dbField as string).startsWith("customField:"))
-      .map((e) => (e.dbField as string).slice("customField:".length))
+      .filter((e) => e.dbField.startsWith("customField:"))
+      .map((e) => e.dbField.slice("customField:".length))
   );
   return customFields.filter((cf) => cf.isRequired && !mappedIds.has(cf.id)).map((cf) => cf.inputName);
 }
@@ -302,7 +302,7 @@ export function Step2MapFields(): JSX.Element {
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex items-center justify-between pt-2">
-        <Button variant="secondary" onClick={() => { setState({ analysisResult: null }); prevStep(); }} disabled={analyzing || starting}>
+        <Button variant="secondary" onClick={() => { setState({ analysisResult: null }); setError(null); prevStep(); }} disabled={analyzing || starting}>
           Back
         </Button>
         <div className="flex items-center gap-3">
