@@ -188,6 +188,30 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // ── Executed recipients ───────────────────────────────────────────────────
+  fastify.get<{ Params: { id: string }; Querystring: { page?: string } }>(
+    "/campaigns/:id/recipients",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
+      if (!campaign) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
+      const page = Math.max(1, parseInt(request.query.page ?? "1", 10));
+      const [data, total] = await Promise.all([
+        fastify.prisma.campaignRecipient.findMany({
+          where: { campaignId: request.params.id, status: { in: ["sent", "delivered", "read", "failed"] } },
+          include: { contact: { select: { firstName: true, lastName: true, phoneNumber: true } } },
+          skip: (page - 1) * 50,
+          take: 50,
+          orderBy: { createdAt: "asc" },
+        }),
+        fastify.prisma.campaignRecipient.count({
+          where: { campaignId: request.params.id, status: { in: ["sent", "delivered", "read", "failed"] } },
+        }),
+      ]);
+      return reply.send({ data, total });
+    }
+  );
+
   // ── Abort ─────────────────────────────────────────────────────────────────
   fastify.post<{ Params: { id: string } }>("/campaigns/:id/abort", async (request, reply) => {
     const { organizationId } = request.auth;

@@ -323,3 +323,36 @@ describe("PATCH /v1/campaigns/:id", () => {
     );
   });
 });
+
+describe("GET /v1/campaigns/:id/recipients", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns executed recipients for a campaign", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({ id: "cam-1", organizationId: "org-1" });
+    mockPrisma.campaignRecipient.findMany.mockResolvedValue([
+      {
+        id: "r-1", status: "sent", phoneNumber: "911234567890",
+        contact: { firstName: "Raj", lastName: "Kumar", phoneNumber: "911234567890" },
+      },
+    ]);
+    mockPrisma.campaignRecipient.count.mockResolvedValue(1);
+    const res = await app.inject({ method: "GET", url: "/v1/campaigns/cam-1/recipients" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: unknown[]; total: number }>();
+    expect(body.data).toHaveLength(1);
+    expect(body.total).toBe(1);
+    expect(mockPrisma.campaignRecipient.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { in: ["sent", "delivered", "read", "failed"] } }),
+      })
+    );
+  });
+
+  it("returns 404 when campaign not in org", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "GET", url: "/v1/campaigns/cam-999/recipients" });
+    expect(res.statusCode).toBe(404);
+  });
+});
