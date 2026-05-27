@@ -121,3 +121,27 @@ describe("DELETE /v1/segments/:id", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("PATCH /v1/segments/:id", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("updates match field when provided", async () => {
+    mockPrisma.segment.findFirst.mockResolvedValue({
+      id: "seg-1", organizationId: "org-1", name: "VIP", filters: [], match: "all",
+    });
+    mockPrisma.segment.update.mockResolvedValue({
+      id: "seg-1", organizationId: "org-1", name: "VIP", filters: [], match: "any",
+    });
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/segments/seg-1",
+      payload: { match: "any" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.segment.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ match: "any" }) })
+    );
+  });
+});
