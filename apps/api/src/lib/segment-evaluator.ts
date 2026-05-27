@@ -60,8 +60,8 @@ function buildClause(rule: FilterRule): Record<string, unknown> {
       if (rule.operator === "isNot") return { NOT: { assignedUserId: rule.value } };
       return { assignedUserId: rule.value };
     case "groups":
-      if (rule.operator === "notMemberOf") return { NOT: { groupContacts: { some: { groupId: rule.value } } } };
-      return { groupContacts: { some: { groupId: rule.value } } };
+      if (rule.operator === "notMemberOf") return { NOT: { groupContacts: { some: { contactGroupId: rule.value } } } };
+      return { groupContacts: { some: { contactGroupId: rule.value } } };
     case "whatsappOptOut":
       return { whatsappOptOut: rule.operator === "isTrue" };
     case "disableBot":
@@ -71,9 +71,9 @@ function buildClause(rule: FilterRule): Record<string, unknown> {
       if (rule.operator === "after") return { createdAt: { gte: new Date(rule.value) } };
       return { createdAt: { lte: new Date(rule.value) } };
     case "lastMessageAt":
-      if (rule.operator === "between") return { conversations: { some: { createdAt: { gte: new Date(rule.value), lte: new Date(rule.valueTo!) } } } };
-      if (rule.operator === "after") return { conversations: { some: { createdAt: { gte: new Date(rule.value) } } } };
-      return { conversations: { some: { createdAt: { lte: new Date(rule.value) } } } };
+      if (rule.operator === "between") return { conversations: { some: { lastMessageAt: { gte: new Date(rule.value), lte: new Date(rule.valueTo!) } } } };
+      if (rule.operator === "after") return { conversations: { some: { lastMessageAt: { gte: new Date(rule.value) } } } };
+      return { conversations: { some: { lastMessageAt: { lte: new Date(rule.value) } } } };
     case "customField": {
       if (rule.operator === "isEmpty") return { NOT: { customFieldValues: { some: { fieldId: rule.customFieldId } } } };
       const valueClause =
