@@ -33,6 +33,8 @@ export default function SegmentDetailPage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const { getToken } = useAuth();
   const [segment, setSegment] = useState<Segment | null>(null);
+  const [loadedFilters, setLoadedFilters] = useState<FilterRule[]>([]);
+  const [loadedMatch, setLoadedMatch] = useState<MatchMode>("all");
   const [filters, setFilters] = useState<FilterRule[]>([]);
   const [match, setMatch] = useState<MatchMode>("all");
   const [contacts, setContacts] = useState<ContactPreview[]>([]);
@@ -51,6 +53,8 @@ export default function SegmentDetailPage(): JSX.Element {
       if (res.ok) {
         const s = (await res.json() as { data: Segment }).data;
         setSegment(s);
+        setLoadedFilters(s.filters);
+        setLoadedMatch(s.match ?? "all");
         setFilters(s.filters);
         setMatch(s.match ?? "all");
       }
@@ -98,8 +102,8 @@ export default function SegmentDetailPage(): JSX.Element {
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
         <h2 className="font-medium text-gray-800">Filters</h2>
         <SegmentBuilder
-          initial={filters}
-          match={match}
+          initial={loadedFilters}
+          match={loadedMatch}
           onChange={setFilters}
           onMatchChange={setMatch}
         />
