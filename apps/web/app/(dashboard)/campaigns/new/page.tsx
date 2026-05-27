@@ -377,7 +377,7 @@ export default function NewCampaignPage(): JSX.Element {
                   {[
                     { label: "Campaign", value: name },
                     { label: "Type", value: campaignType === "template" ? "WhatsApp Template" : "Free Text" },
-                    { label: "Message", value: campaignType === "template" ? (selectedTemplate?.name ?? "—") : `${freeTextBody.slice(0, 60)}…` },
+                    { label: "Message", value: campaignType === "template" ? (selectedTemplate?.name ?? "—") : (freeTextBody.length > 60 ? `${freeTextBody.slice(0, 60)}…` : freeTextBody) },
                     { label: "Audience", value: audienceMode === "all" ? "All contacts" : audienceMode === "groups" ? `${selectedGroupIds.length} group(s) · ~${estimatedCount ?? 0} contacts` : segments.find(s => s.id === segmentId)?.name ?? "—" },
                     { label: "Interval", value: messageInterval > 0 ? `${messageInterval}s between messages` : "No delay" },
                     { label: "Sends", value: scheduleMode === "now" ? "Immediately" : scheduledAt ? new Date(scheduledAt).toLocaleString("en-IN") : "—" },
