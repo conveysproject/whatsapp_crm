@@ -31,11 +31,43 @@ describe("GET /v1/segments", () => {
 
   it("returns segments for org", async () => {
     mockPrisma.segment.findMany.mockResolvedValue([
-      { id: "seg-1", organizationId: "org-1", name: "Hot Leads", filters: [] },
+      { id: "seg-1", organizationId: "org-1", name: "Hot Leads", filters: [], match: "all" },
     ]);
     const res = await app.inject({ method: "GET", url: "/v1/segments" });
     expect(res.statusCode).toBe(200);
     expect(res.json<{ data: unknown[] }>().data).toHaveLength(1);
+  });
+});
+
+describe("POST /v1/segments", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("creates segment with match field", async () => {
+    mockPrisma.segment.create.mockResolvedValue({
+      id: "seg-1", organizationId: "org-1", name: "VIP", filters: [], match: "any",
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/segments",
+      payload: { name: "VIP", filters: [], match: "any" },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ data: { match: string } }>().data.match).toBe("any");
+    expect(mockPrisma.segment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ match: "any" }) })
+    );
+  });
+
+  it("defaults match to all when not provided", async () => {
+    mockPrisma.segment.create.mockResolvedValue({
+      id: "seg-2", organizationId: "org-1", name: "New", filters: [], match: "all",
+    });
+    await app.inject({ method: "POST", url: "/v1/segments", payload: { name: "New", filters: [] } });
+    expect(mockPrisma.segment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ match: "all" }) })
+    );
   });
 });
 
@@ -44,16 +76,37 @@ describe("POST /v1/segments/:id/evaluate", () => {
   beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
   afterEach(async () => { await app.close(); });
 
-  it("returns matching contact phone numbers", async () => {
+  it("returns count and contacts array", async () => {
     mockPrisma.segment.findFirst.mockResolvedValue({
-      id: "seg-1", organizationId: "org-1", filters: [{ field: "lifecycleStage", operator: "equals", value: "lead" }],
+      id: "seg-1", organizationId: "org-1", match: "all",
+      filters: [{ field: "lifecycleStage", operator: "equals", value: "lead" }],
     });
     mockPrisma.contact.findMany.mockResolvedValue([
-      { id: "c-1", phoneNumber: "+919000000001" },
+      { id: "c-1", firstName: "Ravi", lastName: "Kumar", phoneNumber: "+919000000001", lifecycleStage: "lead" },
     ]);
     const res = await app.inject({ method: "POST", url: "/v1/segments/seg-1/evaluate" });
     expect(res.statusCode).toBe(200);
-    expect(res.json<{ data: { phones: string[] } }>().data.phones).toContain("+919000000001");
+    const body = res.json<{ data: { count: number; contacts: unknown[] } }>();
+    expect(body.data.count).toBe(1);
+    expect(body.data.contacts).toHaveLength(1);
+  });
+
+  it("passes match mode to evaluateSegment", async () => {
+    mockPrisma.segment.findFirst.mockResolvedValue({
+      id: "seg-1", organizationId: "org-1", match: "any",
+      filters: [
+        { field: "lifecycleStage", operator: "equals", value: "lead" },
+        { field: "tags", operator: "contains", value: "VIP" },
+      ],
+    });
+    mockPrisma.contact.findMany.mockResolvedValue([]);
+    await app.inject({ method: "POST", url: "/v1/segments/seg-1/evaluate" });
+    // When match is "any", Prisma should receive OR clause
+    expect(mockPrisma.contact.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ OR: expect.any(Array) }),
+      })
+    );
   });
 });
 

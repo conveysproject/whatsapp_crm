@@ -1,10 +1,11 @@
 import type { FastifyPluginAsync } from "fastify";
-import { evaluateSegment, type FilterRule } from "../lib/segment-evaluator.js";
+import { evaluateSegment, type FilterRule, type MatchMode } from "../lib/segment-evaluator.js";
 import type { SegmentId } from "@WBMSG/shared";
 
 interface SegmentBody {
   name: string;
   filters: FilterRule[];
+  match?: MatchMode;
 }
 
 export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
@@ -35,6 +36,7 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
         organizationId,
         name: request.body.name,
         filters: request.body.filters as object,
+        match: request.body.match ?? "all",
       },
     });
     return reply.status(201).send({ data: segment });
@@ -53,8 +55,9 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
       const segment = await fastify.prisma.segment.update({
         where: { id: request.params.id },
         data: {
-          name: request.body.name,
-          filters: request.body.filters as object | undefined,
+          ...(request.body.name !== undefined ? { name: request.body.name } : {}),
+          ...(request.body.filters !== undefined ? { filters: request.body.filters as object } : {}),
+          ...(request.body.match !== undefined ? { match: request.body.match } : {}),
         },
       });
       return reply.send({ data: segment });
@@ -84,9 +87,9 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
     const result = await evaluateSegment(
       fastify.prisma,
       organizationId,
-      segment.filters as unknown as FilterRule[]
+      segment.filters as unknown as FilterRule[],
+      (segment.match as MatchMode) ?? "all"
     );
-    const phones = result.contacts.map((c) => c.phoneNumber);
-    return reply.send({ data: { phones, count: result.count } });
+    return reply.send({ data: result });
   });
 };
