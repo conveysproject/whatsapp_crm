@@ -99,6 +99,14 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
         messageInterval: messageInterval ?? null,
       },
     });
+    // Persist group associations
+    const groupIds = normalizeGroupIds(request.body.contactGroup);
+    if (groupIds.length > 0) {
+      await fastify.prisma.campaignGroup.createMany({
+        data: groupIds.map((contactGroupId) => ({ campaignId: campaign.id, contactGroupId })),
+        skipDuplicates: true,
+      });
+    }
     return reply.status(201).send({ data: campaign });
   });
 
@@ -133,7 +141,7 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  fastify.post<{ Params: { id: CampaignId }; Body: { scheduledAt?: string; segmentId: SegmentId } }>(
+  fastify.post<{ Params: { id: CampaignId }; Body: { scheduledAt?: string; segmentId?: SegmentId; groupIds?: string[] } }>(
     "/campaigns/:id/schedule",
     async (request, reply) => {
       const { organizationId } = request.auth;
@@ -146,6 +154,15 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
 
       const scheduledAt = request.body.scheduledAt ? new Date(request.body.scheduledAt) : new Date();
       const delay = Math.max(0, scheduledAt.getTime() - Date.now());
+
+      // Persist any groupIds passed at schedule time (if not already saved on create)
+      const groupIds = normalizeGroupIds(request.body.groupIds);
+      if (groupIds.length > 0) {
+        await fastify.prisma.campaignGroup.createMany({
+          data: groupIds.map((contactGroupId) => ({ campaignId: campaign.id, contactGroupId })),
+          skipDuplicates: true,
+        });
+      }
 
       await campaignQueue.add(
         "send-campaign",

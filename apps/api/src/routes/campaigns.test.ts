@@ -12,6 +12,7 @@ const mockPrisma = {
   segment: { findFirst: vi.fn() },
   campaignSegment: { findFirst: vi.fn() },
   campaignRecipient: { findMany: vi.fn(), count: vi.fn(), updateMany: vi.fn() },
+  campaignGroup: { createMany: vi.fn() },
   groupContact: { findMany: vi.fn() },
   contact: { count: vi.fn(), findMany: vi.fn() },
   vendorSetting: { findFirst: vi.fn().mockResolvedValue(null) },
