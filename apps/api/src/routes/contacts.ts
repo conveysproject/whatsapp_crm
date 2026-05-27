@@ -4,7 +4,6 @@ import type { LifecycleStage } from "@prisma/client";
 import { evaluateSegment, type FilterRule, type MatchMode } from "../lib/segment-evaluator.js";
 import { paginate, parsePaginationParams } from "../lib/pagination.js";
 
-import { generateContactsCsv } from "../lib/csv.js";
 import type { ContactId } from "@WBMSG/shared";
 import { maskPhone, maskEmail, canAccess, hasSubPermission } from "../lib/permissions.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
@@ -151,16 +150,55 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
         .send(header + rows.join("\n"));
     }
 
-    // Default: full export using generateContactsCsv (legacy format)
-    const contacts = await fastify.prisma.contact.findMany({
-      where: { organizationId },
-      orderBy: { createdAt: "asc" },
+    // Default: rich CSV with filters
+    const where = await buildExportWhere(fastify.prisma, organizationId, request.raw.url ?? "");
+
+    const [customFields, contacts] = await Promise.all([
+      fastify.prisma.contactCustomField.findMany({
+        where: { organizationId, isActive: true },
+        select: { id: true, inputName: true },
+        orderBy: { inputName: "asc" },
+      }),
+      fastify.prisma.contact.findMany({
+        where,
+        include: {
+          groupContacts: { include: { contactGroup: { select: { title: true } } } },
+          customFieldValues: { select: { fieldId: true, fieldValue: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+
+    const fixedHeaders = [
+      "Full Phone", "First Name", "Last Name", "Email", "Country Code",
+      "Lifecycle Stage", "Tags", "Groups", "Notes", "Created At",
+    ];
+    const cfHeaders = customFields.map((cf) => cf.inputName);
+    const header = [...fixedHeaders, ...cfHeaders].map(csvEscape).join(",");
+
+    const rows = contacts.map((c) => {
+      const cfValueMap = new Map(c.customFieldValues.map((v) => [v.fieldId, v.fieldValue ?? ""]));
+      const cells = [
+        csvEscape(`="${c.phoneNumber}"`),
+        csvEscape(c.firstName ?? ""),
+        csvEscape(c.lastName ?? ""),
+        csvEscape(c.email ?? ""),
+        csvEscape(c.countryCode ?? ""),
+        csvEscape(c.lifecycleStage ?? ""),
+        csvEscape(c.tags.join("|")),
+        csvEscape(c.groupContacts.map((gc) => gc.contactGroup.title).join("|")),
+        csvEscape((c.notes ?? "").replace(/[\r\n]+/g, " ")),
+        csvEscape(c.createdAt.toISOString()),
+        ...customFields.map((cf) => csvEscape(cfValueMap.get(cf.id) ?? "")),
+      ];
+      return cells.join(",");
     });
-    const csv = generateContactsCsv(contacts);
+
+    const dateStr = new Date().toISOString().split("T")[0]!;
     return reply
       .header("Content-Type", "text/csv")
-      .header("Content-Disposition", "attachment; filename=contacts.csv")
-      .send(csv);
+      .header("Content-Disposition", `attachment; filename="contacts-${dateStr}.csv"`)
+      .send(header + "\n" + rows.join("\n"));
   });
 
   // ── Bulk group assignment ────────────────────────────────────────────────

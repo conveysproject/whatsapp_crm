@@ -120,14 +120,15 @@ describe("GET /v1/contacts/export", () => {
   afterEach(async () => { await app.close(); });
 
   it("returns CSV with correct headers and data", async () => {
+    mockPrisma.contactCustomField.findMany.mockResolvedValue([]);
     mockPrisma.contact.findMany.mockResolvedValue([
-      { id: "c-1", organizationId: "org-1", phoneNumber: "+919000000001", name: "Alice", email: "alice@example.com", lifecycleStage: "lead", tags: [], createdAt: new Date() },
+      { id: "c-1", organizationId: "org-1", phoneNumber: "+919000000001", firstName: "Alice", lastName: null, email: "alice@example.com", countryCode: "IN", lifecycleStage: "lead", tags: [], notes: null, createdAt: new Date(), groupContacts: [], customFieldValues: [] },
     ]);
     const res = await app.inject({ method: "GET", url: "/v1/contacts/export" });
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/csv");
-    expect(res.body).toContain("phoneNumber");
-    expect(res.body).toContain("+919000000001");
+    expect(res.body).toContain("Full Phone");
+    expect(res.body).toContain("919000000001");
   });
 });
 
@@ -269,7 +270,7 @@ describe("GET /v1/contacts/export/count", () => {
   afterEach(async () => { await app.close(); });
 
   it("returns 403 without manage_contacts permission", async () => {
-    mockAuth.role = "member" as const;
+    (mockAuth as { role: string }).role = "member";
     mockAuth.permissions = { some_other_key: "allow" }; // non-empty = full enforcement, manage_contacts absent
     const res = await app.inject({ method: "GET", url: "/v1/contacts/export/count" });
     expect(res.statusCode).toBe(403);
@@ -278,7 +279,7 @@ describe("GET /v1/contacts/export/count", () => {
   });
 
   it("returns 403 when export_contacts sub-permission is explicitly denied", async () => {
-    mockAuth.role = "member" as const;
+    (mockAuth as { role: string }).role = "member";
     mockAuth.permissions = { manage_contacts: "allow", "manage_contacts@export_contacts": "deny" };
     const res = await app.inject({ method: "GET", url: "/v1/contacts/export/count" });
     expect(res.statusCode).toBe(403);
@@ -368,7 +369,7 @@ describe("GET /v1/contacts/export/count", () => {
     mockAuth.permissions = {};
   });
 
-  it("applies custom field filter via ContactCustomFieldValue relation", async () => {
+  it("applies custom field filter via ContactCustomFieldValue relation (in export/count)", async () => {
     mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
     mockPrisma.contact.count.mockResolvedValue(2);
     const res = await app.inject({
@@ -385,6 +386,111 @@ describe("GET /v1/contacts/export/count", () => {
         }),
       })
     );
+    mockAuth.permissions = {};
+  });
+});
+
+describe("GET /v1/contacts/export (new rich CSV)", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  const makeContact = (overrides: Record<string, unknown> = {}) => ({
+    id: "c-1",
+    firstName: "Priya",
+    lastName: "Shah",
+    phoneNumber: "+919000000001",
+    email: "priya@example.com",
+    countryCode: "IN",
+    lifecycleStage: "lead",
+    tags: ["vip", "premium"],
+    notes: "VIP customer\nnew line",
+    createdAt: new Date("2026-01-15T10:30:00.000Z"),
+    groupContacts: [{ contactGroup: { title: "VIP Customers" } }, { contactGroup: { title: "Delhi" } }],
+    customFieldValues: [],
+    ...overrides,
+  });
+
+  it("returns CSV with new rich column headers", async () => {
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.contactCustomField.findMany.mockResolvedValue([]);
+    mockPrisma.contact.findMany.mockResolvedValue([makeContact()]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/export" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/csv");
+    expect(res.body).toContain("Full Phone");
+    expect(res.body).toContain("Lifecycle Stage");
+    expect(res.body).toContain("Groups");
+    expect(res.body).toContain("Notes");
+    mockAuth.permissions = {};
+  });
+
+  it("pipe-separates tags and groups", async () => {
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.contactCustomField.findMany.mockResolvedValue([]);
+    mockPrisma.contact.findMany.mockResolvedValue([makeContact()]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/export" });
+    expect(res.body).toContain("vip|premium");
+    expect(res.body).toContain("VIP Customers|Delhi");
+    mockAuth.permissions = {};
+  });
+
+  it("replaces newlines in notes with space", async () => {
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.contactCustomField.findMany.mockResolvedValue([]);
+    mockPrisma.contact.findMany.mockResolvedValue([makeContact()]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/export" });
+    expect(res.body).toContain("VIP customer new line");
+    expect(res.body).not.toContain("VIP customer\nnew line");
+    mockAuth.permissions = {};
+  });
+
+  it("prefixes phone with = to prevent Excel injection", async () => {
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.contactCustomField.findMany.mockResolvedValue([]);
+    mockPrisma.contact.findMany.mockResolvedValue([makeContact()]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/export" });
+    expect(res.body).toContain("919000000001");
+    expect(res.body).toContain('="');
+    mockAuth.permissions = {};
+  });
+
+  it("adds one column per active custom field and fills values", async () => {
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.contactCustomField.findMany.mockResolvedValue([
+      { id: "cf-1", inputName: "Company Size", isActive: true },
+      { id: "cf-2", inputName: "Industry", isActive: true },
+    ]);
+    mockPrisma.contact.findMany.mockResolvedValue([
+      makeContact({ customFieldValues: [{ fieldId: "cf-1", fieldValue: "Large" }] }),
+    ]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/export" });
+    expect(res.body).toContain("Company Size");
+    expect(res.body).toContain("Industry");
+    expect(res.body).toContain("Large");
+    mockAuth.permissions = {};
+  });
+
+  it("applies lifecycleStage filter", async () => {
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.contactCustomField.findMany.mockResolvedValue([]);
+    mockPrisma.contact.findMany.mockResolvedValue([]);
+    await app.inject({ method: "GET", url: "/v1/contacts/export?lifecycleStage=lead" });
+    expect(mockPrisma.contact.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ lifecycleStage: { in: ["lead"] } }),
+      })
+    );
+    mockAuth.permissions = {};
+  });
+
+  it("includes date in Content-Disposition filename", async () => {
+    mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.contactCustomField.findMany.mockResolvedValue([]);
+    mockPrisma.contact.findMany.mockResolvedValue([]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/export" });
+    const dateStr = new Date().toISOString().split("T")[0]!;
+    expect(res.headers["content-disposition"]).toContain(`contacts-${dateStr}.csv`);
     mockAuth.permissions = {};
   });
 });
