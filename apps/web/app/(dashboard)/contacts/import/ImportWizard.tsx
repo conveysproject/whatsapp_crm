@@ -4,17 +4,16 @@ import { JSX, createContext, useContext, useState } from "react";
 import type { FieldMapping, ImportAnalysisResult, ImportProgress } from "@WBMSG/shared";
 import { Step1Upload } from "./steps/Step1Upload";
 import { Step2MapFields } from "./steps/Step2MapFields";
-import { Step3Preview } from "./steps/Step3Preview";
 import { Step4Progress } from "./steps/Step4Progress";
-import { Step5Summary } from "./steps/Step5Summary";
 
 export interface WizardState {
-  step: 1 | 2 | 3 | 4 | 5;
+  step: 1 | 2 | 3;
   sessionId: string | null;
   columns: string[];
   sampleRows: Record<string, string>[];
   mapping: FieldMapping;
   batchTags: string[];
+  batchGroupIds: string[];
   lifecycleStage: string;
   analysisResult: ImportAnalysisResult | null;
   updateExisting: boolean;
@@ -47,6 +46,7 @@ const INITIAL_STATE: WizardState = {
   sampleRows: [],
   mapping: [],
   batchTags: [],
+  batchGroupIds: [],
   lifecycleStage: "lead",
   analysisResult: null,
   updateExisting: true,
@@ -56,7 +56,7 @@ const INITIAL_STATE: WizardState = {
   importSummary: null,
 };
 
-const STEP_LABELS = ["Upload", "Map Fields", "Preview", "Importing", "Done"] as const;
+const STEP_LABELS = ["Upload", "Configure", "Import"] as const;
 
 export function ImportWizard(): JSX.Element {
   const [state, setStateRaw] = useState<WizardState>(INITIAL_STATE);
@@ -66,7 +66,7 @@ export function ImportWizard(): JSX.Element {
   }
 
   function nextStep() {
-    setStateRaw((prev) => ({ ...prev, step: Math.min(prev.step + 1, 5) as WizardState["step"] }));
+    setStateRaw((prev) => ({ ...prev, step: Math.min(prev.step + 1, 3) as WizardState["step"] }));
   }
 
   function prevStep() {
@@ -80,9 +80,7 @@ export function ImportWizard(): JSX.Element {
   const stepComponents: Record<WizardState["step"], JSX.Element> = {
     1: <Step1Upload />,
     2: <Step2MapFields />,
-    3: <Step3Preview />,
-    4: <Step4Progress />,
-    5: <Step5Summary />,
+    3: <Step4Progress />,
   };
 
   return (

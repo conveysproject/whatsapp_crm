@@ -3,10 +3,7 @@
 import { JSX, useRef, useState, DragEvent, ChangeEvent } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useWizard } from "../ImportWizard";
-import { TagInput } from "@/components/contacts/TagInput";
 import { Button } from "@/components/ui/Button";
-
-const LIFECYCLE_STAGES = ["lead", "prospect", "customer", "loyal", "churned"] as const;
 
 export function Step1Upload(): JSX.Element {
   const { state, setState, nextStep } = useWizard();
@@ -76,9 +73,9 @@ export function Step1Upload(): JSX.Element {
         <p className="font-medium">Upload instructions</p>
         <ul className="list-disc list-inside space-y-0.5 text-blue-700">
           <li>Max 50 MB allowed (up to 500,000 contacts)</li>
-          <li>CSV must contain: <strong>Phone Number &amp; Country Code</strong> in any 2 columns, OR <strong>Full Phone Number</strong> (country code + number combined) in any 1 column</li>
-          <li>If 2 contacts in the CSV have the same phone number, only the first will be imported</li>
-          <li>If a contact already exists in your account, you can choose to update or skip it in the next step</li>
+          <li>CSV must include a phone number column (full international format, or separate number + country code columns)</li>
+          <li>Duplicate phone numbers in the file: only the first row is imported</li>
+          <li>You will configure lifecycle stage, tags, and groups in the next step</li>
         </ul>
       </div>
 
@@ -95,36 +92,12 @@ export function Step1Upload(): JSX.Element {
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Lifecycle stage for all contacts in this file
-          </label>
-          <select
-            value={state.lifecycleStage}
-            onChange={(e) => setState({ lifecycleStage: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          >
-            {LIFECYCLE_STAGES.map((s) => (
-              <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Apply tags to all contacts in this file
-          </label>
-          <TagInput tags={state.batchTags} onChange={(tags) => setState({ batchTags: tags })} />
-        </div>
-      </div>
-
       {uploading && <p className="text-sm text-gray-500 animate-pulse">Uploading and parsing file…</p>}
 
       {uploadedFileName && (
         <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 flex items-center justify-between gap-4">
           <p className="text-sm text-green-800">
-            <span className="font-medium">{uploadedFileName}</span> uploaded successfully — {state.columns.length} columns detected.
+            <span className="font-medium">{uploadedFileName}</span> — {state.columns.length} columns detected.
           </p>
           <Button onClick={nextStep}>Next</Button>
         </div>
