@@ -195,7 +195,8 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
       const { organizationId } = request.auth;
       const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
       if (!campaign) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
-      const page = Math.max(1, parseInt(request.query.page ?? "1", 10));
+      const raw = parseInt(request.query.page ?? "1", 10);
+      const page = Number.isNaN(raw) || raw < 1 ? 1 : raw;
       const [data, total] = await Promise.all([
         fastify.prisma.campaignRecipient.findMany({
           where: { campaignId: request.params.id, status: { in: ["sent", "delivered", "read", "failed"] } },
