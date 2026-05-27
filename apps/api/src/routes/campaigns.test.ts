@@ -8,7 +8,7 @@ vi.mock("../lib/queue.js", () => ({
 }));
 
 const mockPrisma = {
-  campaign: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), count: vi.fn().mockResolvedValue(0) },
+  campaign: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), count: vi.fn().mockResolvedValue(0), delete: vi.fn() },
   segment: { findFirst: vi.fn() },
   campaignSegment: { findFirst: vi.fn() },
   campaignRecipient: { findMany: vi.fn(), count: vi.fn(), updateMany: vi.fn() },
@@ -353,6 +353,37 @@ describe("GET /v1/campaigns/:id/recipients", () => {
   it("returns 404 when campaign not in org", async () => {
     mockPrisma.campaign.findFirst.mockResolvedValue(null);
     const res = await app.inject({ method: "GET", url: "/v1/campaigns/cam-999/recipients" });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("DELETE /v1/campaigns/:id", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("deletes a draft campaign and returns 204", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({
+      id: "cam-1", organizationId: "org-1", status: "draft", scheduledAt: null,
+    });
+    mockPrisma.campaign.delete.mockResolvedValue({});
+    const res = await app.inject({ method: "DELETE", url: "/v1/campaigns/cam-1" });
+    expect(res.statusCode).toBe(204);
+    expect(mockPrisma.campaign.delete).toHaveBeenCalledWith({ where: { id: "cam-1" } });
+  });
+
+  it("returns 409 when campaign is running", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({
+      id: "cam-2", organizationId: "org-1", status: "running", scheduledAt: null,
+    });
+    const res = await app.inject({ method: "DELETE", url: "/v1/campaigns/cam-2" });
+    expect(res.statusCode).toBe(409);
+    expect(mockPrisma.campaign.delete).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when campaign not in org", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "DELETE", url: "/v1/campaigns/cam-999" });
     expect(res.statusCode).toBe(404);
   });
 });

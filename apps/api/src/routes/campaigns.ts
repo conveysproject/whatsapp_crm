@@ -162,6 +162,20 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // ── Delete ────────────────────────────────────────────────────────────────
+  fastify.delete<{ Params: { id: CampaignId } }>("/campaigns/:id", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
+    if (!campaign) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
+    }
+    if (!isDeleteAllowed(campaign.status, campaign.scheduledAt)) {
+      return reply.status(409).send({ error: { code: "DELETE_NOT_ALLOWED", message: "Campaign cannot be deleted in its current state" } });
+    }
+    await fastify.prisma.campaign.delete({ where: { id: request.params.id } });
+    return reply.status(204).send();
+  });
+
   // ── Targeted contact count preview ───────────────────────────────────────
   fastify.get<{ Params: { id: string }; Querystring: { groupIds?: string } }>(
     "/campaigns/:id/targeted-count",
