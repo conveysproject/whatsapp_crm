@@ -169,6 +169,9 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
         if (!phone && phoneEntry && ccEntry) {
           phone = normalizeSplitPhone(row[ccEntry.csvColumn] ?? "", row[phoneEntry.csvColumn] ?? "");
         }
+        if (!phone && phoneEntry) {
+          phone = normalizeFullPhone(row[phoneEntry.csvColumn] ?? "");
+        }
         if (!phone) continue;
         if (seenPhones.has(phone)) {
           duplicatesInCsv++;

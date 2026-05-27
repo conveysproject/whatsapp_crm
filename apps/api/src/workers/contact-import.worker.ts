@@ -96,7 +96,12 @@ function extractPhone(row: Record<string, string>, mapping: FieldMapping): strin
     const normalized = normalizeFullPhone(row[full.csvColumn] ?? "");
     if (normalized) return normalized;
   }
-  if (phone && cc) return normalizeSplitPhone(row[cc.csvColumn] ?? "", row[phone.csvColumn] ?? "");
+  if (phone && cc) {
+    const result = normalizeSplitPhone(row[cc.csvColumn] ?? "", row[phone.csvColumn] ?? "");
+    if (result) return result;
+  }
+  // Fallback: phoneNumber column may contain a full international number
+  if (phone) return normalizeFullPhone(row[phone.csvColumn] ?? "");
   return null;
 }
 
