@@ -387,3 +387,28 @@ describe("DELETE /v1/campaigns/:id", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("GET /v1/campaigns/:id/report (with expired)", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("includes expired and accepted counts in stats", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({ id: "cam-1", organizationId: "org-1" });
+    // count is called 8 times: sent, accepted, delivered, played, read, failed, pending, expired
+    mockPrisma.campaignRecipient.count
+      .mockResolvedValueOnce(10)  // sent
+      .mockResolvedValueOnce(4)   // accepted
+      .mockResolvedValueOnce(8)   // delivered
+      .mockResolvedValueOnce(2)   // played
+      .mockResolvedValueOnce(5)   // read
+      .mockResolvedValueOnce(2)   // failed
+      .mockResolvedValueOnce(3)   // pending
+      .mockResolvedValueOnce(1);  // expired
+    const res = await app.inject({ method: "GET", url: "/v1/campaigns/cam-1/report" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: { stats: { expired: number; accepted: number } } }>();
+    expect(body.data.stats.expired).toBe(1);
+    expect(body.data.stats.accepted).toBe(4);
+  });
+});

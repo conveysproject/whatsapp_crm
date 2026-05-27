@@ -272,14 +272,19 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
       const { organizationId } = request.auth;
       const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
       if (!campaign) return reply.status(404).send({ error: "Not found" });
-      const page = parseInt(request.query.page ?? "1", 10);
-      const data = await fastify.prisma.campaignRecipient.findMany({
-        where: { campaignId: request.params.id, status: "pending" },
-        include: { contact: { select: { firstName: true, lastName: true, phoneNumber: true } } },
-        skip: (page - 1) * 50,
-        take: 50,
-      });
-      return reply.send({ data });
+      const raw = parseInt(request.query.page ?? "1", 10);
+      const page = Number.isNaN(raw) || raw < 1 ? 1 : raw;
+      const [data, total] = await Promise.all([
+        fastify.prisma.campaignRecipient.findMany({
+          where: { campaignId: request.params.id, status: "pending" },
+          include: { contact: { select: { firstName: true, lastName: true, phoneNumber: true } } },
+          skip: (page - 1) * 50,
+          take: 50,
+          orderBy: { createdAt: "asc" },
+        }),
+        fastify.prisma.campaignRecipient.count({ where: { campaignId: request.params.id, status: "pending" } }),
+      ]);
+      return reply.send({ data, total });
     }
   );
 
@@ -290,14 +295,19 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
       const { organizationId } = request.auth;
       const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
       if (!campaign) return reply.status(404).send({ error: "Not found" });
-      const page = parseInt(request.query.page ?? "1", 10);
-      const data = await fastify.prisma.campaignRecipient.findMany({
-        where: { campaignId: request.params.id, status: "expired" },
-        include: { contact: { select: { firstName: true, lastName: true, phoneNumber: true } } },
-        skip: (page - 1) * 50,
-        take: 50,
-      });
-      return reply.send({ data });
+      const raw = parseInt(request.query.page ?? "1", 10);
+      const page = Number.isNaN(raw) || raw < 1 ? 1 : raw;
+      const [data, total] = await Promise.all([
+        fastify.prisma.campaignRecipient.findMany({
+          where: { campaignId: request.params.id, status: "expired" },
+          include: { contact: { select: { firstName: true, lastName: true, phoneNumber: true } } },
+          skip: (page - 1) * 50,
+          take: 50,
+          orderBy: { createdAt: "asc" },
+        }),
+        fastify.prisma.campaignRecipient.count({ where: { campaignId: request.params.id, status: "expired" } }),
+      ]);
+      return reply.send({ data, total });
     }
   );
 
@@ -306,14 +316,17 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId } = request.auth;
     const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
     if (!campaign) return reply.status(404).send({ error: "Not found" });
-    const [sent, delivered, read, failed, pending] = await Promise.all([
+    const [sent, accepted, delivered, played, read, failed, pending, expired] = await Promise.all([
       fastify.prisma.campaignRecipient.count({ where: { campaignId: request.params.id, status: "sent" } }),
+      fastify.prisma.campaignRecipient.count({ where: { campaignId: request.params.id, status: "accepted" } }),
       fastify.prisma.campaignRecipient.count({ where: { campaignId: request.params.id, status: "delivered" } }),
+      fastify.prisma.campaignRecipient.count({ where: { campaignId: request.params.id, status: "played" } }),
       fastify.prisma.campaignRecipient.count({ where: { campaignId: request.params.id, status: "read" } }),
       fastify.prisma.campaignRecipient.count({ where: { campaignId: request.params.id, status: "failed" } }),
       fastify.prisma.campaignRecipient.count({ where: { campaignId: request.params.id, status: "pending" } }),
+      fastify.prisma.campaignRecipient.count({ where: { campaignId: request.params.id, status: "expired" } }),
     ]);
-    return reply.send({ data: { campaign, stats: { sent, delivered, read, failed, pending } } });
+    return reply.send({ data: { campaign, stats: { sent, accepted, delivered, played, read, failed, pending, expired } } });
   });
 
   // ── Pause ────────────────────────────────────────────────────────────────
@@ -444,6 +457,56 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
       reply.header("Content-Type", "text/csv; charset=utf-8");
       reply.header("Content-Disposition", `attachment; filename=${filename}`);
       return reply.send("﻿" + csv); // UTF-8 BOM for Excel compatibility
+    }
+  );
+
+  // ── Queue log export ──────────────────────────────────────────────────────
+  fastify.get<{ Params: { id: CampaignId } }>(
+    "/campaigns/:id/queue-log-export",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
+      if (!campaign) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
+      const recipients = await fastify.prisma.campaignRecipient.findMany({
+        where: { campaignId: request.params.id, status: "pending" },
+        include: { contact: { select: { firstName: true, lastName: true, phoneNumber: true, email: true } } },
+        orderBy: { createdAt: "asc" },
+      });
+      const header = "Contact Name,Phone Number,Email,Status\n";
+      const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+      const rows = recipients.map((r) => {
+        const name = [r.contact?.firstName, r.contact?.lastName].filter(Boolean).join(" ") || "";
+        return [escape(name), escape(`="${r.phoneNumber}"`), escape(r.contact?.email ?? ""), r.status].join(",");
+      });
+      const filename = `campaign-queue-${campaign.name.replace(/\s+/g, "-")}.csv`;
+      reply.header("Content-Type", "text/csv; charset=utf-8");
+      reply.header("Content-Disposition", `attachment; filename=${filename}`);
+      return reply.send("﻿" + header + rows.join("\n"));
+    }
+  );
+
+  // ── Expired log export ────────────────────────────────────────────────────
+  fastify.get<{ Params: { id: CampaignId } }>(
+    "/campaigns/:id/expired-log-export",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
+      if (!campaign) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
+      const recipients = await fastify.prisma.campaignRecipient.findMany({
+        where: { campaignId: request.params.id, status: "expired" },
+        include: { contact: { select: { firstName: true, lastName: true, phoneNumber: true, email: true } } },
+        orderBy: { createdAt: "asc" },
+      });
+      const header = "Contact Name,Phone Number,Email,Status\n";
+      const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+      const rows = recipients.map((r) => {
+        const name = [r.contact?.firstName, r.contact?.lastName].filter(Boolean).join(" ") || "";
+        return [escape(name), escape(`="${r.phoneNumber}"`), escape(r.contact?.email ?? ""), r.status].join(",");
+      });
+      const filename = `campaign-expired-${campaign.name.replace(/\s+/g, "-")}.csv`;
+      reply.header("Content-Type", "text/csv; charset=utf-8");
+      reply.header("Content-Disposition", `attachment; filename=${filename}`);
+      return reply.send("﻿" + header + rows.join("\n"));
     }
   );
 };
