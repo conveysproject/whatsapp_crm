@@ -8,6 +8,7 @@ import { AddContactModal, type Contact, type EditableContact } from "./AddContac
 import { EditContactDrawer } from "./EditContactDrawer";
 import { SendTemplateModal } from "./SendTemplateModal";
 import { ContactChatDrawer } from "./ContactChatDrawer";
+import { ExportModal } from "./ExportModal";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -77,6 +78,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
   const [chatContactId, setChatContactId] = useState<string | null>(null);
   const [chatContactName, setChatContactName] = useState("");
   const [deletingAll, setDeletingAll] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const { toast, toastState, setToastOpen } = useToast();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -204,16 +206,6 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
     else toast("Failed", { variant: "error" });
   }
 
-  async function handleExport() {
-    const token = await getToken();
-    if (!token) return;
-    const res = await fetch(`${API_URL}/v1/contacts/export`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) { toast("Export failed", { variant: "error" }); return; }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "contacts.csv"; a.click();
-    URL.revokeObjectURL(url);
-  }
 
   function Th({ field, label }: { field: SortField; label: string }): JSX.Element {
     const active = sortField === field;
@@ -251,7 +243,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => void handleExport()}
+                onClick={() => setShowExportModal(true)}
                 className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
               >
                 <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
@@ -573,6 +565,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
           onClose={() => setChatContactId(null)}
         />
       )}
+      <ExportModal open={showExportModal} onClose={() => setShowExportModal(false)} />
       <Toast title={toastState.title} variant={toastState.variant} open={toastState.open} onOpenChange={setToastOpen} />
     </>
   );
