@@ -523,6 +523,7 @@ model ContactImport {
   skippedCount   Int                 @default(0) @map("skipped_count")
   fieldMapping   Json                @map("field_mapping")
   batchTags      String[]            @map("batch_tags")
+  batchGroupIds  String[]            @default([])   @map("batch_group_ids")
   lifecycleStage LifecycleStage      @map("lifecycle_stage")
   updateExisting Boolean             @default(false) @map("update_existing")
   errorSummary   Json?               @map("error_summary")
