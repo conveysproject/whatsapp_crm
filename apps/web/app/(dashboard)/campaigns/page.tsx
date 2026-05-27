@@ -14,13 +14,29 @@ interface Campaign {
   id: string;
   name: string;
   status: string;
+  displayStatus: string;
   isArchived: boolean;
+  deleteAllowed: boolean;
   scheduledAt: string | null;
   sentAt: string | null;
 }
 
-const statusVariant: Record<string, "gray" | "yellow" | "blue" | "green" | "red"> = {
+type Tab = "all" | "draft" | "upcoming" | "running" | "paused" | "completed" | "aborted" | "archived";
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "draft", label: "Draft" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "running", label: "Running" },
+  { key: "paused", label: "Paused" },
+  { key: "completed", label: "Completed" },
+  { key: "aborted", label: "Aborted" },
+  { key: "archived", label: "Archived" },
+];
+
+const STATUS_BADGE: Record<string, "gray" | "yellow" | "blue" | "green" | "red"> = {
   draft: "gray",
+  upcoming: "yellow",
   scheduled: "yellow",
   running: "blue",
   paused: "yellow",
@@ -30,21 +46,26 @@ const statusVariant: Record<string, "gray" | "yellow" | "blue" | "green" | "red"
 };
 
 export default function CampaignsPage(): JSX.Element {
-  const [tab, setTab] = useState<"active" | "archived">("active");
+  const [tab, setTab] = useState<Tab>("all");
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: campaigns = [], isLoading } = useQuery<Campaign[]>({
-    queryKey: ["campaigns", tab],
+    queryKey: ["campaigns"],
     queryFn: async () => {
       const token = await getToken();
       const res = await fetch(`${API_URL}/v1/campaigns`, {
         headers: { Authorization: `Bearer ${token ?? ""}` },
       });
       if (!res.ok) return [];
-      const json = await res.json() as { data: Campaign[] };
-      return json.data.filter((c) => tab === "archived" ? c.isArchived : !c.isArchived);
+      return (await res.json() as { data: Campaign[] }).data;
     },
+  });
+
+  const filtered = campaigns.filter((c) => {
+    if (tab === "archived") return c.isArchived;
+    if (tab === "all") return !c.isArchived;
+    return c.displayStatus === tab && !c.isArchived;
   });
 
   async function doAction(id: string, action: string) {
@@ -56,87 +77,155 @@ export default function CampaignsPage(): JSX.Element {
     void queryClient.invalidateQueries({ queryKey: ["campaigns"] });
   }
 
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    const token = await getToken();
+    await fetch(`${API_URL}/v1/campaigns/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token ?? ""}` },
+    });
+    void queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+  }
+
   return (
     <WhatsAppGate feature="Campaigns">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-gray-900">Campaigns</h1>
-          <Link href="/campaigns/new"><Button>New Campaign</Button></Link>
-        </div>
+      <div className="min-h-screen bg-gray-50/60">
+        <div className="max-w-5xl mx-auto px-6 py-6 space-y-5">
 
-        {/* Tabs */}
-        <div className="flex gap-1 border-b border-gray-200">
-          {(["active", "archived"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={[
-                "px-4 py-2 text-sm font-medium capitalize transition-colors",
-                tab === t ? "text-brand-600 border-b-2 border-brand-600" : "text-gray-500 hover:text-gray-700",
-              ].join(" ")}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Campaigns</h1>
+              <p className="text-sm text-gray-500 mt-0.5">{campaigns.filter(c => !c.isArchived).length} active</p>
+            </div>
+            <Link href="/campaigns/new"><Button>New Campaign</Button></Link>
+          </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-card divide-y divide-gray-100">
-          {isLoading ? (
-            <div className="p-6 text-center text-sm text-gray-400">Loading…</div>
-          ) : campaigns.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-gray-400">
-              No {tab} campaigns.
-            </p>
-          ) : (
-            campaigns.map((c) => (
-              <div key={c.id} className="flex items-center justify-between px-4 py-3 gap-3">
-                <div className="min-w-0">
-                  <Link href={`/campaigns/${c.id}`} className="text-sm font-medium text-gray-900 hover:text-brand-600 truncate block">
-                    {c.name}
+          {/* Status tabs */}
+          <div className="flex gap-0.5 border-b border-gray-200 overflow-x-auto">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={[
+                  "px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors shrink-0",
+                  tab === t.key
+                    ? "text-brand-600 border-b-2 border-brand-600 -mb-px"
+                    : "text-gray-500 hover:text-gray-700",
+                ].join(" ")}
+              >
+                {t.label}
+                {t.key !== "all" && t.key !== "archived" && (
+                  <span className={`ml-1.5 text-xs tabular-nums ${tab === t.key ? "text-brand-500" : "text-gray-400"}`}>
+                    {campaigns.filter(c => !c.isArchived && c.displayStatus === t.key).length || ""}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Campaign list */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100">
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-5 py-4">
+                  <div className="h-4 w-48 bg-gray-100 rounded animate-pulse" />
+                  <div className="h-5 w-20 bg-gray-100 rounded-full animate-pulse" />
+                </div>
+              ))
+            ) : filtered.length === 0 ? (
+              <div className="px-5 py-16 text-center">
+                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                  </svg>
+                </div>
+                <p className="text-gray-500 font-medium">No {tab === "all" ? "" : tab} campaigns</p>
+                {tab === "all" && (
+                  <Link href="/campaigns/new" className="mt-2 inline-block text-sm text-brand-600 hover:text-brand-700 font-medium">
+                    Create your first campaign →
                   </Link>
-                  {c.scheduledAt && (
-                    <p className="text-xs text-gray-500">{new Date(c.scheduledAt).toLocaleString("en-IN")}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Badge variant={statusVariant[c.status] ?? "gray"}>{c.status}</Badge>
-                  {c.status === "running" && (
-                    <button
-                      onClick={() => { void doAction(c.id, "abort"); }}
-                      className="text-xs text-red-600 hover:text-red-700 font-medium"
-                    >
-                      Abort
-                    </button>
-                  )}
-                  {(c.status === "completed" || c.status === "aborted") && !c.isArchived && (
-                    <button
-                      onClick={() => { void doAction(c.id, "archive"); }}
-                      className="text-xs text-gray-500 hover:text-gray-700"
-                    >
-                      Archive
-                    </button>
-                  )}
-                  {c.isArchived && (
-                    <button
-                      onClick={() => { void doAction(c.id, "unarchive"); }}
-                      className="text-xs text-brand-600 hover:text-brand-700"
-                    >
-                      Unarchive
-                    </button>
-                  )}
-                  {c.status !== "running" && !c.isArchived && (
-                    <button
-                      onClick={() => { void doAction(c.id, "requeue-failed"); }}
-                      className="text-xs text-gray-400 hover:text-gray-600"
-                      title="Requeue failed recipients"
-                    >
-                      Requeue
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
-            ))
-          )}
+            ) : (
+              filtered.map((c) => (
+                <div key={c.id} className="flex items-center justify-between px-5 py-4 gap-3 group">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/campaigns/${c.id}`}
+                      className="text-sm font-semibold text-gray-900 hover:text-brand-600 truncate block"
+                    >
+                      {c.name}
+                    </Link>
+                    {c.scheduledAt && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {new Date(c.scheduledAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant={STATUS_BADGE[c.displayStatus] ?? "gray"}>{c.displayStatus}</Badge>
+
+                    {c.status === "running" && (
+                      <button
+                        onClick={() => { void doAction(c.id, "abort"); }}
+                        className="text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded-md hover:bg-red-50 transition-colors"
+                      >
+                        Abort
+                      </button>
+                    )}
+                    {c.status === "running" && (
+                      <button
+                        onClick={() => { void doAction(c.id, "pause"); }}
+                        className="text-xs text-gray-600 hover:text-gray-700 font-medium px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
+                      >
+                        Pause
+                      </button>
+                    )}
+                    {c.status === "paused" && (
+                      <button
+                        onClick={() => { void doAction(c.id, "resume"); }}
+                        className="text-xs text-brand-600 hover:text-brand-700 font-medium px-2 py-1 rounded-md hover:bg-brand-50 transition-colors"
+                      >
+                        Resume
+                      </button>
+                    )}
+                    {(c.status === "completed" || c.status === "aborted") && !c.isArchived && (
+                      <button
+                        onClick={() => { void doAction(c.id, "archive"); }}
+                        className="text-xs text-gray-500 hover:text-gray-700 font-medium px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
+                      >
+                        Archive
+                      </button>
+                    )}
+                    {c.isArchived && (
+                      <button
+                        onClick={() => { void doAction(c.id, "unarchive"); }}
+                        className="text-xs text-brand-600 hover:text-brand-700 font-medium px-2 py-1 rounded-md hover:bg-brand-50 transition-colors"
+                      >
+                        Unarchive
+                      </button>
+                    )}
+                    {c.deleteAllowed && (
+                      <button
+                        onClick={() => { void handleDelete(c.id, c.name); }}
+                        className="text-xs text-red-500 hover:text-red-600 font-medium px-2 py-1 rounded-md hover:bg-red-50 transition-colors"
+                        title="Delete campaign"
+                      >
+                        Delete
+                      </button>
+                    )}
+                    <Link
+                      href={`/campaigns/${c.id}`}
+                      className="text-xs text-gray-400 hover:text-gray-600 font-medium px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
+                    >
+                      View →
+                    </Link>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </WhatsAppGate>
