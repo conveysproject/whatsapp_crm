@@ -13,6 +13,7 @@ interface Segment {
   id: string;
   name: string;
   filters: unknown[];
+  match: "all" | "any";
 }
 
 export default function SegmentsPage(): JSX.Element {
@@ -94,7 +95,7 @@ export default function SegmentsPage(): JSX.Element {
               <div>
                 <p className="text-sm font-medium text-gray-900">{s.name}</p>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {s.filters.length} filter{s.filters.length !== 1 ? "s" : ""}
+                  {s.filters.length} filter{s.filters.length !== 1 ? "s" : ""} · {s.match === "any" ? "ANY" : "ALL"}
                 </p>
               </div>
               <div className="flex items-center gap-2">
