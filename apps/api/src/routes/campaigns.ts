@@ -64,7 +64,13 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
     if (!campaign) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
     }
-    return reply.send({ data: campaign });
+    return reply.send({
+      data: {
+        ...campaign,
+        displayStatus: computeDisplayStatus(campaign.status, campaign.scheduledAt),
+        deleteAllowed: isDeleteAllowed(campaign.status, campaign.scheduledAt),
+      },
+    });
   });
 
   fastify.post<{ Body: CampaignBody }>("/campaigns", async (request, reply) => {

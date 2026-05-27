@@ -376,7 +376,9 @@ enum AutoReplyTriggerType {
 enum CampaignRecipientStatus {
   pending
   sent
+  accepted
   delivered
+  played
   read
   failed
   cancelled
