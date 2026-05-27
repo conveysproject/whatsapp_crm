@@ -369,8 +369,9 @@ describe("GET /v1/contacts/export/count", () => {
     mockAuth.permissions = {};
   });
 
-  it("applies custom field filter via ContactCustomFieldValue relation (in export/count)", async () => {
+  it("applies custom field filter via customFields JSON blob (in export/count)", async () => {
     mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
+    mockPrisma.contactCustomField.findMany.mockResolvedValue([{ id: "cf-1", inputName: "Plan" }]);
     mockPrisma.contact.count.mockResolvedValue(2);
     const res = await app.inject({
       method: "GET",
@@ -381,7 +382,7 @@ describe("GET /v1/contacts/export/count", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           AND: expect.arrayContaining([
-            { customFieldValues: { some: { fieldId: "cf-1", fieldValue: { contains: "Gold", mode: "insensitive" } } } },
+            { customFields: { path: ["Plan"], string_contains: "Gold" } },
           ]),
         }),
       })

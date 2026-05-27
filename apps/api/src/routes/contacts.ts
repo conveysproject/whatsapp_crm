@@ -49,9 +49,17 @@ async function buildExportWhere(
     }
   }
 
-  const cfClauses: Prisma.ContactWhereInput[] = Object.entries(cfFilters).map(([fieldId, value]) => ({
-    customFieldValues: { some: { fieldId, fieldValue: { contains: value, mode: "insensitive" } } },
-  }));
+  let cfClauses: Prisma.ContactWhereInput[] = [];
+  if (Object.keys(cfFilters).length > 0) {
+    const cfMeta = await prisma.contactCustomField.findMany({
+      where: { id: { in: Object.keys(cfFilters) }, organizationId },
+      select: { id: true, inputName: true },
+    });
+    const cfMetaMap = new Map(cfMeta.map((cf) => [cf.id, cf.inputName]));
+    cfClauses = Object.entries(cfFilters).map(([fieldId, value]) => ({
+      customFields: { path: [cfMetaMap.get(fieldId) ?? fieldId], string_contains: value },
+    }));
+  }
 
   return {
     organizationId,
