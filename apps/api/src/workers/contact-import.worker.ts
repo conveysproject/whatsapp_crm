@@ -17,10 +17,61 @@ interface ContactImportJob {
   organizationId: string;
   fieldMapping: FieldMapping;
   batchTags: string[];
+  batchGroupIds: string[];
   lifecycleStage: string;
   updateExisting: boolean;
 }
 
+export function extractFirstLastName(
+  row: Record<string, string>,
+  mapping: FieldMapping
+): { firstName: string | null; lastName: string | null; name: string | null } {
+  let firstName: string | null = null;
+  let lastName: string | null = null;
+  let name: string | null = null;
+
+  const fnEntry = mapping.find((e) => e.dbField === "firstName");
+  const lnEntry = mapping.find((e) => e.dbField === "lastName");
+  const fullEntry = mapping.find((e) => e.dbField === "fullName");
+  const nameEntry = mapping.find((e) => e.dbField === "name");
+
+  if (fnEntry) firstName = (row[fnEntry.csvColumn] ?? "").trim() || null;
+  if (lnEntry) lastName = (row[lnEntry.csvColumn] ?? "").trim() || null;
+  if (firstName || lastName) {
+    name = `${firstName ?? ""} ${lastName ?? ""}`.trim() || null;
+  }
+
+  if (fullEntry) {
+    const raw = (row[fullEntry.csvColumn] ?? "").trim();
+    if (raw) {
+      const spaceIdx = raw.indexOf(" ");
+      firstName = spaceIdx >= 0 ? raw.slice(0, spaceIdx) : raw;
+      lastName = spaceIdx >= 0 ? raw.slice(spaceIdx + 1) : "";
+      name = raw;
+    }
+  }
+
+  if (!name && nameEntry) {
+    name = (row[nameEntry.csvColumn] ?? "").trim() || null;
+  }
+
+  return { firstName, lastName, name };
+}
+
+export function extractCustomFields(
+  row: Record<string, string>,
+  mapping: FieldMapping
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const entry of mapping) {
+    if ((entry.dbField as string).startsWith("customField:")) {
+      const id = (entry.dbField as string).slice("customField:".length);
+      const value = (row[entry.csvColumn] ?? "").trim();
+      if (value) result[id] = value;
+    }
+  }
+  return result;
+}
 
 function extractPhone(row: Record<string, string>, mapping: FieldMapping): string | null {
   const full = mapping.find((e) => e.dbField === "fullPhoneNumber");
@@ -64,7 +115,7 @@ async function writeProgress(
 export const contactImportWorker = new Worker<ContactImportJob>(
   "contact-import",
   async (job) => {
-    const { importId, sessionId, organizationId, fieldMapping, batchTags, lifecycleStage, updateExisting } = job.data;
+    const { importId, sessionId, organizationId, fieldMapping, batchTags, batchGroupIds, lifecycleStage, updateExisting } = job.data;
     console.log(`[contact-import] job started importId=${importId}`);
 
     // GAP-S66: per-org concurrent import lock
@@ -147,17 +198,28 @@ export const contactImportWorker = new Worker<ContactImportJob>(
         for (const { phone, row } of validRows) {
           const existingId = existingMap.get(phone);
           const tags = mergeTagsUnion(extractField(row, fieldMapping, "tags"), batchTags);
-          const name = extractField(row, fieldMapping, "name") ?? null;
+          const { firstName, lastName, name } = extractFirstLastName(row, fieldMapping);
           const email = extractField(row, fieldMapping, "email") ?? null;
           const csvLifecycle = extractField(row, fieldMapping, "lifecycleStage");
           const stage = (csvLifecycle || lifecycleStage) as LifecycleStage;
           const countryRaw = extractField(row, fieldMapping, "country");
           const countryId = countryRaw ? (countryLookup.get(countryRaw.toLowerCase()) ?? null) : null;
+          const customFields = extractCustomFields(row, fieldMapping);
+          const customFieldsValue = Object.keys(customFields).length > 0
+            ? customFields as unknown as Prisma.InputJsonValue
+            : undefined;
 
           if (existingId && updateExisting) {
-            toUpdate.push({ id: existingId, phone, data: { name, email, lifecycleStage: stage, tags, ...(countryId !== null && { countryId }) } });
+            toUpdate.push({
+              id: existingId, phone,
+              data: { firstName, lastName, name, email, lifecycleStage: stage, tags, ...(countryId !== null && { countryId }), ...(customFieldsValue !== undefined && { customFields: customFieldsValue }) },
+            });
           } else if (!existingId) {
-            toCreate.push({ organizationId, phoneNumber: phone, name, email, lifecycleStage: stage, tags, ...(countryId !== null && { countryId }) });
+            toCreate.push({
+              organizationId, phoneNumber: phone, firstName, lastName, name, email, lifecycleStage: stage, tags,
+              ...(countryId !== null && { countryId }),
+              ...(customFieldsValue !== undefined && { customFields: customFieldsValue }),
+            });
           } else {
             skipped++;
           }
