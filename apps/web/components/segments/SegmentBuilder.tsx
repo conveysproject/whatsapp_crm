@@ -22,6 +22,8 @@ export type FilterRule =
   | { field: "createdAt" | "lastMessageAt"; operator: "after" | "before" | "between"; value: string; valueTo?: string }
   | { field: "customField"; operator: "contains" | "equals" | "isEmpty"; customFieldId: string; value?: string };
 
+type RuleEntry = { id: string; rule: FilterRule };
+
 // ── Field groups ─────────────────────────────────────────────────────────────
 
 interface FieldOption { value: string; label: string }
@@ -235,7 +237,9 @@ export function SegmentBuilder({
   onMatchChange,
 }: SegmentBuilderProps): JSX.Element {
   const { getToken } = useAuth();
-  const [rules, setRules] = useState<FilterRule[]>(initial);
+  const [entries, setEntries] = useState<RuleEntry[]>(
+    () => initial.map((rule) => ({ id: crypto.randomUUID(), rule }))
+  );
   const [customFields, setCustomFields] = useState<Array<{ id: string; inputName: string }>>([]);
 
   useEffect(() => {
@@ -251,6 +255,10 @@ export function SegmentBuilder({
     })();
   }, [getToken]);
 
+  useEffect(() => {
+    setEntries(initial.map((rule) => ({ id: crypto.randomUUID(), rule })));
+  }, [initial]);
+
   // Custom fields use "customField:<id>" as option value so each is selectable independently
   const fieldGroups: FieldGroup[] =
     customFields.length > 0
@@ -258,34 +266,39 @@ export function SegmentBuilder({
       : STATIC_FIELD_GROUPS;
 
   function update(index: number, patch: Partial<FilterRule>) {
-    const next = rules.map((r, i) => (i === index ? ({ ...r, ...patch } as FilterRule) : r));
-    setRules(next);
-    onChange(next);
+    const next = entries.map((e, i) =>
+      i === index ? { ...e, rule: { ...e.rule, ...patch } as FilterRule } : e
+    );
+    setEntries(next);
+    onChange(next.map((e) => e.rule));
   }
 
   function changeField(index: number, rawField: string) {
-    let base: FilterRule;
+    let rule: FilterRule;
     if (rawField.startsWith("customField:")) {
       const customFieldId = rawField.slice("customField:".length);
-      base = { field: "customField", operator: "contains", customFieldId, value: "" };
+      rule = { field: "customField", operator: "contains", customFieldId, value: "" };
     } else {
-      base = defaultRuleForField(rawField);
+      rule = defaultRuleForField(rawField);
     }
-    const next = rules.map((r, i) => (i === index ? base : r));
-    setRules(next);
-    onChange(next);
+    const next = entries.map((e, i) => (i === index ? { ...e, rule } : e));
+    setEntries(next);
+    onChange(next.map((e) => e.rule));
   }
 
   function addRule() {
-    const next = [...rules, { field: "lifecycleStage", operator: "equals", value: "lead" } as FilterRule];
-    setRules(next);
-    onChange(next);
+    const next = [
+      ...entries,
+      { id: crypto.randomUUID(), rule: { field: "lifecycleStage", operator: "equals", value: "lead" } as FilterRule },
+    ];
+    setEntries(next);
+    onChange(next.map((e) => e.rule));
   }
 
   function removeRule(index: number) {
-    const next = rules.filter((_, i) => i !== index);
-    setRules(next);
-    onChange(next);
+    const next = entries.filter((_, i) => i !== index);
+    setEntries(next);
+    onChange(next.map((e) => e.rule));
   }
 
   return (
@@ -305,10 +318,11 @@ export function SegmentBuilder({
       </div>
 
       {/* Rules */}
-      {rules.map((rule, i) => {
+      {entries.map((entry, i) => {
+        const rule = entry.rule;
         const ops = getOperators(rule.field);
         return (
-          <div key={i} className="flex items-center gap-2">
+          <div key={entry.id} className="flex items-center gap-2">
             {/* Field grouped dropdown — custom fields use "customField:<id>" as their option value */}
             <select
               className={selectClass}
