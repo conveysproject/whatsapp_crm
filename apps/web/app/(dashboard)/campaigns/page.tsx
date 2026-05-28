@@ -62,7 +62,7 @@ export default function CampaignsPage(): JSX.Element {
       return (await res.json() as { data: Campaign[] }).data;
     },
     refetchInterval: (query) =>
-      query.state.data?.some((c) => c.status === "running") ? 8000 : false,
+      query.state.data?.some((c) => c.status === "running" || c.status === "scheduled") ? 8000 : false,
   });
 
   useEffect(() => {
