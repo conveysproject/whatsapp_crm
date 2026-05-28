@@ -1,96 +1,200 @@
 "use client";
-import { useState } from "react";
+
+import { JSX, useState } from "react";
 import { useParams } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
+import { Badge } from "@/components/ui/Badge";
 
 type LogTab = "queue" | "executed" | "expired";
 
 interface Recipient {
   id: string;
   status: string;
-  contact: { firstName: string | null; lastName: string | null; phoneNumber: string };
+  phoneNumber: string;
+  sentAt?: string | null;
+  errorMessage?: string | null;
+  contact: { firstName: string | null; lastName: string | null; phoneNumber: string } | null;
 }
 
-const STATUS_BADGE: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-700",
-  sent: "bg-blue-100 text-blue-700",
-  delivered: "bg-green-100 text-green-700",
-  read: "bg-purple-100 text-purple-700",
-  failed: "bg-red-100 text-red-700",
-  expired: "bg-gray-100 text-gray-600",
+const STATUS_BADGE: Record<string, "gray" | "yellow" | "blue" | "green" | "red"> = {
+  pending: "yellow",
+  sent: "blue",
+  delivered: "green",
+  read: "green",
+  failed: "red",
+  expired: "gray",
 };
+
+const TAB_LABELS: Record<LogTab, string> = { queue: "Queue", executed: "Executed", expired: "Expired" };
+
+const EXPORT_PATHS: Record<LogTab, string> = {
+  queue: "queue-log-export",
+  executed: "export",
+  expired: "expired-log-export",
+};
+
+const TAB_ROUTE: Record<LogTab, string> = {
+  queue: "queue-log",
+  executed: "recipients",
+  expired: "expired-log",
+};
+
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+
+function SkeletonRows(): JSX.Element {
+  return (
+    <>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-gray-100 animate-pulse" />
+            <div className="space-y-1.5">
+              <div className="h-3.5 w-32 bg-gray-100 rounded animate-pulse" />
+              <div className="h-3 w-24 bg-gray-100 rounded animate-pulse" />
+            </div>
+          </div>
+          <div className="h-5 w-16 bg-gray-100 rounded-full animate-pulse" />
+        </div>
+      ))}
+    </>
+  );
+}
 
 export default function CampaignLogsPage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
+  const { getToken } = useAuth();
   const [tab, setTab] = useState<LogTab>("queue");
+  const [pages, setPages] = useState<Record<LogTab, number>>({ queue: 1, executed: 1, expired: 1 });
 
-  const queueQuery = useQuery<{ data: Recipient[] }>({
-    queryKey: ["campaign-queue-log", id],
-    queryFn: () => fetch(`/api/v1/campaigns/${id}/queue-log`).then((r) => r.json()),
-    enabled: tab === "queue",
+  const page = pages[tab];
+
+  const { data, isLoading, isFetching } = useQuery<{ data: Recipient[]; total?: number }>({
+    queryKey: ["campaign-log", id, tab, page],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/campaigns/${id}/${TAB_ROUTE[tab]}?page=${page}`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      return res.json() as Promise<{ data: Recipient[]; total?: number }>;
+    },
   });
 
-  const executedQuery = useQuery<{ data: Recipient[] }>({
-    queryKey: ["campaign-recipients", id],
-    queryFn: () => fetch(`/api/v1/campaigns/${id}/recipients`).then((r) => r.json()),
-    enabled: tab === "executed",
-  });
+  const recipients = data?.data ?? [];
+  const total = data?.total ?? recipients.length;
+  const totalPages = Math.max(1, Math.ceil(total / 50));
+  const loading = isLoading || isFetching;
 
-  const expiredQuery = useQuery<{ data: Recipient[] }>({
-    queryKey: ["campaign-expired-log", id],
-    queryFn: () => fetch(`/api/v1/campaigns/${id}/expired-log`).then((r) => r.json()),
-    enabled: tab === "expired",
-  });
-
-  const activeData =
-    tab === "queue" ? queueQuery.data?.data :
-    tab === "executed" ? executedQuery.data?.data :
-    expiredQuery.data?.data;
+  function setPage(n: number) {
+    setPages((prev) => ({ ...prev, [tab]: n }));
+  }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Campaign Logs</h1>
-        <a
-          href={`/api/v1/campaigns/${id}/report`}
-          className="px-4 py-2 border text-sm rounded hover:bg-gray-50"
-          download
-        >
-          Download Report
-        </a>
-      </div>
+    <div className="min-h-screen bg-gray-50/60">
+      <div className="max-w-4xl mx-auto px-6 py-6 space-y-5">
 
-      <div className="flex border-b">
-        {(["queue", "executed", "expired"] as LogTab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium capitalize border-b-2 -mb-px ${
-              tab === t ? "border-green-600 text-green-600" : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
+        {/* Breadcrumb */}
+        <Link href={`/campaigns/${id}`} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          Campaign
+        </Link>
+
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Campaign Logs</h1>
+          <a
+            href={`${API_URL}/v1/campaigns/${id}/${EXPORT_PATHS[tab]}`}
+            className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+            download
           >
-            {t}
-          </button>
-        ))}
-      </div>
+            <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            Download {TAB_LABELS[tab]} CSV
+          </a>
+        </div>
 
-      <div className="border rounded-lg divide-y">
-        {(activeData ?? []).length === 0 && (
-          <p className="p-6 text-center text-sm text-gray-400">No records in this tab.</p>
-        )}
-        {(activeData ?? []).map((r) => (
-          <div key={r.id} className="flex items-center justify-between p-3">
-            <div>
-              <p className="text-sm font-medium">
-                {[r.contact.firstName, r.contact.lastName].filter(Boolean).join(" ") || "Unknown"}
-              </p>
-              <p className="text-xs text-gray-500">{r.contact.phoneNumber}</p>
+        {/* Tabs */}
+        <div className="flex gap-0.5 border-b border-gray-200">
+          {(Object.keys(TAB_LABELS) as LogTab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={[
+                "px-4 py-2.5 text-sm font-medium transition-colors",
+                tab === t ? "text-brand-600 border-b-2 border-brand-600 -mb-px" : "text-gray-500 hover:text-gray-700",
+              ].join(" ")}
+            >
+              {TAB_LABELS[t]}
+            </button>
+          ))}
+        </div>
+
+        {/* List */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          {loading ? (
+            <SkeletonRows />
+          ) : recipients.length === 0 ? (
+            <div className="px-5 py-16 text-center">
+              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+              </div>
+              <p className="text-gray-500 font-medium">No records in {TAB_LABELS[tab].toLowerCase()} log</p>
             </div>
-            <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_BADGE[r.status] ?? "bg-gray-100 text-gray-600"}`}>
-              {r.status}
-            </span>
-          </div>
-        ))}
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {recipients.map((r) => {
+                const displayName = r.contact
+                  ? [r.contact.firstName, r.contact.lastName].filter(Boolean).join(" ") || r.phoneNumber
+                  : r.phoneNumber;
+                const initials = displayName.slice(0, 2).toUpperCase();
+                return (
+                  <div key={r.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50/60 transition-colors">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold shrink-0">
+                        {initials}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+                        <p className="text-xs text-gray-400 font-mono">+{r.contact?.phoneNumber ?? r.phoneNumber}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {r.sentAt && (
+                        <span className="text-xs text-gray-400 hidden sm:block">
+                          {new Date(r.sentAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}
+                        </span>
+                      )}
+                      <Badge variant={STATUS_BADGE[r.status] ?? "gray"}>{r.status}</Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!loading && totalPages > 1 && (
+            <div className="flex items-center justify-between px-5 py-3.5 border-t border-gray-100">
+              <p className="text-sm text-gray-500">Page {page} of {totalPages}</p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(Math.max(1, page - 1))}
+                  disabled={page === 1}
+                  className="h-8 w-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  ‹
+                </button>
+                <button
+                  onClick={() => setPage(Math.min(totalPages, page + 1))}
+                  disabled={page === totalPages}
+                  className="h-8 w-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
