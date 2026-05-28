@@ -462,8 +462,9 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
 
       const header = "Contact Name,Phone Number,Email,Status,Sent At,Error\n";
       const rows = recipients.map((r) => {
-        const name = [r.contact?.firstName, r.contact?.lastName].filter(Boolean).join(" ") || "";
-        const phone = maskPhones ? maskPhone(r.contact?.phoneNumber ?? "") : (r.contact?.phoneNumber ?? "");
+        const name = (r.contact ? [r.contact.firstName, r.contact.lastName].filter(Boolean).join(" ") : r.fullName) || "";
+        const rawPhone = r.contact?.phoneNumber ?? r.phoneNumber;
+        const phone = maskPhones ? maskPhone(rawPhone) : rawPhone;
         const email = maskEmails ? maskEmail(r.contact?.email ?? "") : (r.contact?.email ?? "");
         const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
         return [escape(name), escape(`="${phone}"`), escape(email), r.status, r.sentAt?.toISOString() ?? "", escape(r.errorMessage ?? "")].join(",");
