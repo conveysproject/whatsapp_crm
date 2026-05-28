@@ -74,6 +74,19 @@ export default function NewCampaignPage(): JSX.Element {
     },
   });
 
+  const { data: presets = [] } = useQuery<{ id: string; name: string; content: string }[]>({
+    queryKey: ["preset-messages"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/canned-responses?category=nt_campaign&limit=100`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (!res.ok) return [];
+      return (await res.json() as { data: { id: string; name: string; content: string }[] }).data;
+    },
+    enabled: campaignType === "non_template",
+  });
+
   const selectedTemplate = templates.find((t) => t.id === templateId);
 
   const estimatedCount = audienceMode === "groups"
@@ -247,16 +260,36 @@ export default function NewCampaignPage(): JSX.Element {
             )}
 
             {step === 2 && campaignType === "non_template" && (
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-700">Message Body</label>
-                <textarea
-                  value={freeTextBody}
-                  onChange={(e) => setFreeTextBody(e.target.value)}
-                  rows={5}
-                  placeholder="Type your message… Use {{name}}, {{phone}}, {{email}} for personalization."
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
-                />
-                <p className="text-xs text-gray-400">{freeTextBody.length} characters</p>
+              <div className="space-y-4">
+                {presets.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-gray-700">Load from preset</label>
+                    <select
+                      onChange={(e) => {
+                        const p = presets.find((p) => p.id === e.target.value);
+                        if (p) setFreeTextBody(p.content);
+                      }}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      defaultValue=""
+                    >
+                      <option value="">Pick a saved preset…</option>
+                      {presets.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-gray-700">Message Body</label>
+                  <textarea
+                    value={freeTextBody}
+                    onChange={(e) => setFreeTextBody(e.target.value)}
+                    rows={5}
+                    placeholder="Type your message… Use {{name}}, {{phone}}, {{email}} for personalization."
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+                  />
+                  <p className="text-xs text-gray-400">{freeTextBody.length} characters</p>
+                </div>
               </div>
             )}
 
