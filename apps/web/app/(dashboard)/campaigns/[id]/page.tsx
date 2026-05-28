@@ -257,8 +257,8 @@ export default function CampaignDetailPage(): JSX.Element {
 
         {/* Timestamps */}
         <div className="text-xs text-gray-400 space-y-1">
-          {campaign.scheduledAt && <p>Scheduled: {new Date(campaign.scheduledAt).toLocaleString("en-IN")}</p>}
-          {campaign.sentAt && <p>Sent: {new Date(campaign.sentAt).toLocaleString("en-IN")}</p>}
+          {campaign.scheduledAt && <p>Scheduled: {new Date(campaign.scheduledAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</p>}
+          {campaign.sentAt && <p>Sent: {new Date(campaign.sentAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</p>}
         </div>
       </div>
     </div>

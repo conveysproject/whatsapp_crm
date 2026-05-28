@@ -180,7 +180,7 @@ export default function CampaignsPage(): JSX.Element {
                     </Link>
                     {c.scheduledAt && (
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {new Date(c.scheduledAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                        {new Date(c.scheduledAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
                       </p>
                     )}
                   </div>

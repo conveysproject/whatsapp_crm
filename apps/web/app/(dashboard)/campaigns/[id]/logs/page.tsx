@@ -161,7 +161,7 @@ export default function CampaignLogsPage(): JSX.Element {
                     <div className="flex items-center gap-3 shrink-0">
                       {r.sentAt && (
                         <span className="text-xs text-gray-400 hidden sm:block">
-                          {new Date(r.sentAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}
+                          {new Date(r.sentAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
                         </span>
                       )}
                       <Badge variant={STATUS_BADGE[r.status] ?? "gray"}>{r.status}</Badge>
