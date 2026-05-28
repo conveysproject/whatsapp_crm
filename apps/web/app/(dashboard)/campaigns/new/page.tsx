@@ -136,7 +136,7 @@ export default function NewCampaignPage(): JSX.Element {
         headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           segmentId: audienceMode === "segment" ? segmentId : undefined,
-          scheduledAt: scheduleMode === "later" && scheduledAt ? scheduledAt : undefined,
+          scheduledAt: scheduleMode === "later" && scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
         }),
       });
 
