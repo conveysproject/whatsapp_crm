@@ -1,12 +1,13 @@
 "use client";
 
-import { JSX, useState } from "react";
+import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
+import { getSocket } from "@/lib/socket";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -60,7 +61,27 @@ export default function CampaignsPage(): JSX.Element {
       if (!res.ok) return [];
       return (await res.json() as { data: Campaign[] }).data;
     },
+    refetchInterval: (query) =>
+      query.state.data?.some((c) => c.status === "running") ? 8000 : false,
   });
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket.connected) socket.connect();
+
+    function refresh() {
+      void queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+    }
+
+    socket.on("campaign:completed", refresh);
+    socket.on("campaign:aborted", refresh);
+    socket.on("campaign:expired", refresh);
+    return () => {
+      socket.off("campaign:completed", refresh);
+      socket.off("campaign:aborted", refresh);
+      socket.off("campaign:expired", refresh);
+    };
+  }, [queryClient]);
 
   const filtered = campaigns.filter((c) => {
     if (tab === "archived") return c.isArchived;
