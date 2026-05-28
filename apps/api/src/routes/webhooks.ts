@@ -110,36 +110,39 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
           if (change.value.statuses?.length) {
             const TERMINAL = new Set<string>(["read"]);
             const STATUS_RANK: Record<string, number> = { sending: -1, sent: 0, delivered: 1, read: 2 };
+            const RECIPIENT_RANK: Record<string, number> = { sent: 0, accepted: 1, delivered: 2, played: 3, read: 4 };
+            const RECIPIENT_STATUSES = new Set<string>(["accepted", "delivered", "played", "read", "failed"]);
             const io = getIo();
             for (const su of change.value.statuses) {
+              // Update conversation Message if one exists for this wamid
               const msg = await fastify.prisma.message.findFirst({
                 where: { whatsappMessageId: su.id },
                 select: { id: true, status: true },
               });
-              if (!msg) continue;
-              if (TERMINAL.has(msg.status)) continue; // ratchet: never downgrade from read
-              const currentRank = STATUS_RANK[msg.status] ?? -1;
-              const newRank = STATUS_RANK[su.status] ?? -1;
-              if (newRank <= currentRank) continue; // no downgrade
-              const allowedStatuses: MessageStatus[] = ["sent", "delivered", "read", "failed"];
-              const newStatus = allowedStatuses.includes(su.status as MessageStatus) ? (su.status as MessageStatus) : null;
-              if (!newStatus) continue;
-              await fastify.prisma.message.update({
-                where: { id: msg.id },
-                data: { status: newStatus },
-              });
-              if (org) {
-                io?.to(`org:${org.id}`).emit("message:status", {
-                  whatsappMessageId: su.id,
-                  status: newStatus,
-                });
+              if (msg && !TERMINAL.has(msg.status)) {
+                const currentRank = STATUS_RANK[msg.status] ?? -1;
+                const newRank = STATUS_RANK[su.status] ?? -1;
+                if (newRank > currentRank) {
+                  const allowedStatuses: MessageStatus[] = ["sent", "delivered", "read", "failed"];
+                  const newStatus = allowedStatuses.includes(su.status as MessageStatus) ? (su.status as MessageStatus) : null;
+                  if (newStatus) {
+                    await fastify.prisma.message.update({
+                      where: { id: msg.id },
+                      data: { status: newStatus },
+                    });
+                    if (org) {
+                      io?.to(`org:${org.id}`).emit("message:status", {
+                        whatsappMessageId: su.id,
+                        status: newStatus,
+                      });
+                    }
+                  }
+                }
               }
 
-              // Mirror status onto CampaignRecipient (if this message was sent by a campaign)
-              const RECIPIENT_STATUSES = new Set<string>(["accepted", "delivered", "played", "read", "failed"]);
+              // Always update CampaignRecipient if this wamid was sent by a campaign
               if (RECIPIENT_STATUSES.has(su.status)) {
                 const recipientStatus = su.status as CampaignRecipientStatus;
-                const RECIPIENT_RANK: Record<string, number> = { sent: 0, accepted: 1, delivered: 2, played: 3, read: 4 };
                 const recipient = await fastify.prisma.campaignRecipient.findFirst({
                   where: { messageId: su.id },
                   select: { id: true, status: true },
