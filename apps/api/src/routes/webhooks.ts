@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import type { MessageStatus } from "@prisma/client";
+import type { MessageStatus, CampaignRecipientStatus } from "@prisma/client";
 import { createHmac, timingSafeEqual } from "crypto";
 import { verifyWebhookSignature } from "../lib/whatsapp.js";
 import { inboundMessageQueue } from "../lib/queue.js";
@@ -133,6 +133,27 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                   whatsappMessageId: su.id,
                   status: newStatus,
                 });
+              }
+
+              // Mirror status onto CampaignRecipient (if this message was sent by a campaign)
+              const RECIPIENT_STATUSES = new Set<string>(["accepted", "delivered", "played", "read", "failed"]);
+              if (RECIPIENT_STATUSES.has(su.status)) {
+                const recipientStatus = su.status as CampaignRecipientStatus;
+                const RECIPIENT_RANK: Record<string, number> = { sent: 0, accepted: 1, delivered: 2, played: 3, read: 4 };
+                const recipient = await fastify.prisma.campaignRecipient.findFirst({
+                  where: { messageId: su.id },
+                  select: { id: true, status: true },
+                });
+                if (recipient) {
+                  const currentRecipientRank = RECIPIENT_RANK[recipient.status] ?? -1;
+                  const newRecipientRank = RECIPIENT_RANK[recipientStatus] ?? -1;
+                  if (newRecipientRank > currentRecipientRank) {
+                    await fastify.prisma.campaignRecipient.update({
+                      where: { id: recipient.id },
+                      data: { status: recipientStatus },
+                    });
+                  }
+                }
               }
             }
           }
