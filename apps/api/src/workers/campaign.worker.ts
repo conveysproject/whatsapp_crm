@@ -68,6 +68,15 @@ async function resolveTargetPhones(
   return allContacts.map((c) => c.phoneNumber);
 }
 
+function isTransientError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  if (msg.includes("429") || msg.includes("rate limit")) return true;
+  if (msg.includes("econnreset") || msg.includes("econnrefused") || msg.includes("etimedout")) return true;
+  if (msg.includes("network") || msg.includes("socket hang up")) return true;
+  return false;
+}
+
 export const campaignWorker = new Worker<CampaignJob>(
   "campaigns",
   async (job) => {
@@ -169,11 +178,19 @@ export const campaignWorker = new Worker<CampaignJob>(
         sent++;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        await prisma.campaignRecipient.update({
-          where: { id: recipient.id },
-          data: { status: "failed", errorMessage, retries: { increment: 1 } },
-        });
-        failed++;
+        if (isTransientError(err) && (recipient.retries ?? 0) < 3) {
+          await prisma.campaignRecipient.update({
+            where: { id: recipient.id },
+            data: { status: "pending", errorMessage, retries: { increment: 1 } },
+          });
+          await sleep(2000);
+        } else {
+          await prisma.campaignRecipient.update({
+            where: { id: recipient.id },
+            data: { status: "failed", errorMessage, retries: { increment: 1 } },
+          });
+          failed++;
+        }
       }
 
       if ((i + 1) % 50 === 0) emitProgress();
