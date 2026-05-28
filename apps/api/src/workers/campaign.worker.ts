@@ -148,8 +148,17 @@ export const campaignWorker = new Worker<CampaignJob>(
 
       const contact = await prisma.contact.findFirst({
         where: { organizationId, phoneNumber: phone },
-        select: { firstName: true, lastName: true, phoneNumber: true, email: true },
+        select: { id: true, firstName: true, lastName: true, phoneNumber: true, email: true },
       });
+
+      if (contact && (!recipient.fullName || !recipient.contactId)) {
+        const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || null;
+        await prisma.campaignRecipient.update({
+          where: { id: recipient.id },
+          data: { contactId: contact.id, fullName },
+        });
+        recipient = { ...recipient, contactId: contact.id, fullName };
+      }
 
       const body = contact ? resolveTemplateVars(templateBody, contact) : templateBody;
 
