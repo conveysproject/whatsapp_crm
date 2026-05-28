@@ -26,7 +26,9 @@ interface Campaign {
 
 interface Stats {
   sent: number;
+  accepted: number;
   delivered: number;
+  played: number;
   read: number;
   failed: number;
   pending: number;
@@ -129,18 +131,25 @@ export default function CampaignDetailPage(): JSX.Element {
   }
 
   const { campaign, stats } = report;
+
+  // Cumulative funnel — each tier includes all higher tiers (a "read" message was also sent + delivered)
+  const funnelSent = stats.sent + stats.accepted + stats.delivered + stats.played + stats.read + stats.failed;
+  const funnelDelivered = stats.delivered + stats.played + stats.read;
+  const funnelRead = stats.read + stats.played;
+  const funnelTotal = funnelSent + stats.pending + stats.expired;
+
   const liveProgress = progress ?? {
-    sent: stats.sent,
+    sent: funnelSent - stats.failed,
     failed: stats.failed,
-    total: stats.sent + stats.delivered + stats.read + stats.failed + stats.pending + stats.expired,
+    total: funnelTotal,
     percentage: 0,
   };
   const livePercentage = liveProgress.total > 0
     ? Math.round(((liveProgress.sent + liveProgress.failed) / liveProgress.total) * 100)
     : (campaign.status === "completed" ? 100 : 0);
 
-  const deliveryRate = stats.sent > 0 ? Math.round((stats.delivered / stats.sent) * 100) : 0;
-  const readRate = stats.delivered > 0 ? Math.round((stats.read / stats.delivered) * 100) : 0;
+  const deliveryRate = funnelSent > 0 ? Math.round((funnelDelivered / funnelSent) * 100) : 0;
+  const readRate = funnelDelivered > 0 ? Math.round((funnelRead / funnelDelivered) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-gray-50/60">
@@ -219,9 +228,9 @@ export default function CampaignDetailPage(): JSX.Element {
         {/* Stats grid */}
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
           {([
-            { label: "Sent", value: stats.sent, color: "text-gray-900" },
-            { label: "Delivered", value: stats.delivered, color: "text-blue-600" },
-            { label: "Read", value: stats.read, color: "text-green-600" },
+            { label: "Sent", value: funnelSent, color: "text-gray-900" },
+            { label: "Delivered", value: funnelDelivered, color: "text-blue-600" },
+            { label: "Read", value: funnelRead, color: "text-green-600" },
             { label: "Failed", value: stats.failed, color: "text-red-600" },
             { label: "Pending", value: stats.pending, color: "text-yellow-600" },
             { label: "Expired", value: stats.expired, color: "text-gray-400" },
@@ -234,7 +243,7 @@ export default function CampaignDetailPage(): JSX.Element {
         </div>
 
         {/* Rates */}
-        {(stats.sent > 0 || stats.delivered > 0) && (
+        {funnelSent > 0 && (
           <div className="flex gap-6 bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4 text-sm">
             <div>
               <span className="text-gray-400">Delivery rate</span>
