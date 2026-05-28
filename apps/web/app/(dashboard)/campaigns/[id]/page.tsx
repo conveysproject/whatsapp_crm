@@ -139,7 +139,7 @@ export default function CampaignDetailPage(): JSX.Element {
   const funnelTotal = funnelSent + stats.pending + stats.expired;
 
   const liveProgress = progress ?? {
-    sent: funnelSent - stats.failed,
+    sent: funnelSent,   // everyone who exited pending (includes delivered/read)
     failed: stats.failed,
     total: funnelTotal,
     percentage: 0,
@@ -225,38 +225,34 @@ export default function CampaignDetailPage(): JSX.Element {
           </div>
         )}
 
-        {/* Stats grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Stats grid — current status of each recipient (WhatsApp advances one stage at a time) */}
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
           {([
-            { label: "Sent", value: funnelSent, color: "text-gray-900", hint: "unique recipients reached" },
-            { label: "Failed", value: stats.failed, color: "text-red-600", hint: "delivery errors" },
-            { label: "Pending", value: stats.pending, color: "text-yellow-600", hint: "not yet sent" },
-            { label: "Expired", value: stats.expired, color: "text-gray-400", hint: "timed out" },
-          ] as const).map(({ label, value, color, hint }) => (
+            { label: "Sent", value: stats.sent, color: "text-gray-900" },
+            { label: "Delivered", value: stats.delivered, color: "text-blue-600" },
+            { label: "Read", value: stats.read, color: "text-green-600" },
+            { label: "Failed", value: stats.failed, color: "text-red-600" },
+            { label: "Pending", value: stats.pending, color: "text-yellow-600" },
+            { label: "Expired", value: stats.expired, color: "text-gray-400" },
+          ] as const).map(({ label, value, color }) => (
             <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
               <p className={`text-2xl font-bold ${color}`}>{value}</p>
-              <p className="text-xs text-gray-500 mt-1 font-medium">{label}</p>
-              <p className="text-xs text-gray-300 mt-0.5 hidden sm:block">{hint}</p>
+              <p className="text-xs text-gray-400 mt-1">{label}</p>
             </div>
           ))}
         </div>
 
-        {/* Delivery funnel rates */}
+        {/* Rates — cumulative across all stages above "sent" */}
         {funnelSent > 0 && (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Delivery Funnel</p>
-            <div className="flex items-center gap-4 text-sm flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-600 text-xs font-bold">{funnelDelivered}</span>
-                <span className="text-gray-600">Delivered</span>
-                <span className="font-semibold text-gray-900">{deliveryRate}%</span>
-              </div>
-              <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-600 text-xs font-bold">{funnelRead}</span>
-                <span className="text-gray-600">Read</span>
-                <span className="font-semibold text-gray-900">{readRate}%</span>
-              </div>
+          <div className="flex gap-6 bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4 text-sm">
+            <div>
+              <span className="text-gray-400">Delivery rate</span>
+              <span className="ml-2 font-semibold text-gray-900">{deliveryRate}%</span>
+            </div>
+            <div className="w-px bg-gray-100" />
+            <div>
+              <span className="text-gray-400">Read rate</span>
+              <span className="ml-2 font-semibold text-gray-900">{readRate}%</span>
             </div>
           </div>
         )}
