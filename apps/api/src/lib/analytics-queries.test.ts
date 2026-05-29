@@ -149,6 +149,20 @@ describe("getCampaignSnapshot", () => {
     expect(result.lastCampaign).toBeNull();
     expect(result.nextScheduled).toBeNull();
   });
+
+  it("returns nextScheduled even when no last campaign exists", async () => {
+    const scheduledAt = new Date("2026-06-01T09:00:00Z");
+    mockPrisma.campaign.findFirst
+      .mockResolvedValueOnce(null)  // no completed campaign
+      .mockResolvedValueOnce({ id: "camp-2", name: "June Launch", scheduledAt, _count: { recipients: 50 } });
+
+    const { getCampaignSnapshot } = await import("./analytics-queries.js");
+    const result = await getCampaignSnapshot(mockPrisma as unknown as PrismaClient, "org-1");
+
+    expect(result.lastCampaign).toBeNull();
+    expect(result.nextScheduled?.id).toBe("camp-2");
+    expect(result.nextScheduled?.recipientCount).toBe(50);
+  });
 });
 
 describe("getActivityFeed", () => {

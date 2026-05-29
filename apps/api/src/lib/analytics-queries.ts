@@ -398,7 +398,17 @@ export async function getCampaignSnapshot(
   ]);
 
   if (!lastCampaign) {
-    return { lastCampaign: null, nextScheduled: null };
+    return {
+      lastCampaign: null,
+      nextScheduled: nextScheduled
+        ? {
+            id: nextScheduled.id,
+            name: nextScheduled.name,
+            scheduledAt: nextScheduled.scheduledAt!.toISOString(),
+            recipientCount: nextScheduled._count.recipients,
+          }
+        : null,
+    };
   }
 
   const recipientCounts = await prisma.campaignRecipient.groupBy({
@@ -493,7 +503,7 @@ export async function getActivityFeed(
 
   return events
     .filter((e) => e.timestamp)
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .sort((a, b) => (b.timestamp < a.timestamp ? -1 : b.timestamp > a.timestamp ? 1 : 0))
     .slice(0, 10);
 }
 
