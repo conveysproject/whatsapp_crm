@@ -360,6 +360,81 @@ export async function getTeamStats(
   });
 }
 
+export interface CampaignSnapshotData {
+  lastCampaign: {
+    id: string;
+    name: string;
+    sentAt: string;
+    totalSent: number;
+    delivered: number;
+    read: number;
+    failed: number;
+  } | null;
+  nextScheduled: {
+    id: string;
+    name: string;
+    scheduledAt: string;
+    recipientCount: number;
+  } | null;
+}
+
+export async function getCampaignSnapshot(
+  prisma: PrismaClient,
+  organizationId: string
+): Promise<CampaignSnapshotData> {
+  const now = new Date();
+
+  const [lastCampaign, nextScheduled] = await Promise.all([
+    prisma.campaign.findFirst({
+      where: { organizationId, status: "completed" },
+      orderBy: { sentAt: "desc" },
+      select: { id: true, name: true, sentAt: true },
+    }),
+    prisma.campaign.findFirst({
+      where: { organizationId, status: "scheduled", scheduledAt: { gte: now } },
+      orderBy: { scheduledAt: "asc" },
+      select: { id: true, name: true, scheduledAt: true, _count: { select: { recipients: true } } },
+    }),
+  ]);
+
+  if (!lastCampaign) {
+    return { lastCampaign: null, nextScheduled: null };
+  }
+
+  const recipientCounts = await prisma.campaignRecipient.groupBy({
+    by: ["status"],
+    where: { campaignId: lastCampaign.id },
+    _count: { _all: true },
+  });
+
+  const countByStatus = new Map(recipientCounts.map((r) => [r.status, r._count._all]));
+  const deliveredStatuses = ["delivered", "read", "played"];
+  const delivered = deliveredStatuses.reduce((sum, s) => sum + (countByStatus.get(s) ?? 0), 0);
+  const read = countByStatus.get("read") ?? 0;
+  const failed = countByStatus.get("failed") ?? 0;
+  const totalSent = [...countByStatus.values()].reduce((a, b) => a + b, 0);
+
+  return {
+    lastCampaign: {
+      id: lastCampaign.id,
+      name: lastCampaign.name,
+      sentAt: lastCampaign.sentAt?.toISOString() ?? "",
+      totalSent,
+      delivered,
+      read,
+      failed,
+    },
+    nextScheduled: nextScheduled
+      ? {
+          id: nextScheduled.id,
+          name: nextScheduled.name,
+          scheduledAt: nextScheduled.scheduledAt!.toISOString(),
+          recipientCount: nextScheduled._count.recipients,
+        }
+      : null,
+  };
+}
+
 export async function getTeamPerformance(
   prisma: PrismaClient,
   organizationId: string

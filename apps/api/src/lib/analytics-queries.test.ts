@@ -111,3 +111,42 @@ describe("getTeamStats", () => {
     expect(anil?.avgFirstResponseSecs).toBe(0);
   });
 });
+
+describe("getCampaignSnapshot", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("returns last campaign with delivery counts and next scheduled campaign", async () => {
+    const sentAt = new Date("2026-05-27T10:00:00Z");
+    const scheduledAt = new Date("2026-06-01T09:00:00Z");
+
+    mockPrisma.campaign.findFirst
+      .mockResolvedValueOnce({ id: "camp-1", name: "May Offer", sentAt })
+      .mockResolvedValueOnce({ id: "camp-2", name: "June Launch", scheduledAt, _count: { recipients: 150 } });
+
+    mockPrisma.campaignRecipient.groupBy.mockResolvedValue([
+      { status: "delivered", _count: { _all: 80 } },
+      { status: "read", _count: { _all: 40 } },
+      { status: "failed", _count: { _all: 5 } },
+      { status: "sent", _count: { _all: 25 } },
+    ]);
+
+    const { getCampaignSnapshot } = await import("./analytics-queries.js");
+    const result = await getCampaignSnapshot(mockPrisma as unknown as PrismaClient, "org-1");
+
+    expect(result.lastCampaign?.id).toBe("camp-1");
+    expect(result.lastCampaign?.totalSent).toBe(150);
+    expect(result.lastCampaign?.delivered).toBe(120); // delivered + read
+    expect(result.lastCampaign?.read).toBe(40);
+    expect(result.lastCampaign?.failed).toBe(5);
+    expect(result.nextScheduled?.id).toBe("camp-2");
+    expect(result.nextScheduled?.recipientCount).toBe(150);
+  });
+
+  it("returns nulls when no campaigns exist", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue(null);
+    const { getCampaignSnapshot } = await import("./analytics-queries.js");
+    const result = await getCampaignSnapshot(mockPrisma as unknown as PrismaClient, "org-1");
+    expect(result.lastCampaign).toBeNull();
+    expect(result.nextScheduled).toBeNull();
+  });
+});
