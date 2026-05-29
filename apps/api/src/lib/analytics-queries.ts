@@ -254,6 +254,112 @@ export async function getMyWork(
   };
 }
 
+export interface AgentStats {
+  userId: string;
+  displayName: string;
+  openConversations: number;
+  resolvedToday: number;
+  avgFirstResponseSecs: number;
+  slaBreaches: number;
+}
+
+export async function getTeamStats(
+  prisma: PrismaClient,
+  organizationId: string
+): Promise<AgentStats[]> {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+
+  const users = await prisma.user.findMany({
+    where: { organizationId, isActive: true },
+    select: { id: true, fullName: true },
+  });
+  const userIds = users.map((u) => u.id);
+
+  const [openConvs, resolvedConvs, convs30d] = await Promise.all([
+    prisma.conversation.findMany({
+      where: { organizationId, assignedTo: { in: userIds }, status: { in: ["open", "pending"] } },
+      select: {
+        assignedTo: true,
+        createdAt: true,
+        slaId: true,
+        sla: { select: { firstResponseSecs: true } },
+      },
+    }),
+    prisma.conversation.findMany({
+      where: {
+        organizationId,
+        assignedTo: { in: userIds },
+        status: "resolved",
+        closedAt: { gte: startOfDay },
+      },
+      select: { assignedTo: true },
+    }),
+    prisma.conversation.findMany({
+      where: { organizationId, assignedTo: { in: userIds }, createdAt: { gte: since30d } },
+      select: { id: true, assignedTo: true, createdAt: true },
+    }),
+  ]);
+
+  const conv30dIds = convs30d.map((c) => c.id);
+  const convAssignMap = new Map(
+    convs30d.map((c) => [c.id, { assignedTo: c.assignedTo, createdAt: c.createdAt }])
+  );
+
+  const firstOutbounds = await prisma.message.findMany({
+    where: { conversationId: { in: conv30dIds }, direction: "outbound", isSystemMessage: false },
+    select: { conversationId: true, createdAt: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const firstByConv = new Map<string, Date>();
+  for (const m of firstOutbounds) {
+    if (!firstByConv.has(m.conversationId)) firstByConv.set(m.conversationId, m.createdAt);
+  }
+
+  const openCountByUser = new Map<string, number>();
+  const slaBreachByUser = new Map<string, number>();
+  for (const c of openConvs) {
+    const uid = c.assignedTo!;
+    openCountByUser.set(uid, (openCountByUser.get(uid) ?? 0) + 1);
+    if (c.sla && c.createdAt.getTime() + c.sla.firstResponseSecs * 1000 < now.getTime()) {
+      slaBreachByUser.set(uid, (slaBreachByUser.get(uid) ?? 0) + 1);
+    }
+  }
+
+  const resolvedCountByUser = new Map<string, number>();
+  for (const c of resolvedConvs) {
+    const uid = c.assignedTo!;
+    resolvedCountByUser.set(uid, (resolvedCountByUser.get(uid) ?? 0) + 1);
+  }
+
+  const responseTimesByUser = new Map<string, number[]>();
+  for (const [convId, firstAt] of firstByConv.entries()) {
+    const convData = convAssignMap.get(convId);
+    if (!convData?.assignedTo) continue;
+    const uid = convData.assignedTo;
+    const secs = (firstAt.getTime() - convData.createdAt.getTime()) / 1000;
+    if (!responseTimesByUser.has(uid)) responseTimesByUser.set(uid, []);
+    responseTimesByUser.get(uid)!.push(secs);
+  }
+
+  return users.map((u) => {
+    const times = responseTimesByUser.get(u.id) ?? [];
+    const avg =
+      times.length > 0 ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : 0;
+    return {
+      userId: u.id,
+      displayName: u.fullName,
+      openConversations: openCountByUser.get(u.id) ?? 0,
+      resolvedToday: resolvedCountByUser.get(u.id) ?? 0,
+      avgFirstResponseSecs: avg,
+      slaBreaches: slaBreachByUser.get(u.id) ?? 0,
+    };
+  });
+}
+
 export async function getTeamPerformance(
   prisma: PrismaClient,
   organizationId: string

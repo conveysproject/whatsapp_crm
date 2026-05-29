@@ -78,3 +78,36 @@ describe("getMyWork", () => {
     expect(result.topConversations[0]!.lastMessagePreview).toBe("Hello there");
   });
 });
+
+describe("getTeamStats", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("returns per-agent stats with openConversations, resolvedToday, slaBreaches", async () => {
+    mockPrisma.user.findMany.mockResolvedValue([
+      { id: "user-1", fullName: "Anil Kumar" },
+      { id: "user-2", fullName: "Priya Mehta" },
+    ]);
+    mockPrisma.conversation.findMany
+      .mockResolvedValueOnce([
+        { assignedTo: "user-1", slaId: null, sla: null, createdAt: new Date() },
+        { assignedTo: "user-1", slaId: null, sla: null, createdAt: new Date() },
+      ])                         // open convs
+      .mockResolvedValueOnce([
+        { assignedTo: "user-1" },
+      ])                         // resolvedToday
+      .mockResolvedValueOnce([]); // convs30d
+
+    mockPrisma.message.findMany.mockResolvedValue([]); // firstOutbounds
+
+    const { getTeamStats } = await import("./analytics-queries.js");
+    const result = await getTeamStats(mockPrisma as unknown as PrismaClient, "org-1");
+
+    expect(result).toHaveLength(2);
+    const anil = result.find((r) => r.userId === "user-1");
+    expect(anil?.displayName).toBe("Anil Kumar");
+    expect(anil?.openConversations).toBe(2);
+    expect(anil?.resolvedToday).toBe(1);
+    expect(anil?.slaBreaches).toBe(0);
+    expect(anil?.avgFirstResponseSecs).toBe(0);
+  });
+});
