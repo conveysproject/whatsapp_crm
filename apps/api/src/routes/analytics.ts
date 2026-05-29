@@ -2,7 +2,10 @@ import type { FastifyPluginAsync } from "fastify";
 import {
   getOverviewMetrics,
   getConversationVolume,
-  getTeamPerformance,
+  getTeamStats,
+  getMyWork,
+  getCampaignSnapshot,
+  getActivityFeed,
 } from "../lib/analytics-queries.js";
 import { cacheGet, cacheSet, orgKey } from "../lib/cache.js";
 
@@ -34,8 +37,38 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
     const key = orgKey(organizationId, "analytics:team");
     const cached = await cacheGet(key);
     if (cached) return reply.send({ data: cached });
-    const performance = await getTeamPerformance(fastify.prisma, organizationId);
-    await cacheSet(key, performance, 120);
-    return reply.send({ data: performance });
+    const stats = await getTeamStats(fastify.prisma, organizationId);
+    await cacheSet(key, stats, 120);
+    return reply.send({ data: stats });
+  });
+
+  fastify.get("/analytics/my-work", async (request, reply) => {
+    const { organizationId, userId } = request.auth;
+    const key = orgKey(organizationId, `analytics:my-work:${userId}`);
+    const cached = await cacheGet(key);
+    if (cached) return reply.send({ data: cached });
+    const data = await getMyWork(fastify.prisma, organizationId, userId);
+    await cacheSet(key, data, 60);
+    return reply.send({ data: data });
+  });
+
+  fastify.get("/analytics/campaign-snapshot", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const key = orgKey(organizationId, "analytics:campaign-snapshot");
+    const cached = await cacheGet(key);
+    if (cached) return reply.send({ data: cached });
+    const data = await getCampaignSnapshot(fastify.prisma, organizationId);
+    await cacheSet(key, data, 120);
+    return reply.send({ data: data });
+  });
+
+  fastify.get("/analytics/activity-feed", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const key = orgKey(organizationId, "analytics:activity-feed");
+    const cached = await cacheGet(key);
+    if (cached) return reply.send({ data: cached });
+    const data = await getActivityFeed(fastify.prisma, organizationId);
+    await cacheSet(key, data, 120);
+    return reply.send({ data: data });
   });
 };

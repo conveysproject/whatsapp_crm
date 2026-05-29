@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient, CampaignRecipientStatus } from "@prisma/client";
 
 export interface OverviewMetrics {
   openConversations: number;
@@ -14,11 +14,6 @@ export interface DailyVolume {
   date: string;
   inbound: number;
   outbound: number;
-}
-
-export interface AgentPerformance {
-  assignedTo: string;
-  conversationsHandled: number;
 }
 
 export async function getOverviewMetrics(
@@ -418,7 +413,7 @@ export async function getCampaignSnapshot(
   });
 
   const countByStatus = new Map(recipientCounts.map((r) => [r.status, r._count._all]));
-  const deliveredStatuses = ["delivered", "read", "played"];
+  const deliveredStatuses: CampaignRecipientStatus[] = ["delivered", "read", "played"];
   const delivered = deliveredStatuses.reduce((sum, s) => sum + (countByStatus.get(s) ?? 0), 0);
   const read = countByStatus.get("read") ?? 0;
   const failed = countByStatus.get("failed") ?? 0;
@@ -507,21 +502,3 @@ export async function getActivityFeed(
     .slice(0, 10);
 }
 
-export async function getTeamPerformance(
-  prisma: PrismaClient,
-  organizationId: string
-): Promise<AgentPerformance[]> {
-  const conversations = await prisma.conversation.findMany({
-    where: { organizationId, assignedTo: { not: null } },
-    select: { assignedTo: true },
-  });
-
-  const counts: Record<string, number> = {};
-  for (const c of conversations) {
-    if (c.assignedTo) counts[c.assignedTo] = (counts[c.assignedTo] ?? 0) + 1;
-  }
-
-  return Object.entries(counts)
-    .sort(([, a], [, b]) => b - a)
-    .map(([assignedTo, conversationsHandled]) => ({ assignedTo, conversationsHandled }));
-}
