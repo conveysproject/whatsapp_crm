@@ -700,9 +700,27 @@ model Flow {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
   autoReplies    AutoReply[]
+  runs           FlowRun[]
 
   @@index([organizationId])
   @@map("flows")
+}
+
+model FlowRun {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  flowId         String    @map("flow_id")
+  flow           Flow      @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  contactPhone   String?   @map("contact_phone")
+  conversationId String?   @map("conversation_id")
+  status         String    @default("completed")
+  stepsExecuted  Int       @default(0) @map("steps_executed")
+  error          String?
+  startedAt      DateTime  @default(now()) @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+
+  @@index([organizationId, flowId])
+  @@map("flow_runs")
 }
 
 model Chatbot {
