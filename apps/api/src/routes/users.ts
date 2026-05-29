@@ -12,6 +12,15 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     return { data: users };
   });
 
+  fastify.get("/users/me", async (request) => {
+    const user = await fastify.prisma.user.findFirst({
+      where: { id: request.auth.userId, organizationId: request.auth.organizationId, isActive: true },
+      select: { id: true, fullName: true, email: true, role: true },
+    });
+    if (!user) return { data: null };
+    return { data: user };
+  });
+
   fastify.patch<{ Params: { id: string }; Body: { role: Role } }>(
     "/users/:id/role",
     {

@@ -3,7 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
 const mockPrisma = {
-  user: { findMany: vi.fn(), update: vi.fn() },
+  user: { findMany: vi.fn(), update: vi.fn(), findFirst: vi.fn() },
   organizationMember: {
     findFirst: vi.fn(),
     update: vi.fn(),
@@ -38,5 +38,26 @@ describe("PUT /v1/users/:id/permissions", () => {
     expect(mockPrisma.organizationMember.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { permissions: { manage_contacts: "allow", messaging: "deny" } } })
     );
+  });
+});
+
+describe("GET /v1/users/me", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns current user id, fullName, email and role", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({
+      id: "user-1",
+      fullName: "Rahul Sharma",
+      email: "rahul@test.com",
+      role: "admin",
+    });
+    const res = await app.inject({ method: "GET", url: "/v1/users/me" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { data: { id: string; fullName: string; email: string; role: string } };
+    expect(body.data.id).toBe("user-1");
+    expect(body.data.fullName).toBe("Rahul Sharma");
+    expect(body.data.role).toBe("admin");
   });
 });
