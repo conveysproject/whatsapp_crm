@@ -5,6 +5,9 @@ export interface OverviewMetrics {
   totalContacts: number;
   messagesToday: number;
   pendingInvitations: number;
+  campaignsSentThisMonth: number;
+  avgFirstResponseTime: number;
+  botConversations: number;
 }
 
 export interface DailyVolume {
@@ -25,16 +28,69 @@ export async function getOverviewMetrics(
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  const [openConversations, totalContacts, messagesToday, pendingInvitations] = await Promise.all([
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [
+    openConversations,
+    totalContacts,
+    messagesToday,
+    pendingInvitations,
+    campaignsSentThisMonth,
+    botConversations,
+    outboundMsgs,
+    convs30d,
+  ] = await Promise.all([
     prisma.conversation.count({ where: { organizationId, status: "open" } }),
     prisma.contact.count({ where: { organizationId } }),
-    prisma.message.count({
-      where: { organizationId, createdAt: { gte: startOfDay } },
-    }),
+    prisma.message.count({ where: { organizationId, createdAt: { gte: startOfDay } } }),
     prisma.invitation.count({ where: { organizationId, status: "pending" } }),
+    prisma.campaign.count({
+      where: { organizationId, status: "completed", sentAt: { gte: startOfMonth } },
+    }),
+    prisma.conversation.count({
+      where: { organizationId, status: "bot", lastMessageAt: { gte: startOfDay } },
+    }),
+    prisma.message.findMany({
+      where: { organizationId, direction: "outbound", isSystemMessage: false, createdAt: { gte: since30d } },
+      select: { conversationId: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.conversation.findMany({
+      where: { organizationId, createdAt: { gte: since30d } },
+      select: { id: true, createdAt: true },
+    }),
   ]);
 
-  return { openConversations, totalContacts, messagesToday, pendingInvitations };
+  // Avg first response time (org-wide, last 30 days)
+  const firstByConv = new Map<string, Date>();
+  for (const m of outboundMsgs) {
+    if (!firstByConv.has(m.conversationId)) firstByConv.set(m.conversationId, m.createdAt);
+  }
+  const convCreatedMap = new Map(convs30d.map((c) => [c.id, c.createdAt]));
+  let totalSecs = 0;
+  let responseCount = 0;
+  for (const [convId, firstAt] of firstByConv.entries()) {
+    const convCreated = convCreatedMap.get(convId);
+    if (convCreated) {
+      totalSecs += (firstAt.getTime() - convCreated.getTime()) / 1000;
+      responseCount++;
+    }
+  }
+  const avgFirstResponseTime = responseCount > 0 ? Math.round(totalSecs / responseCount) : 0;
+
+  return {
+    openConversations,
+    totalContacts,
+    messagesToday,
+    pendingInvitations,
+    campaignsSentThisMonth,
+    avgFirstResponseTime,
+    botConversations,
+  };
 }
 
 export async function getConversationVolume(
