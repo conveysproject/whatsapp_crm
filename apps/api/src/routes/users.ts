@@ -1,10 +1,9 @@
 import type { FastifyPluginAsync } from "fastify";
-import { prisma } from "../lib/prisma.js";
 import type { Role } from "@prisma/client";
 
 export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/users", async (request) => {
-    const users = await prisma.user.findMany({
+    const users = await fastify.prisma.user.findMany({
       where: { organizationId: request.auth.organizationId, isActive: true },
       select: { id: true, email: true, fullName: true, role: true, createdAt: true },
       orderBy: { createdAt: "asc" },
@@ -12,12 +11,12 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     return { data: users };
   });
 
-  fastify.get("/users/me", async (request) => {
+  fastify.get("/users/me", async (request, reply) => {
     const user = await fastify.prisma.user.findFirst({
       where: { id: request.auth.userId, organizationId: request.auth.organizationId, isActive: true },
       select: { id: true, fullName: true, email: true, role: true },
     });
-    if (!user) return { data: null };
+    if (!user) return reply.status(404).send({ error: { code: "USER_NOT_FOUND", message: "User not found" } });
     return { data: user };
   });
 
@@ -37,7 +36,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       if (request.auth.role !== "admin") {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can change roles" } });
       }
-      const user = await prisma.user.update({
+      const user = await fastify.prisma.user.update({
         where: { id: request.params.id, organizationId: request.auth.organizationId },
         data: { role: request.body.role },
         select: { id: true, email: true, role: true },
@@ -57,7 +56,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       if (request.auth.role !== "admin") {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can remove users" } });
       }
-      await prisma.user.update({
+      await fastify.prisma.user.update({
         where: { id: request.params.id, organizationId: request.auth.organizationId },
         data: { isActive: false },
       });

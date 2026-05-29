@@ -58,6 +58,13 @@ describe("GET /v1/users/me", () => {
     const body = res.json() as { data: { id: string; fullName: string; email: string; role: string } };
     expect(body.data.id).toBe("user-1");
     expect(body.data.fullName).toBe("Rahul Sharma");
+    expect(body.data.email).toBe("rahul@test.com");
     expect(body.data.role).toBe("admin");
+  });
+
+  it("returns 404 when user is not found", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "GET", url: "/v1/users/me" });
+    expect(res.statusCode).toBe(404);
   });
 });
