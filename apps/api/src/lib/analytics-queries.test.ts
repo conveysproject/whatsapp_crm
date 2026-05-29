@@ -39,3 +39,42 @@ describe("getOverviewMetrics", () => {
     expect(result.botConversations).toBe(2);
   });
 });
+
+describe("getMyWork", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("returns assigned counts, performance stats and top 3 conversations", async () => {
+    const now = new Date();
+    mockPrisma.conversation.findMany
+      .mockResolvedValueOnce([
+        {
+          id: "conv-1",
+          unreadCount: 3,
+          lastMessageAt: now,
+          createdAt: new Date(now.getTime() - 600_000),
+          slaId: null,
+          sla: null,
+          contact: { name: "Priya Singh", firstName: null, lastName: null },
+        },
+      ])
+      .mockResolvedValueOnce([]); // convs30d
+    mockPrisma.contact.count.mockResolvedValue(5);
+    mockPrisma.conversation.count.mockResolvedValue(2); // resolvedToday
+    mockPrisma.message.findMany
+      .mockResolvedValueOnce([{ conversationId: "conv-1", body: "Hello there", contentType: "text", createdAt: now }])  // last messages
+      .mockResolvedValueOnce([]); // firstOutbounds
+
+    const { getMyWork } = await import("./analytics-queries.js");
+    const result = await getMyWork(mockPrisma as unknown as PrismaClient, "org-1", "user-1");
+
+    expect(result.assignedOpen).toBe(1);
+    expect(result.unreadCount).toBe(3);
+    expect(result.assignedContacts).toBe(5);
+    expect(result.resolvedToday).toBe(2);
+    expect(result.avgFirstResponseSecs).toBe(0);
+    expect(result.slaBreaches).toBe(0);
+    expect(result.topConversations).toHaveLength(1);
+    expect(result.topConversations[0]!.contactName).toBe("Priya Singh");
+    expect(result.topConversations[0]!.lastMessagePreview).toBe("Hello there");
+  });
+});
