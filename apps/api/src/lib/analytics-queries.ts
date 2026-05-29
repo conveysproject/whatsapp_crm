@@ -435,6 +435,68 @@ export async function getCampaignSnapshot(
   };
 }
 
+export interface ActivityEvent {
+  type: "contact_created" | "campaign_sent" | "conversation_closed" | "member_joined";
+  label: string;
+  timestamp: string;
+}
+
+export async function getActivityFeed(
+  prisma: PrismaClient,
+  organizationId: string
+): Promise<ActivityEvent[]> {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const [recentContacts, recentCampaigns, recentClosedConvs, recentMembers] = await Promise.all([
+    prisma.contact.findMany({
+      where: { organizationId, createdAt: { gte: since } },
+      select: { name: true, firstName: true, lastName: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    }),
+    prisma.campaign.findMany({
+      where: { organizationId, status: "completed", sentAt: { gte: since } },
+      select: { name: true, sentAt: true },
+      orderBy: { sentAt: "desc" },
+      take: 5,
+    }),
+    prisma.conversation.findMany({
+      where: { organizationId, status: "resolved", closedAt: { gte: since } },
+      select: { contact: { select: { name: true, firstName: true } }, closedAt: true },
+      orderBy: { closedAt: "desc" },
+      take: 5,
+    }),
+    prisma.user.findMany({
+      where: { organizationId, createdAt: { gte: since }, isActive: true },
+      select: { fullName: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    }),
+  ]);
+
+  const events: ActivityEvent[] = [];
+
+  for (const c of recentContacts) {
+    const name = c.name ?? [c.firstName, c.lastName].filter(Boolean).join(" ") ?? "Unknown";
+    events.push({ type: "contact_created", label: `New contact: ${name}`, timestamp: c.createdAt.toISOString() });
+  }
+  for (const c of recentCampaigns) {
+    events.push({ type: "campaign_sent", label: `Campaign "${c.name}" sent`, timestamp: c.sentAt?.toISOString() ?? "" });
+  }
+  for (const c of recentClosedConvs) {
+    const name = c.contact?.name ?? c.contact?.firstName ?? "Unknown";
+    events.push({ type: "conversation_closed", label: `Conversation with ${name} resolved`, timestamp: c.closedAt?.toISOString() ?? "" });
+  }
+  for (const u of recentMembers) {
+    events.push({ type: "member_joined", label: `${u.fullName} joined the team`, timestamp: u.createdAt.toISOString() });
+  }
+
+  return events
+    .filter((e) => e.timestamp)
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .slice(0, 10);
+}
+
 export async function getTeamPerformance(
   prisma: PrismaClient,
   organizationId: string

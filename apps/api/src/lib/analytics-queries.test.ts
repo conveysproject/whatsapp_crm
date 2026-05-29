@@ -150,3 +150,48 @@ describe("getCampaignSnapshot", () => {
     expect(result.nextScheduled).toBeNull();
   });
 });
+
+describe("getActivityFeed", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("merges events from contacts, campaigns, conversations and users, sorted by time desc", async () => {
+    const t1 = new Date("2026-05-28T09:00:00Z");
+    const t2 = new Date("2026-05-28T08:00:00Z");
+    const t3 = new Date("2026-05-28T07:00:00Z");
+    const t4 = new Date("2026-05-28T06:00:00Z");
+
+    mockPrisma.contact.findMany.mockResolvedValue([
+      { name: "Rahul Sharma", firstName: null, lastName: null, createdAt: t1 },
+    ]);
+    mockPrisma.campaign.findMany.mockResolvedValue([
+      { name: "May Offer", sentAt: t2 },
+    ]);
+    mockPrisma.conversation.findMany.mockResolvedValue([
+      { contact: { name: "Priya Mehta", firstName: null }, closedAt: t3 },
+    ]);
+    mockPrisma.user.findMany.mockResolvedValue([
+      { fullName: "Sandeep Joshi", createdAt: t4 },
+    ]);
+
+    const { getActivityFeed } = await import("./analytics-queries.js");
+    const result = await getActivityFeed(mockPrisma as unknown as PrismaClient, "org-1");
+
+    expect(result).toHaveLength(4);
+    expect(result[0]!.type).toBe("contact_created");
+    expect(result[0]!.label).toContain("Rahul Sharma");
+    expect(result[1]!.type).toBe("campaign_sent");
+    expect(result[2]!.type).toBe("conversation_closed");
+    expect(result[3]!.type).toBe("member_joined");
+  });
+
+  it("returns empty array when no events", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([]);
+    mockPrisma.campaign.findMany.mockResolvedValue([]);
+    mockPrisma.conversation.findMany.mockResolvedValue([]);
+    mockPrisma.user.findMany.mockResolvedValue([]);
+
+    const { getActivityFeed } = await import("./analytics-queries.js");
+    const result = await getActivityFeed(mockPrisma as unknown as PrismaClient, "org-1");
+    expect(result).toHaveLength(0);
+  });
+});
