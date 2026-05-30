@@ -83,6 +83,12 @@ export const inboundWorker = new Worker<InboundMessageJob>(
   async (job) => {
     const { organizationId, whatsappContactPhone, whatsappMessageId, contentType, body, mediaId, timestamp } = job.data;
 
+    // Idempotency: skip if this wamid was already stored (Meta delivers at-least-once)
+    if (whatsappMessageId) {
+      const existing = await prisma.message.findUnique({ where: { whatsappMessageId }, select: { id: true } });
+      if (existing) return;
+    }
+
     const org = await prisma.organization.findUnique({
       where: { id: organizationId },
       select: { phoneNumberId: true, wabaAccessToken: true },

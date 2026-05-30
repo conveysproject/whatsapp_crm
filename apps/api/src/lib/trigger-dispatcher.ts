@@ -88,7 +88,11 @@ export async function dispatchFlowTrigger(
       messageBody: payload.messageBody,
       contactId: payload.contactId,
     };
-    await flowQueue.add("trigger-flow", { flowId: flow.id, payload: jobPayload });
+    // jobId deduplicates: same flow can't be queued twice for the same conversation
+    // within the same second (covers inbound_message + keyword_match both matching)
+    const epoch = Math.floor(Date.now() / 1000);
+    const jobId = `flow-${flow.id}-${payload.conversationId ?? organizationId}-${epoch}`;
+    await flowQueue.add("trigger-flow", { flowId: flow.id, payload: jobPayload }, { jobId });
   }
 }
 

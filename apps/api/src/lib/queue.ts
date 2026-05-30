@@ -18,7 +18,9 @@ export const campaignQueue = new Queue("campaigns", {
 
 export const flowQueue = new Queue("flows", {
   connection: redisConnection,
-  defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 2000 } },
+  // attempts:1 — flow steps are not idempotent (they send messages); retrying a
+  // failed job would re-send every message the flow already delivered.
+  defaultJobOptions: { attempts: 1 },
 });
 
 export const contactImportQueue = new Queue("contact-import", {

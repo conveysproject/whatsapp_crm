@@ -189,7 +189,7 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
               body,
               mediaId,
               timestamp: parseInt(msg.timestamp, 10),
-            });
+            }, { jobId: `wamsg-${msg.id}` });
           }
         }
       }
