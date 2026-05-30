@@ -103,7 +103,7 @@ export const flowsRouter: FastifyPluginAsync = async (fastify) => {
     if (!flow) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Flow not found" } });
     }
-    const limit = Math.min(parseInt(request.query.limit ?? "50", 10), 100);
+    const limit = Math.min(parseInt(request.query.limit ?? "50", 10) || 50, 100);
     const cursor = request.query.cursor;
     const runs = await fastify.prisma.flowRun.findMany({
       where: { flowId: request.params.id, organizationId },
