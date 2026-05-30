@@ -141,7 +141,7 @@ export async function runFlow(
         case "close_conversation": {
           await prisma.conversation.update({
             where: { id: payload.conversationId },
-            data: { status: "closed" },
+            data: { status: "resolved" },
           });
           break;
         }
