@@ -1,4 +1,5 @@
 import { Worker } from "bullmq";
+import { Prisma } from "@prisma/client";
 import { redisConnection } from "../lib/queue.js";
 import { prisma } from "../lib/prisma.js";
 import { getIo } from "../lib/io-ref.js";
@@ -176,7 +177,7 @@ export const inboundWorker = new Worker<InboundMessageJob>(
         // Clear session first so a crash doesn't loop
         await prisma.conversation.update({
           where: { id: conversation.id },
-          data: { flowSession: null },
+          data: { flowSession: Prisma.JsonNull },
         });
         await runFlow(prisma, flow.id, flow.flowDefinition as unknown as FlowDefinition, {
           conversationId: conversation.id,

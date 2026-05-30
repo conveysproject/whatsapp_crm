@@ -5,6 +5,7 @@ import {
   sendInteractiveMessage,
   sendTemplateMessage,
   type WaInteractivePayload,
+  type WaTemplateComponent,
 } from "./whatsapp.js";
 import { resumeFlowQueue } from "./queue.js";
 
@@ -159,7 +160,7 @@ export async function runFlow(
         case "send_template": {
           const templateName = (node.config["templateName"] as string) ?? "";
           const languageCode = (node.config["languageCode"] as string) ?? "en";
-          const components = (node.config["components"] as object[]) ?? [];
+          const components = ((node.config["components"] as WaTemplateComponent[]) ?? []);
           if (payload.contactPhone && templateName) {
             await sendTemplateMessage(phoneNumberId, payload.contactPhone, templateName, languageCode, components, accessToken);
           }
