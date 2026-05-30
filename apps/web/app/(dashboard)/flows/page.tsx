@@ -1,20 +1,40 @@
 import { JSX } from "react";
 import { auth } from "@clerk/nextjs/server";
+import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import Link from "next/link";
 import { AutoRepliesSection } from "./auto-replies-section";
+import { FlowListActions } from "./flow-list-actions";
 
-interface Flow { id: string; name: string; triggerType: string; isActive: boolean; }
+interface Flow {
+  id: string;
+  name: string;
+  triggerType: string;
+  isActive: boolean;
+  createdAt: string;
+  _count?: { runs: number };
+}
 
 async function getFlows(token: string): Promise<Flow[]> {
   try {
-    const res = await fetch(`${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/flows`, {
-      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
-    });
+    const res = await fetch(
+      `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/flows`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+    );
     return res.ok ? (await res.json() as { data: Flow[] }).data : [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
+
+const TRIGGER_LABELS: Record<string, string> = {
+  new_conversation: "New Conversation",
+  keyword_match:    "Keyword Match",
+  contact_created:  "Contact Created",
+  tag_added:        "Label Added",
+  lifecycle_change: "Stage Changed",
+  inbound_message:  "Incoming Message",
+};
 
 export default async function FlowsPage(): Promise<JSX.Element> {
   const { getToken } = await auth.protect();
@@ -22,27 +42,61 @@ export default async function FlowsPage(): Promise<JSX.Element> {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between">
+        <div>
           <h1 className="text-2xl font-semibold text-gray-900">Automation Flows</h1>
-          <Link href="/flows/new"><Button>New Flow</Button></Link>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {flows.length} flow{flows.length !== 1 ? "s" : ""}
+          </p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 shadow-card divide-y divide-gray-100">
-          {flows.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-gray-400">No flows yet.</p>
-          ) : (
-            flows.map((f) => (
-              <div key={f.id} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <Link href={`/flows/${f.id}`} className="text-sm font-medium text-gray-900 hover:text-brand-600">{f.name}</Link>
-                  <p className="text-xs text-gray-500">{f.triggerType.replace(/_/g, " ")}</p>
-                </div>
-                <Badge variant={f.isActive ? "green" : "gray"}>{f.isActive ? "Active" : "Inactive"}</Badge>
-              </div>
-            ))
-          )}
-        </div>
+        <Link href="/flows/new">
+          <Button>+ New Flow</Button>
+        </Link>
       </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 shadow-card overflow-hidden">
+        {flows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <span className="text-5xl">🔁</span>
+            <p className="text-gray-500 text-sm">No flows yet. Create your first automation.</p>
+            <Link href="/flows/new">
+              <Button size="sm">+ New Flow</Button>
+            </Link>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {flows.map((f) => (
+              <div key={f.id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 group">
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/flows/${f.id}`}
+                      className="text-sm font-semibold text-gray-900 hover:text-brand-600 truncate block"
+                    >
+                      {f.name}
+                    </Link>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-gray-400">
+                        {TRIGGER_LABELS[f.triggerType] ?? f.triggerType.replace(/_/g, " ")}
+                      </span>
+                      {(f._count?.runs ?? 0) > 0 && (
+                        <span className="text-xs text-gray-400">· {f._count!.runs} runs</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Badge variant={f.isActive ? "green" : "gray"}>
+                    {f.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                  <FlowListActions flowId={f.id} flowName={f.name} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <AutoRepliesSection />
     </div>
   );
