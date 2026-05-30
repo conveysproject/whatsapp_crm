@@ -1,8 +1,8 @@
 import dagre from "dagre";
 import type { Node, Edge } from "reactflow";
 
-const NODE_WIDTH = 280;
-const NODE_HEIGHT = 90;
+const NODE_WIDTH = 200;
+const NODE_HEIGHT = 68;
 
 export function getLayoutedElements(nodes: Node[], edges: Edge[]): Node[] {
   if (nodes.length === 0) return nodes;
