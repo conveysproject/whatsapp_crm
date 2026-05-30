@@ -9,12 +9,13 @@ const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 export default async function FlowEditorPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }): Promise<JSX.Element> {
   const { getToken } = await auth.protect();
+  const { id } = await params;
   const token = await getToken();
 
-  const res = await fetch(`${API_URL}/v1/flows/${params.id}`, {
+  const res = await fetch(`${API_URL}/v1/flows/${id}`, {
     headers: { Authorization: `Bearer ${token ?? ""}` },
     cache: "no-store",
   });
