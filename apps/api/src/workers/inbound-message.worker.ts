@@ -231,6 +231,9 @@ export const inboundWorker = new Worker<InboundMessageJob>(
     }
 
     // --- Auto-reply evaluation (keyword-triggered instant replies) ---
+    // If an auto-reply fires, skip inbound_message/keyword_match flow dispatches below
+    // to prevent the same flow running twice when flowId is set on the auto-reply.
+    let autoRepliedWithFlow = false;
     if (body && refreshed?.status !== "bot") {
       const autoReplies = await prisma.autoReply.findMany({
         where: { organizationId, isActive: true },
@@ -250,6 +253,7 @@ export const inboundWorker = new Worker<InboundMessageJob>(
         if (matched.flowId) {
           const arFlow = await prisma.flow.findFirst({ where: { id: matched.flowId, isActive: true } });
           if (arFlow) {
+            autoRepliedWithFlow = true;
             await runFlow(prisma, arFlow.id, arFlow.flowDefinition as unknown as FlowDefinition, {
               conversationId: conversation.id,
               organizationId,
@@ -290,8 +294,12 @@ export const inboundWorker = new Worker<InboundMessageJob>(
         contentType,
       };
 
-      await dispatchFlowTrigger(prisma, organizationId, "inbound_message", dispatchPayload);
-      await dispatchFlowTrigger(prisma, organizationId, "keyword_match", dispatchPayload);
+      // Skip inbound_message/keyword_match if an auto-reply already ran a flow —
+      // prevents the same flow executing twice for one message.
+      if (!autoRepliedWithFlow) {
+        await dispatchFlowTrigger(prisma, organizationId, "inbound_message", dispatchPayload);
+        await dispatchFlowTrigger(prisma, organizationId, "keyword_match", dispatchPayload);
+      }
 
       if (contentType === "interactive") {
         await dispatchFlowTrigger(prisma, organizationId, "button_reply", dispatchPayload);
