@@ -8,6 +8,7 @@ import type { ContactId } from "@WBMSG/shared";
 import { maskPhone, maskEmail, canAccess, hasSubPermission } from "../lib/permissions.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 import { normalizeFullPhone } from "../lib/phone-normalize.js";
+import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
 
 function csvEscape(value: string): string {
   const str = value.replace(/"/g, '""');
@@ -386,6 +387,11 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       }
       throw err;
     }
+    void dispatchFlowTrigger(fastify.prisma, organizationId, "contact_created", {
+      organizationId,
+      contactPhone: contact.phoneNumber,
+      contactId: contact.id,
+    });
     return reply.status(201).send({ data: contact });
   });
 
@@ -440,6 +446,17 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
             });
           }
         }
+      }
+
+      const dispatchBase = { organizationId, contactPhone: contact.phoneNumber, contactId: contact.id };
+      if (request.body.tags !== undefined) {
+        const addedTags = contact.tags.filter((t) => !existing.tags.includes(t));
+        if (addedTags.length > 0) {
+          void dispatchFlowTrigger(fastify.prisma, organizationId, "tag_added", dispatchBase);
+        }
+      }
+      if (request.body.lifecycleStage !== undefined && request.body.lifecycleStage !== existing.lifecycleStage) {
+        void dispatchFlowTrigger(fastify.prisma, organizationId, "lifecycle_change", dispatchBase);
       }
 
       return reply.send({ data: contact });

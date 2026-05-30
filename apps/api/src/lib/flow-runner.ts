@@ -1,7 +1,24 @@
 import type { PrismaClient } from "@prisma/client";
-import { sendTextMessage, sendMediaMessage, sendInteractiveMessage, type WaInteractivePayload } from "./whatsapp.js";
+import {
+  sendTextMessage,
+  sendMediaMessage,
+  sendInteractiveMessage,
+  sendTemplateMessage,
+  type WaInteractivePayload,
+} from "./whatsapp.js";
+import { resumeFlowQueue } from "./queue.js";
 
-export type TriggerType = "inbound_message" | "contact_tag_added" | "conversation_assigned";
+export type TriggerType =
+  | "inbound_message"
+  | "new_conversation"
+  | "keyword_match"
+  | "button_reply"
+  | "contact_created"
+  | "tag_added"
+  | "lifecycle_change"
+  | "conversation_resolved"
+  | "conversation_assigned"
+  | "no_reply";
 
 export interface FlowNode {
   id: string;
@@ -9,10 +26,15 @@ export interface FlowNode {
     | "send_message" | "send_text"
     | "send_media" | "send_image" | "send_video" | "send_document"
     | "send_interactive" | "send_buttons" | "send_list"
+    | "send_template"
+    | "cta_url"
     | "ask_question"
     | "update_stage"
     | "assign_conversation" | "assign_agent"
     | "add_tag" | "add_label"
+    | "remove_tag" | "remove_label"
+    | "opt_in" | "opt_out"
+    | "toggle_bot"
     | "close_conversation"
     | "condition"
     | "wait"
@@ -32,6 +54,14 @@ export interface FlowTriggerPayload {
   organizationId: string;
   contactPhone?: string;
   messageBody?: string;
+  contactId?: string;
+  resumeFromNodeId?: string;
+}
+
+export interface FlowSession {
+  flowId: string;
+  flowRunId: string;
+  waitingAtNodeId: string;
 }
 
 export async function runFlow(
@@ -45,7 +75,7 @@ export async function runFlow(
       organizationId: payload.organizationId,
       flowId,
       contactPhone: payload.contactPhone ?? null,
-      conversationId: payload.conversationId,
+      conversationId: payload.conversationId || null,
       status: "running",
     },
   });
@@ -59,7 +89,8 @@ export async function runFlow(
   const phoneNumberId = org?.phoneNumberId ?? process.env["WA_PHONE_NUMBER_ID"] ?? "";
   const accessToken = org?.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
 
-  let currentNodeId: string | null = flowDefinition.startNodeId;
+  const startId = payload.resumeFromNodeId ?? flowDefinition.startNodeId;
+  let currentNodeId: string | null = startId;
   let stepsExecuted = 0;
 
   try {
@@ -78,6 +109,7 @@ export async function runFlow(
           }
           break;
         }
+
         case "send_media":
         case "send_image":
         case "send_video":
@@ -90,17 +122,100 @@ export async function runFlow(
           }
           break;
         }
+
         case "send_interactive":
         case "send_buttons": {
           const interactive = node.config["interactive"] as WaInteractivePayload | undefined;
           if (payload.contactPhone && interactive) {
             await sendInteractiveMessage(phoneNumberId, payload.contactPhone, interactive, accessToken);
           }
+          if (node.config["waitForReply"] !== false && payload.conversationId) {
+            await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id);
+            await prisma.flowRun.update({
+              where: { id: run.id },
+              data: { status: "waiting", currentNodeId: node.id, stepsExecuted },
+            });
+            return;
+          }
           break;
         }
-        case "send_list":
-        case "ask_question":
+
+        case "send_list": {
+          const listInteractive = buildListInteractive(node.config);
+          if (payload.contactPhone && listInteractive) {
+            await sendInteractiveMessage(phoneNumberId, payload.contactPhone, listInteractive, accessToken);
+          }
+          if (node.config["waitForReply"] !== false && payload.conversationId) {
+            await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id);
+            await prisma.flowRun.update({
+              where: { id: run.id },
+              data: { status: "waiting", currentNodeId: node.id, stepsExecuted },
+            });
+            return;
+          }
           break;
+        }
+
+        case "send_template": {
+          const templateName = (node.config["templateName"] as string) ?? "";
+          const languageCode = (node.config["languageCode"] as string) ?? "en";
+          const components = (node.config["components"] as object[]) ?? [];
+          if (payload.contactPhone && templateName) {
+            await sendTemplateMessage(phoneNumberId, payload.contactPhone, templateName, languageCode, components, accessToken);
+          }
+          break;
+        }
+
+        case "cta_url": {
+          const ctaBody = (node.config["body"] as string) ?? "";
+          const buttonText = (node.config["buttonText"] as string) ?? "";
+          const url = (node.config["url"] as string) ?? "";
+          if (payload.contactPhone && ctaBody && url) {
+            const ctaInteractive: WaInteractivePayload = {
+              type: "cta_url",
+              body: { text: ctaBody },
+              action: { name: "cta_url", parameters: { display_text: buttonText, url } },
+            };
+            await sendInteractiveMessage(phoneNumberId, payload.contactPhone, ctaInteractive, accessToken);
+          }
+          break;
+        }
+
+        case "ask_question": {
+          const question = (node.config["question"] as string) ?? "";
+          if (payload.contactPhone && question) {
+            await sendTextMessage(phoneNumberId, payload.contactPhone, question, accessToken);
+          }
+          if (payload.conversationId) {
+            await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id);
+            await prisma.flowRun.update({
+              where: { id: run.id },
+              data: { status: "waiting", currentNodeId: node.id, stepsExecuted },
+            });
+            return;
+          }
+          break;
+        }
+
+        case "wait": {
+          const duration = Number(node.config["duration"] ?? 1);
+          const unit = (node.config["unit"] as string) ?? "hours";
+          const multipliers: Record<string, number> = { minutes: 60000, hours: 3600000, days: 86400000 };
+          const delayMs = duration * (multipliers[unit] ?? 3600000);
+          if (node.next) {
+            await resumeFlowQueue.add(
+              "resume-flow",
+              { flowId, payload: { ...payload, resumeFromNodeId: node.next } },
+              { delay: delayMs, jobId: `resume-${run.id}` }
+            );
+            await prisma.flowRun.update({
+              where: { id: run.id },
+              data: { status: "waiting", currentNodeId: node.id, stepsExecuted },
+            });
+          }
+          return;
+        }
+
         case "update_stage": {
           const stage = node.config["lifecycleStage"] as string;
           if (stage && payload.contactPhone) {
@@ -111,10 +226,11 @@ export async function runFlow(
           }
           break;
         }
+
         case "assign_conversation":
         case "assign_agent": {
           const assignTo = (node.config["assignTo"] as string) ?? "";
-          if (assignTo) {
+          if (assignTo && payload.conversationId) {
             await prisma.conversation.update({
               where: { id: payload.conversationId },
               data: { assignedTo: assignTo },
@@ -122,6 +238,7 @@ export async function runFlow(
           }
           break;
         }
+
         case "add_tag":
         case "add_label": {
           const tag = (node.config["tag"] as string) ?? "";
@@ -130,21 +247,70 @@ export async function runFlow(
               where: { organizationId: payload.organizationId, phoneNumber: payload.contactPhone },
             });
             if (contact && !contact.tags.includes(tag)) {
+              await prisma.contact.update({ where: { id: contact.id }, data: { tags: { push: tag } } });
+            }
+          }
+          break;
+        }
+
+        case "remove_tag":
+        case "remove_label": {
+          const tag = (node.config["tag"] as string) ?? "";
+          if (tag && payload.contactPhone) {
+            const contact = await prisma.contact.findFirst({
+              where: { organizationId: payload.organizationId, phoneNumber: payload.contactPhone },
+            });
+            if (contact) {
               await prisma.contact.update({
                 where: { id: contact.id },
-                data: { tags: { push: tag } },
+                data: { tags: contact.tags.filter((t) => t !== tag) },
               });
             }
           }
           break;
         }
-        case "close_conversation": {
-          await prisma.conversation.update({
-            where: { id: payload.conversationId },
-            data: { status: "resolved" },
-          });
+
+        case "opt_in": {
+          if (payload.contactPhone) {
+            await prisma.contact.updateMany({
+              where: { organizationId: payload.organizationId, phoneNumber: payload.contactPhone },
+              data: { whatsappOptOut: false },
+            });
+          }
           break;
         }
+
+        case "opt_out": {
+          if (payload.contactPhone) {
+            await prisma.contact.updateMany({
+              where: { organizationId: payload.organizationId, phoneNumber: payload.contactPhone },
+              data: { whatsappOptOut: true },
+            });
+          }
+          break;
+        }
+
+        case "toggle_bot": {
+          const action = (node.config["action"] as string) ?? "disable";
+          if (payload.contactPhone) {
+            await prisma.contact.updateMany({
+              where: { organizationId: payload.organizationId, phoneNumber: payload.contactPhone },
+              data: { disableBot: action === "disable" },
+            });
+          }
+          break;
+        }
+
+        case "close_conversation": {
+          if (payload.conversationId) {
+            await prisma.conversation.update({
+              where: { id: payload.conversationId },
+              data: { status: "resolved" },
+            });
+          }
+          break;
+        }
+
         case "condition": {
           const conditionType = (node.config["conditionType"] as string) ?? "contains";
           const value = ((node.config["value"] as string) ?? "").toLowerCase();
@@ -157,8 +323,7 @@ export async function runFlow(
           resolvedNext = matched ? node.next : (node.nextNo ?? null);
           break;
         }
-        case "wait":
-          break;
+
         case "end":
           await prisma.flowRun.update({
             where: { id: run.id },
@@ -187,4 +352,29 @@ export async function runFlow(
     });
     throw err;
   }
+}
+
+async function writeFlowSession(
+  prisma: PrismaClient,
+  conversationId: string,
+  flowId: string,
+  flowRunId: string,
+  waitingAtNodeId: string
+): Promise<void> {
+  const session: FlowSession = { flowId, flowRunId, waitingAtNodeId };
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { flowSession: session as object },
+  });
+}
+
+function buildListInteractive(config: Record<string, unknown>): WaInteractivePayload | null {
+  const buttonText = (config["buttonText"] as string) ?? "Select";
+  const sections = config["sections"] as Array<{ title: string; rows: Array<{ id: string; title: string; description?: string }> }> | undefined;
+  if (!sections?.length) return null;
+  return {
+    type: "list",
+    body: { text: (config["body"] as string) ?? " " },
+    action: { button: buttonText, sections },
+  };
 }

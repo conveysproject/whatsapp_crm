@@ -4,17 +4,19 @@ import { prisma } from "../lib/prisma.js";
 import { getIo } from "../lib/io-ref.js";
 import { evaluateRoutingRules } from "../lib/router.js";
 import { transcribeAudio } from "../lib/whisper.js";
-import { flowQueue } from "../lib/queue.js";
 import { handleBotMessage } from "../lib/bot-runner.js";
-import { getMediaUrl, downloadMediaBytes, markAsRead } from "../lib/whatsapp.js";
+import { getMediaUrl, markAsRead } from "../lib/whatsapp.js";
 import { dispatchWebhook } from "../lib/webhook-dispatch.js";
 import { isFeatureEnabled } from "../lib/plan-limits.js";
+import { dispatchFlowTrigger, cancelNoReplyJobs } from "../lib/trigger-dispatcher.js";
+import { runFlow } from "../lib/flow-runner.js";
+import type { FlowDefinition, FlowSession } from "../lib/flow-runner.js";
 import Expo from "expo-server-sdk";
 
 const expo = new Expo();
 
 function isBotInWindow(startTime: string | undefined, endTime: string | undefined, timezone: string | undefined): boolean {
-  if (!startTime || !endTime) return true; // no restriction configured
+  if (!startTime || !endTime) return true;
   const tz = timezone ?? "UTC";
   try {
     const now = new Date();
@@ -27,10 +29,7 @@ function isBotInWindow(startTime: string | undefined, endTime: string | undefine
     const [eh, em] = endTime.split(":").map(Number);
     const startMinutes = (sh ?? 0) * 60 + (sm ?? 0);
     const endMinutes = (eh ?? 0) * 60 + (em ?? 0);
-    if (startMinutes <= endMinutes) {
-      return currentMinutes >= startMinutes && currentMinutes < endMinutes;
-    }
-    // spans midnight
+    if (startMinutes <= endMinutes) return currentMinutes >= startMinutes && currentMinutes < endMinutes;
     return currentMinutes >= startMinutes || currentMinutes < endMinutes;
   } catch {
     return true;
@@ -50,15 +49,7 @@ export interface InboundMessageJob {
 export const inboundWorker = new Worker<InboundMessageJob>(
   "inbound-messages",
   async (job) => {
-    const {
-      organizationId,
-      whatsappContactPhone,
-      whatsappMessageId,
-      contentType,
-      body,
-      mediaId,
-      timestamp,
-    } = job.data;
+    const { organizationId, whatsappContactPhone, whatsappMessageId, contentType, body, mediaId, timestamp } = job.data;
 
     const org = await prisma.organization.findUnique({
       where: { id: organizationId },
@@ -71,8 +62,10 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       where: { organizationId, whatsappContactId: whatsappContactPhone },
     });
 
+    let isNewConversation = false;
+
     if (!conversation) {
-      // Phones stored as plain digits — WhatsApp sends same format — exact match
+      isNewConversation = true;
       const existingContact = await prisma.contact.findFirst({
         where: { organizationId, phoneNumber: whatsappContactPhone, deletedAt: null },
         select: { id: true },
@@ -109,7 +102,6 @@ export const inboundWorker = new Worker<InboundMessageJob>(
           select: { pushToken: true },
         });
         if (profile?.pushToken && Expo.isExpoPushToken(profile.pushToken)) {
-          // GAP-S38: auto-delete push token on DeviceNotRegistered / invalid token errors
           const tickets = await expo.sendPushNotificationsAsync([{
             to: profile.pushToken,
             title: whatsappContactPhone,
@@ -124,6 +116,14 @@ export const inboundWorker = new Worker<InboundMessageJob>(
           }
         }
       }
+
+      // Trigger new_conversation flows
+      await dispatchFlowTrigger(prisma, organizationId, "new_conversation", {
+        conversationId: conversation.id,
+        organizationId,
+        contactPhone: whatsappContactPhone,
+        messageBody: body ?? "",
+      });
     }
 
     const storedMessage = await prisma.message.create({
@@ -139,14 +139,12 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       },
     });
 
-    // Download media from Meta and store the URL on the message
     if (mediaId && org?.wabaAccessToken) {
       try {
         const { url: metaUrl } = await getMediaUrl(mediaId, org.wabaAccessToken);
-        // Store the Meta URL (short-lived); replace with S3/R2 upload when storage is configured
         await prisma.message.update({ where: { id: storedMessage.id }, data: { mediaUrl: metaUrl } });
       } catch {
-        // Media download failure is non-critical — message still stored
+        // Media download failure is non-critical
       }
     }
 
@@ -159,12 +157,10 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       }
     }
 
-    // Mark the message as read in WhatsApp
     if (whatsappMessageId && org?.phoneNumberId && org?.wabaAccessToken) {
       void markAsRead(org.phoneNumberId, whatsappMessageId, org.wabaAccessToken);
     }
 
-    // GAP-S07: update service window timestamp on every inbound message
     await prisma.conversation.update({
       where: { id: conversation.id },
       data: { lastMessageAt: messageDate, lastInboundAt: messageDate, unreadCount: { increment: 1 } },
@@ -172,6 +168,37 @@ export const inboundWorker = new Worker<InboundMessageJob>(
 
     const refreshed = await prisma.conversation.findFirst({ where: { id: conversation.id } });
 
+    // --- Flow session resume: takes priority over all other processing ---
+    const flowSession = refreshed?.flowSession as FlowSession | null | undefined;
+    if (flowSession?.flowId && flowSession.waitingAtNodeId) {
+      const flow = await prisma.flow.findFirst({ where: { id: flowSession.flowId } });
+      if (flow?.isActive) {
+        // Clear session first so a crash doesn't loop
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { flowSession: null },
+        });
+        await runFlow(prisma, flow.id, flow.flowDefinition as unknown as FlowDefinition, {
+          conversationId: conversation.id,
+          organizationId,
+          contactPhone: whatsappContactPhone,
+          messageBody: body ?? "",
+          resumeFromNodeId: flowSession.waitingAtNodeId,
+        });
+      }
+      // Emit socket event and exit — message consumed by flow session
+      const io = getIo();
+      io?.to(`org:${organizationId}`).emit("new-message", {
+        conversationId: conversation.id,
+        organizationId,
+        direction: "inbound",
+        body,
+        sentAt: messageDate.toISOString(),
+      });
+      return;
+    }
+
+    // --- Bot handling ---
     const botSettings = await prisma.vendorSetting.findMany({
       where: { organizationId, key: { in: ["enable_bot_timing_restrictions", "bot_start_timing", "bot_end_timing", "bot_timing_timezone"] } },
     });
@@ -190,20 +217,26 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       }
     }
 
-    const activeFlows = await prisma.flow.findMany({
-      where: { organizationId, isActive: true, triggerType: "inbound_message" },
-      select: { id: true },
-    });
-    for (const flow of activeFlows) {
-      await flowQueue.add("trigger-flow", {
-        flowId: flow.id,
-        payload: {
-          conversationId: conversation.id,
-          organizationId,
-          contactPhone: whatsappContactPhone,
-          messageBody: body ?? "",
-        },
-      });
+    // --- Flow triggers (skip for new conversations — already fired above) ---
+    if (!isNewConversation) {
+      const dispatchPayload = {
+        conversationId: conversation.id,
+        organizationId,
+        contactPhone: whatsappContactPhone,
+        messageBody: body ?? "",
+        contentType,
+      };
+
+      await dispatchFlowTrigger(prisma, organizationId, "inbound_message", dispatchPayload);
+      await dispatchFlowTrigger(prisma, organizationId, "keyword_match", dispatchPayload);
+
+      if (contentType === "interactive") {
+        await dispatchFlowTrigger(prisma, organizationId, "button_reply", dispatchPayload);
+      }
+
+      // Schedule no-reply check flows (cancel existing first to reset timer)
+      await cancelNoReplyJobs(conversation.id);
+      await dispatchFlowTrigger(prisma, organizationId, "no_reply", dispatchPayload);
     }
 
     const io = getIo();
@@ -217,7 +250,6 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       });
     }
 
-    // Dispatch outbound webhook (plan-gated)
     void dispatchWebhook(organizationId, "message.inbound", {
       messageId: storedMessage.id,
       conversationId: conversation.id,

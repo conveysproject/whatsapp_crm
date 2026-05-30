@@ -9,11 +9,16 @@ import { Button } from "@/components/ui/Button";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 const TRIGGER_TYPES = [
-  { value: "new_conversation", label: "New Conversation" },
-  { value: "keyword_match",    label: "Keyword Match" },
-  { value: "contact_created",  label: "Contact Created" },
-  { value: "tag_added",        label: "Tag Added" },
-  { value: "lifecycle_change", label: "Lifecycle Stage Changed" },
+  { value: "new_conversation",      label: "New Conversation" },
+  { value: "inbound_message",       label: "Incoming Message (any)" },
+  { value: "keyword_match",         label: "Keyword Match" },
+  { value: "button_reply",          label: "Button Reply" },
+  { value: "contact_created",       label: "Contact Created" },
+  { value: "tag_added",             label: "Tag / Label Added" },
+  { value: "lifecycle_change",      label: "Lifecycle Stage Changed" },
+  { value: "conversation_resolved", label: "Conversation Resolved" },
+  { value: "conversation_assigned", label: "Conversation Assigned" },
+  { value: "no_reply",              label: "No Reply (X hours)" },
 ];
 
 export default function NewFlowPage(): JSX.Element {

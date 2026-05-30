@@ -4,6 +4,7 @@ import type { ConversationId } from "@WBMSG/shared";
 import { getIo } from "../lib/io-ref.js";
 import { summarizeConversation } from "../lib/claude.js";
 import { maskPhone } from "../lib/permissions.js";
+import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
 
 export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
   // ── List with status / assignee filters ────────────────────────────────
@@ -110,6 +111,13 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
         },
       });
       getIo()?.to(`org:${organizationId}`).emit("conversation:status", { conversationId: conversation.id, status });
+      if (status === "resolved") {
+        void dispatchFlowTrigger(fastify.prisma, organizationId, "conversation_resolved", {
+          organizationId,
+          conversationId: conversation.id,
+          contactPhone: conversation.whatsappContactId ?? undefined,
+        });
+      }
       return reply.send({ data: updated });
     }
   );
@@ -133,6 +141,13 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
         conversationId: conversation.id,
         assignedTo: request.body.assignedTo,
       });
+      if (request.body.assignedTo) {
+        void dispatchFlowTrigger(fastify.prisma, organizationId, "conversation_assigned", {
+          organizationId,
+          conversationId: conversation.id,
+          contactPhone: conversation.whatsappContactId ?? undefined,
+        });
+      }
       return reply.send({ data: updated });
     }
   );

@@ -4,6 +4,7 @@ import type { WaInteractivePayload } from "../lib/whatsapp.js";
 import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
 import type { ConversationId } from "@WBMSG/shared";
 import { canAccess } from "../lib/permissions.js";
+import { cancelNoReplyJobs } from "../lib/trigger-dispatcher.js";
 
 type SendMessageBody =
   | { contentType?: "text"; text: string }
@@ -248,6 +249,9 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
         }
         storedBody = mediaBody.caption ?? null;
       }
+
+      // Cancel pending no-reply checks — agent is replying
+      void cancelNoReplyJobs(conversation.id);
 
       // Create record with "sending" status before WA call for stuck-message recovery
       const draft = await fastify.prisma.message.create({

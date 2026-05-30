@@ -21,11 +21,17 @@ const NODE_META: Record<string, { icon: string; label: string }> = {
   send_buttons:         { icon: "🔘", label: "Send Buttons" },
   send_interactive:     { icon: "🔘", label: "Send Buttons" },
   send_list:            { icon: "📋", label: "Send List" },
+  send_template:        { icon: "📨", label: "Send Template" },
+  cta_url:              { icon: "🔗", label: "CTA URL Button" },
   ask_question:         { icon: "❓", label: "Ask Question" },
   condition:            { icon: "🔀", label: "Condition" },
   wait:                 { icon: "⏱️",  label: "Wait / Delay" },
   add_label:            { icon: "🏷️",  label: "Add Label" },
   add_tag:              { icon: "🏷️",  label: "Add Label" },
+  remove_label:         { icon: "🗑️",  label: "Remove Label" },
+  opt_in:               { icon: "✔️",  label: "Opt In (Marketing)" },
+  opt_out:              { icon: "🚫", label: "Opt Out (Marketing)" },
+  toggle_bot:           { icon: "🤖", label: "Toggle Bot" },
   update_stage:         { icon: "📈", label: "Update Stage" },
   assign_agent:         { icon: "👤", label: "Assign Agent" },
   assign_conversation:  { icon: "👤", label: "Assign Agent" },
@@ -34,12 +40,16 @@ const NODE_META: Record<string, { icon: string; label: string }> = {
 };
 
 const TRIGGER_LABELS: Record<string, string> = {
-  new_conversation: "New Conversation Starts",
-  keyword_match:    "Keyword Matched",
-  contact_created:  "Contact Created",
-  tag_added:        "Label Added",
-  lifecycle_change: "Stage Changed",
-  inbound_message:  "Incoming Message",
+  new_conversation:      "New Conversation Starts",
+  inbound_message:       "Incoming Message (any)",
+  keyword_match:         "Keyword Matched",
+  button_reply:          "Button Reply",
+  contact_created:       "Contact Created",
+  tag_added:             "Label Added",
+  lifecycle_change:      "Stage Changed",
+  conversation_resolved: "Conversation Resolved",
+  conversation_assigned: "Conversation Assigned",
+  no_reply:              "No Reply (X hours)",
 };
 
 const VARS = ["{{first_name}}", "{{last_name}}", "{{phone}}"];
@@ -166,13 +176,60 @@ export function FlowConfigPanel({ node, onUpdate, onDelete, onClose }: FlowConfi
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
 
         {isTrigger && (
-          <Field>
-            <Label>Trigger Type</Label>
-            <p className="text-sm text-gray-900">
-              {TRIGGER_LABELS[(node.data.triggerType as string) ?? ""] ?? (node.data.triggerType as string)}
-            </p>
-            <p className="text-xs text-gray-400">Trigger type is set when the flow is created.</p>
-          </Field>
+          <>
+            <Field>
+              <Label>Trigger Type</Label>
+              <p className="text-sm text-gray-900">
+                {TRIGGER_LABELS[(node.data.triggerType as string) ?? ""] ?? (node.data.triggerType as string)}
+              </p>
+              <p className="text-xs text-gray-400">Trigger type is set when the flow is created.</p>
+            </Field>
+
+            {(node.data.triggerType as string) === "keyword_match" && (
+              <>
+                <Field>
+                  <Label>Match Type</Label>
+                  <Select
+                    value={str("matchType") || "contains"}
+                    onChange={(v) => set("matchType", v)}
+                    options={[
+                      { value: "contains",      label: "Contains" },
+                      { value: "exact",         label: "Exactly" },
+                      { value: "starts_with",   label: "Starts with" },
+                      { value: "ends_with",     label: "Ends with" },
+                      { value: "contains_word", label: "Contains word" },
+                    ]}
+                  />
+                </Field>
+                <Field>
+                  <Label>Keyword</Label>
+                  <TextInput value={str("keyword")} onChange={(v) => set("keyword", v)} placeholder="e.g. hello" />
+                </Field>
+              </>
+            )}
+
+            {(node.data.triggerType as string) === "button_reply" && (
+              <Field>
+                <Label>Button Text (exact match)</Label>
+                <TextInput value={str("buttonText")} onChange={(v) => set("buttonText", v)} placeholder="e.g. Get Started" />
+                <p className="text-xs text-gray-400">Leave empty to match any button reply.</p>
+              </Field>
+            )}
+
+            {(node.data.triggerType as string) === "no_reply" && (
+              <Field>
+                <Label>Hours without reply</Label>
+                <input
+                  type="number"
+                  min={1}
+                  value={num("hours", 24)}
+                  onChange={(e) => set("hours", parseInt(e.target.value, 10) || 1)}
+                  className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                <p className="text-xs text-gray-400">Flow fires if no outbound message is sent within this many hours.</p>
+              </Field>
+            )}
+          </>
         )}
 
         {(nodeType === "send_text" || nodeType === "send_message") && (
@@ -233,6 +290,17 @@ export function FlowConfigPanel({ node, onUpdate, onDelete, onClose }: FlowConfi
                 <button onClick={addBtn} className="text-xs text-brand-600 hover:text-brand-700 font-medium">+ Add Button</button>
               )}
             </Field>
+            <Field>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={(config["waitForReply"] as boolean | undefined) !== false}
+                  onChange={(e) => set("waitForReply", e.target.checked)}
+                  className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span className="text-sm text-gray-700">Wait for button reply before continuing</span>
+              </label>
+            </Field>
           </>
         )}
 
@@ -257,6 +325,17 @@ export function FlowConfigPanel({ node, onUpdate, onDelete, onClose }: FlowConfi
                 <button onClick={addItem} className="text-xs text-brand-600 hover:text-brand-700 font-medium">+ Add Item</button>
               )}
             </Field>
+            <Field>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={(config["waitForReply"] as boolean | undefined) !== false}
+                  onChange={(e) => set("waitForReply", e.target.checked)}
+                  className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span className="text-sm text-gray-700">Wait for list selection before continuing</span>
+              </label>
+            </Field>
           </>
         )}
 
@@ -267,10 +346,91 @@ export function FlowConfigPanel({ node, onUpdate, onDelete, onClose }: FlowConfi
               <Textarea value={str("question")} onChange={(v) => set("question", v)} />
             </Field>
             <Field>
-              <Label>Save reply to variable</Label>
+              <Label>Save reply to variable (optional)</Label>
               <TextInput value={str("saveToVariable")} onChange={(v) => set("saveToVariable", v)} placeholder="e.g. user_reply" />
             </Field>
+            <Field>
+              <Label>Save reply to contact field (optional)</Label>
+              <Select
+                value={str("saveToField") || ""}
+                onChange={(v) => set("saveToField", v)}
+                options={[
+                  { value: "",          label: "— none —" },
+                  { value: "firstName", label: "First Name" },
+                  { value: "lastName",  label: "Last Name" },
+                  { value: "email",     label: "Email" },
+                  { value: "notes",     label: "Notes" },
+                ]}
+              />
+            </Field>
           </>
+        )}
+
+        {nodeType === "send_template" && (
+          <>
+            <Field>
+              <Label>Template Name</Label>
+              <TextInput value={str("templateName")} onChange={(v) => set("templateName", v)} placeholder="e.g. welcome_message" />
+            </Field>
+            <Field>
+              <Label>Language Code</Label>
+              <TextInput value={str("languageCode") || "en"} onChange={(v) => set("languageCode", v)} placeholder="e.g. en" />
+            </Field>
+            <p className="text-xs text-gray-400">Template must be approved in Meta Business Manager before use.</p>
+          </>
+        )}
+
+        {nodeType === "cta_url" && (
+          <>
+            <Field>
+              <Label>Body Text</Label>
+              <Textarea value={str("body")} onChange={(v) => set("body", v)} />
+            </Field>
+            <Field>
+              <Label>Button Text</Label>
+              <TextInput value={str("buttonText")} onChange={(v) => set("buttonText", v)} placeholder="e.g. Visit Website" />
+            </Field>
+            <Field>
+              <Label>URL</Label>
+              <TextInput value={str("url")} onChange={(v) => set("url", v)} placeholder="https://example.com" />
+            </Field>
+          </>
+        )}
+
+        {nodeType === "remove_label" && (
+          <Field>
+            <Label>Label Name</Label>
+            <TextInput value={str("tag")} onChange={(v) => set("tag", v)} placeholder="e.g. interested" />
+          </Field>
+        )}
+
+        {nodeType === "opt_in" && (
+          <p className="text-sm text-gray-500">Marks the contact as opted in to marketing messages. No configuration needed.</p>
+        )}
+
+        {nodeType === "opt_out" && (
+          <p className="text-sm text-gray-500">Marks the contact as opted out of marketing messages. No configuration needed.</p>
+        )}
+
+        {nodeType === "toggle_bot" && (
+          <Field>
+            <Label>Bot State</Label>
+            <div className="flex flex-col gap-2">
+              {[{ value: "enable", label: "Enable bot (resume auto-replies)" }, { value: "disable", label: "Disable bot (pause auto-replies)" }].map((opt) => (
+                <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="botState"
+                    value={opt.value}
+                    checked={(str("botState") || "enable") === opt.value}
+                    onChange={() => set("botState", opt.value)}
+                    className="text-brand-600 focus:ring-brand-500"
+                  />
+                  <span className="text-sm text-gray-700">{opt.label}</span>
+                </label>
+              ))}
+            </div>
+          </Field>
         )}
 
         {nodeType === "condition" && (

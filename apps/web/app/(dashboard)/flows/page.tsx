@@ -28,12 +28,16 @@ async function getFlows(token: string): Promise<Flow[]> {
 }
 
 const TRIGGER_LABELS: Record<string, string> = {
-  new_conversation: "New Conversation",
-  keyword_match:    "Keyword Match",
-  contact_created:  "Contact Created",
-  tag_added:        "Label Added",
-  lifecycle_change: "Stage Changed",
-  inbound_message:  "Incoming Message",
+  new_conversation:      "New Conversation",
+  inbound_message:       "Incoming Message",
+  keyword_match:         "Keyword Match",
+  button_reply:          "Button Reply",
+  contact_created:       "Contact Created",
+  tag_added:             "Label Added",
+  lifecycle_change:      "Stage Changed",
+  conversation_resolved: "Conversation Resolved",
+  conversation_assigned: "Conversation Assigned",
+  no_reply:              "No Reply",
 };
 
 export default async function FlowsPage(): Promise<JSX.Element> {

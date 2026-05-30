@@ -30,3 +30,13 @@ export const conversationSummaryQueue = new Queue("conversation-summary", {
   connection: redisConnection,
   defaultJobOptions: { attempts: 2, backoff: { type: "exponential", delay: 5000 } },
 });
+
+export const noReplyQueue = new Queue("no-reply-checks", {
+  connection: redisConnection,
+  defaultJobOptions: { attempts: 2, backoff: { type: "exponential", delay: 5000 } },
+});
+
+export const resumeFlowQueue = new Queue("resume-flow", {
+  connection: redisConnection,
+  defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 2000 } },
+});

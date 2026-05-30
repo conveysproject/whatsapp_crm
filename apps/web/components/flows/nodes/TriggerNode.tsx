@@ -6,16 +6,43 @@ import { Handle, Position, type NodeProps } from "reactflow";
 interface TriggerNodeData {
   triggerType: string;
   label: string;
+  config?: Record<string, unknown>;
 }
 
 const TRIGGER_LABELS: Record<string, string> = {
-  new_conversation: "New Conversation Starts",
-  keyword_match:    "Keyword Matched",
-  contact_created:  "Contact Created",
-  tag_added:        "Label Added",
-  lifecycle_change: "Stage Changed",
-  inbound_message:  "Incoming Message",
+  new_conversation:      "New Conversation Starts",
+  inbound_message:       "Incoming Message",
+  keyword_match:         "Keyword Matched",
+  button_reply:          "Button Reply",
+  contact_created:       "Contact Created",
+  tag_added:             "Label Added",
+  lifecycle_change:      "Stage Changed",
+  conversation_resolved: "Conversation Resolved",
+  conversation_assigned: "Conversation Assigned",
+  no_reply:              "No Reply",
 };
+
+const MATCH_TYPE_LABELS: Record<string, string> = {
+  exact:         "Exactly",
+  contains:      "Contains",
+  starts_with:   "Starts with",
+  ends_with:     "Ends with",
+  contains_word: "Contains word",
+};
+
+function TriggerDetail({ triggerType, config }: { triggerType: string; config?: Record<string, unknown> }): JSX.Element | null {
+  if (triggerType === "keyword_match" && config?.["keyword"]) {
+    const matchLabel = MATCH_TYPE_LABELS[(config["matchType"] as string) ?? "contains"] ?? "Contains";
+    return <p className="text-[9px] text-gray-400 mt-0.5 truncate">{matchLabel}: &ldquo;{String(config["keyword"])}&rdquo;</p>;
+  }
+  if (triggerType === "button_reply" && config?.["buttonText"]) {
+    return <p className="text-[9px] text-gray-400 mt-0.5 truncate">Button: &ldquo;{String(config["buttonText"])}&rdquo;</p>;
+  }
+  if (triggerType === "no_reply" && config?.["hours"]) {
+    return <p className="text-[9px] text-gray-400 mt-0.5">After {String(config["hours"])}h no reply</p>;
+  }
+  return null;
+}
 
 export function TriggerNode({ data, selected }: NodeProps<TriggerNodeData>): JSX.Element {
   return (
@@ -33,6 +60,7 @@ export function TriggerNode({ data, selected }: NodeProps<TriggerNodeData>): JSX
         <p className="text-[11px] font-medium text-gray-900 leading-tight">
           {TRIGGER_LABELS[data.triggerType] ?? data.triggerType.replace(/_/g, " ")}
         </p>
+        <TriggerDetail triggerType={data.triggerType} config={data.config} />
       </div>
       <Handle
         type="source"

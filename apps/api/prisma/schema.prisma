@@ -237,6 +237,7 @@ model Conversation {
   lastInboundAt     DateTime?          @map("last_inbound_at")
   unreadCount       Int                @default(0) @map("unread_count")
   closedAt          DateTime?          @map("closed_at")
+  flowSession       Json?              @map("flow_session")
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
   messages          Message[]
@@ -715,6 +716,7 @@ model FlowRun {
   conversationId String?   @map("conversation_id")
   status         String    @default("completed")
   stepsExecuted  Int       @default(0) @map("steps_executed")
+  currentNodeId  String?   @map("current_node_id")
   error          String?
   startedAt      DateTime  @default(now()) @map("started_at")
   completedAt    DateTime? @map("completed_at")

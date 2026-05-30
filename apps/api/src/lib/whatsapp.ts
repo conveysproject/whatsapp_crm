@@ -80,7 +80,7 @@ export async function sendMediaMessage(
 }
 
 export interface WaInteractivePayload {
-  type: "button" | "list";
+  type: "button" | "list" | "cta_url";
   header?: { type: "text"; text: string };
   body: { text: string };
   footer?: { text: string };
