@@ -157,7 +157,9 @@ export async function runFlow(
 
         case "send_interactive":
         case "send_buttons": {
-          const rawInteractive = node.config["interactive"] as WaInteractivePayload | undefined;
+          // Builder stores body+buttons separately; fall back to building the payload if no pre-built interactive
+          const rawInteractive = (node.config["interactive"] as WaInteractivePayload | undefined)
+            ?? buildButtonsInteractive(node.config);
           const interactive = rawInteractive?.body?.text
             ? { ...rawInteractive, body: { ...rawInteractive.body, text: substituteVariables(rawInteractive.body.text, contact) } }
             : rawInteractive;
@@ -232,6 +234,25 @@ export async function runFlow(
         }
 
         case "ask_question": {
+          const isResuming = payload.resumeFromNodeId === node.id;
+          if (isResuming) {
+            // Flow resumed here — contact just replied. Save reply to contact field if configured.
+            const saveToField = node.config["saveToField"] as string | undefined;
+            const reply = payload.messageBody ?? "";
+            if (saveToField && reply && payload.contactPhone) {
+              const allowedFields: Record<string, string> = {
+                firstName: "firstName", lastName: "lastName", email: "email", notes: "notes",
+              };
+              const field = allowedFields[saveToField];
+              if (field) {
+                await prisma.contact.updateMany({
+                  where: { organizationId: payload.organizationId, phoneNumber: payload.contactPhone },
+                  data: { [field]: reply },
+                });
+              }
+            }
+            break;
+          }
           const question = substituteVariables((node.config["question"] as string) ?? "", contact);
           if (payload.contactPhone && question) {
             const { messageId } = await sendTextMessage(phoneNumberId, payload.contactPhone, question, accessToken);
@@ -344,7 +365,7 @@ export async function runFlow(
         }
 
         case "toggle_bot": {
-          const action = (node.config["action"] as string) ?? "disable";
+          const action = (node.config["botState"] as string) ?? (node.config["action"] as string) ?? "disable";
           if (payload.contactPhone) {
             await prisma.contact.updateMany({
               where: { organizationId: payload.organizationId, phoneNumber: payload.contactPhone },
@@ -421,13 +442,42 @@ async function writeFlowSession(
   });
 }
 
-function buildListInteractive(config: Record<string, unknown>): WaInteractivePayload | null {
-  const buttonText = (config["buttonText"] as string) ?? "Select";
-  const sections = config["sections"] as Array<{ title: string; rows: Array<{ id: string; title: string; description?: string }> }> | undefined;
-  if (!sections?.length) return null;
+function buildButtonsInteractive(config: Record<string, unknown>): WaInteractivePayload | null {
+  const body = (config["body"] as string | undefined) ?? "";
+  const buttons = config["buttons"] as Array<{ id: string; text: string }> | undefined;
+  if (!body || !buttons?.length) return null;
   return {
-    type: "list",
-    body: { text: (config["body"] as string) ?? " " },
-    action: { button: buttonText, sections },
+    type: "button",
+    body: { text: body },
+    action: {
+      buttons: buttons.map((btn) => ({ type: "reply", reply: { id: btn.id, title: btn.text } })),
+    },
   };
+}
+
+function buildListInteractive(config: Record<string, unknown>): WaInteractivePayload | null {
+  const bodyText = (config["body"] as string | undefined) ?? " ";
+  // Legacy format: sections array
+  const sections = config["sections"] as Array<{ title: string; rows: Array<{ id: string; title: string; description?: string }> }> | undefined;
+  if (sections?.length) {
+    const buttonText = (config["buttonText"] as string) ?? "Select";
+    return { type: "list", body: { text: bodyText }, action: { button: buttonText, sections } };
+  }
+  // Builder format: items array + header as button label
+  const items = config["items"] as Array<{ title: string; description?: string }> | undefined;
+  if (items?.length) {
+    const buttonText = (config["header"] as string) ?? "Select";
+    return {
+      type: "list",
+      body: { text: bodyText },
+      action: {
+        button: buttonText,
+        sections: [{
+          title: "",
+          rows: items.map((item, i) => ({ id: `row_${i}`, title: item.title, description: item.description ?? undefined })),
+        }],
+      },
+    };
+  }
+  return null;
 }
