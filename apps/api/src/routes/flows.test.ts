@@ -9,7 +9,17 @@ vi.mock("../lib/queue.js", () => ({
 }));
 
 const mockPrisma = {
-  flow: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), count: vi.fn().mockResolvedValue(0) },
+  flow: {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    count: vi.fn().mockResolvedValue(0),
+  },
+  flowRun: {
+    findMany: vi.fn(),
+  },
   vendorSetting: { findFirst: vi.fn().mockResolvedValue(null) },
 };
 const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
@@ -43,5 +53,74 @@ describe("POST /v1/flows", () => {
     });
     expect(res.statusCode).toBe(201);
     expect(res.json<{ data: { isActive: boolean } }>().data.isActive).toBe(false);
+  });
+});
+
+describe("POST /v1/flows/:id/duplicate", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns 404 when flow not found", async () => {
+    mockPrisma.flow.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "POST", url: "/v1/flows/missing/duplicate" });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("creates a copy with name prefixed and isActive false", async () => {
+    const original = {
+      id: "flow-1",
+      organizationId: "org-1",
+      name: "My Flow",
+      triggerType: "new_conversation",
+      isActive: true,
+      flowDefinition: { startNodeId: "n1", nodes: [] },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const copy = { ...original, id: "flow-2", name: "Copy of My Flow", isActive: false };
+    mockPrisma.flow.findFirst.mockResolvedValue(original);
+    mockPrisma.flow.create.mockResolvedValue(copy);
+
+    const res = await app.inject({ method: "POST", url: "/v1/flows/flow-1/duplicate" });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ data: { name: string; isActive: boolean } }>().data.name).toBe("Copy of My Flow");
+    expect(res.json<{ data: { name: string; isActive: boolean } }>().data.isActive).toBe(false);
+  });
+});
+
+describe("GET /v1/flows/:id/runs", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns 404 when flow not found", async () => {
+    mockPrisma.flow.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "GET", url: "/v1/flows/missing/runs" });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns paginated run list", async () => {
+    mockPrisma.flow.findFirst.mockResolvedValue({ id: "flow-1" });
+    mockPrisma.flowRun.findMany.mockResolvedValue([
+      {
+        id: "run-1",
+        flowId: "flow-1",
+        organizationId: "org-1",
+        contactPhone: "919900000001",
+        conversationId: "conv-1",
+        status: "completed",
+        stepsExecuted: 3,
+        error: null,
+        startedAt: new Date(),
+        completedAt: new Date(),
+      },
+    ]);
+
+    const res = await app.inject({ method: "GET", url: "/v1/flows/flow-1/runs" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: unknown[] }>().data).toHaveLength(1);
   });
 });
