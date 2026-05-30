@@ -24,7 +24,20 @@ describe("GET /v1/deals", () => {
 
   it("returns deals for org scoped by optional pipelineId", async () => {
     mockPrisma.deal.findMany.mockResolvedValue([
-      { id: "d-1", organizationId: "org-1", title: "Deal A", stage: "new", pipelineId: "p-1" },
+      {
+        id: "deal-1",
+        organizationId: "org-1",
+        title: "Big Contract",
+        value: 5000,
+        stage: "new",
+        pipelineId: "pipe-1",
+        contactId: "contact-1",
+        assignedTo: null,
+        notes: null,
+        contact: { id: "contact-1", firstName: "Alice", lastName: "Smith", phone: "+14155552671" },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
     ]);
     const res = await app.inject({ method: "GET", url: "/v1/deals?pipelineId=p-1" });
     expect(res.statusCode).toBe(200);
@@ -51,5 +64,27 @@ describe("PATCH /v1/deals/:id/stage", () => {
     expect(mockPrisma.deal.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ stage: "won" }) })
     );
+  });
+});
+
+describe("PATCH /v1/deals/:id with notes", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("updates deal notes", async () => {
+    mockPrisma.deal.findFirst.mockResolvedValue({ id: "deal-1", organizationId: "org-1" });
+    mockPrisma.deal.update.mockResolvedValue({
+      id: "deal-1",
+      title: "Big Contract",
+      notes: "Called on Monday, follow up Thursday",
+    });
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/deals/deal-1",
+      payload: { notes: "Called on Monday, follow up Thursday" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { notes: string } }>().data.notes).toBe("Called on Monday, follow up Thursday");
   });
 });

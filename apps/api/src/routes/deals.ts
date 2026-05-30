@@ -8,6 +8,7 @@ interface DealBody {
   assignedTo?: string;
   value?: number;
   stage?: string;
+  notes?: string;
 }
 
 export const dealsRouter: FastifyPluginAsync = async (fastify) => {
@@ -21,6 +22,11 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
     const deals = await fastify.prisma.deal.findMany({
       where,
       orderBy: { createdAt: "desc" },
+      include: {
+        contact: {
+          select: { id: true, firstName: true, lastName: true, phone: true },
+        },
+      },
     });
     return reply.send({ data: deals });
   });
@@ -29,6 +35,11 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId } = request.auth;
     const deal = await fastify.prisma.deal.findFirst({
       where: { id: request.params.id, organizationId },
+      include: {
+        contact: {
+          select: { id: true, firstName: true, lastName: true, phone: true },
+        },
+      },
     });
     if (!deal) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Deal not found" } });
@@ -47,6 +58,7 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
         assignedTo: request.body.assignedTo ?? null,
         value: request.body.value != null ? request.body.value : null,
         stage: request.body.stage ?? "new",
+        notes: request.body.notes ?? null,
       },
     });
     return reply.status(201).send({ data: deal });
@@ -68,6 +80,7 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
         assignedTo: request.body.assignedTo,
         value: request.body.value,
         stage: request.body.stage,
+        notes: request.body.notes,
       },
     });
     return reply.send({ data: deal });
