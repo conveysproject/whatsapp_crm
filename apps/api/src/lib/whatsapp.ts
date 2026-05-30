@@ -54,7 +54,11 @@ export async function sendMediaMessage(
     : contentType === "audio" ? "audio"
     : "image";
 
-  const mediaObject: Record<string, string | undefined> = { id: mediaId };
+  // Meta requires `link` for public URLs and `id` for uploaded media IDs
+  const mediaObject: Record<string, string | undefined> =
+    mediaId.startsWith("http://") || mediaId.startsWith("https://")
+      ? { link: mediaId }
+      : { id: mediaId };
   if (caption) mediaObject.caption = caption;
 
   const res = await fetch(`${WA_BASE}/${phoneNumberId}/messages`, {
