@@ -36,7 +36,7 @@ export function ActionNode({ data, selected }: NodeProps<ActionNodeData>): JSX.E
   return (
     <div
       className={[
-        "w-[200px] rounded-lg bg-white shadow-sm transition-all",
+        "w-[160px] rounded-md bg-white shadow-sm transition-all",
         "border border-gray-200",
         selected ? "ring-2 ring-brand-500 ring-offset-1" : "",
       ].join(" ")}
@@ -45,19 +45,19 @@ export function ActionNode({ data, selected }: NodeProps<ActionNodeData>): JSX.E
       <Handle
         type="target"
         position={Position.Top}
-        className="!w-2.5 !h-2.5 !bg-gray-300 !border-2 !border-white"
+        className="!w-2 !h-2 !bg-gray-300 !border-2 !border-white"
       />
-      <div className="px-3 pt-2 pb-0.5 flex items-center gap-1.5">
-        <span className="text-[11px] leading-none">{meta.icon}</span>
-        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{meta.label}</span>
+      <div className="px-2.5 pt-1.5 pb-0.5 flex items-center gap-1">
+        <span className="text-[10px] leading-none">{meta.icon}</span>
+        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{meta.label}</span>
       </div>
-      <div className="px-3 pb-2">
-        <p className="text-xs text-gray-700 line-clamp-2 leading-tight min-h-[1rem]">{data.label}</p>
+      <div className="px-2.5 pb-1.5">
+        <p className="text-[11px] text-gray-700 line-clamp-2 leading-tight">{data.label}</p>
       </div>
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!w-2.5 !h-2.5 !bg-gray-300 !border-2 !border-white"
+        className="!w-2 !h-2 !bg-gray-300 !border-2 !border-white"
       />
     </div>
   );

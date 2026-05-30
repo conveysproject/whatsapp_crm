@@ -21,23 +21,23 @@ export function TriggerNode({ data, selected }: NodeProps<TriggerNodeData>): JSX
   return (
     <div
       className={[
-        "w-[200px] rounded-lg overflow-hidden shadow-sm transition-all",
+        "w-[160px] rounded-md overflow-hidden shadow-sm transition-all",
         selected ? "ring-2 ring-brand-500 ring-offset-1" : "",
       ].join(" ")}
     >
-      <div className="bg-brand-600 px-3 py-1.5 flex items-center gap-1.5">
-        <span className="text-[11px] leading-none">⚡</span>
-        <span className="text-[10px] font-bold text-white uppercase tracking-widest">Trigger</span>
+      <div className="bg-brand-600 px-2.5 py-1 flex items-center gap-1">
+        <span className="text-[10px] leading-none">⚡</span>
+        <span className="text-[9px] font-bold text-white uppercase tracking-widest">Trigger</span>
       </div>
-      <div className="bg-white px-3 py-2 border border-brand-200 border-t-0 rounded-b-lg">
-        <p className="text-xs font-medium text-gray-900 leading-tight">
+      <div className="bg-white px-2.5 py-1.5 border border-brand-200 border-t-0 rounded-b-md">
+        <p className="text-[11px] font-medium text-gray-900 leading-tight">
           {TRIGGER_LABELS[data.triggerType] ?? data.triggerType.replace(/_/g, " ")}
         </p>
       </div>
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!w-2.5 !h-2.5 !bg-brand-500 !border-2 !border-white"
+        className="!w-2 !h-2 !bg-brand-500 !border-2 !border-white"
       />
     </div>
   );
