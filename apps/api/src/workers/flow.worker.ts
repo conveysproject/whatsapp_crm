@@ -14,7 +14,7 @@ export const flowWorker = new Worker<FlowJob>(
     const { flowId, payload } = job.data;
     const flow = await prisma.flow.findFirst({ where: { id: flowId } });
     if (!flow || !flow.isActive) return;
-    await runFlow(prisma, flow.flowDefinition as unknown as FlowDefinition, payload);
+    await runFlow(prisma, flowId, flow.flowDefinition as unknown as FlowDefinition, payload);
   },
   { connection: redisConnection }
 );
