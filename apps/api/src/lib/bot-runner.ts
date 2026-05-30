@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { sendTextMessage } from "./whatsapp.js";
+import { recordOutbound } from "./record-outbound.js";
 import type { FlowDefinition, FlowNode } from "./flow-runner.js";
 
 // GAP-S18: substitute WhatsApp bot tokens — built-in fields + all custom fields
@@ -15,18 +16,19 @@ function substituteTokens(
 ): string {
   if (!contact) return text;
   let result = text
-    .replace(/\{first_name\}/gi, contact.firstName ?? "")
-    .replace(/\{last_name\}/gi, contact.lastName ?? "")
-    .replace(/\{full_name\}/gi, contact.name ?? `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim())
-    .replace(/\{phone_number\}/gi, contact.phoneNumber)
-    .replace(/\{email\}/gi, contact.email ?? "")
-    .replace(/\{country\}/gi, contact.countryCode ?? "")
-    .replace(/\{language_code\}/gi, contact.languageCode ?? "")
-    .replace(/\{assigned_team_member\}/gi, assignedTeamMember ?? "");
-  // Substitute all custom fields: {field_key} → value
+    .replace(/\{\{first_name\}\}/gi, contact.firstName ?? "")
+    .replace(/\{\{last_name\}\}/gi, contact.lastName ?? "")
+    .replace(/\{\{full_name\}\}/gi, contact.name ?? `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim())
+    .replace(/\{\{phone\}\}/gi, contact.phoneNumber)
+    .replace(/\{\{phone_number\}\}/gi, contact.phoneNumber)
+    .replace(/\{\{email\}\}/gi, contact.email ?? "")
+    .replace(/\{\{country\}\}/gi, contact.countryCode ?? "")
+    .replace(/\{\{language_code\}\}/gi, contact.languageCode ?? "")
+    .replace(/\{\{assigned_team_member\}\}/gi, assignedTeamMember ?? "");
+  // Substitute all custom fields: {{field_key}} → value
   if (contact.customFields) {
     for (const [key, value] of Object.entries(contact.customFields)) {
-      result = result.replace(new RegExp(`\\{${key}\\}`, "gi"), String(value ?? ""));
+      result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "gi"), String(value ?? ""));
     }
   }
   return result;
@@ -83,12 +85,13 @@ export async function handleBotMessage(
     const rawText = (node.config["text"] as string) ?? "";
     const text = substituteTokens(rawText, contact ? { ...contact, customFields: contact.customFields as Record<string, unknown> | undefined } : null, assignedTeamMember);
     if (text && contactPhone) {
-      await sendTextMessage(
+      const { messageId } = await sendTextMessage(
         process.env["WA_PHONE_NUMBER_ID"] ?? "",
         contactPhone,
         text,
         process.env["WA_ACCESS_TOKEN"] ?? ""
       );
+      await recordOutbound(prisma, { conversationId, organizationId, contentType: "text", body: text, whatsappMessageId: messageId });
     }
     await prisma.botSession.update({
       where: { id: session.id },
@@ -98,12 +101,14 @@ export async function handleBotMessage(
     await prisma.botSession.update({ where: { id: session.id }, data: { isEscalated: true } });
     await prisma.conversation.update({ where: { id: conversationId }, data: { status: "open" } });
     if (contactPhone) {
-      await sendTextMessage(
+      const escalationText = "You're now connected with a live agent. Please hold on.";
+      const { messageId } = await sendTextMessage(
         process.env["WA_PHONE_NUMBER_ID"] ?? "",
         contactPhone,
-        "You're now connected with a live agent. Please hold on.",
+        escalationText,
         process.env["WA_ACCESS_TOKEN"] ?? ""
       );
+      await recordOutbound(prisma, { conversationId, organizationId, contentType: "text", body: escalationText, whatsappMessageId: messageId });
     }
   }
 

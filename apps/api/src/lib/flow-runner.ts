@@ -8,6 +8,22 @@ import {
   type WaTemplateComponent,
 } from "./whatsapp.js";
 import { resumeFlowQueue } from "./queue.js";
+import { recordOutbound } from "./record-outbound.js";
+
+function substituteVariables(
+  text: string,
+  contact: { firstName: string | null; lastName: string | null; name: string | null; phoneNumber: string; email: string | null } | null
+): string {
+  if (!contact) return text;
+  const fullName = contact.name ?? `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim();
+  return text
+    .replace(/\{\{first_name\}\}/gi, contact.firstName ?? "")
+    .replace(/\{\{last_name\}\}/gi, contact.lastName ?? "")
+    .replace(/\{\{full_name\}\}/gi, fullName)
+    .replace(/\{\{name\}\}/gi, fullName)
+    .replace(/\{\{phone\}\}/gi, contact.phoneNumber)
+    .replace(/\{\{email\}\}/gi, contact.email ?? "");
+}
 
 export type TriggerType =
   | "inbound_message"
@@ -91,6 +107,13 @@ export async function runFlow(
   const phoneNumberId = org?.phoneNumberId ?? process.env["WA_PHONE_NUMBER_ID"] ?? "";
   const accessToken = org?.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
 
+  const contact = payload.contactPhone
+    ? await prisma.contact.findFirst({
+        where: { organizationId: payload.organizationId, phoneNumber: payload.contactPhone },
+        select: { firstName: true, lastName: true, name: true, phoneNumber: true, email: true },
+      })
+    : null;
+
   const startId = payload.resumeFromNodeId ?? flowDefinition.startNodeId;
   let currentNodeId: string | null = startId;
   let stepsExecuted = 0;
@@ -105,9 +128,12 @@ export async function runFlow(
       switch (node.type) {
         case "send_message":
         case "send_text": {
-          const text = (node.config["text"] as string) ?? "";
+          const text = substituteVariables((node.config["text"] as string) ?? "", contact);
           if (payload.contactPhone && text) {
-            await sendTextMessage(phoneNumberId, payload.contactPhone, text, accessToken);
+            const { messageId } = await sendTextMessage(phoneNumberId, payload.contactPhone, text, accessToken);
+            if (payload.conversationId) {
+              await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "text", body: text, whatsappMessageId: messageId });
+            }
           }
           break;
         }
@@ -118,18 +144,28 @@ export async function runFlow(
         case "send_document": {
           const mediaId = (node.config["mediaId"] as string) ?? (node.config["url"] as string) ?? "";
           const contentType = (node.config["contentType"] as string) ?? node.type.replace("send_", "") ?? "image";
-          const caption = node.config["caption"] as string | undefined;
+          const rawCaption = node.config["caption"] as string | undefined;
+          const caption = rawCaption ? substituteVariables(rawCaption, contact) : undefined;
           if (payload.contactPhone && mediaId) {
-            await sendMediaMessage(phoneNumberId, payload.contactPhone, contentType, mediaId, caption, accessToken);
+            const { messageId } = await sendMediaMessage(phoneNumberId, payload.contactPhone, contentType, mediaId, caption, accessToken);
+            if (payload.conversationId) {
+              await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType, body: caption ?? null, mediaUrl: mediaId, whatsappMessageId: messageId });
+            }
           }
           break;
         }
 
         case "send_interactive":
         case "send_buttons": {
-          const interactive = node.config["interactive"] as WaInteractivePayload | undefined;
+          const rawInteractive = node.config["interactive"] as WaInteractivePayload | undefined;
+          const interactive = rawInteractive?.body?.text
+            ? { ...rawInteractive, body: { ...rawInteractive.body, text: substituteVariables(rawInteractive.body.text, contact) } }
+            : rawInteractive;
           if (payload.contactPhone && interactive) {
-            await sendInteractiveMessage(phoneNumberId, payload.contactPhone, interactive, accessToken);
+            const { messageId } = await sendInteractiveMessage(phoneNumberId, payload.contactPhone, interactive, accessToken);
+            if (payload.conversationId) {
+              await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "interactive", body: interactive.body?.text ?? null, whatsappMessageId: messageId });
+            }
           }
           if (node.config["waitForReply"] !== false && payload.conversationId) {
             await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id);
@@ -143,9 +179,15 @@ export async function runFlow(
         }
 
         case "send_list": {
-          const listInteractive = buildListInteractive(node.config);
+          const listConfig = typeof node.config["body"] === "string"
+            ? { ...node.config, body: substituteVariables(node.config["body"], contact) }
+            : node.config;
+          const listInteractive = buildListInteractive(listConfig);
           if (payload.contactPhone && listInteractive) {
-            await sendInteractiveMessage(phoneNumberId, payload.contactPhone, listInteractive, accessToken);
+            const { messageId } = await sendInteractiveMessage(phoneNumberId, payload.contactPhone, listInteractive, accessToken);
+            if (payload.conversationId) {
+              await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "interactive", body: listInteractive.body?.text ?? null, whatsappMessageId: messageId });
+            }
           }
           if (node.config["waitForReply"] !== false && payload.conversationId) {
             await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id);
@@ -163,13 +205,16 @@ export async function runFlow(
           const languageCode = (node.config["languageCode"] as string) ?? "en";
           const components = ((node.config["components"] as WaTemplateComponent[]) ?? []);
           if (payload.contactPhone && templateName) {
-            await sendTemplateMessage(phoneNumberId, payload.contactPhone, templateName, languageCode, components, accessToken);
+            const { messageId } = await sendTemplateMessage(phoneNumberId, payload.contactPhone, templateName, languageCode, components, accessToken);
+            if (payload.conversationId) {
+              await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "template", body: templateName, whatsappMessageId: messageId });
+            }
           }
           break;
         }
 
         case "cta_url": {
-          const ctaBody = (node.config["body"] as string) ?? "";
+          const ctaBody = substituteVariables((node.config["body"] as string) ?? "", contact);
           const buttonText = (node.config["buttonText"] as string) ?? "";
           const url = (node.config["url"] as string) ?? "";
           if (payload.contactPhone && ctaBody && url) {
@@ -178,15 +223,21 @@ export async function runFlow(
               body: { text: ctaBody },
               action: { name: "cta_url", parameters: { display_text: buttonText, url } },
             };
-            await sendInteractiveMessage(phoneNumberId, payload.contactPhone, ctaInteractive, accessToken);
+            const { messageId } = await sendInteractiveMessage(phoneNumberId, payload.contactPhone, ctaInteractive, accessToken);
+            if (payload.conversationId) {
+              await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "interactive", body: ctaBody, whatsappMessageId: messageId });
+            }
           }
           break;
         }
 
         case "ask_question": {
-          const question = (node.config["question"] as string) ?? "";
+          const question = substituteVariables((node.config["question"] as string) ?? "", contact);
           if (payload.contactPhone && question) {
-            await sendTextMessage(phoneNumberId, payload.contactPhone, question, accessToken);
+            const { messageId } = await sendTextMessage(phoneNumberId, payload.contactPhone, question, accessToken);
+            if (payload.conversationId) {
+              await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "text", body: question, whatsappMessageId: messageId });
+            }
           }
           if (payload.conversationId) {
             await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id);

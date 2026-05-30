@@ -6,13 +6,44 @@ import { getIo } from "../lib/io-ref.js";
 import { evaluateRoutingRules } from "../lib/router.js";
 import { transcribeAudio } from "../lib/whisper.js";
 import { handleBotMessage } from "../lib/bot-runner.js";
-import { getMediaUrl, markAsRead } from "../lib/whatsapp.js";
+import { getMediaUrl, markAsRead, sendTextMessage } from "../lib/whatsapp.js";
+import { recordOutbound } from "../lib/record-outbound.js";
 import { dispatchWebhook } from "../lib/webhook-dispatch.js";
 import { isFeatureEnabled } from "../lib/plan-limits.js";
 import { dispatchFlowTrigger, cancelNoReplyJobs } from "../lib/trigger-dispatcher.js";
 import { runFlow } from "../lib/flow-runner.js";
 import type { FlowDefinition, FlowSession } from "../lib/flow-runner.js";
 import Expo from "expo-server-sdk";
+
+function interpolateAutoReply(
+  text: string,
+  contact: { firstName: string | null; lastName: string | null; phoneNumber: string; email: string | null } | null
+): string {
+  if (!contact) return text;
+  const fullName = `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim() || contact.phoneNumber;
+  return text
+    .replace(/\{\{first_name\}\}/gi, contact.firstName ?? "")
+    .replace(/\{\{last_name\}\}/gi, contact.lastName ?? "")
+    .replace(/\{\{full_name\}\}/gi, fullName)
+    .replace(/\{\{name\}\}/gi, fullName)
+    .replace(/\{\{phone\}\}/gi, contact.phoneNumber)
+    .replace(/\{\{email\}\}/gi, contact.email ?? "");
+}
+
+function matchesAutoReply(triggerType: string, triggerKeyword: string, body: string): boolean {
+  const lc = body.toLowerCase();
+  const kw = triggerKeyword.toLowerCase();
+  switch (triggerType) {
+    case "contains": return lc.includes(kw);
+    case "is": return lc === kw;
+    case "starts_with": return lc.startsWith(kw);
+    case "ends_with": return lc.endsWith(kw);
+    case "regex": {
+      try { return new RegExp(triggerKeyword, "i").test(body); } catch { return false; }
+    }
+    default: return false;
+  }
+}
 
 const expo = new Expo();
 
@@ -197,6 +228,37 @@ export const inboundWorker = new Worker<InboundMessageJob>(
         sentAt: messageDate.toISOString(),
       });
       return;
+    }
+
+    // --- Auto-reply evaluation (keyword-triggered instant replies) ---
+    if (body && refreshed?.status !== "bot") {
+      const autoReplies = await prisma.autoReply.findMany({
+        where: { organizationId, isActive: true },
+        orderBy: { priorityIndex: "asc" },
+      });
+      const matched = autoReplies.find((ar) => matchesAutoReply(ar.triggerType, ar.triggerKeyword, body));
+      if (matched) {
+        const arContact = await prisma.contact.findFirst({
+          where: { organizationId, phoneNumber: whatsappContactPhone },
+          select: { firstName: true, lastName: true, phoneNumber: true, email: true },
+        });
+        const replyText = interpolateAutoReply(matched.replyText, arContact);
+        if (replyText && org?.phoneNumberId && org?.wabaAccessToken) {
+          const { messageId } = await sendTextMessage(org.phoneNumberId, whatsappContactPhone, replyText, org.wabaAccessToken);
+          await recordOutbound(prisma, { conversationId: conversation.id, organizationId, contentType: "text", body: replyText, whatsappMessageId: messageId });
+        }
+        if (matched.flowId) {
+          const arFlow = await prisma.flow.findFirst({ where: { id: matched.flowId, isActive: true } });
+          if (arFlow) {
+            await runFlow(prisma, arFlow.id, arFlow.flowDefinition as unknown as FlowDefinition, {
+              conversationId: conversation.id,
+              organizationId,
+              contactPhone: whatsappContactPhone,
+              messageBody: body,
+            });
+          }
+        }
+      }
     }
 
     // --- Bot handling ---

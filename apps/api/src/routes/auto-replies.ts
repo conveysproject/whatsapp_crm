@@ -22,14 +22,19 @@ interface Contact {
   organizationId: string;
   firstName: string | null;
   lastName: string | null;
-  phone: string | null;
+  phoneNumber: string;
+  email: string | null;
 }
 
 function interpolate(template: string, contact: Contact): string {
+  const fullName = `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim() || contact.phoneNumber;
   return template
     .replace(/\{\{first_name\}\}/g, contact.firstName ?? "")
     .replace(/\{\{last_name\}\}/g, contact.lastName ?? "")
-    .replace(/\{\{phone\}\}/g, contact.phone ?? "");
+    .replace(/\{\{full_name\}\}/g, fullName)
+    .replace(/\{\{name\}\}/g, fullName)
+    .replace(/\{\{phone\}\}/g, contact.phoneNumber)
+    .replace(/\{\{email\}\}/g, contact.email ?? "");
 }
 
 interface AutoReplyBody {
@@ -138,6 +143,7 @@ export const autoRepliesRouter: FastifyPluginAsync = async (fastify) => {
     }
     const contact = await fastify.prisma.contact.findFirst({
       where: { id: request.params.contactId, organizationId },
+      select: { id: true, organizationId: true, firstName: true, lastName: true, phoneNumber: true, email: true },
     }) as Contact | null;
     if (!contact) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });

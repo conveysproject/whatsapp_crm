@@ -23,6 +23,9 @@ function resolveTemplateVars(
 ): string {
   const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.phoneNumber;
   return template
+    .replace(/\{\{first_name\}\}/gi, contact.firstName ?? "")
+    .replace(/\{\{last_name\}\}/gi, contact.lastName ?? "")
+    .replace(/\{\{full_name\}\}/gi, fullName)
     .replace(/\{\{name\}\}/gi, fullName)
     .replace(/\{\{phone\}\}/gi, contact.phoneNumber)
     .replace(/\{\{email\}\}/gi, contact.email ?? "");

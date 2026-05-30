@@ -52,7 +52,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   no_reply:              "No Reply (X hours)",
 };
 
-const VARS = ["{{first_name}}", "{{last_name}}", "{{phone}}"];
+const VARS = ["{{first_name}}", "{{last_name}}", "{{full_name}}", "{{phone}}", "{{email}}"];
 
 function Label({ children }: { children: React.ReactNode }): JSX.Element {
   return <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{children}</p>;
