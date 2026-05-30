@@ -591,6 +591,7 @@ model Deal {
   contactId      String?   @map("contact_id")
   assignedTo     String?   @map("assigned_to")
   closedAt       DateTime? @map("closed_at")
+  notes          String?
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
