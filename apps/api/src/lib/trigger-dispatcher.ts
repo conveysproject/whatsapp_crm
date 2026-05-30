@@ -64,6 +64,7 @@ export async function dispatchFlowTrigger(
     where: { organizationId, isActive: true, triggerType },
     select: { id: true, flowDefinition: true },
   });
+  console.log(`[flow-dispatch] trigger=${triggerType} org=${organizationId} found=${flows.length}`);
 
   for (const flow of flows) {
     if (triggerType === "keyword_match") {

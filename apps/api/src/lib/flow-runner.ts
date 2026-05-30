@@ -82,6 +82,7 @@ export async function runFlow(
   });
 
   const nodeMap = new Map<string, FlowNode>(flowDefinition.nodes.map((n) => [n.id, n]));
+  console.log(`[flow-runner] flowId=${flowId} nodes=${JSON.stringify(flowDefinition.nodes.map((n) => ({ id: n.id, type: n.type, next: n.next })))}`);
 
   const org = await prisma.organization.findUnique({
     where: { id: payload.organizationId },
