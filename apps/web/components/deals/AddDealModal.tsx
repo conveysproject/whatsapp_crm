@@ -6,7 +6,7 @@ interface Contact {
   id: string;
   firstName: string | null;
   lastName: string | null;
-  phone: string;
+  phone: string | null;
 }
 
 interface AddDealModalProps {
@@ -30,6 +30,7 @@ export function AddDealModal({ pipelineId, stages, onClose, onCreated, defaultSt
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function searchContacts(q: string) {
     if (q.length < 2) { setContacts([]); return; }
@@ -48,8 +49,9 @@ export function AddDealModal({ pipelineId, stages, onClose, onCreated, defaultSt
   async function handleSubmit() {
     if (!title.trim()) return;
     setSaving(true);
+    setError(null);
     const token = await getToken();
-    await fetch(`${api}/v1/deals`, {
+    const res = await fetch(`${api}/v1/deals`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -62,12 +64,16 @@ export function AddDealModal({ pipelineId, stages, onClose, onCreated, defaultSt
       }),
     });
     setSaving(false);
+    if (!res.ok) {
+      setError("Failed to create deal. Please try again.");
+      return;
+    }
     onCreated();
     onClose();
   }
 
   const contactLabel = (c: Contact) =>
-    [c.firstName, c.lastName].filter(Boolean).join(" ") || c.phone;
+    [c.firstName, c.lastName].filter(Boolean).join(" ") || c.phone || c.id;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
@@ -159,6 +165,10 @@ export function AddDealModal({ pipelineId, stages, onClose, onCreated, defaultSt
             onChange={(e) => setNotes(e.target.value)}
           />
         </div>
+
+        {error && (
+          <p className="text-xs text-red-600">{error}</p>
+        )}
 
         <div className="flex gap-3 pt-1">
           <button
