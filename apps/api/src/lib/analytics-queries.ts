@@ -357,6 +357,121 @@ export async function getTeamStats(
   });
 }
 
+export interface AgentDetail {
+  resolvedCount: number;
+  avgFirstResponseSecs: number;
+  slaBreaches: number;
+  topConversations: {
+    id: string;
+    contactName: string;
+    lastMessagePreview: string;
+    status: string;
+    lastMessageAt: string;
+  }[];
+}
+
+export async function getAgentDetail(
+  prisma: PrismaClient,
+  organizationId: string,
+  userId: string,
+  days: number
+): Promise<AgentDetail> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const [resolvedCount, openConvs, convsSince] = await Promise.all([
+    prisma.conversation.count({
+      where: { organizationId, assignedTo: userId, status: "resolved", closedAt: { gte: startOfDay } },
+    }),
+    prisma.conversation.findMany({
+      where: { organizationId, assignedTo: userId, status: { in: ["open", "pending"] } },
+      select: {
+        id: true,
+        createdAt: true,
+        slaId: true,
+        sla: { select: { firstResponseSecs: true } },
+        status: true,
+        lastMessageAt: true,
+        contact: { select: { name: true, firstName: true, lastName: true } },
+      },
+      orderBy: { lastMessageAt: "desc" },
+      take: 10,
+    }),
+    prisma.conversation.findMany({
+      where: { organizationId, assignedTo: userId, createdAt: { gte: since } },
+      select: { id: true, createdAt: true },
+    }),
+  ]);
+
+  const conv30dIds = convsSince.map((c) => c.id);
+  const convCreatedMap = new Map(convsSince.map((c) => [c.id, c.createdAt]));
+
+  const firstOutbounds = await prisma.message.findMany({
+    where: { conversationId: { in: conv30dIds }, direction: "outbound", isSystemMessage: false },
+    select: { conversationId: true, createdAt: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const firstByConv = new Map<string, Date>();
+  for (const m of firstOutbounds) {
+    if (!firstByConv.has(m.conversationId)) firstByConv.set(m.conversationId, m.createdAt);
+  }
+
+  let totalSecs = 0;
+  let responseCount = 0;
+  for (const [convId, firstAt] of firstByConv.entries()) {
+    const created = convCreatedMap.get(convId);
+    if (created) {
+      totalSecs += (firstAt.getTime() - created.getTime()) / 1000;
+      responseCount++;
+    }
+  }
+
+  const slaBreaches = openConvs.filter(
+    (c) => c.sla && c.createdAt.getTime() + c.sla.firstResponseSecs * 1000 < now.getTime()
+  ).length;
+
+  const topIds = openConvs.slice(0, 10).map((c) => c.id);
+  const lastMessages = await prisma.message.findMany({
+    where: { conversationId: { in: topIds }, isSystemMessage: false },
+    select: { conversationId: true, body: true, contentType: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+  const lastMsgMap = new Map<string, (typeof lastMessages)[0]>();
+  for (const m of lastMessages) {
+    if (!lastMsgMap.has(m.conversationId)) lastMsgMap.set(m.conversationId, m);
+  }
+
+  const topConversations = openConvs.map((c) => {
+    const contact = c.contact;
+    const contactName =
+      contact?.name ??
+      [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") ??
+      "Unknown";
+    const lastMsg = lastMsgMap.get(c.id);
+    let preview = "[Media]";
+    if (lastMsg?.body) preview = lastMsg.body.slice(0, 60);
+    else if (lastMsg?.contentType === "image") preview = "[Image]";
+    else if (lastMsg?.contentType === "audio") preview = "[Audio]";
+    return {
+      id: c.id,
+      contactName,
+      lastMessagePreview: preview,
+      status: c.status,
+      lastMessageAt: (c.lastMessageAt ?? c.createdAt).toISOString(),
+    };
+  });
+
+  return {
+    resolvedCount,
+    avgFirstResponseSecs: responseCount > 0 ? Math.round(totalSecs / responseCount) : 0,
+    slaBreaches,
+    topConversations,
+  };
+}
+
 export interface CampaignSnapshotData {
   lastCampaign: {
     id: string;

@@ -238,3 +238,46 @@ describe("getActivityFeed", () => {
     expect(result).toHaveLength(0);
   });
 });
+
+describe("getAgentDetail", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("returns resolved count, sla breaches, avg response, and top conversations", async () => {
+    const now = new Date();
+    const convCreated = new Date(now.getTime() - 120_000); // 2 min ago
+
+    mockPrisma.conversation.count.mockResolvedValue(3); // resolvedCount
+    mockPrisma.conversation.findMany
+      .mockResolvedValueOnce([
+        {
+          id: "c1",
+          createdAt: convCreated,
+          slaId: null,
+          sla: null,
+          status: "open",
+          lastMessageAt: now,
+          contact: { name: "Rahul Sharma", firstName: null, lastName: null },
+        },
+      ])   // openConvs
+      .mockResolvedValueOnce([
+        { id: "c1", createdAt: convCreated },
+      ]);  // convsSince
+
+    mockPrisma.message.findMany
+      .mockResolvedValueOnce([]) // firstOutbounds (no response time)
+      .mockResolvedValueOnce([
+        { conversationId: "c1", body: "Need help", contentType: "text", createdAt: now },
+      ]); // lastMessages
+
+    const { getAgentDetail } = await import("./analytics-queries.js");
+    const result = await getAgentDetail(mockPrisma as unknown as PrismaClient, "org-1", "user-1", 30);
+
+    expect(result.resolvedCount).toBe(3);
+    expect(result.slaBreaches).toBe(0);
+    expect(result.avgFirstResponseSecs).toBe(0);
+    expect(result.topConversations).toHaveLength(1);
+    expect(result.topConversations[0]!.contactName).toBe("Rahul Sharma");
+    expect(result.topConversations[0]!.lastMessagePreview).toBe("Need help");
+    expect(result.topConversations[0]!.status).toBe("open");
+  });
+});
