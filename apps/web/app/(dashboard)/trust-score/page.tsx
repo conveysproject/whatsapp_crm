@@ -1,11 +1,27 @@
 "use client";
+
 import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import Link from "next/link";
+import { TrustTrendChart } from "@/components/trust-score/TrustTrendChart";
+
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+
+interface Recommendation {
+  text: string;
+  href: string;
+}
+
+interface HistoryPoint {
+  score: number;
+  recordedAt: string;
+}
 
 interface TrustScoreData {
   score: number;
   breakdown: { category: string; score: number; maxScore: number; description: string }[];
-  recommendations: string[];
+  recommendations: Recommendation[];
+  history?: HistoryPoint[];
 }
 
 function getScoreColor(score: number): string {
@@ -35,7 +51,6 @@ function getBarColor(score: number, maxScore: number): string {
 }
 
 function ScoreGauge({ score }: { score: number }): JSX.Element {
-  // SVG circle gauge: radius 54, circumference ~339
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
   const clampedScore = Math.max(0, Math.min(100, score));
@@ -43,31 +58,11 @@ function ScoreGauge({ score }: { score: number }): JSX.Element {
 
   return (
     <div className="relative flex items-center justify-center w-40 h-40">
-      <svg
-        className="absolute inset-0 -rotate-90"
-        width="160"
-        height="160"
-        viewBox="0 0 160 160"
-      >
-        {/* Track */}
+      <svg className="absolute inset-0 -rotate-90" width="160" height="160" viewBox="0 0 160 160">
+        <circle cx="80" cy="80" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="12" />
         <circle
-          cx="80"
-          cy="80"
-          r={radius}
-          fill="none"
-          stroke="#e5e7eb"
-          strokeWidth="12"
-        />
-        {/* Progress */}
-        <circle
-          cx="80"
-          cy="80"
-          r={radius}
-          fill="none"
-          strokeWidth="12"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={dashOffset}
+          cx="80" cy="80" r={radius} fill="none" strokeWidth="12" strokeLinecap="round"
+          strokeDasharray={circumference} strokeDashoffset={dashOffset}
           className={getGaugeRingColor(score)}
           style={{ transition: "stroke-dashoffset 0.6s ease" }}
         />
@@ -83,24 +78,14 @@ function ScoreGauge({ score }: { score: number }): JSX.Element {
 }
 
 function BreakdownRow({
-  category,
-  score,
-  maxScore,
-  description,
-}: {
-  category: string;
-  score: number;
-  maxScore: number;
-  description: string;
-}): JSX.Element {
+  category, score, maxScore, description,
+}: { category: string; score: number; maxScore: number; description: string }): JSX.Element {
   const pct = maxScore > 0 ? Math.min(100, (score / maxScore) * 100) : 0;
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-sm">
         <span className="font-medium text-gray-700">{category}</span>
-        <span className="text-gray-500 tabular-nums">
-          {score}/{maxScore}
-        </span>
+        <span className="text-gray-500 tabular-nums">{score}/{maxScore}</span>
       </div>
       <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
         <div
@@ -108,9 +93,7 @@ function BreakdownRow({
           style={{ width: `${pct}%`, transition: "width 0.5s ease" }}
         />
       </div>
-      {description ? (
-        <p className="text-xs text-gray-400">{description}</p>
-      ) : null}
+      {description ? <p className="text-xs text-gray-400">{description}</p> : null}
     </div>
   );
 }
@@ -126,33 +109,20 @@ export default function TrustScorePage(): JSX.Element {
     void (async () => {
       try {
         const token = await getToken();
-        const apiUrl =
-          process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
-        const res = await fetch(`${apiUrl}/v1/trust-score`, {
+        const res = await fetch(`${API_URL}/v1/trust-score?history=true`, {
           headers: { Authorization: `Bearer ${token ?? ""}` },
         });
         if (!res.ok) {
-          if (!cancelled) {
-            setError("Trust score data is not available yet.");
-            setLoading(false);
-          }
+          if (!cancelled) { setError("Trust score data is not available yet."); setLoading(false); }
           return;
         }
         const json = (await res.json()) as { data: TrustScoreData };
-        if (!cancelled) {
-          setData(json.data);
-          setLoading(false);
-        }
+        if (!cancelled) { setData(json.data); setLoading(false); }
       } catch {
-        if (!cancelled) {
-          setError("Network error loading trust score.");
-          setLoading(false);
-        }
+        if (!cancelled) { setError("Network error loading trust score."); setLoading(false); }
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [getToken]);
 
   if (loading) {
@@ -165,42 +135,33 @@ export default function TrustScorePage(): JSX.Element {
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-8">
-      {/* Header */}
       <h1 className="text-2xl font-semibold">Trust Score</h1>
 
-      {/* Error banner */}
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
-      {/* Empty state — no error, no data */}
       {!loading && !error && !data && (
         <p className="text-sm text-gray-400">No trust score data is available yet.</p>
       )}
 
-      {/* Gauge + breakdown + recommendations — only when data is present */}
       {!loading && !error && data && (
         <>
-          {/* Score gauge card */}
+          {data.history && <TrustTrendChart history={data.history} />}
+
           <div className="bg-white border rounded-xl p-8 flex flex-col items-center gap-3 shadow-sm">
             <ScoreGauge score={data.score} />
             <p className={`text-lg font-semibold ${getScoreColor(data.score)}`}>
               {getGradeText(data.score)}
             </p>
             <p className="text-sm text-gray-500 text-center">
-              Your organisation&apos;s trust score reflects messaging quality,
-              engagement, and compliance.
+              Your organisation&apos;s trust score reflects messaging quality, engagement, and compliance.
             </p>
           </div>
 
-          {/* Score Breakdown */}
           {data.breakdown.length > 0 && (
             <div className="bg-white border rounded-xl p-6 shadow-sm space-y-5">
-              <h2 className="text-base font-semibold text-gray-800">
-                Score Breakdown
-              </h2>
+              <h2 className="text-base font-semibold text-gray-800">Score Breakdown</h2>
               {data.breakdown.map((item) => (
                 <BreakdownRow
                   key={item.category}
@@ -213,17 +174,22 @@ export default function TrustScorePage(): JSX.Element {
             </div>
           )}
 
-          {/* Recommendations */}
           {data.recommendations.length > 0 && (
             <div className="bg-white border rounded-xl p-6 shadow-sm">
-              <h2 className="text-base font-semibold text-gray-800 mb-4">
-                Recommendations
-              </h2>
-              <ul className="space-y-2">
+              <h2 className="text-base font-semibold text-gray-800 mb-4">Recommendations</h2>
+              <ul className="space-y-3">
                 {data.recommendations.map((rec, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                    <span className="text-blue-500 font-bold shrink-0">&rarr;</span>
-                    <span>{rec}</span>
+                  <li key={i} className="flex items-center justify-between gap-4">
+                    <div className="flex items-start gap-2 text-sm text-gray-700">
+                      <span className="text-blue-500 font-bold shrink-0">&rarr;</span>
+                      <span>{rec.text}</span>
+                    </div>
+                    <Link
+                      href={rec.href}
+                      className="shrink-0 text-xs font-medium text-brand-600 hover:text-brand-700 border border-brand-200 rounded-lg px-2.5 py-1 hover:bg-brand-50 transition-colors"
+                    >
+                      Fix it &rarr;
+                    </Link>
                   </li>
                 ))}
               </ul>
