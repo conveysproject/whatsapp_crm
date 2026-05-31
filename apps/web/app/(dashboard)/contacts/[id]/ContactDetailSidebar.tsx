@@ -9,6 +9,7 @@ import {
   LANGUAGES,
 } from "@/components/contacts/contact-shared";
 import { ContactLabelManager } from "@/components/contacts/ContactLabelManager";
+import { ContactDeals } from "@/components/deals/ContactDeals";
 import type { Contact } from "./ContactDetailClient";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -258,6 +259,9 @@ export function ContactDetailSidebar({ contact }: Props): JSX.Element {
           </div>
         </>
       )}
+
+      {/* ── Deals ────────────────────────────────────────────── */}
+      <ContactDeals contactId={contact.id} />
     </div>
   );
 }
