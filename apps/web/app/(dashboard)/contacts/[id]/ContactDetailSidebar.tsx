@@ -77,6 +77,18 @@ export function ContactDetailSidebar({ contact }: Props): JSX.Element {
     },
   });
 
+  const { data: trustData, isLoading: loadingTrust } = useQuery<{ score: number; label: string } | null>({
+    queryKey: ["contact-trust-score", contact.id],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/contacts/${contact.id}/trust-score`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      return res.ok ? (await res.json() as { data: { score: number; label: string } }).data : null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   const countryName = countries.find((c) => c.id === contact.countryId)?.name ?? null;
   const languageLabel = LANGUAGES.find((l) => l.code === contact.languageCode)?.label ?? null;
   const assignee = users.find((u) => u.id === contact.assignedUserId);
@@ -259,6 +271,38 @@ export function ContactDetailSidebar({ contact }: Props): JSX.Element {
           </div>
         </>
       )}
+
+      {/* ── Trust Score ──────────────────────────────────────── */}
+      <SectionHeader title="Trust Score" />
+      <div className="pb-4">
+        {loadingTrust ? (
+          <FieldSkeleton />
+        ) : trustData ? (
+          <div className="flex items-center gap-3">
+            <span className={`text-3xl font-bold tabular-nums ${
+              trustData.score >= 80 ? "text-green-600" :
+              trustData.score >= 50 ? "text-yellow-500" : "text-red-500"
+            }`}>
+              {trustData.score}
+            </span>
+            <span className={`inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-semibold ${
+              trustData.label === "high"     ? "bg-green-50 text-green-700" :
+              trustData.label === "medium"   ? "bg-yellow-50 text-yellow-700" :
+                                              "bg-red-50 text-red-700"
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                trustData.label === "high"   ? "bg-green-500" :
+                trustData.label === "medium" ? "bg-yellow-400" : "bg-red-500"
+              }`} />
+              {trustData.label === "very_low"
+                ? "Very Low"
+                : trustData.label.charAt(0).toUpperCase() + trustData.label.slice(1)}
+            </span>
+          </div>
+        ) : (
+          <span className="text-sm text-gray-400">—</span>
+        )}
+      </div>
 
       {/* ── Deals ────────────────────────────────────────────── */}
       <ContactDeals contactId={contact.id} />

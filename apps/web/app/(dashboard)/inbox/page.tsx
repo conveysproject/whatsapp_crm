@@ -13,6 +13,7 @@ import { BotPanel } from "@/components/bot-panel";
 import { SmartReplyPanel } from "@/components/smart-reply-panel";
 import { useConversations } from "@/hooks/useConversations";
 import { CreateOfferModal } from "@/components/deals/CreateOfferModal";
+import { ContactTrustBadge } from "@/components/trust-score/ContactTrustBadge";
 
 export default function InboxPage(): JSX.Element {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
@@ -66,6 +67,7 @@ export default function InboxPage(): JSX.Element {
                   {selectedConversation.status}
                 </span>
               </div>
+              {contact && <ContactTrustBadge contactId={contact.id} />}
             </div>
           </div>
         )}
