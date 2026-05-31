@@ -65,11 +65,24 @@ interface InteractiveParsed {
     buttons?: Array<{ type?: string; reply?: { id?: string; title?: string } }>;
     sections?: Array<{ title?: string; rows?: Array<{ id?: string; title?: string }> }>;
   };
+  button_reply?: { id?: string; title?: string };
+  list_reply?: { id?: string; title?: string };
 }
 
 function InteractiveMessageBubble({ body }: { body: string }): JSX.Element {
   let parsed: InteractiveParsed = {};
   try { parsed = JSON.parse(body) as InteractiveParsed; } catch { /* raw fallback */ }
+
+  // Inbound button/list reply from contact
+  const replyTitle = parsed.button_reply?.title ?? parsed.list_reply?.title;
+  if (replyTitle) {
+    return (
+      <div className="flex items-center gap-1.5 text-sm text-gray-800">
+        <span className="text-[#00a884] font-bold">✓</span>
+        <span>{replyTitle}</span>
+      </div>
+    );
+  }
 
   const headerText = parsed.header?.text;
   const bodyText = parsed.body?.text;

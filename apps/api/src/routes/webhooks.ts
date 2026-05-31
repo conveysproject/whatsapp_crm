@@ -26,6 +26,12 @@ interface WaMessage {
   voice?: WaMediaObject;
   location?: { latitude: number; longitude: number; name?: string; address?: string };
   reaction?: { message_id: string; emoji: string };
+  interactive?: {
+    type: string;
+    button_reply?: { id: string; title: string };
+    list_reply?: { id: string; title: string; description?: string };
+    nfm_reply?: { response_json: string; name: string; body: string };
+  };
 }
 
 interface WaStatusUpdate {
@@ -180,6 +186,8 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
               body = msg.video.caption;
             } else if (msg.document?.caption) {
               body = msg.document.caption;
+            } else if (msg.interactive) {
+              body = JSON.stringify(msg.interactive);
             }
             await inboundMessageQueue.add("inbound", {
               organizationId: org.id,
