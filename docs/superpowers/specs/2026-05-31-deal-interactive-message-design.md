@@ -34,7 +34,7 @@ Deal notifications currently send a plain text message to the contact. The conta
   - Header: `Deal: {title}`
   - Body: `Value: {value}\n\n{notes}`
   - Footer: `Reply using the buttons below`
-  - Buttons: `✓ Accept` · `✗ Reject` · `~ Negotiate`
+  - Buttons: `Accept` · `Reject` · `Negotiate`
 - If notes are empty → warning shown: *"Add notes to give the contact context before sending."* Send is blocked.
 - If no linked contact or no WhatsApp conversation exists → toggle is disabled with tooltip: *"No WhatsApp conversation found for this contact."*
 
@@ -57,9 +57,9 @@ Sent to existing endpoint: `POST /v1/conversations/:id/messages`
     "footer": { "text": "Reply using the buttons below" },
     "action": {
       "buttons": [
-        { "type": "reply", "reply": { "id": "deal_accept_{dealId}", "title": "✓ Accept" } },
-        { "type": "reply", "reply": { "id": "deal_reject_{dealId}", "title": "✗ Reject" } },
-        { "type": "reply", "reply": { "id": "deal_negotiate_{dealId}", "title": "~ Negotiate" } }
+        { "type": "reply", "reply": { "id": "deal_accept_{dealId}", "title": "Accept" } },
+        { "type": "reply", "reply": { "id": "deal_reject_{dealId}", "title": "Reject" } },
+        { "type": "reply", "reply": { "id": "deal_negotiate_{dealId}", "title": "Negotiate" } }
       ]
     }
   }
@@ -83,7 +83,7 @@ This makes inbox visibility a server-side invariant — no client can accidental
 ### 4. Agent Inbox Display
 
 - **Sent message:** Renders via existing `InteractiveMessageBubble` component — header, body text, and three buttons shown visually. No component changes needed.
-- **Contact reply:** Inbound worker already handles `button_reply` and creates an inbound message. Reply appears as a normal inbound bubble showing the button title (e.g., *"✓ Accept"*). Agent sees it immediately and acts manually.
+- **Contact reply:** Inbound worker already handles `button_reply` and creates an inbound message. Reply appears as a normal inbound bubble showing the button title (e.g., *"Accept"*). Agent sees it immediately and acts manually.
 
 ---
 

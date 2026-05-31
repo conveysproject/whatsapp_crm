@@ -223,9 +223,9 @@ describe("POST /v1/conversations/:id/messages — interactive isSystemMessage gu
           footer: { text: "Reply using the buttons below" },
           action: {
             buttons: [
-              { type: "reply", reply: { id: "deal_accept_abc123", title: "✓ Accept" } },
-              { type: "reply", reply: { id: "deal_reject_abc123", title: "✗ Reject" } },
-              { type: "reply", reply: { id: "deal_negotiate_abc123", title: "~ Negotiate" } },
+              { type: "reply", reply: { id: "deal_accept_abc123", title: "Accept" } },
+              { type: "reply", reply: { id: "deal_reject_abc123", title: "Reject" } },
+              { type: "reply", reply: { id: "deal_negotiate_abc123", title: "Negotiate" } },
             ],
           },
         },

@@ -105,9 +105,9 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
                   footer: { text: "Reply using the buttons below" },
                   action: {
                     buttons: [
-                      { type: "reply", reply: { id: `deal_accept_${dealId}`, title: "✓ Accept" } },
-                      { type: "reply", reply: { id: `deal_reject_${dealId}`, title: "✗ Reject" } },
-                      { type: "reply", reply: { id: `deal_negotiate_${dealId}`, title: "~ Negotiate" } },
+                      { type: "reply", reply: { id: `deal_accept_${dealId}`, title: "Accept" } },
+                      { type: "reply", reply: { id: `deal_reject_${dealId}`, title: "Reject" } },
+                      { type: "reply", reply: { id: `deal_negotiate_${dealId}`, title: "Negotiate" } },
                     ],
                   },
                 },
@@ -229,9 +229,9 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
               <p className="font-semibold text-gray-800 truncate">Deal: {title.trim() || "—"}</p>
               <p className="text-gray-600">Value: {value || "—"}</p>
               <div className="flex gap-1.5 pt-1 flex-wrap">
-                <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">✓ Accept</span>
-                <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">✗ Reject</span>
-                <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">~ Negotiate</span>
+                <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">Accept</span>
+                <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">Reject</span>
+                <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">Negotiate</span>
               </div>
               <p className="text-xs text-gray-400">Sent to the contact&apos;s active WhatsApp conversation.</p>
             </div>

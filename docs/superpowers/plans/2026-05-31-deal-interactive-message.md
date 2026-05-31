@@ -48,9 +48,9 @@ describe("POST /v1/conversations/:id/messages — interactive isSystemMessage gu
           footer: { text: "Reply using the buttons below" },
           action: {
             buttons: [
-              { type: "reply", reply: { id: "deal_accept_abc123", title: "✓ Accept" } },
-              { type: "reply", reply: { id: "deal_reject_abc123", title: "✗ Reject" } },
-              { type: "reply", reply: { id: "deal_negotiate_abc123", title: "~ Negotiate" } },
+              { type: "reply", reply: { id: "deal_accept_abc123", title: "Accept" } },
+              { type: "reply", reply: { id: "deal_reject_abc123", title: "Reject" } },
+              { type: "reply", reply: { id: "deal_negotiate_abc123", title: "Negotiate" } },
             ],
           },
         },
@@ -207,9 +207,9 @@ Replace the entire `handleSave` function (lines 55–102) with:
                 footer: { text: "Reply using the buttons below" },
                 action: {
                   buttons: [
-                    { type: "reply", reply: { id: `deal_accept_${deal.id}`, title: "✓ Accept" } },
-                    { type: "reply", reply: { id: `deal_reject_${deal.id}`, title: "✗ Reject" } },
-                    { type: "reply", reply: { id: `deal_negotiate_${deal.id}`, title: "~ Negotiate" } },
+                    { type: "reply", reply: { id: `deal_accept_${deal.id}`, title: "Accept" } },
+                    { type: "reply", reply: { id: `deal_reject_${deal.id}`, title: "Reject" } },
+                    { type: "reply", reply: { id: `deal_negotiate_${deal.id}`, title: "Negotiate" } },
                   ],
                 },
               },
@@ -260,9 +260,9 @@ Find the `{deal.contact && (` block (lines 183–210 of the original file). Repl
                     <p className="text-amber-600 text-xs">Add notes to give the contact context before sending.</p>
                   )}
                   <div className="flex gap-1.5 pt-1 flex-wrap">
-                    <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">✓ Accept</span>
-                    <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">✗ Reject</span>
-                    <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">~ Negotiate</span>
+                    <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">Accept</span>
+                    <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">Reject</span>
+                    <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">Negotiate</span>
                   </div>
                   <p className="text-xs text-gray-400">Sent to {contactName}&apos;s active WhatsApp conversation.</p>
                 </div>
@@ -349,7 +349,7 @@ Toggle "Notify contact on save" ON with notes field empty. Confirm:
 - Preview card appears with deal title and value
 - Amber warning: *"Add notes to give the contact context before sending."*
 - No notes text shown
-- Three button chips visible: ✓ Accept · ✗ Reject · ~ Negotiate
+- Three button chips visible: Accept · Reject · Negotiate
 - "Save & Send" button is **disabled** (greyed out)
 - "Save without notifying" button is **enabled**
 
