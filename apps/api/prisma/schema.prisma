@@ -69,9 +69,10 @@ model Organization {
   invitations         Invitation[]
   conversations       Conversation[]
   members             OrganizationMember[]
-  manualSubscriptions ManualSubscription[]
-  transactions        Transaction[]
-  creditLedger        CreditLedger[]
+  manualSubscriptions  ManualSubscription[]
+  transactions         Transaction[]
+  creditLedger         CreditLedger[]
+  trustScoreSnapshots  OrgTrustScoreSnapshot[]
 
   @@map("organizations")
 }
@@ -1361,11 +1362,12 @@ model ImpersonationLog {
 // Each row = one periodic snapshot of an org's trust score.
 
 model OrgTrustScoreSnapshot {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
+  id             String       @id @default(uuid())
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   score          Int
   breakdown      Json
-  recordedAt     DateTime @default(now()) @map("recorded_at")
+  recordedAt     DateTime     @default(now()) @map("recorded_at")
 
   @@index([organizationId, recordedAt])
   @@map("org_trust_score_snapshots")
