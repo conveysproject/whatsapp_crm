@@ -40,6 +40,35 @@ describe("getOverviewMetrics", () => {
   });
 });
 
+describe("getOverviewMetrics with days param", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("uses the provided days window for avgFirstResponseTime calculation", async () => {
+    mockPrisma.conversation.count
+      .mockResolvedValueOnce(3)   // open
+      .mockResolvedValueOnce(1);  // bot
+    mockPrisma.contact.count.mockResolvedValue(50);
+    mockPrisma.message.count.mockResolvedValue(10);
+    mockPrisma.invitation.count.mockResolvedValue(0);
+    mockPrisma.campaign.count.mockResolvedValue(1);
+    // outbound messages and convs produce a calculable avg
+    const now = new Date();
+    const convCreated = new Date(now.getTime() - 300_000); // 5 min ago
+    const firstReply = new Date(now.getTime() - 240_000);  // 4 min ago (60s response)
+    mockPrisma.message.findMany.mockResolvedValue([
+      { conversationId: "c1", createdAt: firstReply },
+    ]);
+    mockPrisma.conversation.findMany.mockResolvedValue([
+      { id: "c1", createdAt: convCreated },
+    ]);
+
+    const { getOverviewMetrics } = await import("./analytics-queries.js");
+    const result = await getOverviewMetrics(mockPrisma as unknown as PrismaClient, "org-1", 7);
+
+    expect(result.avgFirstResponseTime).toBe(60);
+  });
+});
+
 describe("getMyWork", () => {
   beforeEach(() => { vi.clearAllMocks(); });
 

@@ -18,7 +18,8 @@ export interface DailyVolume {
 
 export async function getOverviewMetrics(
   prisma: PrismaClient,
-  organizationId: string
+  organizationId: string,
+  days = 30
 ): Promise<OverviewMetrics> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -27,7 +28,7 @@ export async function getOverviewMetrics(
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const since30d = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
   const [
     openConversations,
@@ -260,11 +261,12 @@ export interface AgentStats {
 
 export async function getTeamStats(
   prisma: PrismaClient,
-  organizationId: string
+  organizationId: string,
+  days = 30
 ): Promise<AgentStats[]> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
-  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const since30d = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const now = new Date();
 
   const users = await prisma.user.findMany({
