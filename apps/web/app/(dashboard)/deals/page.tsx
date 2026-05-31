@@ -2,20 +2,12 @@ import { JSX } from "react";
 import { auth } from "@clerk/nextjs/server";
 import { Button } from "@/components/ui/Button";
 import { KanbanBoard } from "@/components/deals/KanbanBoard";
+import type { Deal } from "@/components/deals/DealCard";
 
 interface Pipeline {
   id: string;
   name: string;
   stages: string[];
-}
-
-interface Deal {
-  id: string;
-  title: string;
-  stage: string;
-  value: number | null;
-  assignedTo: string | null;
-  pipelineId: string;
 }
 
 async function getData(token: string) {

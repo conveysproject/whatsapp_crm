@@ -12,15 +12,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useAuth } from "@clerk/nextjs";
-import { DealCard } from "./DealCard";
-
-interface Deal {
-  id: string;
-  title: string;
-  stage: string;
-  value: number | null;
-  assignedTo: string | null;
-}
+import { DealCard, type Deal } from "./DealCard";
 
 interface KanbanBoardProps {
   initialDeals: Deal[];

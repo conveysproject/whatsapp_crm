@@ -11,6 +11,7 @@ interface DealContact {
 
 export interface Deal {
   id: string;
+  pipelineId: string;
   title: string;
   value: number | null;
   assignedTo: string | null;
