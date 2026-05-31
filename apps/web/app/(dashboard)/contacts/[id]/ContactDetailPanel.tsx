@@ -15,10 +15,11 @@ const TABS: { id: Tab; label: string }[] = [
 
 interface Props {
   contactId: string;
+  contactName: string;
   initialSummary: string | null;
 }
 
-export function ContactDetailPanel({ contactId, initialSummary }: Props): JSX.Element {
+export function ContactDetailPanel({ contactId, contactName, initialSummary }: Props): JSX.Element {
   const [tab, setTab] = useState<Tab>("timeline");
 
   return (
@@ -49,7 +50,7 @@ export function ContactDetailPanel({ contactId, initialSummary }: Props): JSX.El
         <AiSummaryCard contactId={contactId} initialSummary={initialSummary} />
       </div>
       <div className={tab === "deals" ? undefined : "hidden"}>
-        <ContactDealsTab contactId={contactId} />
+        <ContactDealsTab contactId={contactId} contactName={contactName} />
       </div>
     </div>
   );

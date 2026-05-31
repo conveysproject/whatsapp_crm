@@ -9,16 +9,17 @@ import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
 export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
   // ── List with status / assignee filters ────────────────────────────────
   fastify.get<{
-    Querystring: { status?: string; assignedTo?: string; teamId?: string; page?: string };
+    Querystring: { status?: string; assignedTo?: string; teamId?: string; page?: string; contactId?: string };
   }>("/conversations", async (request, reply) => {
     const { userId, organizationId, permissions } = request.auth;
-    const { status, assignedTo, teamId, page } = request.query;
+    const { status, assignedTo, teamId, page, contactId } = request.query;
     const pageNum = Math.max(1, parseInt(page ?? "1", 10));
 
     const where: Record<string, unknown> = { organizationId };
     if (status) where.status = status;
     if (assignedTo) where.assignedTo = assignedTo;
     if (teamId) where.teamId = teamId;
+    if (contactId) where.contactId = contactId;
     // agents with assigned_chats_only permission see only their own conversations
     if (permissions["assigned_chats_only"] === "allow") where.assignedTo = userId;
 

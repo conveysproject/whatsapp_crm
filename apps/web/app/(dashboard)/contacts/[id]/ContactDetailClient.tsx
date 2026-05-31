@@ -86,7 +86,11 @@ export function ContactDetailClient({ contact: initial }: { contact: Contact }):
           </div>
         </aside>
         <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
-          <ContactDetailPanel contactId={contact.id} initialSummary={contact.pastAiSummary} />
+          <ContactDetailPanel
+            contactId={contact.id}
+            contactName={[contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.phoneNumber}
+            initialSummary={contact.pastAiSummary}
+          />
         </main>
       </div>
       <EditContactDrawer
