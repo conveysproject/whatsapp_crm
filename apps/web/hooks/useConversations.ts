@@ -13,7 +13,7 @@ export interface Conversation {
   assignedTo: string | null;
   lastMessageAt: string | null;
   unreadCount: number;
-  contact?: { firstName: string | null; lastName: string | null; phoneNumber: string } | null;
+  contact?: { id: string; firstName: string | null; lastName: string | null; phoneNumber: string } | null;
 }
 
 interface ConversationsResponse {
