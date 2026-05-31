@@ -58,12 +58,17 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
 
   async function handleDelete() {
     setDeleting(true);
+    setError(null);
     const token = await getToken();
-    await fetch(`${api}/v1/deals/${deal.id}`, {
+    const res = await fetch(`${api}/v1/deals/${deal.id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token ?? ""}` },
     });
     setDeleting(false);
+    if (!res.ok) {
+      setError("Failed to delete. Please try again.");
+      return;
+    }
     onDeleted();
     onClose();
   }
