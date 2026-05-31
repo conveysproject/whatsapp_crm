@@ -505,6 +505,7 @@ model Contact {
   campaignRecipients CampaignRecipient[]
   groupContacts      GroupContact[]
   conversations      Conversation[]
+  deals              Deal[]
 
   @@unique([organizationId, phoneNumber])
   @@index([organizationId])
@@ -589,6 +590,7 @@ model Deal {
   pipelineId     String    @map("pipeline_id")
   pipeline       Pipeline  @relation(fields: [pipelineId], references: [id])
   contactId      String?   @map("contact_id")
+  contact        Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
   assignedTo     String?   @map("assigned_to")
   closedAt       DateTime? @map("closed_at")
   notes          String?
@@ -597,6 +599,7 @@ model Deal {
 
   @@index([organizationId])
   @@index([organizationId, pipelineId])
+  @@index([contactId])
   @@map("deals")
 }
 

@@ -6,7 +6,7 @@ interface Contact {
   id: string;
   firstName: string | null;
   lastName: string | null;
-  phone: string | null;
+  phoneNumber: string | null;
 }
 
 interface AddDealModalProps {
@@ -73,7 +73,7 @@ export function AddDealModal({ pipelineId, stages, onClose, onCreated, defaultSt
   }
 
   const contactLabel = (c: Contact) =>
-    [c.firstName, c.lastName].filter(Boolean).join(" ") || c.phone || c.id;
+    [c.firstName, c.lastName].filter(Boolean).join(" ") || c.phoneNumber || c.id;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
@@ -145,7 +145,7 @@ export function AddDealModal({ pipelineId, stages, onClose, onCreated, defaultSt
                       onClick={() => { setSelectedContact(c); setContacts([]); setContactSearch(""); }}
                     >
                       {contactLabel(c)}
-                      <span className="text-gray-400 ml-2 text-xs">{c.phone}</span>
+                      <span className="text-gray-400 ml-2 text-xs">{c.phoneNumber}</span>
                     </button>
                   ))}
                 </div>

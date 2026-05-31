@@ -6,7 +6,7 @@ interface DealContact {
   id: string;
   firstName: string | null;
   lastName: string | null;
-  phone: string;
+  phoneNumber: string;
 }
 
 export interface Deal {
@@ -31,7 +31,7 @@ export function DealCard({ deal, onClick }: DealCardProps): JSX.Element {
   });
 
   const contactName = deal.contact
-    ? [deal.contact.firstName, deal.contact.lastName].filter(Boolean).join(" ") || deal.contact.phone
+    ? [deal.contact.firstName, deal.contact.lastName].filter(Boolean).join(" ") || deal.contact.phoneNumber
     : null;
 
   const formattedValue =

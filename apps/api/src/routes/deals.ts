@@ -24,7 +24,7 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: "desc" },
       include: {
         contact: {
-          select: { id: true, firstName: true, lastName: true, phone: true },
+          select: { id: true, firstName: true, lastName: true, phoneNumber: true },
         },
       },
     });
@@ -37,7 +37,7 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
       where: { id: request.params.id, organizationId },
       include: {
         contact: {
-          select: { id: true, firstName: true, lastName: true, phone: true },
+          select: { id: true, firstName: true, lastName: true, phoneNumber: true },
         },
       },
     });
@@ -84,7 +84,7 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
       },
       include: {
         contact: {
-          select: { id: true, firstName: true, lastName: true, phone: true },
+          select: { id: true, firstName: true, lastName: true, phoneNumber: true },
         },
       },
     });
@@ -106,7 +106,7 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
         data: { stage: request.body.stage },
         include: {
           contact: {
-            select: { id: true, firstName: true, lastName: true, phone: true },
+            select: { id: true, firstName: true, lastName: true, phoneNumber: true },
           },
         },
       });

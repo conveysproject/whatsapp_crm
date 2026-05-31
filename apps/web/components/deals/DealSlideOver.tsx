@@ -74,7 +74,7 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
   }
 
   const contactName = deal.contact
-    ? [deal.contact.firstName, deal.contact.lastName].filter(Boolean).join(" ") || deal.contact.phone || ""
+    ? [deal.contact.firstName, deal.contact.lastName].filter(Boolean).join(" ") || deal.contact.phoneNumber || ""
     : null;
 
   return (
