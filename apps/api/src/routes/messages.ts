@@ -262,6 +262,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
           contentType,
           body: storedBody,
           status: "sending",
+          // interactive messages must always be agent-visible, never hidden as system messages
           ...(contentType === "interactive" ? { isSystemMessage: false } : {}),
         },
       });
