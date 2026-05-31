@@ -317,3 +317,23 @@ describe("getCampaignAnalytics", () => {
     expect(result).toHaveLength(0);
   });
 });
+
+describe("getConversationStatusBreakdown", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("returns counts per status for conversations active in the period", async () => {
+    mockPrisma.conversation.groupBy.mockResolvedValue([
+      { status: "open",     _count: { _all: 12 } },
+      { status: "resolved", _count: { _all: 45 } },
+      { status: "bot",      _count: { _all: 5 } },
+    ]);
+
+    const { getConversationStatusBreakdown } = await import("./analytics-queries.js");
+    const result = await getConversationStatusBreakdown(mockPrisma as unknown as PrismaClient, "org-1", 14);
+
+    expect(result.open).toBe(12);
+    expect(result.resolved).toBe(45);
+    expect(result.bot).toBe(5);
+    expect(result.pending).toBe(0);
+  });
+});

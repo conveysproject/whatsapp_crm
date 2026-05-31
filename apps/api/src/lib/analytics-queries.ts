@@ -535,6 +535,36 @@ export async function getCampaignAnalytics(
   });
 }
 
+export interface ConversationStatusBreakdown {
+  open: number;
+  pending: number;
+  bot: number;
+  resolved: number;
+}
+
+export async function getConversationStatusBreakdown(
+  prisma: PrismaClient,
+  organizationId: string,
+  days: number
+): Promise<ConversationStatusBreakdown> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  const groups = await prisma.conversation.groupBy({
+    by: ["status"],
+    where: { organizationId, lastMessageAt: { gte: since } },
+    _count: { _all: true },
+  });
+
+  const countByStatus = new Map(groups.map((g) => [g.status, g._count._all]));
+
+  return {
+    open: countByStatus.get("open") ?? 0,
+    pending: countByStatus.get("pending") ?? 0,
+    bot: countByStatus.get("bot") ?? 0,
+    resolved: countByStatus.get("resolved") ?? 0,
+  };
+}
+
 export interface CampaignSnapshotData {
   lastCampaign: {
     id: string;
