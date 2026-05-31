@@ -1,9 +1,11 @@
 "use client";
 
-import { JSX, useEffect, useState } from "react";
+import { JSX, useCallback, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { TeamLeaderboard } from "./TeamLeaderboard";
 import Link from "next/link";
+
+const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 interface AgentConversation {
   id: string;
@@ -42,31 +44,30 @@ function AgentPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setDetail(null);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}/v1/analytics/agent/${userId}?days=${days}`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (res.ok) {
+        setDetail((await res.json() as { data: AgentDetail }).data);
+      } else {
+        setError("Failed to load agent details.");
+      }
+    } catch {
+      setError("Network error loading agent details.");
+    } finally {
+      setLoading(false);
+    }
+  }, [getToken, userId, days]);
 
   useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError(null);
-      setDetail(null);
-      try {
-        const token = await getToken();
-        const res = await fetch(`${API_BASE}/v1/analytics/agent/${userId}?days=${days}`, {
-          headers: { Authorization: `Bearer ${token ?? ""}` },
-        });
-        if (res.ok) {
-          setDetail((await res.json() as { data: AgentDetail }).data);
-        } else {
-          setError("Failed to load agent details.");
-        }
-      } catch {
-        setError("Network error loading agent details.");
-      } finally {
-        setLoading(false);
-      }
-    }
     void load();
-  }, [getToken, userId, days, API_BASE]);
+  }, [load]);
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -108,7 +109,7 @@ function AgentPanel({
             <div className="space-y-3">
               <p className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{error}</p>
               <button
-                onClick={() => { setError(null); setLoading(true); }}
+                onClick={() => { void load(); }}
                 className="text-xs text-blue-600 hover:underline"
               >
                 Retry
