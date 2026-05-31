@@ -26,6 +26,7 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
   const [value, setValue] = useState("");
   const [stage, setStage] = useState("");
   const [notes, setNotes] = useState("");
+  const [contactMessage, setContactMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sendMsg, setSendMsg] = useState(true);
@@ -101,7 +102,7 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
                 interactive: {
                   type: "button",
                   header: { type: "text", text: `Deal: ${title.trim().slice(0, 54)}` },
-                  body: { text: `Value: ${value || "–"}` },
+                  body: { text: `Value: ${value || "–"}${contactMessage.trim() ? `\n\n${contactMessage.trim()}` : ""}` },
                   footer: { text: "Reply using the buttons below" },
                   action: {
                     buttons: [
@@ -225,16 +226,29 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
             </button>
           </div>
           {sendMsg && (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2 text-sm">
-              <p className="font-semibold text-gray-800 truncate">Deal: {title.trim() || "—"}</p>
-              <p className="text-gray-600">Value: {value || "—"}</p>
-              <div className="flex gap-1.5 pt-1 flex-wrap">
-                <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">Accept</span>
-                <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">Reject</span>
-                <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">Negotiate</span>
+            <>
+              <textarea
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                rows={3}
+                placeholder="Add a message to the contact (optional)..."
+                value={contactMessage}
+                onChange={(e) => setContactMessage(e.target.value)}
+              />
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2 text-sm">
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">Preview</p>
+                <p className="font-semibold text-gray-800 truncate">Deal: {title.trim() || "—"}</p>
+                <p className="text-gray-600">Value: {value || "—"}</p>
+                {contactMessage.trim() && (
+                  <p className="text-gray-600 whitespace-pre-wrap text-xs">{contactMessage.trim()}</p>
+                )}
+                <div className="flex gap-1.5 pt-1 flex-wrap">
+                  <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">Accept</span>
+                  <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">Reject</span>
+                  <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">Negotiate</span>
+                </div>
+                <p className="text-xs text-gray-400">Sent to the contact&apos;s active WhatsApp conversation.</p>
               </div>
-              <p className="text-xs text-gray-400">Sent to the contact&apos;s active WhatsApp conversation.</p>
-            </div>
+            </>
           )}
         </div>
 

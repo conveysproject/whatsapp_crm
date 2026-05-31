@@ -213,12 +213,14 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
           >
             {msg.contentType === "audio" && msg.mediaUrl ? (
               <VoicePlayer mediaUrl={msg.mediaUrl} messageId={msg.id} />
-            ) : msg.mediaUrl != null && msg.contentType !== "text" ? (
-              <MediaMessage mediaUrl={msg.mediaUrl} contentType={msg.contentType ?? "document"} />
             ) : msg.contentType === "template" && msg.body ? (
               <TemplateMessageBubble body={msg.body} />
-            ) : msg.contentType === "interactive" && msg.body ? (
-              <InteractiveMessageBubble body={msg.body} />
+            ) : msg.contentType === "interactive" ? (
+              msg.body
+                ? <InteractiveMessageBubble body={msg.body} />
+                : <span className="text-xs text-gray-400 italic">Interactive message</span>
+            ) : msg.mediaUrl != null && msg.contentType !== "text" ? (
+              <MediaMessage mediaUrl={msg.mediaUrl} contentType={msg.contentType ?? "document"} />
             ) : (
               <>
                 <p dangerouslySetInnerHTML={{ __html: msg.body ? formatWhatsAppText(msg.body) : "[media]" }} />
