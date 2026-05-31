@@ -54,7 +54,7 @@ export const trustScoreRouter: FastifyPluginAsync = async (fastify) => {
         href: "/contacts",
       });
     }
-    if (responseRate < 0.1 && totalMessages > 50) {
+    if (responseRate < 0.1 && totalMessages > 0) {
       recommendations.push({
         text: "Increase engagement by using personalised messages and follow-ups.",
         href: "/campaigns/new",

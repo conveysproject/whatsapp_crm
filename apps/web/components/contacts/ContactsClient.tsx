@@ -330,7 +330,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                     <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Country</th>
                     <Th field="email" label="Email" />
                     <Th field="whatsappOptOut" label="Marketing" />
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Trust</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Trust</th>
                   </tr>
                 </thead>
                 <tbody>

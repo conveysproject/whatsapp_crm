@@ -29,12 +29,9 @@ export function TrustTrendChart({ history }: Props): JSX.Element {
   const innerW = W - PAD.left - PAD.right;
   const innerH = H - PAD.top - PAD.bottom;
 
-  const scores = history.map((p) => p.score);
-  const rawMin = Math.min(...scores);
-  const rawMax = Math.max(...scores);
-  const minScore = Math.max(0, rawMin - 5);
-  const maxScore = Math.min(100, rawMax + 5);
-  const scoreRange = maxScore - minScore || 1;
+  const minScore = 0;
+  const maxScore = 100;
+  const scoreRange = 100;
 
   function xPos(i: number): number {
     return PAD.left + (i / (history.length - 1)) * innerW;

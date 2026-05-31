@@ -46,7 +46,7 @@ export function startTrustScoreWorker() {
     async () => {
       const orgs = await prisma.organization.findMany({ select: { id: true } });
       const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
+      todayStart.setUTCHours(0, 0, 0, 0);
 
       for (const org of orgs) {
         const existing = await prisma.orgTrustScoreSnapshot.findFirst({
