@@ -63,46 +63,48 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
       return;
     }
 
-    if (sendNotification && notifyContact && deal.contact && notes.trim()) {
-      const convRes = await fetch(`${api}/v1/conversations?contactId=${deal.contact.id}&limit=1`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
-      });
-      if (convRes.ok) {
-        const convBody = await convRes.json() as { data: Array<{ id: string }> };
-        const conv = convBody.data[0];
-        if (conv) {
-          await fetch(`${api}/v1/conversations/${conv.id}/messages`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contentType: "interactive",
-              isSystemMessage: false,
-              interactive: {
-                type: "button",
-                header: { type: "text", text: `Deal: ${title.trim().slice(0, 54)}` },
-                body: { text: `Value: ${value || "–"}\n\n${notes.trim()}` },
-                footer: { text: "Reply using the buttons below" },
-                action: {
-                  buttons: [
-                    { type: "reply", reply: { id: `deal_accept_${deal.id}`, title: "✓ Accept" } },
-                    { type: "reply", reply: { id: `deal_reject_${deal.id}`, title: "✗ Reject" } },
-                    { type: "reply", reply: { id: `deal_negotiate_${deal.id}`, title: "~ Negotiate" } },
-                  ],
+    try {
+      if (sendNotification && notifyContact && deal.contact && notes.trim()) {
+        const convRes = await fetch(`${api}/v1/conversations?contactId=${deal.contact.id}&limit=1`, {
+          headers: { Authorization: `Bearer ${token ?? ""}` },
+        });
+        if (convRes.ok) {
+          const convBody = await convRes.json() as { data: Array<{ id: string }> };
+          const conv = convBody.data[0];
+          if (conv) {
+            const msgRes = await fetch(`${api}/v1/conversations/${conv.id}/messages`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contentType: "interactive",
+                isSystemMessage: false,
+                interactive: {
+                  type: "button",
+                  header: { type: "text", text: `Deal: ${title.trim().slice(0, 54)}` },
+                  body: { text: `Value: ${value || "–"}\n\n${notes.trim()}` },
+                  footer: { text: "Reply using the buttons below" },
+                  action: {
+                    buttons: [
+                      { type: "reply", reply: { id: `deal_accept_${deal.id}`, title: "✓ Accept" } },
+                      { type: "reply", reply: { id: `deal_reject_${deal.id}`, title: "✗ Reject" } },
+                      { type: "reply", reply: { id: `deal_negotiate_${deal.id}`, title: "~ Negotiate" } },
+                    ],
+                  },
                 },
-              },
-            }),
-          });
-        } else {
-          setSaving(false);
-          setError("Deal saved. No active WhatsApp conversation found — message not sent.");
-          onUpdated();
-          return;
+              }),
+            });
+            if (!msgRes.ok) {
+              setError("Deal saved, but message failed to send. Please try again from the inbox.");
+            }
+          } else {
+            setError("Deal saved. No active WhatsApp conversation found — message not sent.");
+          }
         }
       }
+    } finally {
+      setSaving(false);
+      onUpdated();
     }
-
-    setSaving(false);
-    onUpdated();
   }
 
   async function handleDelete() {
@@ -201,7 +203,7 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
               </div>
               {notifyContact && (
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2 text-sm">
-                  <p className="font-semibold text-gray-800 truncate">Deal: {title || "—"}</p>
+                  <p className="font-semibold text-gray-800 truncate">Deal: {title.trim() || "—"}</p>
                   <p className="text-gray-600">Value: {value || "—"}</p>
                   {notes.trim() ? (
                     <p className="text-gray-600 whitespace-pre-wrap text-xs">{notes.trim()}</p>
