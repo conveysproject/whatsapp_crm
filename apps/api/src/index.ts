@@ -19,6 +19,7 @@ import "./workers/conversation-summary.worker.js";
 import "./workers/no-reply.worker.js";
 import "./workers/resume-flow.worker.js";
 import { startMessageCleanupWorker, scheduleMessageCleanupCron } from "./workers/message-cleanup.js";
+import { startTrustScoreWorker, scheduleTrustScoreCron } from "./workers/trust-score.js";
 console.log("[startup] all workers ready");
 
 const PORT = Number(process.env["API_PORT"] ?? 4000);
@@ -55,6 +56,8 @@ async function start() {
   server.log.info(`API running on http://${HOST}:${PORT}`);
   startMessageCleanupWorker();
   scheduleMessageCleanupCron().catch((err) => server.log.warn({ err }, "Message cleanup cron schedule failed"));
+  startTrustScoreWorker();
+  scheduleTrustScoreCron().catch((err) => server.log.warn({ err }, "Trust score cron schedule failed"));
 }
 
 start().catch((err) => {
