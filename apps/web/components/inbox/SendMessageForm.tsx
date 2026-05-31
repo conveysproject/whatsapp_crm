@@ -22,9 +22,10 @@ interface Props {
   conversationId: string | null;
   prefillText?: string;
   onSent?: () => void;
+  onCreateDeal?: () => void;
 }
 
-export function SendMessageForm({ conversationId, prefillText, onSent }: Props): JSX.Element {
+export function SendMessageForm({ conversationId, prefillText, onSent, onCreateDeal }: Props): JSX.Element {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -222,6 +223,21 @@ export function SendMessageForm({ conversationId, prefillText, onSent }: Props):
           </div>
         )}
       </div>
+
+      {/* Create Deal */}
+      {onCreateDeal && (
+        <button
+          type="button"
+          onClick={onCreateDeal}
+          disabled={!conversationId}
+          className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
+          title="Create Deal"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+          </svg>
+        </button>
+      )}
 
       {/* Slash command palette */}
       <div className="relative flex-1">

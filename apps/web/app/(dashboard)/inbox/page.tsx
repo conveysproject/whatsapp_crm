@@ -67,22 +67,6 @@ export default function InboxPage(): JSX.Element {
                 </span>
               </div>
             </div>
-            {contact && (
-              <div className="relative group">
-                <button
-                  onClick={() => setShowOffer(true)}
-                  className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                  aria-label="Create Deal"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-3-3v6M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0z" />
-                  </svg>
-                </button>
-                <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                  Create Deal
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -112,6 +96,7 @@ export default function InboxPage(): JSX.Element {
           conversationId={selectedConversationId}
           prefillText={prefillText}
           onSent={() => setPrefillText("")}
+          onCreateDeal={contact ? () => setShowOffer(true) : undefined}
         />
         {selectedConversationId && (
           <BotPanel conversationId={selectedConversationId} />
