@@ -472,6 +472,69 @@ export async function getAgentDetail(
   };
 }
 
+export interface CampaignAnalyticsItem {
+  id: string;
+  name: string;
+  sentAt: string;
+  totalSent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+  deliveryRate: number;
+  readRate: number;
+}
+
+export async function getCampaignAnalytics(
+  prisma: PrismaClient,
+  organizationId: string,
+  days: number
+): Promise<CampaignAnalyticsItem[]> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  const campaigns = await prisma.campaign.findMany({
+    where: { organizationId, status: "completed", sentAt: { gte: since } },
+    select: { id: true, name: true, sentAt: true },
+    orderBy: { sentAt: "desc" },
+  });
+
+  if (campaigns.length === 0) return [];
+
+  const recipientGroups = await prisma.campaignRecipient.groupBy({
+    by: ["campaignId", "status"],
+    where: { campaignId: { in: campaigns.map((c) => c.id) } },
+    _count: { _all: true },
+  });
+
+  const byId = new Map<string, Map<string, number>>();
+  for (const r of recipientGroups) {
+    if (!byId.has(r.campaignId)) byId.set(r.campaignId, new Map());
+    byId.get(r.campaignId)!.set(r.status, r._count._all);
+  }
+
+  const deliveredStatuses: CampaignRecipientStatus[] = ["delivered", "read", "played"];
+
+  return campaigns.map((c) => {
+    const statusMap = byId.get(c.id) ?? new Map<string, number>();
+    const delivered = deliveredStatuses.reduce((sum, s) => sum + (statusMap.get(s) ?? 0), 0);
+    const read = statusMap.get("read") ?? 0;
+    const failed = statusMap.get("failed") ?? 0;
+    const totalSent = [...statusMap.values()].reduce((a, b) => a + b, 0);
+    const deliveryRate = totalSent > 0 ? Math.round((delivered / totalSent) * 100) : 0;
+    const readRate = totalSent > 0 ? Math.round((read / totalSent) * 100) : 0;
+    return {
+      id: c.id,
+      name: c.name,
+      sentAt: c.sentAt?.toISOString() ?? "",
+      totalSent,
+      delivered,
+      read,
+      failed,
+      deliveryRate,
+      readRate,
+    };
+  });
+}
+
 export interface CampaignSnapshotData {
   lastCampaign: {
     id: string;

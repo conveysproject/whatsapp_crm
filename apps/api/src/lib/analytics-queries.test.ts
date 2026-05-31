@@ -281,3 +281,39 @@ describe("getAgentDetail", () => {
     expect(result.topConversations[0]!.status).toBe("open");
   });
 });
+
+describe("getCampaignAnalytics", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("returns campaigns with delivery and read rates", async () => {
+    const sentAt = new Date("2026-05-28T10:00:00Z");
+    mockPrisma.campaign.findMany.mockResolvedValue([
+      { id: "camp-1", name: "May Promo", sentAt },
+    ]);
+    mockPrisma.campaignRecipient.groupBy.mockResolvedValue([
+      { campaignId: "camp-1", status: "delivered", _count: { _all: 60 } },
+      { campaignId: "camp-1", status: "read",      _count: { _all: 30 } },
+      { campaignId: "camp-1", status: "failed",    _count: { _all: 10 } },
+    ]);
+
+    const { getCampaignAnalytics } = await import("./analytics-queries.js");
+    const result = await getCampaignAnalytics(mockPrisma as unknown as PrismaClient, "org-1", 30);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]!.name).toBe("May Promo");
+    expect(result[0]!.totalSent).toBe(100);
+    // delivered = "delivered" + "read" = 90 (both are in deliveredStatuses)
+    expect(result[0]!.delivered).toBe(90);
+    expect(result[0]!.read).toBe(30);
+    expect(result[0]!.failed).toBe(10);
+    expect(result[0]!.deliveryRate).toBe(90);
+    expect(result[0]!.readRate).toBe(30);
+  });
+
+  it("returns empty array when no campaigns in period", async () => {
+    mockPrisma.campaign.findMany.mockResolvedValue([]);
+    const { getCampaignAnalytics } = await import("./analytics-queries.js");
+    const result = await getCampaignAnalytics(mockPrisma as unknown as PrismaClient, "org-1", 7);
+    expect(result).toHaveLength(0);
+  });
+});
