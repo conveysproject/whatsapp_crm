@@ -5,6 +5,7 @@ import { buildTemplateComponents, contactBodyVars } from "../lib/template-compon
 import type { ConversationId } from "@WBMSG/shared";
 import { canAccess } from "../lib/permissions.js";
 import { cancelNoReplyJobs } from "../lib/trigger-dispatcher.js";
+import { getIo } from "../lib/io-ref.js";
 
 type SendMessageBody =
   | { contentType?: "text"; text: string }
@@ -225,6 +226,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
 
         const message = await fastify.prisma.message.update({ where: { id: draft.id }, data: { status: "sent", whatsappMessageId: messageId } });
         await fastify.prisma.conversation.update({ where: { id: conversation.id }, data: { lastMessageAt: new Date() } });
+        getIo()?.to(`org:${organizationId}`).emit("new-message", { conversationId: conversation.id, organizationId, direction: "outbound", body: renderedBody, sentAt: message.sentAt.toISOString() });
         return reply.status(201).send({ data: message });
       }
 
@@ -303,6 +305,8 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
         where: { id: conversation.id },
         data: { lastMessageAt: new Date() },
       });
+
+      getIo()?.to(`org:${organizationId}`).emit("new-message", { conversationId: conversation.id, organizationId, direction: "outbound", body: storedBody, sentAt: message.sentAt.toISOString() });
 
       return reply.status(201).send({ data: message });
     }

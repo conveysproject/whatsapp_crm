@@ -12,16 +12,22 @@ export function useSocket(organizationId: string | undefined): void {
 
     const socket = getSocket();
 
+    function joinOrg() {
+      socket.emit("join-org", organizationId);
+    }
+
     async function connect() {
       const token = await getToken();
       socket.auth = { token };
+      // Re-join org room on every connect/reconnect
+      socket.on("connect", joinOrg);
       socket.connect();
-      socket.emit("join-org", organizationId);
     }
 
     void connect();
 
     return () => {
+      socket.off("connect", joinOrg);
       socket.emit("leave-org", organizationId);
       socket.disconnect();
     };
