@@ -1356,3 +1356,17 @@ model ImpersonationLog {
   @@index([startedAt])
   @@map("impersonation_logs")
 }
+
+// ─── Trust Score Snapshot ─────────────────────────────────────────────────────
+// Each row = one periodic snapshot of an org's trust score.
+
+model OrgTrustScoreSnapshot {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  score          Int
+  breakdown      Json
+  recordedAt     DateTime @default(now()) @map("recorded_at")
+
+  @@index([organizationId, recordedAt])
+  @@map("org_trust_score_snapshots")
+}
