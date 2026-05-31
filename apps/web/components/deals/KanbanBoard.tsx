@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX, useState, useEffect } from "react";
+import React, { JSX, useState, useEffect } from "react";
 import {
   DndContext,
   type DragEndEvent,
@@ -9,6 +9,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  useDroppable,
 } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useAuth } from "@clerk/nextjs";
@@ -21,6 +22,15 @@ interface KanbanBoardProps {
   pipelineId: string;
   onMutated: () => void;
   onDealClick?: (deal: Deal) => void;
+}
+
+function DroppableColumn({ id, children }: { id: string; children: React.ReactNode }): JSX.Element {
+  const { setNodeRef } = useDroppable({ id });
+  return (
+    <div ref={setNodeRef} className="flex flex-col gap-2 min-h-20 bg-gray-50 rounded-xl p-2 border border-gray-200">
+      {children}
+    </div>
+  );
 }
 
 export function KanbanBoard({ deals: initialDeals, stages, pipelineId, onMutated, onDealClick }: KanbanBoardProps): JSX.Element {
@@ -41,8 +51,11 @@ export function KanbanBoard({ deals: initialDeals, stages, pipelineId, onMutated
     setActiveDeal(null);
     if (!over || active.id === over.id) return;
 
-    const targetStage = over.id as string;
-    if (!stages.includes(targetStage)) return;
+    // over.id is either a stage name (dropped on empty column) or a deal ID (dropped on card)
+    const targetStage = stages.includes(over.id as string)
+      ? (over.id as string)
+      : deals.find((d) => d.id === over.id)?.stage;
+    if (!targetStage) return;
 
     setDeals((prev) =>
       prev.map((d) => (d.id === active.id ? { ...d, stage: targetStage } : d))
@@ -86,7 +99,6 @@ export function KanbanBoard({ deals: initialDeals, stages, pipelineId, onMutated
             return (
               <div
                 key={stage}
-                id={stage}
                 className="flex flex-col gap-3 min-w-60 w-60 flex-shrink-0"
               >
                 <div className="flex items-start justify-between px-1">
@@ -100,7 +112,7 @@ export function KanbanBoard({ deals: initialDeals, stages, pipelineId, onMutated
                     {stageDealList.length}
                   </span>
                 </div>
-                <div className="flex flex-col gap-2 min-h-20 bg-gray-50 rounded-xl p-2 border border-gray-200">
+                <DroppableColumn id={stage}>
                   <SortableContext
                     items={stageDealList.map((d) => d.id)}
                     strategy={verticalListSortingStrategy}
@@ -115,7 +127,7 @@ export function KanbanBoard({ deals: initialDeals, stages, pipelineId, onMutated
                   >
                     + Add deal
                   </button>
-                </div>
+                </DroppableColumn>
               </div>
             );
           })}
