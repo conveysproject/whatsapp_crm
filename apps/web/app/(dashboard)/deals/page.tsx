@@ -30,7 +30,7 @@ export default function DealsPage(): JSX.Element {
     return res.json() as Promise<unknown>;
   }
 
-  const { data: pipelinesData } = useQuery<{ data: Pipeline[] }>({
+  const { data: pipelinesData, isLoading: pipelinesLoading } = useQuery<{ data: Pipeline[] }>({
     queryKey: ["pipelines"],
     queryFn: () => authFetch(`${api}/v1/pipelines`) as Promise<{ data: Pipeline[] }>,
   });
@@ -52,6 +52,26 @@ export default function DealsPage(): JSX.Element {
 
   function invalidate() {
     void qc.invalidateQueries({ queryKey: ["deals"] });
+  }
+
+  if (pipelinesLoading) {
+    return (
+      <div className="p-8 space-y-4">
+        <h1 className="text-2xl font-semibold text-gray-900">Deals</h1>
+        <div className="flex gap-4 overflow-x-auto pb-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex flex-col gap-3 min-w-60 w-60 flex-shrink-0">
+              <div className="h-5 w-24 bg-gray-200 rounded animate-pulse" />
+              <div className="flex flex-col gap-2 min-h-40 bg-gray-50 rounded-xl p-2 border border-gray-200">
+                {[1, 2].map((j) => (
+                  <div key={j} className="h-16 bg-gray-200 rounded-lg animate-pulse" />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   if (pipelines.length === 0) {
