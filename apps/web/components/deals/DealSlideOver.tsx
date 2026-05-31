@@ -77,7 +77,6 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
               headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
               body: JSON.stringify({
                 contentType: "interactive",
-                isSystemMessage: false,
                 interactive: {
                   type: "button",
                   header: { type: "text", text: `Deal: ${title.trim().slice(0, 54)}` },
@@ -99,6 +98,8 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
           } else {
             setError("Deal saved. No active WhatsApp conversation found — message not sent.");
           }
+        } else {
+          setError("Deal saved, but could not reach server to send notification.");
         }
       }
     } finally {
