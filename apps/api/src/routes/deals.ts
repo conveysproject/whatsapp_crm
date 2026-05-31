@@ -82,6 +82,11 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
         stage: request.body.stage,
         notes: request.body.notes,
       },
+      include: {
+        contact: {
+          select: { id: true, firstName: true, lastName: true, phone: true },
+        },
+      },
     });
     return reply.send({ data: deal });
   });
@@ -99,6 +104,11 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
       const deal = await fastify.prisma.deal.update({
         where: { id: request.params.id },
         data: { stage: request.body.stage },
+        include: {
+          contact: {
+            select: { id: true, firstName: true, lastName: true, phone: true },
+          },
+        },
       });
       return reply.send({ data: deal });
     }
