@@ -26,9 +26,6 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
   const [value, setValue] = useState("");
   const [stage, setStage] = useState("");
   const [notes, setNotes] = useState("");
-  const [message, setMessage] = useState(
-    `Hi ${contactName || "there"}, I'd like to share an offer with you. Let me know if you're interested!`
-  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sendMsg, setSendMsg] = useState(true);
@@ -84,31 +81,53 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
       return;
     }
 
-    if (withMessage && message.trim()) {
-      const convRes = await fetch(`${api}/v1/conversations?contactId=${contactId}&limit=1`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
-      });
-      if (convRes.ok) {
-        const convBody = await convRes.json() as { data: Array<{ id: string }> };
-        const conv = convBody.data[0];
-        if (conv) {
-          await fetch(`${api}/v1/conversations/${conv.id}/messages`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ contentType: "text", text: message.trim() }),
-          });
+    const dealData = await dealRes.json() as { data: { id: string } };
+    const dealId = dealData.data.id;
+
+    try {
+      if (withMessage) {
+        const convRes = await fetch(`${api}/v1/conversations?contactId=${contactId}&limit=1`, {
+          headers: { Authorization: `Bearer ${token ?? ""}` },
+        });
+        if (convRes.ok) {
+          const convBody = await convRes.json() as { data: Array<{ id: string }> };
+          const conv = convBody.data[0];
+          if (conv) {
+            const msgRes = await fetch(`${api}/v1/conversations/${conv.id}/messages`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contentType: "interactive",
+                interactive: {
+                  type: "button",
+                  header: { type: "text", text: `Deal: ${title.trim().slice(0, 54)}` },
+                  body: { text: `Value: ${value || "–"}` },
+                  footer: { text: "Reply using the buttons below" },
+                  action: {
+                    buttons: [
+                      { type: "reply", reply: { id: `deal_accept_${dealId}`, title: "✓ Accept" } },
+                      { type: "reply", reply: { id: `deal_reject_${dealId}`, title: "✗ Reject" } },
+                      { type: "reply", reply: { id: `deal_negotiate_${dealId}`, title: "~ Negotiate" } },
+                    ],
+                  },
+                },
+              }),
+            });
+            if (!msgRes.ok) {
+              setError("Deal created, but message failed to send. Please try again from the inbox.");
+            }
+          } else {
+            setError("Deal created. No active WhatsApp conversation found — message not sent.");
+          }
         } else {
-          setError("Deal created. No active WhatsApp conversation found — message not sent.");
-          setSaving(false);
-          onCreated();
-          return;
+          setError("Deal created, but could not reach server to send notification.");
         }
       }
+    } finally {
+      setSaving(false);
+      onCreated();
+      onClose();
     }
-
-    setSaving(false);
-    onCreated();
-    onClose();
   }
 
   if (pipelines.length === 0) {
@@ -206,16 +225,16 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
             </button>
           </div>
           {sendMsg && (
-            <textarea
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
-              rows={4}
-              placeholder="Message to send on WhatsApp..."
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-            />
-          )}
-          {sendMsg && (
-            <p className="text-xs text-gray-400 mt-1">Sent to the contact&apos;s active WhatsApp conversation.</p>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2 text-sm">
+              <p className="font-semibold text-gray-800 truncate">Deal: {title.trim() || "—"}</p>
+              <p className="text-gray-600">Value: {value || "—"}</p>
+              <div className="flex gap-1.5 pt-1 flex-wrap">
+                <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">✓ Accept</span>
+                <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">✗ Reject</span>
+                <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">~ Negotiate</span>
+              </div>
+              <p className="text-xs text-gray-400">Sent to the contact&apos;s active WhatsApp conversation.</p>
+            </div>
           )}
         </div>
 
