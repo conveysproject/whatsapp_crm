@@ -39,7 +39,7 @@ const NAV: NavItem[] = [
   { href: "/templates",           label: "Templates",   icon: "📋" },
   { href: "/flows",               label: "Flows",       icon: "⚡" },
   { href: "/deals",               label: "Deals",       icon: "💼" },
-  { href: "/analytics/predictive",label: "Analytics",   icon: "📊" },
+  { href: "/analytics",            label: "Analytics",   icon: "📊" },
   { href: "/trust-score",         label: "Trust Score", icon: "🛡" },
   { href: "/settings",            label: "Settings",    icon: "⚙" },
 ];
