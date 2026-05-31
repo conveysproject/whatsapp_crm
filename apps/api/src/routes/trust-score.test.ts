@@ -4,8 +4,8 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
 const mockPrisma = {
-  message: { count: vi.fn() },
-  contact: { count: vi.fn() },
+  message: { count: vi.fn(), findMany: vi.fn() },
+  contact: { count: vi.fn(), findFirst: vi.fn() },
   campaign: { findMany: vi.fn() },
   orgTrustScoreSnapshot: { findMany: vi.fn() },
   deal: { findMany: vi.fn() },
@@ -104,23 +104,16 @@ describe("GET /v1/contacts/:id/trust-score", () => {
 
   it("returns { score, label } from ML service for a known contact", async () => {
     mockPrisma.contact.count.mockResolvedValue(1);  // not used directly but needed
-    // findFirst used by the contact lookup — we need to add contact.findFirst to mock
-    (mockPrisma as unknown as Record<string, unknown>).contact = {
-      ...mockPrisma.contact,
-      findFirst: vi.fn().mockResolvedValue({
-        id: "c-1",
-        organizationId: "org-1",
-        lifecycleStage: "customer",
-        tags: ["vip"],
-      }),
-    };
-    (mockPrisma as unknown as Record<string, unknown>).message = {
-      ...mockPrisma.message,
-      findMany: vi.fn().mockResolvedValue([
-        { direction: "inbound", sentAt: new Date() },
-        { direction: "outbound", sentAt: new Date() },
-      ]),
-    };
+    mockPrisma.contact.findFirst.mockResolvedValue({
+      id: "c-1",
+      organizationId: "org-1",
+      lifecycleStage: "customer",
+      tags: ["vip"],
+    });
+    mockPrisma.message.findMany.mockResolvedValue([
+      { direction: "inbound", sentAt: new Date() },
+      { direction: "outbound", sentAt: new Date() },
+    ]);
     mockPrisma.deal.findMany.mockResolvedValue([{ value: 5000 }]);
 
     const res = await app.inject({ method: "GET", url: "/v1/contacts/c-1/trust-score" });
@@ -131,10 +124,7 @@ describe("GET /v1/contacts/:id/trust-score", () => {
   });
 
   it("returns 404 when contact not found", async () => {
-    (mockPrisma as unknown as Record<string, unknown>).contact = {
-      ...mockPrisma.contact,
-      findFirst: vi.fn().mockResolvedValue(null),
-    };
+    mockPrisma.contact.findFirst.mockResolvedValue(null);
     const res = await app.inject({ method: "GET", url: "/v1/contacts/bad-id/trust-score" });
     expect(res.statusCode).toBe(404);
   });
