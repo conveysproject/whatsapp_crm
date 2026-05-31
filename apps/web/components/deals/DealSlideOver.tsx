@@ -24,6 +24,13 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const contactName = deal.contact
+    ? [deal.contact.firstName, deal.contact.lastName].filter(Boolean).join(" ") || deal.contact.phoneNumber || ""
+    : null;
+
+  const [notifyContact, setNotifyContact] = useState(false);
+  const [notifyMessage, setNotifyMessage] = useState("");
+
   useEffect(() => {
     setTitle(deal.title);
     setValue(deal.value != null ? String(deal.value) : "");
@@ -31,13 +38,26 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
     setNotes(deal.notes ?? "");
     setError(null);
     setConfirmDelete(false);
+    setNotifyContact(false);
+    setNotifyMessage("");
   }, [deal]);
+
+  // Build default notify message whenever value or stage changes
+  useEffect(() => {
+    if (!notifyContact) return;
+    const name = contactName ?? "there";
+    const valuePart = value
+      ? `The updated price is ${parseFloat(value).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}.`
+      : "";
+    setNotifyMessage(`Hi ${name}, we've updated your deal "${title}". ${valuePart} Please let us know if you have any questions!`.trim());
+  }, [notifyContact, value, stage, title]);
 
   async function handleSave() {
     if (!title.trim()) return;
     setSaving(true);
     setError(null);
     const token = await getToken();
+
     const res = await fetch(`${api}/v1/deals/${deal.id}`, {
       method: "PATCH",
       headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
@@ -48,11 +68,36 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
         notes: notes.trim() || null,
       }),
     });
-    setSaving(false);
+
     if (!res.ok) {
+      setSaving(false);
       setError("Failed to save. Please try again.");
       return;
     }
+
+    if (notifyContact && notifyMessage.trim() && deal.contact) {
+      const convRes = await fetch(`${api}/v1/conversations?contactId=${deal.contact.id}&limit=1`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (convRes.ok) {
+        const convBody = await convRes.json() as { data: Array<{ id: string }> };
+        const conv = convBody.data[0];
+        if (conv) {
+          await fetch(`${api}/v1/conversations/${conv.id}/messages`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ contentType: "text", text: notifyMessage.trim() }),
+          });
+        } else {
+          setSaving(false);
+          setError("Deal saved. No active WhatsApp conversation found — message not sent.");
+          onUpdated();
+          return;
+        }
+      }
+    }
+
+    setSaving(false);
     onUpdated();
   }
 
@@ -72,10 +117,6 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
     onDeleted();
     onClose();
   }
-
-  const contactName = deal.contact
-    ? [deal.contact.firstName, deal.contact.lastName].filter(Boolean).join(" ") || deal.contact.phoneNumber || ""
-    : null;
 
   return (
     <>
@@ -131,12 +172,42 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
             <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
             <textarea
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
-              rows={5}
+              rows={4}
               placeholder="Add notes about this deal..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
           </div>
+
+          {/* Notify contact — only shown when deal has a linked contact */}
+          {deal.contact && (
+            <div className="border-t pt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-gray-700">Notify contact on save</label>
+                <button
+                  type="button"
+                  onClick={() => setNotifyContact((v) => !v)}
+                  className={[
+                    "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                    notifyContact ? "bg-green-500" : "bg-gray-200",
+                  ].join(" ")}
+                >
+                  <span className={["inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform", notifyContact ? "translate-x-4" : "translate-x-1"].join(" ")} />
+                </button>
+              </div>
+              {notifyContact && (
+                <>
+                  <textarea
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                    rows={3}
+                    value={notifyMessage}
+                    onChange={(e) => setNotifyMessage(e.target.value)}
+                  />
+                  <p className="text-xs text-gray-400">Sent to {contactName}&apos;s active WhatsApp conversation.</p>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="px-5 py-4 border-t space-y-2">
@@ -146,7 +217,7 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
             disabled={saving || !title.trim()}
             className="w-full py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? "Saving..." : notifyContact ? "Save & Notify Contact" : "Save Changes"}
           </button>
           {confirmDelete ? (
             <div className="flex gap-2">
