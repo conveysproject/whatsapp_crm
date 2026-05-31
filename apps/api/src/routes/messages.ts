@@ -262,6 +262,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
           contentType,
           body: storedBody,
           status: "sending",
+          ...(contentType === "interactive" ? { isSystemMessage: false } : {}),
         },
       });
 

@@ -28,6 +28,10 @@ vi.mock("../lib/whatsapp.js", () => ({
   sendInteractiveMessage: vi.fn().mockResolvedValue({ messageId: "wamid-int-789" }),
 }));
 
+vi.mock("../lib/trigger-dispatcher.js", () => ({
+  cancelNoReplyJobs: vi.fn(),
+}));
+
 const baseConversation = {
   id: "conv-1",
   organizationId: "org-1",
@@ -189,5 +193,49 @@ describe("POST /v1/conversations/:id/messages — interactive", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json<{ error: { code: string } }>().error.code).toBe("MISSING_INTERACTIVE");
+  });
+});
+
+describe("POST /v1/conversations/:id/messages — interactive isSystemMessage guard", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("creates message draft with isSystemMessage: false for interactive messages", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(baseConversation);
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-int-1", status: "sending" });
+    mockPrisma.message.update.mockResolvedValue({
+      id: "msg-int-1", contentType: "interactive", direction: "outbound",
+      status: "sent", isSystemMessage: false,
+    });
+    mockPrisma.conversation.update.mockResolvedValue({});
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/conversations/conv-1/messages",
+      headers: { "content-type": "application/json" },
+      payload: {
+        contentType: "interactive",
+        interactive: {
+          type: "button",
+          header: { type: "text", text: "Deal: Test Deal" },
+          body: { text: "Value: 25000\n\nSome notes" },
+          footer: { text: "Reply using the buttons below" },
+          action: {
+            buttons: [
+              { type: "reply", reply: { id: "deal_accept_abc123", title: "✓ Accept" } },
+              { type: "reply", reply: { id: "deal_reject_abc123", title: "✗ Reject" } },
+              { type: "reply", reply: { id: "deal_negotiate_abc123", title: "~ Negotiate" } },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(mockPrisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ isSystemMessage: false }),
+      })
+    );
   });
 });
