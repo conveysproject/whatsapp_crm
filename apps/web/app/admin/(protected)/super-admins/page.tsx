@@ -154,7 +154,7 @@ export default function SuperAdminsPage(): JSX.Element {
                 <p className="font-medium text-sm">{admin.fullName}</p>
                 <p className="text-xs text-gray-500">{admin.email}</p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Added {new Date(admin.createdAt).toLocaleDateString("en-IN")}
+                  Added {new Date(admin.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
                   {!admin.isActive && <span className="ml-2 text-red-500 font-medium">Deactivated</span>}
                 </p>
               </div>

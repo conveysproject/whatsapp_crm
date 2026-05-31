@@ -75,9 +75,9 @@ const SUB_CATEGORIES: Record<string, string[]> = {
 };
 
 const REVENUE_BANDS = [
-  "Less than ₹5 Lakhs", "₹5 Lakhs – ₹25 Lakhs", "₹25 Lakhs – ₹50 Lakhs",
-  "₹50 Lakhs – ₹1 Crore", "₹1 Crore – ₹10 Crore", "₹10 Crore – ₹100 Crore",
-  "More than ₹100 Crore",
+  "Less than $10K", "$10K – $50K", "$50K – $100K",
+  "$100K – $500K", "$500K – $5M", "$5M – $50M",
+  "More than $50M",
 ];
 
 interface FormState {
@@ -87,7 +87,7 @@ interface FormState {
 }
 
 const INIT: FormState = {
-  countryCode: "+91", phone: "", companyName: "", companyWebsite: "",
+  countryCode: "+1", phone: "", companyName: "", companyWebsite: "",
   companyLocation: "", industry: "", subCategory: "", revenue: "",
   whatsappUpdates: true, termsAccepted: false,
 };

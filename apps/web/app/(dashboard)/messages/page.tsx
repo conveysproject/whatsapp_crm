@@ -214,7 +214,7 @@ export default function MessageLogPage(): JSX.Element {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
-                      {new Date(msg.createdAt).toLocaleString("en-IN")}
+                      {new Date(msg.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
                     </td>
                   </tr>
                 );

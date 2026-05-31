@@ -80,7 +80,7 @@ export function CampaignSnapshot(): JSX.Element {
           <div>
             <p className="text-xs text-gray-500 mb-0.5">Last Sent</p>
             <p className="text-sm font-medium text-gray-900 truncate">{data.lastCampaign.name}</p>
-            <p className="text-xs text-gray-400">{new Date(data.lastCampaign.sentAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</p>
+            <p className="text-xs text-gray-400">{new Date(data.lastCampaign.sentAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</p>
           </div>
           <DeliveryBar
             delivered={data.lastCampaign.delivered}
@@ -105,7 +105,7 @@ export function CampaignSnapshot(): JSX.Element {
             <div className="min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">{data.nextScheduled.name}</p>
               <p className="text-xs text-gray-400">
-                {new Date(data.nextScheduled.scheduledAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                {new Date(data.nextScheduled.scheduledAt).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
               </p>
             </div>
             <span className="ml-2 shrink-0 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">

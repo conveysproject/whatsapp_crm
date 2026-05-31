@@ -89,7 +89,7 @@ export default function AuditLogsPage(): JSX.Element {
             {logs.map((log) => (
               <div key={log.id} className="p-4 flex items-start gap-4">
                 <div className="flex-shrink-0 w-40 text-xs text-gray-400 pt-0.5">
-                  {new Date(log.createdAt).toLocaleString("en-IN")}
+                  {new Date(log.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
                 </div>
                 <div className="flex-shrink-0">
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ACTION_COLOR[log.action] ?? "bg-gray-100 text-gray-600"}`}>

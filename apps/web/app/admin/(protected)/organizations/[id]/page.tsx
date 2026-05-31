@@ -161,7 +161,7 @@ export default function AdminOrgDetailPage(): JSX.Element {
       </div>
 
       <div className="text-xs text-gray-400">
-        Created: {new Date(org.createdAt).toLocaleString("en-IN")} · ID: {org.id}
+        Created: {new Date(org.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })} · ID: {org.id}
       </div>
     </div>
   );

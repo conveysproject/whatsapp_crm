@@ -153,7 +153,7 @@ export default function AdminOrgsPage(): JSX.Element {
             <div>
               <p className="font-medium text-sm">{org.name}</p>
               <p className="text-xs text-gray-500">
-                {org._count.members} members · <span className="capitalize">{org.planTier}</span> · {new Date(org.createdAt).toLocaleDateString("en-IN")}
+                {org._count.members} members · <span className="capitalize">{org.planTier}</span> · {new Date(org.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
               </p>
             </div>
             <div className="flex items-center gap-3">

@@ -22,9 +22,9 @@ const FEATURES = [
 ];
 
 const PRICING = [
-  { name: "Starter", price: "₹999", period: "/mo", desc: "Solo founders & small teams", agents: "3 agents", contacts: "1,000 contacts", popular: false, features: ["Unified WhatsApp inbox", "Basic CRM (contacts & deals)", "5 broadcast templates", "Basic analytics", "Email support"] },
-  { name: "Growth", price: "₹2,999", period: "/mo", desc: "Growing teams & SMBs", agents: "10 agents", contacts: "10,000 contacts", popular: true, features: ["Everything in Starter", "AI Smart Replies (Claude)", "Unlimited broadcasts", "Automation flow builder", "Advanced analytics", "Priority support"] },
-  { name: "Scale", price: "₹7,999", period: "/mo", desc: "Scale-ups & power users", agents: "Unlimited agents", contacts: "100,000 contacts", popular: false, features: ["Everything in Growth", "Agency sub-accounts", "White-label option", "Custom AI training", "Dedicated account manager", "SLA guarantee"] },
+  { name: "Starter", price: "$12", period: "/mo", desc: "Solo founders & small teams", agents: "3 agents", contacts: "1,000 contacts", popular: false, features: ["Unified WhatsApp inbox", "Basic CRM (contacts & deals)", "5 broadcast templates", "Basic analytics", "Email support"] },
+  { name: "Growth", price: "$36", period: "/mo", desc: "Growing teams & SMBs", agents: "10 agents", contacts: "10,000 contacts", popular: true, features: ["Everything in Starter", "AI Smart Replies (Claude)", "Unlimited broadcasts", "Automation flow builder", "Advanced analytics", "Priority support"] },
+  { name: "Scale", price: "$96", period: "/mo", desc: "Scale-ups & power users", agents: "Unlimited agents", contacts: "100,000 contacts", popular: false, features: ["Everything in Growth", "Agency sub-accounts", "White-label option", "Custom AI training", "Dedicated account manager", "SLA guarantee"] },
 ];
 
 export default function LandingPage(): JSX.Element {
@@ -319,11 +319,11 @@ export default function LandingPage(): JSX.Element {
               </div>
               <div className="chat">
                 <div className="m1 b-in">
-                  Hi! Is your Growth plan still ₹2,999/mo? 🙏
+                  Hi! Is your Growth plan still $36/mo? 🙏
                   <div className="msg-t">10:42</div>
                 </div>
                 <div className="m2 b-out" style={{alignSelf:"flex-end"}}>
-                  Yes! Growth is ₹2,999/mo — 10 agents, 10K contacts & AI replies ✨
+                  Yes! Growth is $36/mo — 10 agents, 10K contacts & AI replies ✨
                   <div className="msg-t">10:42 ✓✓</div>
                 </div>
                 <div className="m3 b-in">
@@ -460,7 +460,7 @@ export default function LandingPage(): JSX.Element {
               </div>
               <div className="ins" style={{background:"var(--g50)",border:"1px solid var(--g200)"}}>
                 <div className="ins-lbl" style={{color:"var(--g7)"}}>Suggested Reply</div>
-                <div className="ins-txt">&ldquo;Hi Priya! Growth plan is perfect for your 8-person team — ₹2,999/mo. Want a quick demo? 🗓️&rdquo;</div>
+                <div className="ins-txt">&ldquo;Hi Priya! Growth plan is perfect for your 8-person team — $36/mo. Want a quick demo? 🗓️&rdquo;</div>
                 <div className="ins-acts">
                   <Link href="/sign-up" className="ins-btn-p">Send Now</Link>
                   <Link href="/sign-up" className="ins-btn-o">Edit Reply</Link>

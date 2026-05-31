@@ -110,13 +110,13 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
           </div>
           {subscription?.stripe && (
             <p className="text-xs text-gray-500 mb-4">
-              Renews {new Date(subscription.stripe.currentPeriodEnd).toLocaleDateString("en-IN")} · Status: {subscription.stripe.status}
+              Renews {new Date(subscription.stripe.currentPeriodEnd).toLocaleDateString(undefined, { dateStyle: "medium" })} · Status: {subscription.stripe.status}
             </p>
           )}
           {subscription?.manual && (
             <p className="text-xs text-gray-500 mb-4">
               Manual subscription · {subscription.manual.chargesFrequency} · Status: {subscription.manual.status}
-              {subscription.manual.expiresAt ? ` · Expires: ${new Date(subscription.manual.expiresAt).toLocaleDateString("en-IN")}` : ""}
+              {subscription.manual.expiresAt ? ` · Expires: ${new Date(subscription.manual.expiresAt).toLocaleDateString(undefined, { dateStyle: "medium" })}` : ""}
             </p>
           )}
           <UsageBar used={usage.usage.contacts} limit={usage.limits.contacts} label="Contacts" />
@@ -145,9 +145,9 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {p.priceInr != null && (
+                    {p.priceUsd != null && (
                       <span className="text-sm font-semibold text-gray-800">
-                        ₹{p.priceInr}/mo
+                        ${p.priceUsd}/mo
                       </span>
                     )}
                     {canSwitch && (
@@ -156,7 +156,7 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
                         disabled={switching === p.tier}
                         className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 disabled:opacity-50"
                       >
-                        {switching === p.tier ? "Switching…" : (p.priceInr && p.priceInr > (plans.find((pp) => pp.tier === currentPlan)?.priceInr ?? 0) ? "Upgrade" : "Downgrade")}
+                        {switching === p.tier ? "Switching…" : (p.priceUsd && p.priceUsd > (plans.find((pp) => pp.tier === currentPlan)?.priceUsd ?? 0) ? "Upgrade" : "Downgrade")}
                       </button>
                     )}
                     {!isCurrent && !canSwitch && p.tier !== "enterprise" && (
@@ -189,7 +189,7 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
                   <p className="text-sm text-gray-900">
                     {t.currency?.toUpperCase()} {(t.amount / 100).toFixed(2)}
                   </p>
-                  <p className="text-xs text-gray-500 capitalize">{t.gateway} · {new Date(t.createdAt).toLocaleDateString("en-IN")}</p>
+                  <p className="text-xs text-gray-500 capitalize">{t.gateway} · {new Date(t.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}</p>
                 </div>
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${t.status === "paid" || t.status === "success" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
                   {t.status}

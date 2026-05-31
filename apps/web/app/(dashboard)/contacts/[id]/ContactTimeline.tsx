@@ -174,7 +174,7 @@ export function ContactTimeline({ contactId }: { contactId: string }): JSX.Eleme
                 </p>
               )}
               <p className="text-xs text-gray-400 mt-0.5">
-                {new Date(item.createdAt).toLocaleString("en-IN")}
+                {new Date(item.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
               </p>
             </div>
           </div>
