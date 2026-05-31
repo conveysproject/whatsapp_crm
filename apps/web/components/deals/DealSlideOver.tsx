@@ -29,7 +29,6 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
     : null;
 
   const [notifyContact, setNotifyContact] = useState(false);
-  const [notifyMessage, setNotifyMessage] = useState("");
 
   useEffect(() => {
     setTitle(deal.title);
@@ -39,20 +38,9 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
     setError(null);
     setConfirmDelete(false);
     setNotifyContact(false);
-    setNotifyMessage("");
   }, [deal]);
 
-  // Build default notify message whenever value or stage changes
-  useEffect(() => {
-    if (!notifyContact) return;
-    const name = contactName ?? "there";
-    const valuePart = value
-      ? `The updated price is ${parseFloat(value).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}.`
-      : "";
-    setNotifyMessage(`Hi ${name}, we've updated your deal "${title}". ${valuePart} Please let us know if you have any questions!`.trim());
-  }, [notifyContact, value, stage, title]);
-
-  async function handleSave() {
+  async function handleSave(sendNotification = true) {
     if (!title.trim()) return;
     setSaving(true);
     setError(null);
@@ -75,7 +63,7 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
       return;
     }
 
-    if (notifyContact && notifyMessage.trim() && deal.contact) {
+    if (sendNotification && notifyContact && deal.contact && notes.trim()) {
       const convRes = await fetch(`${api}/v1/conversations?contactId=${deal.contact.id}&limit=1`, {
         headers: { Authorization: `Bearer ${token ?? ""}` },
       });
@@ -86,7 +74,23 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
           await fetch(`${api}/v1/conversations/${conv.id}/messages`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ contentType: "text", text: notifyMessage.trim() }),
+            body: JSON.stringify({
+              contentType: "interactive",
+              isSystemMessage: false,
+              interactive: {
+                type: "button",
+                header: { type: "text", text: `Deal: ${title.trim().slice(0, 54)}` },
+                body: { text: `Value: ${value || "–"}\n\n${notes.trim()}` },
+                footer: { text: "Reply using the buttons below" },
+                action: {
+                  buttons: [
+                    { type: "reply", reply: { id: `deal_accept_${deal.id}`, title: "✓ Accept" } },
+                    { type: "reply", reply: { id: `deal_reject_${deal.id}`, title: "✗ Reject" } },
+                    { type: "reply", reply: { id: `deal_negotiate_${deal.id}`, title: "~ Negotiate" } },
+                  ],
+                },
+              },
+            }),
           });
         } else {
           setSaving(false);
@@ -196,15 +200,21 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
                 </button>
               </div>
               {notifyContact && (
-                <>
-                  <textarea
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
-                    rows={3}
-                    value={notifyMessage}
-                    onChange={(e) => setNotifyMessage(e.target.value)}
-                  />
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2 text-sm">
+                  <p className="font-semibold text-gray-800 truncate">Deal: {title || "—"}</p>
+                  <p className="text-gray-600">Value: {value || "—"}</p>
+                  {notes.trim() ? (
+                    <p className="text-gray-600 whitespace-pre-wrap text-xs">{notes.trim()}</p>
+                  ) : (
+                    <p className="text-amber-600 text-xs">Add notes to give the contact context before sending.</p>
+                  )}
+                  <div className="flex gap-1.5 pt-1 flex-wrap">
+                    <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">✓ Accept</span>
+                    <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">✗ Reject</span>
+                    <span className="px-2 py-1 rounded border border-gray-300 text-xs text-gray-600 bg-white">~ Negotiate</span>
+                  </div>
                   <p className="text-xs text-gray-400">Sent to {contactName}&apos;s active WhatsApp conversation.</p>
-                </>
+                </div>
               )}
             </div>
           )}
@@ -212,13 +222,32 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
 
         <div className="px-5 py-4 border-t space-y-2">
           {error && <p className="text-xs text-red-600">{error}</p>}
-          <button
-            onClick={() => void handleSave()}
-            disabled={saving || !title.trim()}
-            className="w-full py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50"
-          >
-            {saving ? "Saving..." : notifyContact ? "Save & Notify Contact" : "Save Changes"}
-          </button>
+          {notifyContact ? (
+            <>
+              <button
+                onClick={() => void handleSave(true)}
+                disabled={saving || !title.trim() || !notes.trim()}
+                className="w-full py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                {saving ? "Sending..." : "Save & Send"}
+              </button>
+              <button
+                onClick={() => void handleSave(false)}
+                disabled={saving || !title.trim()}
+                className="w-full py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Save without notifying
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => void handleSave()}
+              disabled={saving || !title.trim()}
+              className="w-full py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          )}
           {confirmDelete ? (
             <div className="flex gap-2">
               <button
