@@ -15,7 +15,6 @@ export type FilterRule =
   | { field: "lifecycleStage"; operator: "equals" | "isNot"; value: string }
   | { field: "tags"; operator: "contains" | "doesNotContain"; value: string }
   | { field: "countryCode" | "languageCode"; operator: "equals" | "isNot"; value: string }
-  | { field: "companyName"; operator: "contains" | "equals" | "isEmpty" | "isNotEmpty"; value?: string }
   | { field: "assignedUserId"; operator: "equals" | "isNot" | "isEmpty"; value?: string }
   | { field: "groups"; operator: "memberOf" | "notMemberOf"; value: string }
   | { field: "whatsappOptOut" | "disableBot"; operator: "isTrue" | "isFalse" }
@@ -46,7 +45,6 @@ const STATIC_FIELD_GROUPS: FieldGroup[] = [
     { value: "languageCode", label: "Language" },
   ]},
   { label: "Organization", fields: [
-    { value: "companyName", label: "Company" },
     { value: "assignedUserId", label: "Assigned user" },
     { value: "groups", label: "Groups" },
   ]},
@@ -78,13 +76,6 @@ function getOperators(field: string): OperatorOption[] {
     return [{ value: "contains", label: "contains" }, { value: "doesNotContain", label: "does not contain" }];
   if (["countryCode", "languageCode"].includes(field))
     return [{ value: "equals", label: "is" }, { value: "isNot", label: "is not" }];
-  if (field === "companyName")
-    return [
-      { value: "contains", label: "contains" },
-      { value: "equals", label: "equals" },
-      { value: "isEmpty", label: "is empty" },
-      { value: "isNotEmpty", label: "is not empty" },
-    ];
   if (field === "assignedUserId")
     return [
       { value: "equals", label: "is" },

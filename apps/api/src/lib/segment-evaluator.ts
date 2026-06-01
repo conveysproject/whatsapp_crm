@@ -7,7 +7,6 @@ export type FilterRule =
   | { field: "lifecycleStage"; operator: "equals" | "isNot"; value: string }
   | { field: "tags"; operator: "contains" | "doesNotContain"; value: string }
   | { field: "countryCode" | "languageCode"; operator: "equals" | "isNot"; value: string }
-  | { field: "companyName"; operator: "contains" | "equals" | "isEmpty" | "isNotEmpty"; value?: string }
   | { field: "assignedUserId"; operator: "equals" | "isNot" | "isEmpty"; value?: string }
   | { field: "groups"; operator: "memberOf" | "notMemberOf"; value: string }
   | { field: "whatsappOptOut" | "disableBot"; operator: "isTrue" | "isFalse" }
@@ -50,11 +49,6 @@ function buildClause(rule: FilterRule): Record<string, unknown> {
       if (rule.operator === "isNot") return { NOT: { [col]: rule.value } };
       return { [col]: rule.value };
     }
-    case "companyName":
-      if (rule.operator === "isEmpty") return { companyId: null };
-      if (rule.operator === "isNotEmpty") return { NOT: { companyId: null } };
-      if (rule.operator === "contains") return { company: { name: { contains: rule.value, mode: "insensitive" } } };
-      return { company: { name: { equals: rule.value, mode: "insensitive" } } };
     case "assignedUserId":
       if (rule.operator === "isEmpty") return { assignedUserId: null };
       if (rule.operator === "isNot") return { NOT: { assignedUserId: rule.value } };

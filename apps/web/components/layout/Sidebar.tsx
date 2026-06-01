@@ -34,7 +34,6 @@ const NAV: NavItem[] = [
       { href: "/settings/custom-fields",    label: "Custom Fields" },
     ],
   },
-  { href: "/companies",           label: "Companies",   icon: "🏢" },
   { href: "/campaigns",           label: "Campaigns",   icon: "📢" },
   { href: "/templates",           label: "Templates",   icon: "📋" },
   { href: "/flows",               label: "Flows",       icon: "⚡" },

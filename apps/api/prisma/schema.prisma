@@ -476,8 +476,6 @@ model Contact {
   lastName       String?        @map("last_name")
   email          String?
   languageCode   String?        @map("language_code") // drives template language selection
-  companyId      String?        @map("company_id")
-  company        Company?       @relation(fields: [companyId], references: [id])
   lifecycleStage LifecycleStage @default(lead) @map("lifecycle_stage")
   tags           String[]
   customFields   Json           @default("{}") @map("custom_fields")
@@ -539,20 +537,6 @@ model ContactImport {
   @@map("contact_imports")
 }
 
-model Company {
-  id             String    @id @default(uuid())
-  organizationId String    @map("organization_id")
-  name           String
-  domain         String?
-  industry       String?
-  size           String?
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-  contacts       Contact[]
-
-  @@index([organizationId])
-  @@map("companies")
-}
 
 model Segment {
   id             String           @id @default(uuid())

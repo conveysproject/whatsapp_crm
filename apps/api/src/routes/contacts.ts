@@ -80,7 +80,6 @@ interface ContactBody {
   lastName?: string;
   name?: string;
   email?: string;
-  companyId?: string;
   countryId?: number;
   languageCode?: string;
   whatsappOptOut?: boolean;
@@ -351,7 +350,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     }
     let contact: Awaited<ReturnType<typeof fastify.prisma.contact.create>>;
     try {
-      const { firstName, lastName, name, phoneNumber: rawPhone, email, companyId, countryId, languageCode, whatsappOptOut, disableBot, groupIds, customFields } = request.body;
+      const { firstName, lastName, name, phoneNumber: rawPhone, email, countryId, languageCode, whatsappOptOut, disableBot, groupIds, customFields } = request.body;
       const phoneNumber = normalizeFullPhone(rawPhone) ?? rawPhone;
       contact = await fastify.prisma.contact.create({
         data: {
@@ -361,7 +360,6 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           lastName: lastName ?? null,
           name: name ?? (firstName || lastName ? [firstName, lastName].filter(Boolean).join(" ") : null),
           email: email ?? null,
-          companyId: companyId ?? null,
           countryId: countryId ?? null,
           languageCode: languageCode ?? null,
           whatsappOptOut: whatsappOptOut ?? false,
