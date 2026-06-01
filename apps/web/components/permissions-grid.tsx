@@ -3,51 +3,96 @@ import { JSX } from "react";
 
 export const PERMISSION_GROUPS = [
   {
-    key: "administrative",
-    label: "Administrative",
-    description: "Settings, subscription, team members, message log",
-    subPermissions: [] as Array<{ key: string; label: string }>,
-  },
-  {
-    key: "manage_contacts",
-    label: "Manage Contacts",
-    description: "View and edit contacts",
+    key: "contacts_access",
+    label: "Contact Hub",
+    description: "Access to the contacts section",
     subPermissions: [
-      { key: "import_contacts", label: "Import contacts" },
-      { key: "export_contacts", label: "Export contacts" },
-      { key: "delete_contacts", label: "Delete contacts" },
-      { key: "add_edit_contacts", label: "Add / edit contacts" },
-      { key: "add_edit_delete_custom_contact_fields", label: "Manage custom fields" },
-      { key: "add_edit_delete_archive_group", label: "Manage groups" },
+      { key: "contacts_export", label: "Export Contacts" },
+      { key: "contacts_add", label: "Add Contacts" },
+      { key: "contacts_delete", label: "Delete Contacts" },
+      { key: "contacts_bulk_tag", label: "Bulk tag Contacts" },
+      { key: "contacts_import", label: "Import Contacts" },
+      { key: "contacts_manage_custom_fields", label: "Manage custom fields" },
     ],
   },
-  { key: "manage_campaigns", label: "Manage Campaigns", description: "Create, schedule, run campaigns", subPermissions: [] as Array<{ key: string; label: string }> },
-  { key: "messaging", label: "Messaging", description: "Chat and sync templates", subPermissions: [] as Array<{ key: string; label: string }> },
   {
-    key: "manage_templates",
-    label: "Manage Templates",
+    key: "hide_phone_number",
+    label: "Contact Data Privacy",
+    description: "Phone numbers and field data visibility",
+    subPermissions: [
+      { key: "hide_contact_fields", label: "Hide all contact field data" },
+    ],
+  },
+  {
+    key: "inbox_access",
+    label: "Inbox",
+    description: "Access to the shared inbox",
+    subPermissions: [
+      { key: "inbox_all_conversations", label: "Access All section" },
+      { key: "inbox_unassigned", label: "Access Unassigned section" },
+      { key: "assigned_chats_only", label: "See only assigned chats" },
+    ],
+  },
+  {
+    key: "campaigns_access",
+    label: "Campaigns",
+    description: "Create, schedule, and run campaigns",
+    subPermissions: [
+      { key: "campaigns_create", label: "Create new campaigns" },
+      { key: "campaigns_export_report", label: "Export Campaign Reports" },
+      { key: "campaigns_custom_reports", label: "View Custom Campaign Reports" },
+      { key: "campaigns_manage_segments", label: "Create / update Segments" },
+    ],
+  },
+  {
+    key: "templates_access",
+    label: "Templates",
     description: "WhatsApp message templates",
     subPermissions: [
-      { key: "add_edit_templates", label: "Add / edit templates" },
-      { key: "delete_templates", label: "Delete templates" },
+      { key: "templates_ai_buttons", label: "AI-suggested smart buttons" },
+      { key: "templates_create", label: "Create templates" },
+      { key: "templates_edit", label: "Edit templates" },
+      { key: "templates_delete", label: "Delete templates" },
     ],
   },
   {
-    key: "manage_bot_replies",
-    label: "Manage Automation",
-    description: "Bot replies and flow builder",
+    key: "settings_access",
+    label: "Settings",
+    description: "Access to configuration sections",
     subPermissions: [
-      { key: "add_edit_bot_replies", label: "Add / edit bot replies" },
-      { key: "delete_bot_replies", label: "Delete bot replies" },
-      { key: "add_edit_bot_flows", label: "Add / edit bot flows" },
-      { key: "delete_bot_flows", label: "Delete bot flows" },
-      { key: "manage_bot_flow_builder", label: "Access flow builder" },
+      { key: "settings_agents", label: "Agent settings" },
+      { key: "settings_api_key", label: "API Key access" },
+      { key: "settings_whatsapp", label: "WhatsApp Business Setup" },
+      { key: "settings_billing", label: "Invoice & Billing" },
+      { key: "settings_tags", label: "Manage Tags" },
     ],
   },
-  { key: "assigned_chats_only", label: "Assigned Chats Only", description: "Agent sees only their assigned conversations", subPermissions: [] as Array<{ key: string; label: string }> },
-  { key: "hide_contact_phone_numbers", label: "Hide Phone Numbers", description: "Phone numbers hidden from this agent", subPermissions: [] as Array<{ key: string; label: string }> },
-  { key: "hide_contact_emails", label: "Hide Emails", description: "Email addresses hidden from this agent", subPermissions: [] as Array<{ key: string; label: string }> },
-];
+  {
+    key: "analytics_access",
+    label: "Chat Analytics",
+    description: "Dashboards and reporting",
+    subPermissions: [
+      { key: "analytics_export", label: "Export Analytics data" },
+      { key: "analytics_agent_performance", label: "View Agent Performance" },
+    ],
+  },
+  {
+    key: "automation_access",
+    label: "Automation",
+    description: "Bot flows and automation rules",
+    subPermissions: [
+      { key: "automation_export_report", label: "Export Workflow Reports" },
+      { key: "automation_welcome_message", label: "Welcome Message settings" },
+      { key: "automation_bot_flows", label: "Create / edit bot flows" },
+      { key: "automation_bot_replies", label: "Create / edit bot replies" },
+    ],
+  },
+] as const satisfies Array<{
+  key: string;
+  label: string;
+  description: string;
+  subPermissions: Array<{ key: string; label: string }>;
+}>;
 
 interface Props {
   permissions: Record<string, string>;
