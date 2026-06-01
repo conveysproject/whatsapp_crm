@@ -5,6 +5,7 @@ import { sendTextMessage, sendTemplateMessage } from "../lib/whatsapp.js";
 import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
 import { evaluateSegment, type FilterRule } from "../lib/segment-evaluator.js";
 import { getIo } from "../lib/io-ref.js";
+import { recordOutbound } from "../lib/record-outbound.js";
 
 interface CampaignJob {
   campaignId: string;
@@ -187,6 +188,39 @@ export const campaignWorker = new Worker<CampaignJob>(
           where: { id: recipient.id },
           data: { status: "sent", sentAt: new Date(), messageId },
         });
+
+        // Ensure an inbox conversation exists so agents can see outbound campaign messages
+        let conv = await prisma.conversation.findFirst({
+          where: { organizationId, whatsappContactId: phone },
+          select: { id: true, status: true },
+        });
+        if (!conv) {
+          conv = await prisma.conversation.create({
+            data: {
+              organizationId,
+              contactId: contact?.id ?? null,
+              whatsappContactId: phone,
+              channelType: "whatsapp",
+              status: "open",
+              lastMessageAt: new Date(),
+            },
+            select: { id: true, status: true },
+          });
+        } else if (conv.status === "closed") {
+          await prisma.conversation.update({
+            where: { id: conv.id },
+            data: { status: "open" },
+          });
+        }
+        const contentType = isTemplateCampaign ? "template" : "text";
+        await recordOutbound(prisma, {
+          conversationId: conv.id,
+          organizationId,
+          contentType,
+          body,
+          whatsappMessageId: messageId,
+        });
+
         sent++;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
