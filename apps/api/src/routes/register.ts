@@ -2,15 +2,12 @@ import type { FastifyPluginAsync } from "fastify";
 import { verifyClerkToken } from "../lib/clerk.js";
 
 interface RegisterBody {
-  countryCode: string;
-  phone: string;
   companyName: string;
   companyWebsite: string;
   companyLocation: string;
   industry: string;
   subCategory: string;
   revenue: string;
-  whatsappUpdates: boolean;
   email?: string;
   firstName?: string;
   lastName?: string;
@@ -24,17 +21,14 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
       schema: {
         body: {
           type: "object",
-          required: ["countryCode", "companyName", "phone", "industry", "revenue"],
+          required: ["companyName", "industry", "revenue"],
           properties: {
-            countryCode:     { type: "string" },
-            phone:           { type: "string" },
             companyName:     { type: "string", minLength: 1, maxLength: 255 },
             companyWebsite:  { type: "string" },
             companyLocation: { type: "string" },
             industry:        { type: "string" },
             subCategory:     { type: "string" },
             revenue:         { type: "string" },
-            whatsappUpdates: { type: "boolean" },
             email:           { type: "string" },
             firstName:       { type: "string" },
             lastName:        { type: "string" },
@@ -52,13 +46,12 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
       }
 
       const {
-        countryCode, phone, companyName, companyWebsite,
-        companyLocation, industry, subCategory, revenue,
-        whatsappUpdates, email = "", firstName = "", lastName = "",
+        companyName, companyWebsite, companyLocation,
+        industry, subCategory, revenue,
+        email = "", firstName = "", lastName = "",
       } = request.body;
 
       const fullName = [firstName, lastName].filter(Boolean).join(" ") || email;
-      const whatsappPhone = `${countryCode}${phone}`.replace(/\s/g, "");
 
       // Check if this user already belongs to an org (re-submission guard)
       const existingUser = await fastify.prisma.user.findUnique({
@@ -80,21 +73,17 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
           where: { id: organizationId },
           data: {
             name: companyName,
-            phone: whatsappPhone,
             website: companyWebsite,
             location: companyLocation,
             industry,
             subCategory,
             revenue,
-            whatsappUpdates,
             settings: {
-              phone: whatsappPhone,
               website: companyWebsite,
               location: companyLocation,
               industry,
               subCategory,
               revenue,
-              whatsappUpdates,
             },
           },
         });
@@ -103,22 +92,18 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
         const org = await fastify.prisma.organization.create({
           data: {
             name: companyName,
-            phone: whatsappPhone,
             website: companyWebsite,
             location: companyLocation,
             industry,
             subCategory,
             revenue,
-            whatsappUpdates,
             registeredAt: new Date(),
             settings: {
-              phone: whatsappPhone,
               website: companyWebsite,
               location: companyLocation,
               industry,
               subCategory,
               revenue,
-              whatsappUpdates,
               registeredAt: new Date().toISOString(),
             },
           },

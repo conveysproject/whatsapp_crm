@@ -1,6 +1,6 @@
 "use client";
 
-import { useUser } from "@clerk/nextjs";
+import { useUser, useOrganization } from "@clerk/nextjs";
 import { useState, useEffect, type JSX, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -11,42 +11,6 @@ import { PublicNav } from "@/components/public/PublicNav";
 const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-br", weight: ["600", "700", "800"] });
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm", weight: ["400", "500"] });
 
-const COUNTRY_CODES = [
-  { code: "+1",   flag: "🇺🇸", name: "US/CA" },
-  { code: "+7",   flag: "🇷🇺", name: "RU" },
-  { code: "+20",  flag: "🇪🇬", name: "EG" },
-  { code: "+27",  flag: "🇿🇦", name: "ZA" },
-  { code: "+33",  flag: "🇫🇷", name: "FR" },
-  { code: "+34",  flag: "🇪🇸", name: "ES" },
-  { code: "+39",  flag: "🇮🇹", name: "IT" },
-  { code: "+44",  flag: "🇬🇧", name: "GB" },
-  { code: "+49",  flag: "🇩🇪", name: "DE" },
-  { code: "+55",  flag: "🇧🇷", name: "BR" },
-  { code: "+60",  flag: "🇲🇾", name: "MY" },
-  { code: "+61",  flag: "🇦🇺", name: "AU" },
-  { code: "+62",  flag: "🇮🇩", name: "ID" },
-  { code: "+63",  flag: "🇵🇭", name: "PH" },
-  { code: "+65",  flag: "🇸🇬", name: "SG" },
-  { code: "+66",  flag: "🇹🇭", name: "TH" },
-  { code: "+81",  flag: "🇯🇵", name: "JP" },
-  { code: "+82",  flag: "🇰🇷", name: "KR" },
-  { code: "+86",  flag: "🇨🇳", name: "CN" },
-  { code: "+90",  flag: "🇹🇷", name: "TR" },
-  { code: "+91",  flag: "🇮🇳", name: "IN" },
-  { code: "+92",  flag: "🇵🇰", name: "PK" },
-  { code: "+94",  flag: "🇱🇰", name: "LK" },
-  { code: "+95",  flag: "🇲🇲", name: "MM" },
-  { code: "+234", flag: "🇳🇬", name: "NG" },
-  { code: "+254", flag: "🇰🇪", name: "KE" },
-  { code: "+880", flag: "🇧🇩", name: "BD" },
-  { code: "+960", flag: "🇲🇻", name: "MV" },
-  { code: "+966", flag: "🇸🇦", name: "SA" },
-  { code: "+971", flag: "🇦🇪", name: "AE" },
-  { code: "+972", flag: "🇮🇱", name: "IL" },
-  { code: "+974", flag: "🇶🇦", name: "QA" },
-  { code: "+977", flag: "🇳🇵", name: "NP" },
-  { code: "+995", flag: "🇬🇪", name: "GE" },
-];
 
 const INDUSTRIES = [
   "Marketing & Advertising", "Retail", "Education",
@@ -81,26 +45,32 @@ const REVENUE_BANDS = [
 ];
 
 interface FormState {
-  countryCode: string; phone: string; companyName: string;
-  companyWebsite: string; companyLocation: string; industry: string;
-  subCategory: string; revenue: string; whatsappUpdates: boolean; termsAccepted: boolean;
+  companyName: string; companyWebsite: string; companyLocation: string;
+  industry: string; subCategory: string; revenue: string; termsAccepted: boolean;
 }
 
 const INIT: FormState = {
-  countryCode: "+1", phone: "", companyName: "", companyWebsite: "",
+  companyName: "", companyWebsite: "",
   companyLocation: "", industry: "", subCategory: "", revenue: "",
-  whatsappUpdates: true, termsAccepted: false,
+  termsAccepted: false,
 };
 
 type FieldError = Partial<Record<keyof FormState, string>>;
 
 export default function BusinessDetailsPage(): JSX.Element {
   const { user, isLoaded } = useUser();
+  const { organization, isLoaded: orgLoaded } = useOrganization();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(INIT);
   const [errors, setErrors] = useState<FieldError>({});
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState("");
+
+  useEffect(() => {
+    if (orgLoaded && organization?.name) {
+      setForm(f => ({ ...f, companyName: organization.name }));
+    }
+  }, [orgLoaded, organization?.name]);
 
   useEffect(() => {
     if (form.companyWebsite && !form.companyWebsite.startsWith("www.") && !form.companyWebsite.startsWith("http")) {
@@ -116,15 +86,12 @@ export default function BusinessDetailsPage(): JSX.Element {
 
   function validate(): boolean {
     const e: FieldError = {};
-    if (!form.phone.trim() || !/^\d{7,15}$/.test(form.phone.replace(/[\s-]/g, "")))
-      e.phone = "Enter a valid WhatsApp number";
-    if (!form.companyName.trim())    e.companyName    = "Company name is required";
-    if (!form.companyWebsite.trim()) e.companyWebsite = "Company website is required";
+    if (!form.companyWebsite.trim())  e.companyWebsite = "Company website is required";
     if (!form.companyLocation.trim()) e.companyLocation = "Company location is required";
-    if (!form.industry)              e.industry       = "Please select your industry";
-    if (!form.subCategory)           e.subCategory    = "Please select a category";
-    if (!form.revenue)               e.revenue        = "Please select annual revenue";
-    if (!form.termsAccepted)         e.termsAccepted  = "You must accept the terms to continue";
+    if (!form.industry)               e.industry       = "Please select your industry";
+    if (!form.subCategory)            e.subCategory    = "Please select a category";
+    if (!form.revenue)                e.revenue        = "Please select annual revenue";
+    if (!form.termsAccepted)          e.termsAccepted  = "You must accept the terms to continue";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -162,7 +129,7 @@ export default function BusinessDetailsPage(): JSX.Element {
   const initials = [user?.firstName?.[0], user?.lastName?.[0]].filter(Boolean).join("").toUpperCase() || "?";
   const subCats = form.industry ? (SUB_CATEGORIES[form.industry] ?? []) : [];
 
-  if (!isLoaded) {
+  if (!isLoaded || !orgLoaded) {
     return (
       <div className={`${bricolage.variable} ${dmSans.variable}`} style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F4F6FC", fontFamily: "var(--font-dm), sans-serif", color: "#5A7A62" }}>
         Loading your profile…
@@ -304,17 +271,6 @@ export default function BusinessDetailsPage(): JSX.Element {
         .bd2-inp-err { border-color: var(--err) !important; }
         .bd2-err { font-size: .68rem; color: var(--err); }
 
-        /* Phone row */
-        .bd2-phone-row { display: flex; gap: 7px; }
-        .bd2-cc {
-          background: var(--inp); border: 1.5px solid transparent; border-radius: 8px;
-          padding: 10px 8px; font-size: .8rem; color: var(--t1);
-          font-family: var(--font-dm), sans-serif; outline: none;
-          cursor: pointer; flex-shrink: 0; width: 96px; transition: border-color .15s;
-        }
-        .bd2-cc:focus { border-color: var(--g); box-shadow: 0 0 0 3px rgba(11,191,119,.12); background: #fff; }
-        .bd2-wa-note { font-size: .68rem; color: var(--t3); display: flex; align-items: center; gap: 4px; }
-
         /* Select */
         .bd2-sel {
           background: var(--inp); border: 1.5px solid transparent; border-radius: 8px;
@@ -424,57 +380,10 @@ export default function BusinessDetailsPage(): JSX.Element {
               <div className="bd2-right-sub">Help us personalise your experience</div>
             </div>
 
-            {/* ── Business Contact ── */}
-            <div className="bd2-section">Business Contact</div>
-
-            <div className="bd2-field">
-              <label className="bd2-label">WhatsApp Phone Number *</label>
-              <div className="bd2-phone-row">
-                <select
-                  className="bd2-cc"
-                  value={form.countryCode}
-                  onChange={(e: ChangeEvent<HTMLSelectElement>) => set("countryCode", e.target.value)}
-                >
-                  {COUNTRY_CODES.map(c => (
-                    <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
-                  ))}
-                </select>
-                <input
-                  type="tel"
-                  className={`bd2-inp${errors.phone ? " bd2-inp-err" : ""}`}
-                  placeholder="Phone number"
-                  value={form.phone}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => set("phone", e.target.value)}
-                  autoComplete="tel"
-                />
-              </div>
-              <div className="bd2-wa-note">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="#25D366">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z" />
-                  <path d="M20.52 3.449C18.24 1.245 15.24 0 12.045 0 5.463 0 .104 5.334.101 11.893c0 2.096.549 4.14 1.595 5.945L0 24l6.335-1.652A11.94 11.94 0 0 0 12.045 24c6.585 0 11.946-5.336 11.949-11.896 0-3.176-1.24-6.165-3.48-8.447z" fillOpacity=".3" />
-                </svg>
-                Please ensure WhatsApp is active on this number
-              </div>
-              {errors.phone && <div className="bd2-err">{errors.phone}</div>}
-            </div>
-
-            <hr className="bd2-divider" />
-
             {/* ── Company Details ── */}
             <div className="bd2-section">Company Details</div>
 
             <div className="bd2-row bd2-row-2">
-              <div className="bd2-field">
-                <label className="bd2-label">Company Name *</label>
-                <input
-                  type="text"
-                  className={`bd2-inp${errors.companyName ? " bd2-inp-err" : ""}`}
-                  placeholder="Acme Pvt. Ltd."
-                  value={form.companyName}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => set("companyName", e.target.value)}
-                />
-                {errors.companyName && <div className="bd2-err">{errors.companyName}</div>}
-              </div>
               <div className="bd2-field">
                 <label className="bd2-label">Company Website *</label>
                 <input
@@ -546,16 +455,6 @@ export default function BusinessDetailsPage(): JSX.Element {
             </div>
 
             <hr className="bd2-divider" />
-
-            <label className="bd2-check-row">
-              <input
-                type="checkbox"
-                className="bd2-check"
-                checked={form.whatsappUpdates}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => set("whatsappUpdates", e.target.checked)}
-              />
-              <span className="bd2-check-label">Get account updates and product news on WhatsApp</span>
-            </label>
 
             <label className="bd2-check-row">
               <input
