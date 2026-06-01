@@ -206,7 +206,7 @@ export const campaignWorker = new Worker<CampaignJob>(
             },
             select: { id: true, status: true },
           });
-        } else if (conv.status === "closed") {
+        } else if (conv.status === "resolved") {
           await prisma.conversation.update({
             where: { id: conv.id },
             data: { status: "open" },
