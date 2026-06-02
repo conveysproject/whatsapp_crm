@@ -157,47 +157,52 @@ export async function runFlow(
 
         case "send_interactive":
         case "send_buttons": {
-          // Builder stores body+buttons separately; fall back to building the payload if no pre-built interactive
-          const rawInteractive = (node.config["interactive"] as WaInteractivePayload | undefined)
-            ?? buildButtonsInteractive(node.config);
-          const interactive = rawInteractive?.body?.text
-            ? { ...rawInteractive, body: { ...rawInteractive.body, text: substituteVariables(rawInteractive.body.text, contact) } }
-            : rawInteractive;
-          if (payload.contactPhone && interactive) {
-            const { messageId } = await sendInteractiveMessage(phoneNumberId, payload.contactPhone, interactive, accessToken);
-            if (payload.conversationId) {
-              await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "interactive", body: interactive.body?.text ?? null, whatsappMessageId: messageId });
+          // On resume (user replied to a previous send_buttons), skip re-sending — just fall through to node.next so a condition can check messageBody
+          if (payload.resumeFromNodeId !== node.id) {
+            const rawInteractive = (node.config["interactive"] as WaInteractivePayload | undefined)
+              ?? buildButtonsInteractive(node.config);
+            const interactive = rawInteractive?.body?.text
+              ? { ...rawInteractive, body: { ...rawInteractive.body, text: substituteVariables(rawInteractive.body.text, contact) } }
+              : rawInteractive;
+            if (payload.contactPhone && interactive) {
+              const { messageId } = await sendInteractiveMessage(phoneNumberId, payload.contactPhone, interactive, accessToken);
+              if (payload.conversationId) {
+                await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "interactive", body: interactive.body?.text ?? null, whatsappMessageId: messageId });
+              }
             }
-          }
-          if (node.config["waitForReply"] !== false && payload.conversationId) {
-            await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id);
-            await prisma.flowRun.update({
-              where: { id: run.id },
-              data: { status: "waiting", currentNodeId: node.id, stepsExecuted },
-            });
-            return;
+            if (node.config["waitForReply"] !== false && payload.conversationId) {
+              await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id);
+              await prisma.flowRun.update({
+                where: { id: run.id },
+                data: { status: "waiting", currentNodeId: node.id, stepsExecuted },
+              });
+              return;
+            }
           }
           break;
         }
 
         case "send_list": {
-          const listConfig = typeof node.config["body"] === "string"
-            ? { ...node.config, body: substituteVariables(node.config["body"], contact) }
-            : node.config;
-          const listInteractive = buildListInteractive(listConfig);
-          if (payload.contactPhone && listInteractive) {
-            const { messageId } = await sendInteractiveMessage(phoneNumberId, payload.contactPhone, listInteractive, accessToken);
-            if (payload.conversationId) {
-              await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "interactive", body: listInteractive.body?.text ?? null, whatsappMessageId: messageId });
+          // On resume (user replied to a previous send_list), skip re-sending
+          if (payload.resumeFromNodeId !== node.id) {
+            const listConfig = typeof node.config["body"] === "string"
+              ? { ...node.config, body: substituteVariables(node.config["body"], contact) }
+              : node.config;
+            const listInteractive = buildListInteractive(listConfig);
+            if (payload.contactPhone && listInteractive) {
+              const { messageId } = await sendInteractiveMessage(phoneNumberId, payload.contactPhone, listInteractive, accessToken);
+              if (payload.conversationId) {
+                await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "interactive", body: listInteractive.body?.text ?? null, whatsappMessageId: messageId });
+              }
             }
-          }
-          if (node.config["waitForReply"] !== false && payload.conversationId) {
-            await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id);
-            await prisma.flowRun.update({
-              where: { id: run.id },
-              data: { status: "waiting", currentNodeId: node.id, stepsExecuted },
-            });
-            return;
+            if (node.config["waitForReply"] !== false && payload.conversationId) {
+              await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id);
+              await prisma.flowRun.update({
+                where: { id: run.id },
+                data: { status: "waiting", currentNodeId: node.id, stepsExecuted },
+              });
+              return;
+            }
           }
           break;
         }
