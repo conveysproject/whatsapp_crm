@@ -84,6 +84,7 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
       const secret = process.env["WA_WEBHOOK_SECRET"] ?? "";
 
       if (!verifyWebhookSignature(rawBody, signature, secret)) {
+        console.log(`[webhook-403] sig=${signature.slice(0, 20)} secretLen=${secret.length} bodyLen=${rawBody?.length ?? 0} bodyStart=${rawBody?.slice(0, 80)}`);
         return reply.status(403).send({ error: { code: "INVALID_SIGNATURE", message: "Signature mismatch" } });
       }
 
