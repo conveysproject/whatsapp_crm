@@ -208,8 +208,21 @@ export const inboundWorker = new Worker<InboundMessageJob>(
 
     // --- Flow session resume: takes priority over all other processing ---
     const flowSession = refreshed?.flowSession as FlowSession | null | undefined;
-    console.log(`[inbound] conv=${conversation.id} contentType=${contentType} body=${JSON.stringify(body)} flowSession=${JSON.stringify(flowSession ?? null)}`);
     if (flowSession?.flowId && flowSession.waitingAtNodeId) {
+      // Button/list nodes only resume on interactive replies; text messages are ignored so the session stays alive
+      const isButtonWait = flowSession.waitingNodeType === "send_buttons" || flowSession.waitingNodeType === "send_interactive" || flowSession.waitingNodeType === "send_list";
+      if (isButtonWait && contentType !== "interactive") {
+        // Not a button/list reply — leave the session intact and skip all flow processing
+        const io = getIo();
+        io?.to(`org:${organizationId}`).emit("new-message", {
+          conversationId: conversation.id,
+          organizationId,
+          direction: "inbound",
+          body,
+          sentAt: messageDate.toISOString(),
+        });
+        return;
+      }
       const flow = await prisma.flow.findFirst({ where: { id: flowSession.flowId } });
       if (flow?.isActive) {
         // Clear session first so a crash doesn't loop
@@ -217,7 +230,6 @@ export const inboundWorker = new Worker<InboundMessageJob>(
           where: { id: conversation.id },
           data: { flowSession: Prisma.JsonNull },
         });
-        console.log(`[inbound] resuming flow=${flow.id} at node=${flowSession.waitingAtNodeId} body=${JSON.stringify(body)}`);
         await runFlow(prisma, flow.id, flow.flowDefinition as unknown as FlowDefinition, {
           conversationId: conversation.id,
           organizationId,

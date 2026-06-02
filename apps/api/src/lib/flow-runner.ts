@@ -79,6 +79,7 @@ export interface FlowSession {
   flowId: string;
   flowRunId: string;
   waitingAtNodeId: string;
+  waitingNodeType?: string;
 }
 
 export async function runFlow(
@@ -171,7 +172,7 @@ export async function runFlow(
               }
             }
             if (node.config["waitForReply"] !== false && payload.conversationId) {
-              await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id);
+              await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id, node.type);
               await prisma.flowRun.update({
                 where: { id: run.id },
                 data: { status: "waiting", currentNodeId: node.id, stepsExecuted },
@@ -200,7 +201,7 @@ export async function runFlow(
               }
             }
             if (node.config["waitForReply"] !== false && payload.conversationId) {
-              await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id);
+              await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id, node.type);
               await prisma.flowRun.update({
                 where: { id: run.id },
                 data: { status: "waiting", currentNodeId: node.id, stepsExecuted },
@@ -278,7 +279,7 @@ export async function runFlow(
             }
           }
           if (payload.conversationId) {
-            await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id);
+            await writeFlowSession(prisma, payload.conversationId, flowId, run.id, node.id, node.type);
             await prisma.flowRun.update({
               where: { id: run.id },
               data: { status: "waiting", currentNodeId: node.id, stepsExecuted },
@@ -451,9 +452,10 @@ async function writeFlowSession(
   conversationId: string,
   flowId: string,
   flowRunId: string,
-  waitingAtNodeId: string
+  waitingAtNodeId: string,
+  waitingNodeType: string
 ): Promise<void> {
-  const session: FlowSession = { flowId, flowRunId, waitingAtNodeId };
+  const session: FlowSession = { flowId, flowRunId, waitingAtNodeId, waitingNodeType };
   await prisma.conversation.update({
     where: { id: conversationId },
     data: { flowSession: session as object },
