@@ -209,10 +209,32 @@ export const inboundWorker = new Worker<InboundMessageJob>(
     // --- Flow session resume: takes priority over all other processing ---
     const flowSession = refreshed?.flowSession as FlowSession | null | undefined;
     if (flowSession?.flowId && flowSession.waitingAtNodeId) {
-      // ask_question accepts any message; button/list nodes (and legacy sessions without a type) only resume on interactive replies
+      // ask_question resumes on any message type; button/list nodes only on interactive replies
       const acceptsText = flowSession.waitingNodeType === "ask_question";
       if (!acceptsText && contentType !== "interactive") {
-        // Not a button/list reply — leave the session intact and skip all flow processing
+        // Text arrived while waiting for a button — clear the stale session so normal
+        // flow dispatch below can re-trigger the flow from scratch
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { flowSession: Prisma.JsonNull },
+        });
+        // fall through to normal auto-reply / flow dispatch
+      } else {
+        const flow = await prisma.flow.findFirst({ where: { id: flowSession.flowId } });
+        if (flow?.isActive) {
+          // Clear session first so a crash doesn't loop
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { flowSession: Prisma.JsonNull },
+          });
+          await runFlow(prisma, flow.id, flow.flowDefinition as unknown as FlowDefinition, {
+            conversationId: conversation.id,
+            organizationId,
+            contactPhone: whatsappContactPhone,
+            messageBody: body ?? "",
+            resumeFromNodeId: flowSession.waitingAtNodeId,
+          });
+        }
         const io = getIo();
         io?.to(`org:${organizationId}`).emit("new-message", {
           conversationId: conversation.id,
@@ -223,31 +245,6 @@ export const inboundWorker = new Worker<InboundMessageJob>(
         });
         return;
       }
-      const flow = await prisma.flow.findFirst({ where: { id: flowSession.flowId } });
-      if (flow?.isActive) {
-        // Clear session first so a crash doesn't loop
-        await prisma.conversation.update({
-          where: { id: conversation.id },
-          data: { flowSession: Prisma.JsonNull },
-        });
-        await runFlow(prisma, flow.id, flow.flowDefinition as unknown as FlowDefinition, {
-          conversationId: conversation.id,
-          organizationId,
-          contactPhone: whatsappContactPhone,
-          messageBody: body ?? "",
-          resumeFromNodeId: flowSession.waitingAtNodeId,
-        });
-      }
-      // Emit socket event and exit — message consumed by flow session
-      const io = getIo();
-      io?.to(`org:${organizationId}`).emit("new-message", {
-        conversationId: conversation.id,
-        organizationId,
-        direction: "inbound",
-        body,
-        sentAt: messageDate.toISOString(),
-      });
-      return;
     }
 
     // --- Auto-reply evaluation (keyword-triggered instant replies) ---
