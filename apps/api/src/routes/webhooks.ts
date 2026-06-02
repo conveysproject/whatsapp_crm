@@ -186,6 +186,10 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
               body = msg.video.caption;
             } else if (msg.document?.caption) {
               body = msg.document.caption;
+            } else if (msg.interactive?.button_reply) {
+              body = msg.interactive.button_reply.id;
+            } else if (msg.interactive?.list_reply) {
+              body = msg.interactive.list_reply.id;
             } else if (msg.interactive) {
               body = JSON.stringify(msg.interactive);
             }
