@@ -209,9 +209,9 @@ export const inboundWorker = new Worker<InboundMessageJob>(
     // --- Flow session resume: takes priority over all other processing ---
     const flowSession = refreshed?.flowSession as FlowSession | null | undefined;
     if (flowSession?.flowId && flowSession.waitingAtNodeId) {
-      // Button/list nodes only resume on interactive replies; text messages are ignored so the session stays alive
-      const isButtonWait = flowSession.waitingNodeType === "send_buttons" || flowSession.waitingNodeType === "send_interactive" || flowSession.waitingNodeType === "send_list";
-      if (isButtonWait && contentType !== "interactive") {
+      // ask_question accepts any message; button/list nodes (and legacy sessions without a type) only resume on interactive replies
+      const acceptsText = flowSession.waitingNodeType === "ask_question";
+      if (!acceptsText && contentType !== "interactive") {
         // Not a button/list reply — leave the session intact and skip all flow processing
         const io = getIo();
         io?.to(`org:${organizationId}`).emit("new-message", {
