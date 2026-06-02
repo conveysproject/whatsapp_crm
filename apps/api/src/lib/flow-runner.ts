@@ -157,7 +157,6 @@ export async function runFlow(
 
         case "send_interactive":
         case "send_buttons": {
-          // On resume (user replied to a previous send_buttons), skip re-sending — just fall through to node.next so a condition can check messageBody
           if (payload.resumeFromNodeId !== node.id) {
             const rawInteractive = (node.config["interactive"] as WaInteractivePayload | undefined)
               ?? buildButtonsInteractive(node.config);
@@ -178,12 +177,16 @@ export async function runFlow(
               });
               return;
             }
+          } else {
+            // Resume: translate button_reply.id → button title so conditions can match display text
+            const buttons = node.config["buttons"] as Array<{ id: string; text: string }> | undefined;
+            const matched = buttons?.find((b) => b.id === payload.messageBody);
+            if (matched) payload = { ...payload, messageBody: matched.text };
           }
           break;
         }
 
         case "send_list": {
-          // On resume (user replied to a previous send_list), skip re-sending
           if (payload.resumeFromNodeId !== node.id) {
             const listConfig = typeof node.config["body"] === "string"
               ? { ...node.config, body: substituteVariables(node.config["body"], contact) }
@@ -203,6 +206,14 @@ export async function runFlow(
               });
               return;
             }
+          } else {
+            // Resume: translate list row ID → item title so conditions can match display text
+            const sections = node.config["sections"] as Array<{ rows: Array<{ id: string; title: string }> }> | undefined;
+            const items = node.config["items"] as Array<{ title: string }> | undefined;
+            const allRows: Array<{ id: string; title: string }> = sections?.flatMap((s) => s.rows) ??
+              (items?.map((item, i) => ({ id: `row_${i}`, title: item.title })) ?? []);
+            const matchedRow = allRows.find((r) => r.id === payload.messageBody);
+            if (matchedRow) payload = { ...payload, messageBody: matchedRow.title };
           }
           break;
         }
