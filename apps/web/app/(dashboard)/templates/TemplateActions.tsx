@@ -9,11 +9,9 @@ interface Contact {
   email: string | null;
 }
 
-interface Label {
-  id: string;
-  title: string;
-  bgColor: string;
-  textColor: string;
+interface TagStat {
+  tag: string;
+  count: number;
 }
 
 interface SendResult {
@@ -52,8 +50,8 @@ export function TemplateActions({ templateId, templateName, headerFormat, imageC
 function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0, onClose }: { templateId: string; templateName: string; headerFormat?: string; imageCardCount?: number; onClose: () => void }): JSX.Element {
   const [step, setStep] = useState<ModalStep>("pick");
   const [search, setSearch] = useState("");
-  const [labelId, setLabelId] = useState("");
-  const [labels, setLabels] = useState<Label[]>([]);
+  const [tagFilter, setTagFilter] = useState("");
+  const [tags, setTags] = useState<TagStat[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -63,17 +61,17 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
   const [cardMediaUrls, setCardMediaUrls] = useState<string[]>(() => Array(imageCardCount).fill(""));
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load labels once on open
+  // Load all tags once on open
   useEffect(() => {
-    fetch("/api/v1/labels")
+    fetch("/api/v1/tags")
       .then((r) => r.json())
-      .then((body: { data: Label[] }) => setLabels(body.data ?? []))
+      .then((body: { data: TagStat[] }) => setTags(body.data ?? []))
       .catch(() => {});
   }, []);
 
-  const fetchContacts = useCallback((q: string, lId: string): void => {
-    // Don't fetch until user has typed or picked a label
-    if (!q.trim() && !lId) {
+  const fetchContacts = useCallback((q: string, tf: string): void => {
+    // Don't fetch until user has typed or picked a tag
+    if (!q.trim() && !tf) {
       setContacts([]);
       setLoading(false);
       return;
@@ -84,7 +82,7 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
 
     const params = new URLSearchParams({ limit: "20" });
     if (q.trim()) params.set("q", q.trim());
-    if (lId) params.set("labelId", lId);
+    if (tf) params.set("tag", tf);
 
     fetch(`/api/v1/contacts?${params.toString()}`)
       .then((r) => r.json())
@@ -93,12 +91,12 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
       .finally(() => setLoading(false));
   }, []);
 
-  // Debounce search; react immediately to label changes
+  // Debounce search; react immediately to tag changes
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchContacts(search, labelId), 300);
+    debounceRef.current = setTimeout(() => fetchContacts(search, tagFilter), 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [search, labelId, fetchContacts]);
+  }, [search, tagFilter, fetchContacts]);
 
   function toggle(id: string): void {
     setSelected((prev) => {
@@ -179,12 +177,12 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
               />
               <select
                 className="w-full border rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-green-500"
-                value={labelId}
-                onChange={(e) => setLabelId(e.target.value)}
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
               >
-                <option value="">All labels</option>
-                {labels.map((l) => (
-                  <option key={l.id} value={l.id}>{l.title}</option>
+                <option value="">All tags</option>
+                {tags.map(({ tag }) => (
+                  <option key={tag} value={tag}>{tag}</option>
                 ))}
               </select>
             </div>

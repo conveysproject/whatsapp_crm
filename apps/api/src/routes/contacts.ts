@@ -277,8 +277,8 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId, permissions } = request.auth;
     const query = request.query as Record<string, string>;
     const { cursor, limit } = parsePaginationParams(query);
-    const labelId = query["labelId"];
     const q = query["q"]?.trim() ?? "";
+    const tagFilter = query["tag"];
 
     const countryId = query["countryId"] ? parseInt(query["countryId"], 10) : undefined;
 
@@ -287,7 +287,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
         organizationId,
         deletedAt: null,
         ...(cursor ? { id: { gt: cursor } } : {}),
-        ...(labelId ? { labels: { some: { labelId } } } : {}),
+        ...(tagFilter ? { tags: { has: tagFilter } } : {}),
         ...(countryId && !isNaN(countryId) ? { countryId } : {}),
         ...(q ? {
           OR: [
@@ -296,7 +296,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           ],
         } : {}),
       },
-      include: { labels: { include: { label: true } }, country: true, groupContacts: { include: { contactGroup: { select: { id: true, title: true } } } } },
+      include: { country: true, groupContacts: { include: { contactGroup: { select: { id: true, title: true } } } } },
       take: limit + 1,
       orderBy: { id: "asc" },
     });
@@ -319,7 +319,6 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const contact = await fastify.prisma.contact.findFirst({
       where: { id: request.params.id, organizationId, deletedAt: null },
       include: {
-        labels: { include: { label: true } },
         country: true,
         groupContacts: { select: { contactGroupId: true } },
       },

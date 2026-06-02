@@ -58,14 +58,27 @@ export default function InboxPage(): JSX.Element {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{contactName ?? contact?.phoneNumber ?? "Unknown"}</p>
-                <span className={[
-                  "text-xs capitalize",
-                  selectedConversation.status === "open" ? "text-green-600" :
-                  selectedConversation.status === "pending" ? "text-amber-600" :
-                  "text-gray-400",
-                ].join(" ")}>
-                  {selectedConversation.status}
-                </span>
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  <span className={[
+                    "text-xs capitalize",
+                    selectedConversation.status === "open" ? "text-green-600" :
+                    selectedConversation.status === "pending" ? "text-amber-600" :
+                    "text-gray-400",
+                  ].join(" ")}>
+                    {selectedConversation.status}
+                  </span>
+                  {contact?.tags && contact.tags.length > 0 && (
+                    <>
+                      <span className="text-gray-200">·</span>
+                      {contact.tags.slice(0, 3).map((tag) => (
+                        <span key={tag} className="inline-flex items-center h-4 px-1.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-500">{tag}</span>
+                      ))}
+                      {contact.tags.length > 3 && (
+                        <span className="text-[10px] text-gray-400">+{contact.tags.length - 3}</span>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
               {contact && <ContactTrustBadge contactId={contact.id} />}
             </div>

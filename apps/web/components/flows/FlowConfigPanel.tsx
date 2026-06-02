@@ -45,7 +45,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   keyword_match:         "Keyword Matched",
   button_reply:          "Button Reply",
   contact_created:       "Contact Created",
-  tag_added:             "Label Added",
+  tag_added:             "Tag Added",
   lifecycle_change:      "Stage Changed",
   conversation_resolved: "Conversation Resolved",
   conversation_assigned: "Conversation Assigned",

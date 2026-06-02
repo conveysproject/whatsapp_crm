@@ -25,7 +25,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
 
     const conversations = await fastify.prisma.conversation.findMany({
       where,
-      include: { contact: { select: { id: true, firstName: true, lastName: true, phoneNumber: true } } },
+      include: { contact: { select: { id: true, firstName: true, lastName: true, phoneNumber: true, tags: true } } },
       orderBy: { lastMessageAt: "desc" },
       skip: (pageNum - 1) * 50,
       take: 50,

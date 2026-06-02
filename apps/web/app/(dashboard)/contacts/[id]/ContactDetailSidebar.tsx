@@ -8,7 +8,6 @@ import {
   FieldSkeleton,
   LANGUAGES,
 } from "@/components/contacts/contact-shared";
-import { ContactLabelManager } from "@/components/contacts/ContactLabelManager";
 import { ContactDeals } from "@/components/deals/ContactDeals";
 import type { Contact } from "./ContactDetailClient";
 
@@ -178,12 +177,6 @@ export function ContactDetailSidebar({ contact }: Props): JSX.Element {
             </div>
           ) : emptyDash}
         </div>
-      </div>
-
-      {/* ── Labels ───────────────────────────────────────────── */}
-      <SectionHeader title="Labels" />
-      <div className="pb-3">
-        <ContactLabelManager contactId={contact.id} />
       </div>
 
       {/* ── Notes ────────────────────────────────────────────── */}
