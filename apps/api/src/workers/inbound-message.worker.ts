@@ -208,6 +208,7 @@ export const inboundWorker = new Worker<InboundMessageJob>(
 
     // --- Flow session resume: takes priority over all other processing ---
     const flowSession = refreshed?.flowSession as FlowSession | null | undefined;
+    console.log(`[inbound] conv=${conversation.id} type=${contentType} body=${JSON.stringify(body)} session=${JSON.stringify(flowSession ?? null)}`);
     if (flowSession?.flowId && flowSession.waitingAtNodeId) {
       // ask_question resumes on any message type; button/list nodes only on interactive replies
       const acceptsText = flowSession.waitingNodeType === "ask_question";
