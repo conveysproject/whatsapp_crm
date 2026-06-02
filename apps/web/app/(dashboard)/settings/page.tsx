@@ -44,7 +44,8 @@ export default async function SettingsPage(): Promise<JSX.Element> {
       <div className="grid grid-cols-2 gap-3">
         {[
           { href: "/settings/members", label: "Members", desc: "Manage team access" },
-          { href: "/settings/team", label: "Team", desc: "Roles and permissions" },
+          { href: "/settings/team", label: "Team", desc: "Per-user permission overrides" },
+          { href: "/settings/roles", label: "Roles", desc: "Default permissions per role" },
           { href: "/settings/whatsapp-account", label: "WhatsApp Account", desc: "Connect your WABA" },
           { href: "/settings/branding", label: "Branding", desc: "Logo, colors, favicon" },
           { href: "/settings/labels", label: "Labels", desc: "Color-coded contact tags" },
