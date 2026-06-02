@@ -157,6 +157,7 @@ export async function runFlow(
 
         case "send_interactive":
         case "send_buttons": {
+          console.log(`[flow-runner] send_buttons node=${node.id} resuming=${payload.resumeFromNodeId === node.id} waitForReply=${node.config["waitForReply"]} convId=${payload.conversationId}`);
           if (payload.resumeFromNodeId !== node.id) {
             const rawInteractive = (node.config["interactive"] as WaInteractivePayload | undefined)
               ?? buildButtonsInteractive(node.config);
