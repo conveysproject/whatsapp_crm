@@ -59,6 +59,19 @@ interface WhatsAppWebhookBody {
 }
 
 export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
+  // Capture raw body string BEFORE JSON parsing so HMAC verification uses the
+  // exact bytes Meta signed — JSON.stringify(parsedBody) can differ when Meta
+  // uses \uXXXX escape sequences for emoji (e.g. button titles with 📦).
+  fastify.addContentTypeParser(
+    "application/json",
+    { parseAs: "string" },
+    (req, body, done) => {
+      (req as unknown as { rawBody: string }).rawBody = body as string;
+      try { done(null, JSON.parse(body as string)); }
+      catch (e) { (e as Error & { statusCode: number }).statusCode = 400; done(e as Error, undefined); }
+    }
+  );
+
   fastify.get(
     "/webhooks/whatsapp",
     { config: { public: true } },
@@ -80,7 +93,7 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
     { config: { public: true } },
     async (request, reply) => {
       const signature = (request.headers["x-hub-signature-256"] as string) ?? "";
-      const rawBody = JSON.stringify(request.body);
+      const rawBody = (request.raw as unknown as { rawBody?: string }).rawBody ?? JSON.stringify(request.body);
       const secret = process.env["WA_WEBHOOK_SECRET"] ?? "";
 
       if (!verifyWebhookSignature(rawBody, signature, secret)) {
