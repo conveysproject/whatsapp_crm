@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { PrismaClient } from "@prisma/client";
 import Fastify from "fastify";
 import { rolesRouter } from "./roles.js";
 
@@ -14,7 +15,7 @@ vi.mock("../lib/prisma.js", () => ({ prisma: mockPrisma }));
 const mockAuth = {
   userId: "u-1",
   organizationId: "org-1",
-  role: "admin" as const,
+  role: "admin" as "superAdmin" | "admin" | "manager" | "agent" | "viewer",
   permissions: {},
 };
 
@@ -24,16 +25,16 @@ async function buildApp(authOverride?: Partial<typeof mockAuth>) {
   app.addHook("onRequest", async (request) => {
     (request as unknown as { auth: typeof mockAuth }).auth = { ...mockAuth, ...authOverride };
   });
-  app.decorate("prisma", mockPrisma);
+  app.decorate("prisma", mockPrisma as unknown as PrismaClient);
   await app.register(rolesRouter);
   return app;
 }
 
 describe("GET /roles/permissions", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); });
 
   it("returns 403 for non-admin", async () => {
-    const app = await buildApp({ role: "agent" as const });
+    const app = await buildApp({ role: "agent" as const satisfies typeof mockAuth.role });
     mockPrisma.vendorSetting.findMany.mockResolvedValue([]);
 
     const res = await app.inject({ method: "GET", url: "/roles/permissions" });
@@ -74,10 +75,10 @@ describe("GET /roles/permissions", () => {
 });
 
 describe("PUT /roles/:role/permissions", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); });
 
   it("returns 403 for non-admin", async () => {
-    const app = await buildApp({ role: "agent" as const });
+    const app = await buildApp({ role: "agent" as const satisfies typeof mockAuth.role });
 
     const res = await app.inject({
       method: "PUT",
@@ -126,7 +127,7 @@ describe("PUT /roles/:role/permissions", () => {
   });
 
   it("allows superAdmin to update permissions", async () => {
-    const app = await buildApp({ role: "superAdmin" as const });
+    const app = await buildApp({ role: "superAdmin" as const satisfies typeof mockAuth.role });
     mockPrisma.vendorSetting.upsert.mockResolvedValue({} as unknown as { key: string; value: string });
 
     const res = await app.inject({

@@ -26,7 +26,7 @@ export const rolesRouter: FastifyPluginAsync = async (fastify) => {
       VALID_ROLES.map((r) => {
         const row = settings.find((s) => s.key === settingKey(r));
         let permissions: Record<string, string> = {};
-        if (row) {
+        if (row?.value) {
           try { permissions = JSON.parse(row.value) as Record<string, string>; } catch { /* corrupted value — treat as empty */ }
         }
         return [r, permissions];
