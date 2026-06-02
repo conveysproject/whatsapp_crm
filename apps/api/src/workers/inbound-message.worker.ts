@@ -96,22 +96,35 @@ export const inboundWorker = new Worker<InboundMessageJob>(
 
     const messageDate = new Date(timestamp * 1000);
 
+    // Ensure a contact record always exists for this phone number so that
+    // flow actions (add_label, update_stage, opt_out, etc.) can find it.
+    const contact = await prisma.contact.upsert({
+      where: { organizationId_phoneNumber: { organizationId, phoneNumber: whatsappContactPhone } },
+      create: { organizationId, phoneNumber: whatsappContactPhone },
+      update: {},
+      select: { id: true },
+    });
+
     let conversation = await prisma.conversation.findFirst({
       where: { organizationId, whatsappContactId: whatsappContactPhone },
     });
 
     let isNewConversation = false;
 
+    // Backfill contactId on pre-existing conversations that were created without one
+    if (conversation && !conversation.contactId) {
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { contactId: contact.id },
+      });
+    }
+
     if (!conversation) {
       isNewConversation = true;
-      const existingContact = await prisma.contact.findFirst({
-        where: { organizationId, phoneNumber: whatsappContactPhone, deletedAt: null },
-        select: { id: true },
-      });
       conversation = await prisma.conversation.create({
         data: {
           organizationId,
-          contactId: existingContact?.id ?? null,
+          contactId: contact.id,
           whatsappContactId: whatsappContactPhone,
           channelType: "whatsapp",
           status: "open",
