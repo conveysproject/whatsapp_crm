@@ -208,6 +208,7 @@ export const inboundWorker = new Worker<InboundMessageJob>(
 
     // --- Flow session resume: takes priority over all other processing ---
     const flowSession = refreshed?.flowSession as FlowSession | null | undefined;
+    console.log(`[inbound] conv=${conversation.id} contentType=${contentType} body=${JSON.stringify(body)} flowSession=${JSON.stringify(flowSession ?? null)}`);
     if (flowSession?.flowId && flowSession.waitingAtNodeId) {
       const flow = await prisma.flow.findFirst({ where: { id: flowSession.flowId } });
       if (flow?.isActive) {
@@ -216,6 +217,7 @@ export const inboundWorker = new Worker<InboundMessageJob>(
           where: { id: conversation.id },
           data: { flowSession: Prisma.JsonNull },
         });
+        console.log(`[inbound] resuming flow=${flow.id} at node=${flowSession.waitingAtNodeId} body=${JSON.stringify(body)}`);
         await runFlow(prisma, flow.id, flow.flowDefinition as unknown as FlowDefinition, {
           conversationId: conversation.id,
           organizationId,

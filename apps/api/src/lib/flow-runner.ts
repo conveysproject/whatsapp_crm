@@ -410,6 +410,7 @@ export async function runFlow(
           else if (conditionType === "is") matched = messageBody === value;
           else if (conditionType === "starts_with") matched = messageBody.startsWith(value);
           else if (conditionType === "ends_with") matched = messageBody.endsWith(value);
+          console.log(`[flow-runner] condition node=${node.id} type=${conditionType} value=${JSON.stringify(value)} body=${JSON.stringify(messageBody)} matched=${matched} next=${matched ? node.next : (node.nextNo ?? null)}`);
           resolvedNext = matched ? node.next : (node.nextNo ?? null);
           break;
         }
