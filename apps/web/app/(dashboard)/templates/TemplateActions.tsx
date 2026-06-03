@@ -197,7 +197,7 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
                   <p className="text-xs text-red-500 mb-2">Could not load contacts.</p>
                   <button
                     className="text-xs text-green-600 underline"
-                    onClick={() => fetchContacts(search, labelId)}
+                    onClick={() => fetchContacts(search, tagFilter)}
                   >
                     Retry
                   </button>
@@ -205,7 +205,7 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
               )}
               {!loading && !contactsError && contacts.length === 0 && (
                 <p className="text-xs text-gray-400 text-center py-6">
-                  {search.trim() || labelId ? "No contacts found." : "Type a name or phone number to search."}
+                  {search.trim() || tagFilter ? "No contacts found." : "Type a name or phone number to search."}
                 </p>
               )}
               {!loading && !contactsError && contacts.map((c) => {
