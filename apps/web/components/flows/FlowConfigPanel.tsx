@@ -2,6 +2,7 @@
 
 import { JSX, useEffect, useState } from "react";
 import type { Node } from "reactflow";
+import { MediaAssetPicker } from "@/components/media-asset-picker";
 
 interface FlowConfigPanelProps {
   node: Node | null;
@@ -101,6 +102,7 @@ function Select({ value, onChange, options }: { value: string; onChange: (v: str
 
 export function FlowConfigPanel({ node, onUpdate, onDelete, onClose }: FlowConfigPanelProps): JSX.Element | null {
   const [config, setConfig] = useState<Record<string, unknown>>({});
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
 
   useEffect(() => {
     if (node) setConfig((node.data.config as Record<string, unknown>) ?? {});
@@ -256,7 +258,17 @@ export function FlowConfigPanel({ node, onUpdate, onDelete, onClose }: FlowConfi
           <>
             <Field>
               <Label>{nodeType === "send_document" ? "Document URL or Media ID" : "Image/Video URL or Media ID"}</Label>
-              <TextInput value={str("url") || str("mediaId")} onChange={(v) => set("url", v)} placeholder="https://... or media ID" />
+              <div className="flex gap-2">
+                <TextInput value={str("url") || str("mediaId")} onChange={(v) => set("url", v)} placeholder="https://... or media ID" />
+                <button
+                  type="button"
+                  onClick={() => setMediaPickerOpen(true)}
+                  className="shrink-0 h-9 px-3 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 whitespace-nowrap"
+                  title="Pick from Media Library"
+                >
+                  Library
+                </button>
+              </div>
             </Field>
             {nodeType === "send_document" ? (
               <Field>
@@ -532,6 +544,20 @@ export function FlowConfigPanel({ node, onUpdate, onDelete, onClose }: FlowConfi
           </button>
         </div>
       )}
+      <MediaAssetPicker
+        open={mediaPickerOpen}
+        onClose={() => setMediaPickerOpen(false)}
+        onSelect={(asset) => {
+          set("url", asset.fileUrl);
+          setMediaPickerOpen(false);
+        }}
+        filterType={
+          nodeType === "send_image" ? "image"
+          : nodeType === "send_video" ? "video"
+          : nodeType === "send_document" ? "document"
+          : undefined
+        }
+      />
     </aside>
   );
 }
