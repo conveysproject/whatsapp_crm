@@ -99,7 +99,7 @@ export default function InboxPage(): JSX.Element {
         )}
 
         <div className="relative px-2 flex items-center gap-2">
-          <CannedResponsePicker onSelect={(content) => setPrefillText(content)} />
+          <CannedResponsePicker conversationId={selectedConversationId} onSelect={(content) => setPrefillText(content)} />
           {selectedConversationId && (
             <SmartReplyPanel
               conversationId={selectedConversationId}

@@ -54,7 +54,21 @@ export function CannedResponsesClient({ initialItems }: Props): JSX.Element {
     setEditing(item);
     setForm({ name: item.name, shortcut: item.shortcut ?? "", content: item.content });
     setError("");
-    setAttachedMedia(null);
+    const md = item.mediaData;
+    if (md && typeof md === "object" && "fileUrl" in md) {
+      setAttachedMedia({
+        id: "",
+        title: (md["title"] as string) ?? "",
+        description: null,
+        type: (md["type"] as string) ?? "image",
+        fileUrl: (md["fileUrl"] as string) ?? "",
+        mimeType: null,
+        fileSizeBytes: null,
+        createdAt: "",
+      });
+    } else {
+      setAttachedMedia(null);
+    }
     setShowForm(true);
   }
 

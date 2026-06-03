@@ -1,25 +1,34 @@
 "use client";
 import { JSX, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@clerk/nextjs";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 interface CannedResponse {
   id: string;
   name: string;
   shortcut: string | null;
   content: string;
+  mediaData: { fileUrl: string; type: string; title: string } | null;
 }
 
 interface Props {
+  conversationId: string | null;
   onSelect: (content: string) => void;
+  onSent?: () => void;
 }
 
-export function CannedResponsePicker({ onSelect }: Props): JSX.Element {
+export function CannedResponsePicker({ conversationId, onSelect, onSent }: Props): JSX.Element {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
 
   const { data } = useQuery<{ data: CannedResponse[] }>({
     queryKey: ["canned-responses"],
     queryFn: () => fetch("/api/v1/canned-responses").then((r) => r.json() as Promise<{ data: CannedResponse[] }>),
+    staleTime: 30_000,
   });
 
   const filtered = (data?.data ?? []).filter(
@@ -27,6 +36,30 @@ export function CannedResponsePicker({ onSelect }: Props): JSX.Element {
       r.name.toLowerCase().includes(search.toLowerCase()) ||
       (r.shortcut ?? "").toLowerCase().includes(search.toLowerCase())
   );
+
+  async function handleSelect(r: CannedResponse) {
+    setOpen(false);
+    setSearch("");
+    if (r.mediaData && conversationId) {
+      try {
+        const token = await getToken();
+        await fetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contentType: r.mediaData.type,
+            mediaId: r.mediaData.fileUrl,
+            filename: r.mediaData.title,
+          }),
+        });
+        await queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+        onSent?.();
+      } catch {
+        // media send failed silently; text still prefills
+      }
+    }
+    onSelect(r.content);
+  }
 
   if (!open) {
     return (
@@ -63,10 +96,13 @@ export function CannedResponsePicker({ onSelect }: Props): JSX.Element {
             <button
               type="button"
               className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-              onClick={() => { onSelect(r.content); setOpen(false); setSearch(""); }}
+              onClick={() => { void handleSelect(r); }}
             >
-              <span className="font-medium">{r.name}</span>
-              {r.shortcut && <span className="ml-2 text-xs text-gray-400">{r.shortcut}</span>}
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{r.name}</span>
+                {r.shortcut && <span className="text-xs text-gray-400 font-mono">{r.shortcut}</span>}
+                {r.mediaData && <span className="text-xs text-gray-400">📎 {r.mediaData.type}</span>}
+              </div>
               <p className="text-gray-500 truncate">{r.content}</p>
             </button>
           </li>

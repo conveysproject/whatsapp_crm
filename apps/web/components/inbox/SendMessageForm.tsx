@@ -2,7 +2,7 @@
 
 import { JSX, FormEvent, useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { InteractiveMessagePicker } from "./InteractiveMessagePicker";
@@ -11,6 +11,14 @@ import { TemplatePicker } from "./TemplatePicker";
 import { MediaAssetPicker, type MediaAsset } from "@/components/media-asset-picker";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+
+interface CannedResponse {
+  id: string;
+  name: string;
+  shortcut: string | null;
+  content: string;
+  mediaData: { fileUrl: string; type: string; title: string } | null;
+}
 
 const ACCEPT_BY_TYPE: Record<string, string> = {
   image: "image/jpeg,image/png,image/webp,image/gif",
@@ -40,6 +48,12 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
   const pendingMediaTypeRef = useRef<string>("document");
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
+
+  const { data: cannedData } = useQuery<{ data: CannedResponse[] }>({
+    queryKey: ["canned-responses"],
+    queryFn: () => fetch("/api/v1/canned-responses").then((r) => r.json() as Promise<{ data: CannedResponse[] }>),
+    staleTime: 30_000,
+  });
 
   useEffect(() => {
     if (prefillText) setText(prefillText);
@@ -132,6 +146,32 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
       }
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleCannedShortcut(r: CannedResponse) {
+    setSlashMenuOpen(false);
+    setText(r.content);
+    if (r.mediaData && conversationId) {
+      setSending(true);
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contentType: r.mediaData.type,
+            mediaId: r.mediaData.fileUrl,
+            filename: r.mediaData.title,
+          }),
+        });
+        if (res.ok) {
+          onSent?.();
+          await queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+        }
+      } finally {
+        setSending(false);
+      }
     }
   }
 
@@ -284,32 +324,62 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
           const COMMANDS = [
             { id: "template", icon: "⚡", label: "template", desc: "Send a WhatsApp template message" },
           ];
-          const matched = COMMANDS.filter((c) => c.label.startsWith(query));
-          if (!matched.length) return null;
+          const matchedCommands = COMMANDS.filter((c) => c.label.startsWith(query));
+          const matchedCanned = (cannedData?.data ?? []).filter((r) => {
+            const sc = (r.shortcut ?? "").toLowerCase();
+            return sc.length > 1 && sc.slice(1).startsWith(query);
+          });
+          if (!matchedCommands.length && !matchedCanned.length) return null;
           return (
             <div className="absolute bottom-full left-0 mb-2 w-72 bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden z-20">
-              <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Commands</p>
-              {matched.map((cmd) => (
-                <button
-                  key={cmd.id}
-                  type="button"
-                  onClick={() => {
-                    setSlashMenuOpen(false);
-                    setText("");
-                    if (cmd.id === "template") {
-                      setTemplateSearch("");
-                      setTemplateOpen(true);
-                    }
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
-                >
-                  <span className="text-lg">{cmd.icon}</span>
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">/{cmd.label}</p>
-                    <p className="text-xs text-gray-500">{cmd.desc}</p>
-                  </div>
-                </button>
-              ))}
+              {matchedCommands.length > 0 && (
+                <>
+                  <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Commands</p>
+                  {matchedCommands.map((cmd) => (
+                    <button
+                      key={cmd.id}
+                      type="button"
+                      onClick={() => {
+                        setSlashMenuOpen(false);
+                        setText("");
+                        if (cmd.id === "template") {
+                          setTemplateSearch("");
+                          setTemplateOpen(true);
+                        }
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                    >
+                      <span className="text-lg">{cmd.icon}</span>
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">/{cmd.label}</p>
+                        <p className="text-xs text-gray-500">{cmd.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+              {matchedCanned.length > 0 && (
+                <>
+                  <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Canned Responses</p>
+                  {matchedCanned.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => { void handleCannedShortcut(r); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                    >
+                      <span className="text-lg">💬</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-gray-800">{r.shortcut}</p>
+                          {r.mediaData && <span className="text-xs text-gray-400">📎</span>}
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">{r.content}</p>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           );
         })()}
