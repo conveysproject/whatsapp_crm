@@ -90,6 +90,15 @@ describe("POST /v1/media-assets (URL)", () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it("returns 400 for invalid type", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/media-assets",
+      payload: { title: "X", type: "exe", fileUrl: "https://example.com/x.exe" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 describe("PUT /v1/media-assets/:id", () => {
@@ -138,6 +147,9 @@ describe("DELETE /v1/media-assets/:id", () => {
     const res = await app.inject({ method: "DELETE", url: "/v1/media-assets/ma-1" });
     expect(res.statusCode).toBe(204);
     expect(mockPrisma.mediaAsset.delete).toHaveBeenCalled();
+    // Verify R2 cleanup was called with extracted key
+    const { deleteFromR2 } = await import("../lib/r2.js");
+    expect(deleteFromR2).toHaveBeenCalledWith("org-1/uuid.jpg");
   });
 
   it("returns 404 when not found", async () => {

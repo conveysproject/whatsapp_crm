@@ -30,6 +30,10 @@ export const mediaAssetsRouter: FastifyPluginAsync = async (fastify) => {
     if (!title || !type || !fileUrl) {
       return reply.status(400).send({ error: { code: "MISSING_FIELDS", message: "title, type, and fileUrl are required" } });
     }
+    const VALID_TYPES = ["image", "video", "audio", "document"] as const;
+    if (!VALID_TYPES.includes(type as typeof VALID_TYPES[number])) {
+      return reply.status(400).send({ error: { code: "INVALID_TYPE", message: "type must be one of: image, video, audio, document" } });
+    }
     const item = await fastify.prisma.mediaAsset.create({
       data: { organizationId, title, type, fileUrl, description: description ?? null },
     });
@@ -51,7 +55,7 @@ export const mediaAssetsRouter: FastifyPluginAsync = async (fastify) => {
     const titleField = data.fields["title"] as { value?: string } | undefined;
     const descField = data.fields["description"] as { value?: string } | undefined;
     const rawName = titleField?.value ?? data.filename ?? "Untitled";
-    const title = rawName.replace(/\.[^/.]+$/, "");
+    const title = rawName.replace(/\.[^/.]+$/, "") || "Untitled";
     const mimeType = data.mimetype;
     const type = mimeType.startsWith("image/") ? "image"
       : mimeType.startsWith("video/") ? "video"
