@@ -301,14 +301,30 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
         });
 
         // Build rendered body JSON for inbox display (same as send-to-contact)
-        type WaComp = { type?: string; format?: string; text?: string; example?: { header_url?: string[] }; buttons?: Array<{ type?: string; text?: string }> };
+        type WaComp = { type?: string; format?: string; text?: string; example?: { header_url?: string[] }; buttons?: Array<{ type?: string; text?: string }>; cards?: Array<{ components?: WaComp[] }> };
         const comps = stored as WaComp[];
         const headerComp = comps.find((c) => c.type?.toUpperCase() === "HEADER");
         const footerComp = comps.find((c) => c.type?.toUpperCase() === "FOOTER");
         const buttonsComp = comps.find((c) => c.type?.toUpperCase() === "BUTTONS");
+        const carouselRendComp = comps.find((c) => c.type?.toUpperCase() === "CAROUSEL");
         let bodyText = bodyComp?.text ?? "";
         bodyVars.forEach((v, i) => { bodyText = bodyText.replace(new RegExp(`\\{\\{${i + 1}\\}\\}`, "g"), v); });
         const isMediaHeader = ["IMAGE", "VIDEO", "DOCUMENT"].includes((headerComp?.format ?? "").toUpperCase());
+        const msgCardUrls = tplBody.cardMediaUrls ?? [];
+        const carouselCards = carouselRendComp
+          ? (carouselRendComp.cards ?? []).map((card, i) => {
+              const cc = card.components ?? [];
+              const cardHeader = cc.find((c) => c.type?.toUpperCase() === "HEADER");
+              const cardBody = cc.find((c) => c.type?.toUpperCase() === "BODY");
+              const cardBtns = cc.find((c) => c.type?.toUpperCase() === "BUTTONS");
+              return {
+                headerFormat: cardHeader?.format ?? null,
+                headerMediaUrl: msgCardUrls[i] ?? null,
+                body: cardBody?.text ?? null,
+                buttons: cardBtns?.buttons ?? [],
+              };
+            })
+          : null;
         const renderedBody = JSON.stringify({
           templateName: template.name,
           header: headerComp ? {
@@ -319,6 +335,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
           body: bodyText || template.name,
           footer: footerComp?.text ?? null,
           buttons: buttonsComp?.buttons ?? [],
+          carousel: carouselCards,
         });
 
         const draft = await fastify.prisma.message.create({
