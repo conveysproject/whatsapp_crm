@@ -93,11 +93,14 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
     { config: { public: true } },
     async (request, reply) => {
       const signature = (request.headers["x-hub-signature-256"] as string) ?? "";
-      const rawBody = (request.raw as unknown as { rawBody?: string }).rawBody ?? JSON.stringify(request.body);
+      const parsedRawBody = (request.raw as unknown as { rawBody?: string }).rawBody;
+      const rawBody = parsedRawBody ?? JSON.stringify(request.body);
       const secret = process.env["WA_WEBHOOK_SECRET"] ?? "";
 
       if (!verifyWebhookSignature(rawBody, signature, secret)) {
-        console.log(`[webhook-403] sig=${signature.slice(0, 20)} secretLen=${secret.length} bodyLen=${rawBody?.length ?? 0} bodyStart=${rawBody?.slice(0, 80)}`);
+        const { createHmac: hmac } = await import("crypto");
+        const computedDigest = `sha256=${hmac("sha256", secret).update(rawBody).digest("hex")}`;
+        console.log(`[webhook-403] rawBodySource=${parsedRawBody !== undefined ? "parser" : "stringify"} sig=${signature} computed=${computedDigest} secretLen=${secret.length} bodyLen=${rawBody.length} bodyStart=${rawBody.slice(0, 120)}`);
         return reply.status(403).send({ error: { code: "INVALID_SIGNATURE", message: "Signature mismatch" } });
       }
 
