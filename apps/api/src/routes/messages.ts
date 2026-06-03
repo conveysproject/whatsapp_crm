@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { sendTextMessage, sendMediaMessage, sendInteractiveMessage, sendTemplateMessage } from "../lib/whatsapp.js";
+import { sendTextMessage, sendMediaMessage, sendInteractiveMessage, sendTemplateMessage, getMediaUrl } from "../lib/whatsapp.js";
 import type { WaInteractivePayload } from "../lib/whatsapp.js";
 import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
 import type { ConversationId } from "@WBMSG/shared";
@@ -381,6 +381,18 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
       // Cancel pending no-reply checks — agent is replying
       void cancelNoReplyJobs(conversation.id);
 
+      // Resolve the display URL for outbound media (mirrors inbound-message worker pattern)
+      let outboundMediaUrl: string | null = null;
+      if (contentType !== "text" && contentType !== "interactive" && contentType !== "template") {
+        const mediaBody = body as { mediaId: string };
+        try {
+          const { url } = await getMediaUrl(mediaBody.mediaId, accessToken);
+          outboundMediaUrl = url;
+        } catch {
+          // non-fatal — message still sends, inbox just won't show a preview
+        }
+      }
+
       // Create record with "sending" status before WA call for stuck-message recovery
       const draft = await fastify.prisma.message.create({
         data: {
@@ -390,6 +402,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
           contentType,
           body: storedBody,
           status: "sending",
+          ...(outboundMediaUrl ? { mediaUrl: outboundMediaUrl } : {}),
           // interactive messages must always be agent-visible, never hidden as system messages
           ...(contentType === "interactive" ? { isSystemMessage: false } : {}),
         },
