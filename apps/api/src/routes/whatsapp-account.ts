@@ -199,8 +199,8 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ error: { code: "MISSING_CODE", message: "code is required" } });
       }
 
-      const appId = process.env["FACEBOOK_APP_ID"] ?? "";
-      const appSecret = process.env["FACEBOOK_APP_SECRET"] ?? "";
+      const appId = process.env["META_APP_ID"] ?? "";
+      const appSecret = process.env["META_APP_SECRET"] ?? "";
       if (!appId || !appSecret) {
         return reply.status(500).send({ error: { code: "APP_NOT_CONFIGURED", message: "Facebook app credentials not configured" } });
       }

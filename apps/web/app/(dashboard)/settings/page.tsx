@@ -53,6 +53,7 @@ export default async function SettingsPage(): Promise<JSX.Element> {
           { href: "/settings/vendor-settings", label: "Advanced Settings", desc: "Bot timing, API token" },
           { href: "/settings/webhook-actions", label: "Webhook Actions", desc: "Trigger external webhooks" },
           { href: "/settings/media-library", label: "Media Library", desc: "Reusable images, docs, audio" },
+          { href: "/settings/canned-responses", label: "Canned Responses", desc: "Saved reply templates with shortcuts" },
           { href: "/settings/routing", label: "Routing Rules", desc: "Auto-assign conversations" },
           { href: "/settings/ai", label: "AI Settings", desc: "Chatbot and automation config" },
           { href: "/settings/billing", label: "Billing", desc: "Subscription and usage" },

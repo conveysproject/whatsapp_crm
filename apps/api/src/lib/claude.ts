@@ -1,9 +1,11 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
-function getClient(): Anthropic {
-  if (!process.env["ANTHROPIC_API_KEY"]) throw new Error("ANTHROPIC_API_KEY is not set");
-  return new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
+function getClient(): OpenAI {
+  if (!process.env["OPENAI_API_KEY"]) throw new Error("OPENAI_API_KEY is not set");
+  return new OpenAI({ apiKey: process.env["OPENAI_API_KEY"] });
 }
+
+const MODEL = "gpt-4o-mini";
 
 export type IntentType = "question" | "complaint" | "order" | "compliment" | "other";
 export type SentimentType = "positive" | "negative" | "neutral";
@@ -21,7 +23,10 @@ Be concise, professional, and empathetic. Respond in the same language as the cu
 export const AI_CONTEXT_SHORT = 6;
 export const AI_CONTEXT_LONG = 30;
 
-// Summarize and store back to contact when context is long
+function text(response: OpenAI.Chat.ChatCompletion): string {
+  return response.choices[0]?.message?.content?.trim() ?? "";
+}
+
 export async function buildAiContext(
   messages: { body: string | null; direction: string }[],
   pastSummary?: string | null
@@ -44,11 +49,11 @@ export async function generateSuggestions(
   history: Message[],
   count = 3
 ): Promise<string[]> {
-  const response = await getClient().messages.create({
-    model: "claude-haiku-4-5-20251001",
+  const response = await getClient().chat.completions.create({
+    model: MODEL,
     max_tokens: 512,
-    system: SYSTEM_PROMPT,
     messages: [
+      { role: "system", content: SYSTEM_PROMPT },
       ...history,
       {
         role: "user",
@@ -57,40 +62,41 @@ export async function generateSuggestions(
     ],
   });
 
-  const text = response.content[0]?.type === "text" ? response.content[0].text : "[]";
   try {
-    const parsed = JSON.parse(text) as unknown;
+    const parsed = JSON.parse(text(response)) as unknown;
     if (Array.isArray(parsed)) return parsed.filter((s): s is string => typeof s === "string").slice(0, count);
-  } catch {
-    // Return empty if parse fails
-  }
+  } catch { /* return empty */ }
   return [];
 }
 
 export async function detectIntent(messageBody: string): Promise<IntentType> {
-  const response = await getClient().messages.create({
-    model: "claude-haiku-4-5-20251001",
+  const response = await getClient().chat.completions.create({
+    model: MODEL,
     max_tokens: 16,
-    system: "Classify the customer message intent. Reply with exactly one word: question, complaint, order, compliment, or other.",
-    messages: [{ role: "user", content: messageBody }],
+    messages: [
+      { role: "system", content: "Classify the customer message intent. Reply with exactly one word: question, complaint, order, compliment, or other." },
+      { role: "user", content: messageBody },
+    ],
   });
 
-  const text = (response.content[0]?.type === "text" ? response.content[0].text : "other").toLowerCase().trim() as IntentType;
+  const result = text(response).toLowerCase() as IntentType;
   const valid: IntentType[] = ["question", "complaint", "order", "compliment", "other"];
-  return valid.includes(text) ? text : "other";
+  return valid.includes(result) ? result : "other";
 }
 
 export async function analyzeSentiment(messageBody: string): Promise<SentimentType> {
-  const response = await getClient().messages.create({
-    model: "claude-haiku-4-5-20251001",
+  const response = await getClient().chat.completions.create({
+    model: MODEL,
     max_tokens: 16,
-    system: "Classify the sentiment of this customer message. Reply with exactly one word: positive, negative, or neutral.",
-    messages: [{ role: "user", content: messageBody }],
+    messages: [
+      { role: "system", content: "Classify the sentiment of this customer message. Reply with exactly one word: positive, negative, or neutral." },
+      { role: "user", content: messageBody },
+    ],
   });
 
-  const text = (response.content[0]?.type === "text" ? response.content[0].text : "neutral").toLowerCase().trim() as SentimentType;
+  const result = text(response).toLowerCase() as SentimentType;
   const valid: SentimentType[] = ["positive", "negative", "neutral"];
-  return valid.includes(text) ? text : "neutral";
+  return valid.includes(result) ? result : "neutral";
 }
 
 export async function generateSmartReplies(
@@ -101,8 +107,8 @@ export async function generateSmartReplies(
     .map((m) => `${m.direction === "inbound" ? "Customer" : "Agent"}: ${m.body}`)
     .join("\n");
 
-  const response = await getClient().messages.create({
-    model: "claude-haiku-4-5-20251001",
+  const response = await getClient().chat.completions.create({
+    model: MODEL,
     max_tokens: 300,
     messages: [
       {
@@ -113,12 +119,9 @@ export async function generateSmartReplies(
   });
 
   try {
-    const text = response.content[0]?.type === "text" ? response.content[0].text : "[]";
-    const parsed = JSON.parse(text) as unknown;
+    const parsed = JSON.parse(text(response)) as unknown;
     if (Array.isArray(parsed)) return parsed.filter((s): s is string => typeof s === "string").slice(0, 3);
-  } catch {
-    // fallthrough
-  }
+  } catch { /* fallthrough */ }
   return ["Thank you for your message.", "Let me check on that for you.", "I'll get back to you shortly."];
 }
 
@@ -135,44 +138,38 @@ export async function summarizeConversation(
     ? `Previous summary:\n${existingSummary}\n\nNew messages:\n${transcript}`
     : transcript;
 
-  const response = await getClient().messages.create({
-    model: "claude-haiku-4-5-20251001",
+  const response = await getClient().chat.completions.create({
+    model: MODEL,
     max_tokens: 300,
-    system: "You are a CRM assistant. Summarize customer conversations concisely for agents. Focus on: what the customer needed, what was resolved, any follow-up actions. Max 3 sentences.",
-    messages: [{ role: "user", content: context }],
+    messages: [
+      { role: "system", content: "You are a CRM assistant. Summarize customer conversations concisely for agents. Focus on: what the customer needed, what was resolved, any follow-up actions. Max 3 sentences." },
+      { role: "user", content: context },
+    ],
   });
 
-  return response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
+  return text(response);
 }
 
 export async function detectIntentWithConfidence(
-  text: string
+  messageText: string
 ): Promise<{ intent: string; confidence: number }> {
   const intents = ["purchase_inquiry", "support_request", "complaint", "general_inquiry", "pricing", "refund_request"];
-  const response = await getClient().messages.create({
-    model: "claude-haiku-4-5-20251001",
+  const response = await getClient().chat.completions.create({
+    model: MODEL,
     max_tokens: 100,
     messages: [
       {
         role: "user",
-        content: `Classify this message into one of these intents: ${intents.join(", ")}. Return ONLY a JSON object with "intent" and "confidence" (0-1). Message: "${text}"`,
+        content: `Classify this message into one of these intents: ${intents.join(", ")}. Return ONLY a JSON object with "intent" and "confidence" (0-1). Message: "${messageText}"`,
       },
     ],
   });
 
   try {
-    const responseText = response.content[0]?.type === "text" ? response.content[0].text : "{}";
-    const parsed = JSON.parse(responseText) as unknown;
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      "intent" in parsed &&
-      "confidence" in parsed
-    ) {
+    const parsed = JSON.parse(text(response)) as unknown;
+    if (parsed && typeof parsed === "object" && "intent" in parsed && "confidence" in parsed) {
       return parsed as { intent: string; confidence: number };
     }
-  } catch {
-    // fallthrough
-  }
+  } catch { /* fallthrough */ }
   return { intent: "general_inquiry", confidence: 0.5 };
 }
