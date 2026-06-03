@@ -14,6 +14,7 @@ interface CampaignBody {
   segmentId?: SegmentId;
   scheduledAt?: string;
   messageInterval?: number;
+  mediaUrl?: string;
   // GAP-S70: accept CSV string OR array; normalize to array
   contactGroup?: string | string[];
   contactLabels?: string | string[];
@@ -97,6 +98,7 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
         status: "draft" as CampaignStatus,
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         messageInterval: messageInterval ?? null,
+        mediaUrl: request.body.mediaUrl ?? null,
       },
     });
     // Persist group associations
@@ -135,6 +137,7 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
           ...(campaignType ? { campaignType } : {}),
           ...(scheduledAt !== undefined ? { scheduledAt: scheduledAt ? new Date(scheduledAt) : null } : {}),
           ...(messageInterval !== undefined ? { messageInterval } : {}),
+          ...(request.body.mediaUrl !== undefined ? { mediaUrl: request.body.mediaUrl } : {}),
         },
       });
       return reply.send({ data: updated });
