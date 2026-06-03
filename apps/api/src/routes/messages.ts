@@ -386,7 +386,9 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
       let outboundMediaUrl: string | null = null;
       if (contentType !== "text" && contentType !== "interactive") {
         const mediaBody = body as { mediaId: string };
-        outboundMediaUrl = `wamid:${mediaBody.mediaId}`;
+        outboundMediaUrl = mediaBody.mediaId.startsWith("https://")
+          ? mediaBody.mediaId
+          : `wamid:${mediaBody.mediaId}`;
       }
 
       // Create record with "sending" status before WA call for stuck-message recovery
