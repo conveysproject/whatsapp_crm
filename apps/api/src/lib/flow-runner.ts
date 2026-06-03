@@ -168,7 +168,8 @@ export async function runFlow(
             if (payload.contactPhone && interactive) {
               const { messageId } = await sendInteractiveMessage(phoneNumberId, payload.contactPhone, interactive, accessToken);
               if (payload.conversationId) {
-                await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "interactive", body: interactive.body?.text ?? null, whatsappMessageId: messageId });
+                const recordedBody = interactive.body?.text || "[Select an option]";
+                await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "interactive", body: recordedBody, whatsappMessageId: messageId });
               }
             }
             if (node.config["waitForReply"] !== false && payload.conversationId) {

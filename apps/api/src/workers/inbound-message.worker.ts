@@ -331,9 +331,11 @@ export const inboundWorker = new Worker<InboundMessageJob>(
         contentType,
       };
 
-      // Skip inbound_message/keyword_match if an auto-reply already ran a flow —
-      // prevents the same flow executing twice for one message.
-      if (!autoRepliedWithFlow) {
+      // Button/list replies must not start new inbound_message/keyword_match flows —
+      // they only resume sessions (handled above) or trigger dedicated button_reply flows.
+      // Starting a new flow on an orphaned button click (e.g. Meta retry after 403)
+      // would re-run the entire flow, add duplicate labels, and send extra messages.
+      if (!autoRepliedWithFlow && contentType !== "interactive") {
         await dispatchFlowTrigger(prisma, organizationId, "inbound_message", dispatchPayload);
         await dispatchFlowTrigger(prisma, organizationId, "keyword_match", dispatchPayload);
       }
