@@ -383,7 +383,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
 
       // Resolve the display URL for outbound media (mirrors inbound-message worker pattern)
       let outboundMediaUrl: string | null = null;
-      if (contentType !== "text" && contentType !== "interactive" && contentType !== "template") {
+      if (contentType !== "text" && contentType !== "interactive") {
         const mediaBody = body as { mediaId: string };
         try {
           const { url } = await getMediaUrl(mediaBody.mediaId, accessToken);
