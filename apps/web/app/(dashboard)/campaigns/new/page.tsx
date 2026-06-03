@@ -1,6 +1,8 @@
 "use client";
 
 import { JSX, useState } from "react";
+import { MediaAssetPicker } from "@/components/media-asset-picker";
+import type { MediaAsset } from "@/components/media-asset-picker";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -42,6 +44,8 @@ export default function NewCampaignPage(): JSX.Element {
   const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("now");
   const [scheduledAt, setScheduledAt] = useState("");
   const [saving, setSaving] = useState(false);
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
 
   // Data fetching
   const { data: templates = [] } = useQuery<Template[]>({
@@ -119,6 +123,7 @@ export default function NewCampaignPage(): JSX.Element {
           textBody: campaignType === "non_template" ? freeTextBody : undefined,
           messageInterval: messageInterval > 0 ? messageInterval : undefined,
           contactGroup: audienceMode === "groups" ? selectedGroupIds : undefined,
+          mediaUrl: campaignType === "template" && mediaUrl ? mediaUrl : undefined,
         }),
       });
 
@@ -250,6 +255,28 @@ export default function NewCampaignPage(): JSX.Element {
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Preview</p>
                     <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
                       {selectedTemplate.bodyText ?? "No body text"}
+                    </div>
+                  </div>
+                )}
+                {selectedTemplate && (
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Media URL <span className="text-gray-400 text-xs font-normal">(optional — overrides template header image)</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        value={mediaUrl}
+                        onChange={(e) => setMediaUrl(e.target.value)}
+                        placeholder="https://… or choose from library"
+                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setMediaPickerOpen(true)}
+                        className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 whitespace-nowrap"
+                      >
+                        Library
+                      </button>
                     </div>
                   </div>
                 )}
@@ -449,6 +476,11 @@ export default function NewCampaignPage(): JSX.Element {
       </div>
 
       <Toast title={toastState.title} variant={toastState.variant} open={toastState.open} onOpenChange={setToastOpen} />
+      <MediaAssetPicker
+        open={mediaPickerOpen}
+        onClose={() => setMediaPickerOpen(false)}
+        onSelect={(asset: MediaAsset) => { setMediaUrl(asset.fileUrl); setMediaPickerOpen(false); }}
+      />
     </WhatsAppGate>
   );
 }
