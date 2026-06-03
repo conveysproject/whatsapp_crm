@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { MessageStatus, CampaignRecipientStatus } from "@prisma/client";
 import { createHmac, timingSafeEqual } from "crypto";
+import { Readable } from "stream";
 import { verifyWebhookSignature } from "../lib/whatsapp.js";
 import { inboundMessageQueue } from "../lib/queue.js";
 import { getIo } from "../lib/io-ref.js";
@@ -59,19 +60,22 @@ interface WhatsAppWebhookBody {
 }
 
 export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
-  // Capture raw bytes as Buffer — identical approach to billing-webhook.ts (Stripe).
-  // Using parseAs:"buffer" ensures no string encoding normalisation touches the
-  // bytes before HMAC verification. Emoji in button titles (📦, 💳, ⚙️) would
-  // survive as-is because we skip the Buffer→string→Buffer round-trip entirely.
-  fastify.addContentTypeParser(
-    "application/json",
-    { parseAs: "buffer" },
-    (req, body, done) => {
-      (req as unknown as { rawBodyBuffer: Buffer }).rawBodyBuffer = body as unknown as Buffer;
-      try { done(null, JSON.parse((body as unknown as Buffer).toString("utf8"))); }
-      catch (e) { (e as Error & { statusCode: number }).statusCode = 400; done(e as Error, undefined); }
-    }
-  );
+  // Buffer the raw request stream before ANY content-type parser runs.
+  // preParsing is properly plugin-scoped and fires before Fastify's default
+  // JSON parser, so rawBodyBuffer always contains the exact bytes Meta signed.
+  // Emoji in button titles (📦 💳 ⚙️) survive intact — no JSON re-serialisation.
+  fastify.addHook("preParsing", (_request, _reply, payload, done) => {
+    const chunks: Buffer[] = [];
+    payload.on("data", (chunk: unknown) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    });
+    payload.on("end", () => {
+      const raw = Buffer.concat(chunks);
+      (_request.raw as unknown as { rawBodyBuffer: Buffer }).rawBodyBuffer = raw;
+      done(null, Readable.from(raw) as unknown as typeof payload);
+    });
+    payload.on("error", (e: Error) => done(e));
+  });
 
   fastify.get(
     "/webhooks/whatsapp",
@@ -99,9 +103,6 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
       const secret = process.env["WA_WEBHOOK_SECRET"] ?? "";
 
       if (!verifyWebhookSignature(rawBody, signature, secret)) {
-        const { createHmac: hmac } = await import("crypto");
-        const computedDigest = `sha256=${hmac("sha256", secret).update(rawBody).digest("hex")}`;
-        console.log(`[webhook-403] rawBodySource=${rawBodyBuffer !== undefined ? "buffer" : "stringify"} sig=${signature} computed=${computedDigest} secretLen=${secret.length} bodyLen=${rawBody.length} bodyStart=${rawBody.slice(0, 120)}`);
         return reply.status(403).send({ error: { code: "INVALID_SIGNATURE", message: "Signature mismatch" } });
       }
 
