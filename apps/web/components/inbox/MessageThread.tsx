@@ -15,12 +15,20 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
+interface CarouselCard {
+  headerFormat?: string | null;
+  headerMediaUrl?: string | null;
+  body?: string | null;
+  buttons?: Array<{ type?: string; text?: string }>;
+}
+
 interface TemplateParsed {
   templateName?: string;
   header?: { format?: string; text?: string | null; mediaUrl?: string | null } | null;
   body?: string | null;
   footer?: string | null;
   buttons?: Array<{ type?: string; text?: string }>;
+  carousel?: CarouselCard[] | null;
 }
 
 function TemplateMessageBubble({ body }: { body: string }): JSX.Element {
@@ -33,6 +41,7 @@ function TemplateMessageBubble({ body }: { body: string }): JSX.Element {
   const bodyText = parsed.body;
   const footerText = parsed.footer;
   const buttons = parsed.buttons ?? [];
+  const carousel = parsed.carousel ?? [];
 
   return (
     <div className="flex flex-col gap-1 min-w-[180px]">
@@ -50,6 +59,32 @@ function TemplateMessageBubble({ body }: { body: string }): JSX.Element {
       )}
       {footerText && (
         <p className="text-xs text-gray-400 mt-0.5">{footerText}</p>
+      )}
+      {carousel.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto mt-1 pb-1 -mx-1 px-1">
+          {carousel.map((card, i) => (
+            <div key={i} className="min-w-[140px] max-w-[160px] flex-shrink-0 rounded-lg border border-gray-200 overflow-hidden bg-white">
+              {card.headerMediaUrl && (
+                <MediaMessage
+                  mediaUrl={card.headerMediaUrl}
+                  contentType={(card.headerFormat ?? "image").toLowerCase() as "image" | "video" | "document"}
+                />
+              )}
+              {card.body && (
+                <p className="text-xs text-gray-800 p-2 leading-snug">{card.body}</p>
+              )}
+              {(card.buttons ?? []).length > 0 && (
+                <div className="border-t border-gray-100 px-2 py-1">
+                  {(card.buttons ?? []).map((btn, j) => (
+                    <div key={j} className="text-center text-xs text-[#00a884] font-medium py-0.5">
+                      {btn.text ?? "Button"}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
       {buttons.length > 0 && (
         <div className="flex flex-col gap-1 mt-2 border-t border-gray-200 pt-2">

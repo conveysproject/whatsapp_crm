@@ -428,17 +428,33 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
 
       // Build a renderable JSON body from the template components + variables
       // Use storedComponents (not template.components) — it has the resolved media URL injected
-      type WaComp = { type?: string; format?: string; text?: string; example?: { header_url?: string[] }; buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string }> };
+      type WaComp = { type?: string; format?: string; text?: string; example?: { header_url?: string[] }; buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string }>; cards?: Array<{ components?: WaComp[] }> };
       const comps = storedComponents as WaComp[];
       const headerComp = comps.find((c) => c.type?.toUpperCase() === "HEADER");
       const renderedBodyComp = comps.find((c) => c.type?.toUpperCase() === "BODY");
       const footerComp = comps.find((c) => c.type?.toUpperCase() === "FOOTER");
       const buttonsComp = comps.find((c) => c.type?.toUpperCase() === "BUTTONS");
+      const carouselRendComp = comps.find((c) => c.type?.toUpperCase() === "CAROUSEL");
       let bodyText = renderedBodyComp?.text ?? "";
       bodyVars.forEach((v, i) => {
         bodyText = bodyText.replace(new RegExp(`\\{\\{${i + 1}\\}\\}`, "g"), v);
       });
       const isMediaHeader = ["IMAGE", "VIDEO", "DOCUMENT"].includes((headerComp?.format ?? "").toUpperCase());
+      const cardMediaUrls = request.body.cardMediaUrls ?? [];
+      const carouselCards = carouselRendComp
+        ? (carouselRendComp.cards ?? []).map((card, i) => {
+            const cc = card.components ?? [];
+            const cardHeader = cc.find((c) => c.type?.toUpperCase() === "HEADER");
+            const cardBody = cc.find((c) => c.type?.toUpperCase() === "BODY");
+            const cardBtns = cc.find((c) => c.type?.toUpperCase() === "BUTTONS");
+            return {
+              headerFormat: cardHeader?.format ?? null,
+              headerMediaUrl: cardMediaUrls[i] ?? null,
+              body: cardBody?.text ?? null,
+              buttons: cardBtns?.buttons ?? [],
+            };
+          })
+        : null;
       const renderedBody = JSON.stringify({
         templateName: template.name,
         header: headerComp ? {
@@ -449,6 +465,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
         body: bodyText || template.name,
         footer: footerComp?.text ?? null,
         buttons: buttonsComp?.buttons ?? [],
+        carousel: carouselCards,
       });
 
       let conversation = await fastify.prisma.conversation.findFirst({
