@@ -1,1 +1,1 @@
-﻿ALTER TABLE "campaigns" ADD COLUMN IF NOT EXISTS "media_url" TEXT;
+ALTER TABLE "campaigns" ADD COLUMN IF NOT EXISTS "media_url" TEXT;
