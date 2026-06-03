@@ -6,6 +6,7 @@ import type { ConversationId } from "@WBMSG/shared";
 import { canAccess } from "../lib/permissions.js";
 import { cancelNoReplyJobs } from "../lib/trigger-dispatcher.js";
 import { getIo } from "../lib/io-ref.js";
+import { inboundMessageQueue } from "../lib/queue.js";
 
 type SendMessageBody =
   | { contentType?: "text"; text: string }
@@ -59,6 +60,109 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
 
     return reply.send({ data, total, page: pageNum, pageSize });
   });
+
+  // ── Message gaps: dumps received but never stored in messages table ────────
+  fastify.get<{ Querystring: { from?: string; to?: string; page?: string } }>(
+    "/messages/gaps",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const { from, to, page } = request.query;
+      const pageNum = Math.max(1, parseInt(page ?? "1", 10));
+      const pageSize = 50;
+      const offset = (pageNum - 1) * pageSize;
+      const fromDate = from ? new Date(from) : new Date(Date.now() - 7 * 86400000);
+      const toDate = to ? new Date(new Date(to).getTime() + 86400000) : new Date();
+
+      type GapRow = { id: string; wamid: string; from_phone: string; content_type: string; body: string | null; queued: boolean; created_at: Date };
+      const [rows, countRows] = await Promise.all([
+        fastify.prisma.$queryRaw<GapRow[]>`
+          SELECT d.id, d.wamid, d.from_phone, d.content_type, d.body, d.queued, d.created_at
+          FROM inbound_message_dumps d
+          LEFT JOIN messages m ON m.whatsapp_message_id = d.wamid
+          WHERE d.org_id = ${organizationId}
+            AND m.id IS NULL
+            AND d.created_at >= ${fromDate}
+            AND d.created_at < ${toDate}
+          ORDER BY d.created_at DESC
+          LIMIT ${pageSize} OFFSET ${offset}
+        `,
+        fastify.prisma.$queryRaw<[{ count: bigint }]>`
+          SELECT COUNT(*) AS count
+          FROM inbound_message_dumps d
+          LEFT JOIN messages m ON m.whatsapp_message_id = d.wamid
+          WHERE d.org_id = ${organizationId}
+            AND m.id IS NULL
+            AND d.created_at >= ${fromDate}
+            AND d.created_at < ${toDate}
+        `,
+      ]);
+
+      return reply.send({
+        data: rows.map((r) => ({
+          id: r.id,
+          wamid: r.wamid,
+          fromPhone: r.from_phone,
+          contentType: r.content_type,
+          body: r.body,
+          queued: r.queued,
+          createdAt: r.created_at,
+        })),
+        total: Number(countRows[0]?.count ?? 0),
+        page: pageNum,
+      });
+    }
+  );
+
+  // ── Re-queue gap messages back into the inbound worker pipeline ────────────
+  fastify.post<{ Body: { wamids?: string[]; all?: boolean } }>(
+    "/messages/gaps/requeue",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const { wamids, all } = request.body;
+
+      type DumpRow = { id: string; wamid: string; from_phone: string; content_type: string; body: string | null; raw_message: unknown; org_id: string | null };
+      let dumps: DumpRow[];
+
+      if (all) {
+        dumps = await fastify.prisma.$queryRaw<DumpRow[]>`
+          SELECT d.id, d.wamid, d.from_phone, d.content_type, d.body, d.raw_message, d.org_id
+          FROM inbound_message_dumps d
+          LEFT JOIN messages m ON m.whatsapp_message_id = d.wamid
+          WHERE d.org_id = ${organizationId} AND m.id IS NULL
+          LIMIT 500
+        `;
+      } else {
+        if (!wamids?.length) return reply.send({ queued: 0 });
+        const rows = await fastify.prisma.inboundMessageDump.findMany({
+          where: { wamid: { in: wamids }, orgId: organizationId },
+        });
+        dumps = rows.map((r) => ({
+          id: r.id, wamid: r.wamid, from_phone: r.fromPhone,
+          content_type: r.contentType, body: r.body,
+          raw_message: r.rawMessage, org_id: r.orgId,
+        }));
+      }
+
+      let queued = 0;
+      for (const dump of dumps) {
+        const raw = dump.raw_message as { timestamp?: string; image?: { id: string }; video?: { id: string }; audio?: { id: string }; document?: { id: string }; sticker?: { id: string }; voice?: { id: string } };
+        const mediaId = raw.image?.id ?? raw.video?.id ?? raw.audio?.id ?? raw.document?.id ?? raw.sticker?.id ?? raw.voice?.id ?? null;
+        const timestamp = parseInt(raw.timestamp ?? "0", 10) || Math.floor(Date.now() / 1000);
+        await inboundMessageQueue.add("inbound", {
+          organizationId: dump.org_id ?? organizationId,
+          whatsappContactPhone: dump.from_phone,
+          whatsappMessageId: dump.wamid,
+          contentType: dump.content_type,
+          body: dump.body,
+          mediaId,
+          timestamp,
+        }, { jobId: `wamsg-${dump.wamid}` });
+        queued++;
+      }
+
+      return reply.send({ queued });
+    }
+  );
 
   fastify.post<{ Params: { id: ConversationId }; Body: SendMessageBody }>(
     "/conversations/:id/messages",
