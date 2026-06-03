@@ -82,11 +82,17 @@ export const inboundWorker = new Worker<InboundMessageJob>(
   "inbound-messages",
   async (job) => {
     const { organizationId, whatsappContactPhone, whatsappMessageId, contentType, body, mediaId, timestamp } = job.data;
+    console.log(`[worker:inbound] START wamid=${whatsappMessageId} from=${whatsappContactPhone} type=${contentType} body=${JSON.stringify(body)}`);
+
+    try {
 
     // Idempotency: skip if this wamid was already stored (Meta delivers at-least-once)
     if (whatsappMessageId) {
       const existing = await prisma.message.findUnique({ where: { whatsappMessageId }, select: { id: true } });
-      if (existing) return;
+      if (existing) {
+        console.log(`[worker:inbound] SKIP duplicate wamid=${whatsappMessageId}`);
+        return;
+      }
     }
 
     const org = await prisma.organization.findUnique({
@@ -360,6 +366,12 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       contentType,
       sentAt: messageDate.toISOString(),
     });
+    console.log(`[worker:inbound] DONE wamid=${whatsappMessageId} msgId=${storedMessage.id}`);
+
+    } catch (err) {
+      console.error(`[worker:inbound] ERROR wamid=${whatsappMessageId} from=${whatsappContactPhone} type=${contentType}`, err);
+      throw err;
+    }
   },
   { connection: redisConnection }
 );
