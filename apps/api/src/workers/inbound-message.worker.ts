@@ -6,7 +6,7 @@ import { getIo } from "../lib/io-ref.js";
 import { evaluateRoutingRules } from "../lib/router.js";
 import { transcribeAudio } from "../lib/whisper.js";
 import { handleBotMessage } from "../lib/bot-runner.js";
-import { getMediaUrl, markAsRead, sendTextMessage } from "../lib/whatsapp.js";
+import { markAsRead, sendTextMessage } from "../lib/whatsapp.js";
 import { recordOutbound } from "../lib/record-outbound.js";
 import { dispatchWebhook } from "../lib/webhook-dispatch.js";
 import { isFeatureEnabled } from "../lib/plan-limits.js";
@@ -196,13 +196,10 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       },
     });
 
-    if (mediaId && org?.wabaAccessToken) {
-      try {
-        const { url: metaUrl } = await getMediaUrl(mediaId, org.wabaAccessToken);
-        await prisma.message.update({ where: { id: storedMessage.id }, data: { mediaUrl: metaUrl } });
-      } catch {
-        // Media download failure is non-critical
-      }
+    if (mediaId) {
+      // Store a stable wamid: reference — the inbox proxies it via /api/v1/media/:id
+      // so we never rely on the short-lived WhatsApp CDN URL.
+      await prisma.message.update({ where: { id: storedMessage.id }, data: { mediaUrl: `wamid:${mediaId}` } });
     }
 
     if (contentType === "audio" && whatsappMessageId) {

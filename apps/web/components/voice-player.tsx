@@ -16,7 +16,12 @@ function formatDuration(seconds: number): string {
   return `${String(m)}:${String(s).padStart(2, "0")}`;
 }
 
+function resolveUrl(mediaUrl: string): string {
+  return mediaUrl.startsWith("wamid:") ? `/api/v1/media/${mediaUrl.slice(6)}` : mediaUrl;
+}
+
 export function VoicePlayer({ mediaUrl, messageId, duration }: Props): JSX.Element {
+  const audioSrc = resolveUrl(mediaUrl);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -108,7 +113,7 @@ export function VoicePlayer({ mediaUrl, messageId, duration }: Props): JSX.Eleme
       {/* Hidden audio element */}
       <audio
         ref={audioRef}
-        src={mediaUrl}
+        src={audioSrc}
         preload="none"
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}

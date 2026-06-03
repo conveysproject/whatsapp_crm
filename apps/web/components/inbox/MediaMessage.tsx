@@ -8,13 +8,18 @@ interface Props {
   filename?: string;
 }
 
+function resolveUrl(mediaUrl: string): string {
+  return mediaUrl.startsWith("wamid:") ? `/api/v1/media/${mediaUrl.slice(6)}` : mediaUrl;
+}
+
 export function MediaMessage({ mediaUrl, contentType, filename }: Props): JSX.Element {
+  const src = resolveUrl(mediaUrl);
   if (contentType === "image") {
     return (
-      <a href={mediaUrl} target="_blank" rel="noopener noreferrer">
+      <a href={src} target="_blank" rel="noopener noreferrer">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={mediaUrl}
+          src={src}
           alt={filename ?? "image"}
           className="max-w-[240px] max-h-[240px] rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
         />
@@ -25,7 +30,7 @@ export function MediaMessage({ mediaUrl, contentType, filename }: Props): JSX.El
   if (contentType === "video") {
     return (
       <video
-        src={mediaUrl}
+        src={src}
         controls
         className="max-w-[240px] rounded-lg"
       />
@@ -35,7 +40,7 @@ export function MediaMessage({ mediaUrl, contentType, filename }: Props): JSX.El
   if (contentType === "document") {
     return (
       <a
-        href={mediaUrl}
+        href={src}
         download={filename}
         target="_blank"
         rel="noopener noreferrer"
@@ -55,7 +60,7 @@ export function MediaMessage({ mediaUrl, contentType, filename }: Props): JSX.El
   // Fallback for unknown media types
   return (
     <a
-      href={mediaUrl}
+      href={src}
       target="_blank"
       rel="noopener noreferrer"
       className="text-sm text-brand-600 underline"
