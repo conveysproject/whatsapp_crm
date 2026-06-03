@@ -636,6 +636,7 @@ model Campaign {
   status           CampaignStatus      @default(draft)
   scheduledAt      DateTime?           @map("scheduled_at")
   messageInterval  Int?                @map("message_interval") // seconds between sends
+  mediaUrl         String?             @map("media_url") @db.Text
   sentAt         DateTime?           @map("sent_at")
   createdAt      DateTime            @default(now()) @map("created_at")
   updatedAt      DateTime            @updatedAt @map("updated_at")
