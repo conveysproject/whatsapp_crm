@@ -1061,6 +1061,25 @@ model WebhookLog {
   @@map("webhook_logs")
 }
 
+// Raw dump of every inbound Meta message — no conditions, for debugging.
+// One row per WaMessage object inside a webhook payload.
+model InboundMessageDump {
+  id          String   @id @default(uuid())
+  wamid       String   @map("wamid")
+  fromPhone   String   @map("from_phone")
+  contentType String   @map("content_type")
+  body        String?
+  rawMessage  Json     @map("raw_message")
+  orgId       String?  @map("org_id")
+  queued      Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([wamid])
+  @@index([fromPhone])
+  @@index([createdAt])
+  @@map("inbound_message_dumps")
+}
+
 // Outbound delivery attempts for each configured Webhook endpoint.
 
 enum WebhookDeliveryStatus {

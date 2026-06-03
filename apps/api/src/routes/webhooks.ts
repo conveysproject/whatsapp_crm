@@ -187,10 +187,6 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
           }
 
           if (!change.value.messages?.length) continue;
-          if (!org) {
-            console.log(`[webhook] DROP phone_number_id=${phone_number_id} — no org found; messages=${change.value.messages?.length ?? 0}`);
-            continue;
-          }
 
           for (const msg of change.value.messages) {
             const mediaId = msg.image?.id ?? msg.video?.id ?? msg.audio?.id
@@ -215,6 +211,26 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
             } else if (msg.interactive) {
               body = JSON.stringify(msg.interactive);
             }
+
+            const queued = !!org;
+            // Unconditional dump — every message Meta delivers, matched or not
+            void fastify.prisma.inboundMessageDump.create({
+              data: {
+                wamid: msg.id,
+                fromPhone: msg.from,
+                contentType: msg.type,
+                body,
+                rawMessage: msg as object,
+                orgId: org?.id ?? null,
+                queued,
+              },
+            }).catch(() => { /* dump failures must never block the 200 response */ });
+
+            if (!org) {
+              console.log(`[webhook] DROP wamid=${msg.id} from=${msg.from} — no org for phone_number_id=${phone_number_id}`);
+              continue;
+            }
+
             console.log(`[webhook] QUEUE wamid=${msg.id} from=${msg.from} type=${msg.type} body=${JSON.stringify(body)} org=${org.id}`);
             await inboundMessageQueue.add("inbound", {
               organizationId: org.id,
