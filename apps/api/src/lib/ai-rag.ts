@@ -1,8 +1,13 @@
 import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "./prisma.js";
 
 function getOpenAI(): OpenAI {
   return new OpenAI({ apiKey: process.env["OPENAI_API_KEY"] ?? "" });
+}
+
+function getAnthropic(): Anthropic {
+  return new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] ?? "" });
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -81,23 +86,18 @@ export async function findTopRelevantSections(
   return ranked.slice(0, k).map((r) => r.text);
 }
 
-// Generate an answer from the top-k relevant training sections using OpenAI
+// Generate an answer from the top-k relevant training sections using Claude
 export async function generateAnswerFromSections(
   question: string,
   sections: string[]
 ): Promise<string> {
   if (sections.length === 0) return "";
   const context = sections.map((s, i) => `[Section ${i + 1}]: ${s}`).join("\n\n");
-  const response = await getOpenAI().chat.completions.create({
-    model: "gpt-4o-mini",
+  const response = await getAnthropic().messages.create({
+    model: "claude-haiku-4-5-20251001",
     max_tokens: 512,
-    messages: [
-      {
-        role: "system",
-        content: `You are a helpful assistant. Answer the user's question using ONLY the provided context sections. If the answer is not in the context, say "I don't have information about that."`,
-      },
-      { role: "user", content: `Context:\n${context}\n\nQuestion: ${question}` },
-    ],
+    system: `You are a helpful assistant. Answer the user's question using ONLY the provided context sections. If the answer is not in the context, say "I don't have information about that."`,
+    messages: [{ role: "user", content: `Context:\n${context}\n\nQuestion: ${question}` }],
   });
-  return response.choices[0]?.message?.content?.trim() ?? "";
+  return response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
 }
