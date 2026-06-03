@@ -169,7 +169,20 @@ export const campaignWorker = new Worker<CampaignJob>(
       try {
         let messageId: string;
         if (isTemplateCampaign && metaTemplate?.metaTemplateId) {
-          const stored = (metaTemplate.components ?? []) as unknown[];
+          let stored = (metaTemplate.components ?? []) as unknown[];
+          if (campaign.mediaUrl) {
+            stored = stored.map((c) => {
+              const comp = c as { type?: string; format?: string; example?: Record<string, unknown> };
+              if (
+                comp.type?.toUpperCase() === "HEADER" &&
+                comp.format &&
+                ["IMAGE", "VIDEO", "DOCUMENT"].includes(comp.format.toUpperCase())
+              ) {
+                return { ...comp, example: { ...(comp.example ?? {}), header_url: [campaign.mediaUrl!] } };
+              }
+              return c;
+            });
+          }
           const bodyVarCount = (() => {
             const bodyComp = (stored as Array<{ type?: string; text?: string }>).find(
               (c) => c.type?.toUpperCase() === "BODY"
