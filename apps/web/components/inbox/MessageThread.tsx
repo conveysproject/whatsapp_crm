@@ -17,7 +17,7 @@ function formatTime(iso: string): string {
 
 interface TemplateParsed {
   templateName?: string;
-  header?: { format?: string; text?: string | null } | null;
+  header?: { format?: string; text?: string | null; mediaUrl?: string | null } | null;
   body?: string | null;
   footer?: string | null;
   buttons?: Array<{ type?: string; text?: string }>;
@@ -27,13 +27,21 @@ function TemplateMessageBubble({ body }: { body: string }): JSX.Element {
   let parsed: TemplateParsed = {};
   try { parsed = JSON.parse(body) as TemplateParsed; } catch { /* raw fallback */ }
 
+  const headerFormat = (parsed.header?.format ?? "TEXT").toUpperCase();
   const headerText = parsed.header?.text;
+  const headerMediaUrl = parsed.header?.mediaUrl;
   const bodyText = parsed.body;
   const footerText = parsed.footer;
   const buttons = parsed.buttons ?? [];
 
   return (
     <div className="flex flex-col gap-1 min-w-[180px]">
+      {headerMediaUrl && (
+        <MediaMessage
+          mediaUrl={headerMediaUrl}
+          contentType={headerFormat.toLowerCase() as "image" | "video" | "document"}
+        />
+      )}
       {headerText && (
         <p className="font-semibold text-gray-900 leading-snug">{headerText}</p>
       )}

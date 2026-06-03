@@ -427,8 +427,9 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       );
 
       // Build a renderable JSON body from the template components + variables
-      type WaComp = { type?: string; format?: string; text?: string; buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string }> };
-      const comps = (template.components ?? []) as WaComp[];
+      // Use storedComponents (not template.components) — it has the resolved media URL injected
+      type WaComp = { type?: string; format?: string; text?: string; example?: { header_url?: string[] }; buttons?: Array<{ type?: string; text?: string; url?: string; phone_number?: string }> };
+      const comps = storedComponents as WaComp[];
       const headerComp = comps.find((c) => c.type?.toUpperCase() === "HEADER");
       const renderedBodyComp = comps.find((c) => c.type?.toUpperCase() === "BODY");
       const footerComp = comps.find((c) => c.type?.toUpperCase() === "FOOTER");
@@ -437,9 +438,14 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       bodyVars.forEach((v, i) => {
         bodyText = bodyText.replace(new RegExp(`\\{\\{${i + 1}\\}\\}`, "g"), v);
       });
+      const isMediaHeader = ["IMAGE", "VIDEO", "DOCUMENT"].includes((headerComp?.format ?? "").toUpperCase());
       const renderedBody = JSON.stringify({
         templateName: template.name,
-        header: headerComp ? { format: headerComp.format ?? "TEXT", text: headerComp.text ?? null } : null,
+        header: headerComp ? {
+          format: headerComp.format ?? "TEXT",
+          text: headerComp.text ?? null,
+          mediaUrl: isMediaHeader ? (headerComp.example?.header_url?.[0] ?? null) : null,
+        } : null,
         body: bodyText || template.name,
         footer: footerComp?.text ?? null,
         buttons: buttonsComp?.buttons ?? [],

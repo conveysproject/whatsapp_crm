@@ -301,16 +301,21 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
         });
 
         // Build rendered body JSON for inbox display (same as send-to-contact)
-        type WaComp = { type?: string; format?: string; text?: string; buttons?: Array<{ type?: string; text?: string }> };
+        type WaComp = { type?: string; format?: string; text?: string; example?: { header_url?: string[] }; buttons?: Array<{ type?: string; text?: string }> };
         const comps = stored as WaComp[];
         const headerComp = comps.find((c) => c.type?.toUpperCase() === "HEADER");
         const footerComp = comps.find((c) => c.type?.toUpperCase() === "FOOTER");
         const buttonsComp = comps.find((c) => c.type?.toUpperCase() === "BUTTONS");
         let bodyText = bodyComp?.text ?? "";
         bodyVars.forEach((v, i) => { bodyText = bodyText.replace(new RegExp(`\\{\\{${i + 1}\\}\\}`, "g"), v); });
+        const isMediaHeader = ["IMAGE", "VIDEO", "DOCUMENT"].includes((headerComp?.format ?? "").toUpperCase());
         const renderedBody = JSON.stringify({
           templateName: template.name,
-          header: headerComp ? { format: headerComp.format ?? "TEXT", text: headerComp.text ?? null } : null,
+          header: headerComp ? {
+            format: headerComp.format ?? "TEXT",
+            text: headerComp.text ?? null,
+            mediaUrl: isMediaHeader ? (headerComp.example?.header_url?.[0] ?? null) : null,
+          } : null,
           body: bodyText || template.name,
           footer: footerComp?.text ?? null,
           buttons: buttonsComp?.buttons ?? [],
