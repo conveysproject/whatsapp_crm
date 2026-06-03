@@ -90,6 +90,12 @@ function InteractiveMessageBubble({ body }: { body: string }): JSX.Element {
   const replyButtons = parsed.action?.buttons ?? [];
   const listSections = parsed.action?.sections ?? [];
 
+  // Nothing parsed — body is a plain string (e.g. interactive body text from flow runner)
+  const hasContent = headerText || bodyText || footerText || replyButtons.length > 0 || listSections.length > 0;
+  if (!hasContent) {
+    return <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{body}</p>;
+  }
+
   return (
     <div className="flex flex-col gap-1 min-w-[180px]">
       {headerText && (

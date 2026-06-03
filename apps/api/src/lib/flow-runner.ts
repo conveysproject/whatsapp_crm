@@ -181,9 +181,16 @@ export async function runFlow(
               return;
             }
           } else {
-            // Resume: translate button_reply.id → button title so conditions can match display text
+            // Resume: extract button ID from JSON body (webhook stores {button_reply:{id,title}})
+            // then translate id → button text so downstream conditions can match display text
             const buttons = node.config["buttons"] as Array<{ id: string; text: string }> | undefined;
-            const matched = buttons?.find((b) => b.id === payload.messageBody);
+            let buttonId = payload.messageBody ?? "";
+            try {
+              const parsed = JSON.parse(buttonId) as { button_reply?: { id?: string } };
+              const extractedId = parsed.button_reply?.id;
+              if (extractedId) buttonId = extractedId;
+            } catch { /* plain ID string — no change */ }
+            const matched = buttons?.find((b) => b.id === buttonId);
             if (matched) payload = { ...payload, messageBody: matched.text };
           }
           break;
