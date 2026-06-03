@@ -59,15 +59,16 @@ interface WhatsAppWebhookBody {
 }
 
 export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
-  // Capture raw body string BEFORE JSON parsing so HMAC verification uses the
-  // exact bytes Meta signed — JSON.stringify(parsedBody) can differ when Meta
-  // uses \uXXXX escape sequences for emoji (e.g. button titles with 📦).
+  // Capture raw bytes as Buffer — identical approach to billing-webhook.ts (Stripe).
+  // Using parseAs:"buffer" ensures no string encoding normalisation touches the
+  // bytes before HMAC verification. Emoji in button titles (📦, 💳, ⚙️) would
+  // survive as-is because we skip the Buffer→string→Buffer round-trip entirely.
   fastify.addContentTypeParser(
     "application/json",
-    { parseAs: "string" },
+    { parseAs: "buffer" },
     (req, body, done) => {
-      (req as unknown as { rawBody: string }).rawBody = body as string;
-      try { done(null, JSON.parse(body as string)); }
+      (req as unknown as { rawBodyBuffer: Buffer }).rawBodyBuffer = body as unknown as Buffer;
+      try { done(null, JSON.parse((body as unknown as Buffer).toString("utf8"))); }
       catch (e) { (e as Error & { statusCode: number }).statusCode = 400; done(e as Error, undefined); }
     }
   );
@@ -93,14 +94,14 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
     { config: { public: true } },
     async (request, reply) => {
       const signature = (request.headers["x-hub-signature-256"] as string) ?? "";
-      const parsedRawBody = (request.raw as unknown as { rawBody?: string }).rawBody;
-      const rawBody = parsedRawBody ?? JSON.stringify(request.body);
+      const rawBodyBuffer = (request.raw as unknown as { rawBodyBuffer?: Buffer }).rawBodyBuffer;
+      const rawBody = rawBodyBuffer ? rawBodyBuffer.toString("utf8") : JSON.stringify(request.body);
       const secret = process.env["WA_WEBHOOK_SECRET"] ?? "";
 
       if (!verifyWebhookSignature(rawBody, signature, secret)) {
         const { createHmac: hmac } = await import("crypto");
         const computedDigest = `sha256=${hmac("sha256", secret).update(rawBody).digest("hex")}`;
-        console.log(`[webhook-403] rawBodySource=${parsedRawBody !== undefined ? "parser" : "stringify"} sig=${signature} computed=${computedDigest} secretLen=${secret.length} bodyLen=${rawBody.length} bodyStart=${rawBody.slice(0, 120)}`);
+        console.log(`[webhook-403] rawBodySource=${rawBodyBuffer !== undefined ? "buffer" : "stringify"} sig=${signature} computed=${computedDigest} secretLen=${secret.length} bodyLen=${rawBody.length} bodyStart=${rawBody.slice(0, 120)}`);
         return reply.status(403).send({ error: { code: "INVALID_SIGNATURE", message: "Signature mismatch" } });
       }
 
