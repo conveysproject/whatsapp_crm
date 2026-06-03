@@ -157,6 +157,11 @@ export function CannedResponsesClient({ initialItems }: Props): JSX.Element {
                       {item.shortcut}
                     </span>
                   )}
+                  {item.mediaData && (
+                    <span className="inline-block bg-blue-50 text-blue-500 text-xs px-2 py-0.5 rounded capitalize">
+                      📎 {(item.mediaData as { type?: string }).type ?? "media"}
+                    </span>
+                  )}
                 </div>
                 <p className="mt-1 text-sm text-gray-500 line-clamp-2 whitespace-pre-wrap">{item.content}</p>
               </div>
