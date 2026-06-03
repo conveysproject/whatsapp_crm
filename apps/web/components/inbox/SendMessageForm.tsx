@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { InteractiveMessagePicker } from "./InteractiveMessagePicker";
 import type { InteractivePayload } from "./InteractiveMessagePicker";
 import { TemplatePicker } from "./TemplatePicker";
+import { MediaAssetPicker, type MediaAsset } from "@/components/media-asset-picker";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -34,6 +35,7 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingMediaTypeRef = useRef<string>("document");
   const { getToken } = useAuth();
@@ -133,6 +135,29 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
     }
   }
 
+  async function handleLibrarySelect(asset: MediaAsset) {
+    if (!conversationId) return;
+    setSending(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contentType: asset.type,
+          mediaId: asset.fileUrl,
+          filename: asset.title,
+        }),
+      });
+      if (res.ok) {
+        onSent?.();
+        await queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+      }
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <form onSubmit={(e) => { void handleSubmit(e); }} className="flex items-center gap-2 p-3 border-t border-gray-200 bg-white">
       {/* Hidden file input */}
@@ -220,6 +245,19 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
                 {type}
               </button>
             ))}
+            <div className="border-t border-gray-100 mt-1 pt-1">
+              <button
+                type="button"
+                onClick={() => { setLibraryOpen(true); setAttachMenuOpen(false); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                Media Library
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -300,6 +338,11 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
       <Button type="submit" disabled={!conversationId || !text.trim() || sending || uploading}>
         {sending ? "Sending…" : "Send"}
       </Button>
+      <MediaAssetPicker
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        onSelect={(asset) => { void handleLibrarySelect(asset); }}
+      />
     </form>
   );
 }
