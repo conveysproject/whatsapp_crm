@@ -55,6 +55,7 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
   const pendingMediaTypeRef = useRef<string>("document");
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const slashMenuRef = useRef<HTMLDivElement>(null);
+  const templateMenuRef = useRef<HTMLDivElement>(null);
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
 
@@ -75,6 +76,9 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
       }
       if (slashMenuRef.current && !slashMenuRef.current.contains(e.target as Node)) {
         setSlashMenuOpen(false);
+      }
+      if (templateMenuRef.current && !templateMenuRef.current.contains(e.target as Node)) {
+        setTemplateOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -231,7 +235,7 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
       />
 
       {/* Template picker */}
-      <div className="relative">
+      <div className="relative" ref={templateMenuRef}>
         <button
           type="button"
           onClick={() => { setTemplateOpen((v) => !v); setTemplateSearch(""); setAttachMenuOpen(false); setInteractiveOpen(false); }}
