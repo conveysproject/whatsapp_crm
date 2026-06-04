@@ -1,5 +1,5 @@
 "use client";
-import { JSX, useState } from "react";
+import { JSX, useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -24,6 +24,18 @@ export function CannedResponsePicker({ conversationId, onSelect, onSent }: Props
   const [search, setSearch] = useState("");
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
+    }
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
 
   const { data } = useQuery<{ data: CannedResponse[] }>({
     queryKey: ["canned-responses"],
@@ -61,11 +73,11 @@ export function CannedResponsePicker({ conversationId, onSelect, onSent }: Props
     onSelect(r.content);
   }
 
-  if (!open) {
-    return (
+  return (
+    <div ref={containerRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => { setOpen((v) => !v); setSearch(""); }}
         className="p-1.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100"
         title="Canned responses"
       >
@@ -73,41 +85,51 @@ export function CannedResponsePicker({ conversationId, onSelect, onSent }: Props
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h8" />
         </svg>
       </button>
-    );
-  }
 
-  return (
-    <div className="absolute bottom-14 left-0 w-80 bg-white border rounded-lg shadow-lg z-10">
-      <div className="p-2 border-b">
-        <input
-          autoFocus
-          className="w-full text-sm px-2 py-1 border rounded"
-          placeholder="Search canned responses..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-      <ul className="max-h-48 overflow-y-auto">
-        {filtered.length === 0 && (
-          <li className="p-3 text-sm text-gray-400">No responses found</li>
-        )}
-        {filtered.map((r) => (
-          <li key={r.id}>
+      {open && (
+        <div className="absolute bottom-full left-0 mb-1 w-80 bg-white border rounded-lg shadow-lg z-10">
+          <div className="flex items-center gap-1 p-2 border-b">
+            <input
+              autoFocus
+              className="flex-1 text-sm px-2 py-1 border rounded"
+              placeholder="Search canned responses..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setSearch(""); } }}
+            />
             <button
               type="button"
-              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-              onClick={() => { void handleSelect(r); }}
+              onClick={() => { setOpen(false); setSearch(""); }}
+              className="p-1 text-gray-400 hover:text-gray-600"
             >
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{r.name}</span>
-                {r.shortcut && <span className="text-xs text-gray-400 font-mono">{r.shortcut}</span>}
-                {r.mediaData && <span className="text-xs text-gray-400">📎 {r.mediaData.type}</span>}
-              </div>
-              <p className="text-gray-500 truncate">{r.content}</p>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
-          </li>
-        ))}
-      </ul>
+          </div>
+          <ul className="max-h-48 overflow-y-auto">
+            {filtered.length === 0 && (
+              <li className="p-3 text-sm text-gray-400">No responses found</li>
+            )}
+            {filtered.map((r) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                  onClick={() => { void handleSelect(r); }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{r.name}</span>
+                    {r.shortcut && <span className="text-xs text-gray-400 font-mono">{r.shortcut}</span>}
+                    {r.mediaData && <span className="text-xs text-gray-400">📎 {r.mediaData.type}</span>}
+                  </div>
+                  <p className="text-gray-500 truncate">{r.content}</p>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
