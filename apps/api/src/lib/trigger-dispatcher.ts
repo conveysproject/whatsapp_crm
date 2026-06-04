@@ -78,7 +78,10 @@ export async function dispatchFlowTrigger(
       if (payload.contentType !== "interactive") continue;
       const config = getTriggerNodeConfig(flow.flowDefinition);
       const buttonText = (config["buttonText"] as string) ?? "";
-      if (buttonText && (payload.messageBody ?? "").toLowerCase() !== buttonText.toLowerCase()) continue;
+      // Require an explicit buttonText filter — flows without one would catch ALL button
+      // replies (e.g. CSAT Response Handler would fire on every interactive message)
+      if (!buttonText) continue;
+      if ((payload.messageBody ?? "").toLowerCase() !== buttonText.toLowerCase()) continue;
     }
 
     const jobPayload: FlowTriggerPayload = {
