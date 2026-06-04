@@ -1,6 +1,7 @@
 "use client";
-import { JSX, useState, useEffect } from "react";
+import { JSX, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { useQuery } from "@tanstack/react-query";
 
 interface Pipeline {
   id: string;
@@ -19,7 +20,18 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
   const { getToken } = useAuth();
   const api = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
-  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const { data: pipelinesData, isLoading: pipelinesLoading } = useQuery<{ data: Pipeline[] }>({
+    queryKey: ["pipelines"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${api}/v1/pipelines`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+      return res.json() as Promise<{ data: Pipeline[] }>;
+    },
+    staleTime: 30_000,
+  });
+
+  const pipelines = pipelinesData?.data ?? [];
+
   const [pipelineId, setPipelineId] = useState("");
   const [stages, setStages] = useState<string[]>([]);
   const [title, setTitle] = useState("");
@@ -30,24 +42,15 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sendMsg, setSendMsg] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
-  useEffect(() => {
-    void (async () => {
-      const token = await getToken();
-      const res = await fetch(`${api}/v1/pipelines`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
-      });
-      if (!res.ok) return;
-      const body = await res.json() as { data: Pipeline[] };
-      setPipelines(body.data);
-      if (body.data.length > 0) {
-        const first = body.data[0]!;
-        setPipelineId(first.id);
-        setStages(first.stages);
-        setStage(first.stages[0] ?? "Lead");
-      }
-    })();
-  }, []);
+  if (!initialized && pipelines.length > 0) {
+    const first = pipelines[0]!;
+    setPipelineId(first.id);
+    setStages(first.stages);
+    setStage(first.stages[0] ?? "Lead");
+    setInitialized(true);
+  }
 
   function onPipelineChange(id: string) {
     const p = pipelines.find((x) => x.id === id);
@@ -131,7 +134,21 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
     }
   }
 
-  if (pipelines.length === 0) {
+  if (pipelinesLoading) {
+    return (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 flex items-center justify-center gap-3" onClick={(e) => e.stopPropagation()}>
+          <svg className="w-5 h-5 animate-spin text-green-600" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+          <span className="text-sm text-gray-500">Loading…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!pipelinesLoading && pipelines.length === 0) {
     return (
       <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
         <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
