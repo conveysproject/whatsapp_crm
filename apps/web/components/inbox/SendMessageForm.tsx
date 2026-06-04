@@ -32,9 +32,16 @@ interface Props {
   prefillText?: string;
   onSent?: () => void;
   onCreateDeal?: () => void;
+  contact?: { firstName: string | null; lastName: string | null } | null;
 }
 
-export function SendMessageForm({ conversationId, prefillText, onSent, onCreateDeal }: Props): JSX.Element {
+function substituteVars(content: string, contact?: { firstName: string | null; lastName: string | null } | null): string {
+  return content
+    .replace(/\{\{first_name\}\}/g, contact?.firstName ?? "")
+    .replace(/\{\{last_name\}\}/g, contact?.lastName ?? "");
+}
+
+export function SendMessageForm({ conversationId, prefillText, onSent, onCreateDeal, contact }: Props): JSX.Element {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -151,7 +158,7 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
 
   async function handleCannedShortcut(r: CannedResponse) {
     setSlashMenuOpen(false);
-    setText(r.content);
+    setText(substituteVars(r.content, contact));
     if (r.mediaData && conversationId) {
       setSending(true);
       try {
@@ -400,7 +407,18 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
             }
           }}
           onKeyDown={(e) => {
-            if (e.key === "Escape") setSlashMenuOpen(false);
+            if (e.key === "Escape") { setSlashMenuOpen(false); return; }
+            if (e.key === "Enter" && slashMenuOpen) {
+              const query = text.slice(1).toLowerCase();
+              const all = cannedData?.data ?? [];
+              const exact = all.find((r) => (r.shortcut ?? "").toLowerCase() === `/${query}`);
+              const first = all.find((r) => {
+                const sc = (r.shortcut ?? "").toLowerCase();
+                return sc.length > 1 && sc.slice(1).startsWith(query);
+              });
+              const match = exact ?? first;
+              if (match) { e.preventDefault(); void handleCannedShortcut(match); }
+            }
           }}
           disabled={!conversationId || sending || uploading}
         />

@@ -99,7 +99,15 @@ export default function InboxPage(): JSX.Element {
         )}
 
         <div className="relative px-2 flex items-center gap-2">
-          <CannedResponsePicker conversationId={selectedConversationId} onSelect={(content) => setPrefillText(content)} />
+          <CannedResponsePicker
+            conversationId={selectedConversationId}
+            onSelect={(content) => {
+              const substituted = content
+                .replace(/\{\{first_name\}\}/g, contact?.firstName ?? "")
+                .replace(/\{\{last_name\}\}/g, contact?.lastName ?? "");
+              setPrefillText(substituted);
+            }}
+          />
           {selectedConversationId && (
             <SmartReplyPanel
               conversationId={selectedConversationId}
@@ -112,6 +120,7 @@ export default function InboxPage(): JSX.Element {
           prefillText={prefillText}
           onSent={() => setPrefillText("")}
           onCreateDeal={contact ? () => setShowOffer(true) : undefined}
+          contact={contact}
         />
         {selectedConversationId && (
           <BotPanel conversationId={selectedConversationId} />
