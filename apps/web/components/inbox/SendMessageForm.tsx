@@ -53,6 +53,8 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
   const [libraryOpen, setLibraryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingMediaTypeRef = useRef<string>("document");
+  const attachMenuRef = useRef<HTMLDivElement>(null);
+  const slashMenuRef = useRef<HTMLDivElement>(null);
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
 
@@ -65,6 +67,19 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
   useEffect(() => {
     if (prefillText) setText(prefillText);
   }, [prefillText]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
+        setAttachMenuOpen(false);
+      }
+      if (slashMenuRef.current && !slashMenuRef.current.contains(e.target as Node)) {
+        setSlashMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -260,7 +275,7 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
       </div>
 
       {/* Attachment menu */}
-      <div className="relative">
+      <div className="relative" ref={attachMenuRef}>
         <button
           type="button"
           onClick={() => setAttachMenuOpen((v) => !v)}
@@ -325,7 +340,7 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
       )}
 
       {/* Slash command palette */}
-      <div className="relative flex-1">
+      <div className="relative flex-1" ref={slashMenuRef}>
         {slashMenuOpen && conversationId && (() => {
           const query = text.slice(1).toLowerCase();
           const COMMANDS = [
