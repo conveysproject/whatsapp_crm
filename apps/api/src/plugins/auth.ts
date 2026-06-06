@@ -66,9 +66,10 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       },
       select: { value: true },
     });
-    const roleDefaults: Record<string, string> = roleSettingRow?.value
-      ? (JSON.parse(roleSettingRow.value) as Record<string, string>)
-      : {};
+    let roleDefaults: Record<string, string> = {};
+    if (roleSettingRow?.value) {
+      try { roleDefaults = JSON.parse(roleSettingRow.value) as Record<string, string>; } catch { /* corrupted row — treat as empty */ }
+    }
     const memberPermissions = (member?.permissions ?? {}) as Record<string, string>;
     const permissions = { ...roleDefaults, ...memberPermissions };
 
