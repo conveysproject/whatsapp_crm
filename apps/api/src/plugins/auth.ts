@@ -2,6 +2,7 @@ import fp from "fastify-plugin";
 import type { FastifyPluginAsync } from "fastify";
 import { verifyClerkToken } from "../lib/clerk.js";
 import { redis } from "../lib/redis.js";
+import type { AuthContext } from "../types/fastify.js";
 
 const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.addHook("preHandler", async (request, reply) => {
@@ -29,6 +30,17 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    // Cache auth data to avoid 2 DB round-trips on every request.
+    // Invalidated immediately by users routes on role/permission/deactivation changes.
+    const AUTH_CACHE_TTL = 60; // seconds — safety net if invalidation is missed
+    const cacheKey = `auth:user:${userId}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      const { role, organizationId, permissions } = JSON.parse(cached) as Pick<AuthContext, "role" | "organizationId" | "permissions">;
+      request.auth = { userId, organizationId, role, permissions };
+      return;
+    }
+
     const user = await fastify.prisma.user.findFirst({
       where: { id: userId, isActive: true },
       select: { role: true, organizationId: true },
@@ -45,6 +57,12 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       select: { permissions: true },
     });
     const permissions = (member?.permissions ?? {}) as Record<string, string>;
+
+    await redis.setex(
+      cacheKey,
+      AUTH_CACHE_TTL,
+      JSON.stringify({ role: user.role, organizationId: user.organizationId, permissions })
+    );
 
     request.auth = { userId, organizationId: user.organizationId, role: user.role, permissions };
   });

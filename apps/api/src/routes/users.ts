@@ -1,5 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { Role } from "@prisma/client";
+import { redis } from "../lib/redis.js";
+
+function invalidateAuthCache(userId: string): Promise<number> {
+  return redis.del(`auth:user:${userId}`);
+}
 
 export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/users", async (request) => {
@@ -44,6 +49,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
         data: { role: request.body.role },
         select: { id: true, email: true, role: true },
       });
+      await invalidateAuthCache(request.params.id);
       return { data: user };
     }
   );
@@ -66,6 +72,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: request.params.id, organizationId: request.auth.organizationId },
         data: { isActive: false },
       });
+      await invalidateAuthCache(request.params.id);
       return reply.status(204).send();
     }
   );
@@ -132,6 +139,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: member.id },
         data: { permissions: request.body.permissions },
       });
+      await invalidateAuthCache(request.params.id);
       return reply.send({ data });
     }
   );
