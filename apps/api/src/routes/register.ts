@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { verifyClerkToken } from "../lib/clerk.js";
+import { DEFAULT_ROLE_PERMISSIONS } from "../lib/default-role-permissions.js";
 
 interface RegisterBody {
   companyName: string;
@@ -132,6 +133,17 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
             role: "admin",
             isActive: !requireActivation,
           },
+        });
+
+        await fastify.prisma.vendorSetting.createMany({
+          data: (Object.entries(DEFAULT_ROLE_PERMISSIONS) as [string, Record<string, string>][]).map(
+            ([role, perms]) => ({
+              organizationId,
+              key: `role_permissions_${role}`,
+              value: JSON.stringify(perms),
+            })
+          ),
+          skipDuplicates: true,
         });
       }
 
