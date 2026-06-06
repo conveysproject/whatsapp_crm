@@ -177,7 +177,6 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
   // GAP-S57: generate QR for an arbitrary URL (e.g. UPI address)
   fastify.get<{ Querystring: { url: string } }>(
     "/whatsapp-account/url-qr",
-    { config: { public: true } },
     async (request, reply) => {
       const { url } = request.query;
       if (!url) return reply.status(400).send({ error: "url required" });

@@ -22,6 +22,11 @@ import { startMessageCleanupWorker, scheduleMessageCleanupCron } from "./workers
 import { startTrustScoreWorker, scheduleTrustScoreCron } from "./workers/trust-score.js";
 console.log("[startup] all workers ready");
 
+if (process.env["NODE_ENV"] === "production" && process.env["IS_DEMO_MODE"] === "true") {
+  console.error("[startup] FATAL: IS_DEMO_MODE=true must never be set in production");
+  process.exit(1);
+}
+
 const PORT = Number(process.env["API_PORT"] ?? 4000);
 const HOST = process.env["API_HOST"] ?? "0.0.0.0";
 

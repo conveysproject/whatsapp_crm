@@ -14,6 +14,8 @@ interface RegisterBody {
 }
 
 export const registerRouter: FastifyPluginAsync = async (fastify) => {
+  // public: true is intentional — a first-time user has no DB row yet so the
+  // auth plugin would reject them. JWT verification is done manually below.
   fastify.post<{ Body: RegisterBody }>(
     "/register",
     {
