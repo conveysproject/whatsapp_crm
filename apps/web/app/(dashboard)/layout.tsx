@@ -50,6 +50,10 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   const status = await getOrgStatus(token ?? "");
 
+  if (!status.provisioned) {
+    redirect("/business-details");
+  }
+
   return (
     <OnboardingProvider status={status}>
       <div className="flex h-screen overflow-hidden bg-gray-50">

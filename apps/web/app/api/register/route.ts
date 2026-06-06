@@ -25,14 +25,5 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: err.error ?? "Registration failed" }, { status: res.status });
   }
 
-  const response = NextResponse.json(data);
-  // Onboarding-complete signal — read by middleware to skip /business-details redirect.
-  // httpOnly so JS can't clear it; 1-year TTL; re-set on every successful submission.
-  response.cookies.set("tc_registered", "1", {
-    httpOnly: true,
-    sameSite: "strict",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365,
-  });
-  return response;
+  return NextResponse.json(data);
 }

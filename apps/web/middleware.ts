@@ -11,61 +11,35 @@ const isPublicRoute = createRouteMatcher([
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
 const isAdminSignIn = createRouteMatcher(["/admin/sign-in(.*)"]);
 
-// Routes that are part of the setup/onboarding flow — skip the tc_registered gate
-const isSetupRoute = createRouteMatcher([
-  "/business-details(.*)",
-  "/connect-waba(.*)",
-  "/provision-number(.*)",
-  "/checklist(.*)",
-  "/invite-team(.*)",
-  "/onboarding(.*)",
-]);
-
-// API routes run server-side and manage their own auth — skip the cookie gate
-const isApiRoute = createRouteMatcher(["/api/(.*)"]);
-
 export default clerkMiddleware(async (auth, request) => {
   const { userId } = await auth();
 
   // ── Admin routes ─────────────────────────────────────────────────────────
   if (isAdminRoute(request)) {
-    // Admin sign-in is always public
     if (isAdminSignIn(request)) return NextResponse.next();
-
-    // All other /admin/* require authentication → send to admin sign-in if not logged in
     if (!userId) {
       const signInUrl = new URL("/admin/sign-in", request.url);
       signInUrl.searchParams.set("redirect_url", request.nextUrl.pathname);
       return NextResponse.redirect(signInUrl);
     }
-
-    // Authenticated admin users bypass the vendor onboarding gate entirely
     return NextResponse.next();
   }
 
   // ── Vendor routes ─────────────────────────────────────────────────────────
 
-  // Authenticated users hitting the landing page go straight to the dashboard
+  // Logged-in users hitting the landing page go straight to the dashboard
   if (userId && request.nextUrl.pathname === "/") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
+  // Protect all non-public routes with Clerk auth
   if (!isPublicRoute(request)) {
     await auth.protect();
   }
 
-  // Onboarding gate: authenticated user accessing the app but never completed Step 2
-  // → send them back to /business-details so their org/user row gets created.
-  // The cookie tc_registered is set by /api/register on successful submission.
-  if (
-    userId &&
-    !isPublicRoute(request) &&
-    !isSetupRoute(request) &&
-    !isApiRoute(request) &&
-    !request.cookies.get("tc_registered")
-  ) {
-    return NextResponse.redirect(new URL("/business-details", request.url));
-  }
+  // Registration gate is handled by the dashboard layout:
+  // it calls /v1/organizations/me — if the org doesn't exist it redirects
+  // to /business-details. No cookie needed; the DB is the source of truth.
 });
 
 export const config = {
