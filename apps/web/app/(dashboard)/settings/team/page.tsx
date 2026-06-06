@@ -8,6 +8,7 @@ interface Member {
   fullName: string | null;
   email: string;
   role: string;
+  permissions: Record<string, string>;
 }
 
 export default function TeamPage(): JSX.Element {
@@ -70,7 +71,7 @@ export default function TeamPage(): JSX.Element {
                 <p className="text-xs text-gray-500 capitalize">{member.role}</p>
               </div>
               <button
-                onClick={() => { setEditingId(member.id); setPermissions({}); }}
+                onClick={() => { setEditingId(member.id); setPermissions(member.permissions ?? {}); }}
                 className="text-sm text-blue-600 hover:underline"
               >
                 Edit Permissions
