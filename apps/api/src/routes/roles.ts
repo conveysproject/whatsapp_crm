@@ -1,4 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
+import type { Role } from "@prisma/client";
+import { redis } from "../lib/redis.js";
 
 const VALID_ROLES = ["superAdmin", "admin", "manager", "agent", "viewer"] as const;
 type RoleKey = (typeof VALID_ROLES)[number];
@@ -73,6 +75,14 @@ export const rolesRouter: FastifyPluginAsync = async (fastify) => {
         create: { organizationId, key, value },
         update: { value },
       });
+
+      const affected = await fastify.prisma.user.findMany({
+        where: { organizationId, role: request.params.role as Role },
+        select: { id: true },
+      });
+      if (affected.length > 0) {
+        await redis.del(...affected.map((u) => `auth:user:${u.id}`));
+      }
 
       return reply.send({ data: { role: request.params.role, permissions: request.body.permissions } });
     }

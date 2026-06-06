@@ -8,9 +8,16 @@ const mockPrisma = {
     findMany: vi.fn(),
     upsert: vi.fn(),
   },
+  user: {
+    findMany: vi.fn(),
+  },
 };
 
 vi.mock("../lib/prisma.js", () => ({ prisma: mockPrisma }));
+
+const { mockRedisDel } = vi.hoisted(() => ({ mockRedisDel: vi.fn() }));
+const mockRedis = { del: mockRedisDel };
+vi.mock("../lib/redis.js", () => ({ redis: { del: mockRedisDel } }));
 
 const mockAuth = {
   userId: "u-1",
@@ -75,7 +82,11 @@ describe("GET /roles/permissions", () => {
 });
 
 describe("PUT /roles/:role/permissions", () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    mockRedis.del.mockResolvedValue(1);
+  });
 
   it("returns 403 for non-admin", async () => {
     const app = await buildApp({ role: "agent" as const satisfies typeof mockAuth.role });
@@ -137,5 +148,38 @@ describe("PUT /roles/:role/permissions", () => {
     });
 
     expect(res.statusCode).toBe(200);
+  });
+
+  it("invalidates auth caches for users with the affected role", async () => {
+    const app = await buildApp();
+    mockPrisma.vendorSetting.upsert.mockResolvedValue({});
+    mockPrisma.user.findMany.mockResolvedValue([{ id: "u-10" }, { id: "u-11" }]);
+
+    const res = await app.inject({
+      method: "PUT",
+      url: "/roles/agent/permissions",
+      payload: { permissions: { inbox_access: "allow" } },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith({
+      where: { organizationId: "org-1", role: "agent" },
+      select: { id: true },
+    });
+    expect(mockRedis.del).toHaveBeenCalledWith("auth:user:u-10", "auth:user:u-11");
+  });
+
+  it("skips redis.del when no users have the role", async () => {
+    const app = await buildApp();
+    mockPrisma.vendorSetting.upsert.mockResolvedValue({});
+    mockPrisma.user.findMany.mockResolvedValue([]);
+
+    await app.inject({
+      method: "PUT",
+      url: "/roles/agent/permissions",
+      payload: { permissions: { inbox_access: "allow" } },
+    });
+
+    expect(mockRedis.del).not.toHaveBeenCalled();
   });
 });
