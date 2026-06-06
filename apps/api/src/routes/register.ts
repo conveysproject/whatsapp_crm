@@ -19,7 +19,16 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: RegisterBody }>(
     "/register",
     {
-      config: { public: true },
+      config: {
+        public: true,
+        rateLimit: {
+          max: 5,
+          timeWindow: "1 hour",
+          // Keyed by IP (no auth on public route). Prevents mass org creation
+          // even if attacker rotates Clerk tokens from a single machine.
+          keyGenerator: (req) => `register:${req.ip}`,
+        },
+      },
       schema: {
         body: {
           type: "object",
