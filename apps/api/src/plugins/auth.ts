@@ -56,7 +56,21 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       where: { userId, organizationId: user.organizationId },
       select: { permissions: true },
     });
-    const permissions = (member?.permissions ?? {}) as Record<string, string>;
+
+    const roleSettingRow = await fastify.prisma.vendorSetting.findUnique({
+      where: {
+        organizationId_key: {
+          organizationId: user.organizationId,
+          key: `role_permissions_${user.role}`,
+        },
+      },
+      select: { value: true },
+    });
+    const roleDefaults: Record<string, string> = roleSettingRow?.value
+      ? (JSON.parse(roleSettingRow.value) as Record<string, string>)
+      : {};
+    const memberPermissions = (member?.permissions ?? {}) as Record<string, string>;
+    const permissions = { ...roleDefaults, ...memberPermissions };
 
     await redis.setex(
       cacheKey,
