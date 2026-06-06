@@ -14,7 +14,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/users/me", async (request, reply) => {
     const user = await fastify.prisma.user.findFirst({
       where: { id: request.auth.userId, organizationId: request.auth.organizationId, isActive: true },
-      select: { id: true, fullName: true, email: true, role: true },
+      select: { id: true, fullName: true, email: true, role: true, organizationId: true },
     });
     if (!user) return reply.status(404).send({ error: { code: "USER_NOT_FOUND", message: "User not found" } });
     return { data: user };
@@ -36,6 +36,9 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       if (request.auth.role !== "admin") {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can change roles" } });
       }
+      if (request.params.id === request.auth.userId) {
+        return reply.status(400).send({ error: { code: "SELF_MODIFY", message: "Admins cannot change their own role" } });
+      }
       const user = await fastify.prisma.user.update({
         where: { id: request.params.id, organizationId: request.auth.organizationId },
         data: { role: request.body.role },
@@ -56,6 +59,9 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       if (request.auth.role !== "admin") {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can remove users" } });
       }
+      if (request.params.id === request.auth.userId) {
+        return reply.status(400).send({ error: { code: "SELF_MODIFY", message: "Admins cannot remove themselves" } });
+      }
       await fastify.prisma.user.update({
         where: { id: request.params.id, organizationId: request.auth.organizationId },
         data: { isActive: false },
@@ -64,38 +70,50 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  fastify.post<{ Body: { pushToken: string } }>("/users/push-token", async (request, reply) => {
-    const { pushToken } = request.body;
-    await fastify.prisma.user.update({
-      where: { id: request.auth.userId },
-      data: { pushToken },
-    });
-    return reply.status(204).send();
-  });
+  fastify.post<{ Body: { pushToken: string } }>(
+    "/users/push-token",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["pushToken"],
+          properties: { pushToken: { type: "string", minLength: 1, maxLength: 512 } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { pushToken } = request.body;
+      await fastify.prisma.user.update({
+        where: { id: request.auth.userId },
+        data: { pushToken },
+      });
+      return reply.status(204).send();
+    }
+  );
 
   // Mobile Expo device token registration
-  fastify.post<{ Body: { token: string; platform?: string } }>("/users/device-token", async (request, reply) => {
-    const { token, platform } = request.body;
-    if (!token) return reply.status(400).send({ error: { code: "MISSING_TOKEN", message: "token is required" } });
-    await fastify.prisma.user.update({
-      where: { id: request.auth.userId },
-      data: { pushToken: token },
-    });
-    void platform; // stored on User for now; no separate device table needed
-    return reply.send({ data: { registered: true } });
-  });
-
-  // Auth login log — called from Clerk webhook on session.created (public: Clerk has no JWT)
-  fastify.post<{ Body: { userId: string; orgId?: string; ipAddress?: string; userAgent?: string; success?: boolean } }>(
-    "/auth/login-log",
-    { config: { public: true } },
+  fastify.post<{ Body: { token: string; platform?: string } }>(
+    "/users/device-token",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["token"],
+          properties: {
+            token: { type: "string", minLength: 1, maxLength: 512 },
+            platform: { type: "string", maxLength: 32 },
+          },
+        },
+      },
+    },
     async (request, reply) => {
-      const { userId, orgId, ipAddress, userAgent, success = true } = request.body;
-      if (!userId) return reply.status(400).send({ error: { code: "MISSING_USER_ID", message: "userId is required" } });
-      const entry = await fastify.prisma.loginLog.create({
-        data: { userId, orgId: orgId ?? null, ipAddress: ipAddress ?? null, userAgent: userAgent ?? null, success },
+      const { token, platform } = request.body;
+      await fastify.prisma.user.update({
+        where: { id: request.auth.userId },
+        data: { pushToken: token },
       });
-      return reply.status(201).send({ data: { id: entry.id } });
+      void platform; // stored on User for now; no separate device table needed
+      return reply.send({ data: { registered: true } });
     }
   );
 
