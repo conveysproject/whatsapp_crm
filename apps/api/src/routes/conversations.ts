@@ -148,20 +148,24 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
           conversationId: conversation.id,
           contactPhone: conversation.whatsappContactId ?? undefined,
         });
-        await fastify.prisma.notification.create({
-          data: {
-            organizationId,
-            userId: request.body.assignedTo,
+        try {
+          await fastify.prisma.notification.create({
+            data: {
+              organizationId,
+              userId: request.body.assignedTo,
+              type: "conversation_assigned",
+              message: "A conversation has been assigned to you",
+              action: `/inbox?conversation=${conversation.id}`,
+            },
+          });
+          getIo()?.to(`user:${request.body.assignedTo}`).emit("notification", {
             type: "conversation_assigned",
             message: "A conversation has been assigned to you",
             action: `/inbox?conversation=${conversation.id}`,
-          },
-        });
-        getIo()?.to(`user:${request.body.assignedTo}`).emit("notification", {
-          type: "conversation_assigned",
-          message: "A conversation has been assigned to you",
-          action: `/inbox?conversation=${conversation.id}`,
-        });
+          });
+        } catch (err) {
+          fastify.log.error(err, "Failed to create assignment notification");
+        }
       }
       return reply.send({ data: updated });
     }

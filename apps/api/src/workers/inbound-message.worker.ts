@@ -108,7 +108,7 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       where: { organizationId_phoneNumber: { organizationId, phoneNumber: whatsappContactPhone } },
       create: { organizationId, phoneNumber: whatsappContactPhone },
       update: {},
-      select: { id: true },
+      select: { id: true, firstName: true, lastName: true, phoneNumber: true },
     });
 
     let conversation = await prisma.conversation.findFirst({
@@ -224,28 +224,26 @@ export const inboundWorker = new Worker<InboundMessageJob>(
 
     // --- Notify assigned agent of new inbound message ---
     if (refreshed?.assignedTo) {
-      const contactForNotif = await prisma.contact.findUnique({
-        where: { id: contact.id },
-        select: { firstName: true, lastName: true, phoneNumber: true },
-      });
       const displayName =
-        contactForNotif
-          ? (`${contactForNotif.firstName ?? ""} ${contactForNotif.lastName ?? ""}`.trim() || contactForNotif.phoneNumber)
-          : whatsappContactPhone;
-      await prisma.notification.create({
-        data: {
-          organizationId,
-          userId: refreshed.assignedTo,
+        `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim() || contact.phoneNumber;
+      try {
+        await prisma.notification.create({
+          data: {
+            organizationId,
+            userId: refreshed.assignedTo,
+            type: "new_message",
+            message: `New message from ${displayName}`,
+            action: `/inbox?conversation=${conversation.id}`,
+          },
+        });
+        getIo()?.to(`user:${refreshed.assignedTo}`).emit("notification", {
           type: "new_message",
           message: `New message from ${displayName}`,
           action: `/inbox?conversation=${conversation.id}`,
-        },
-      });
-      getIo()?.to(`user:${refreshed.assignedTo}`).emit("notification", {
-        type: "new_message",
-        message: `New message from ${displayName}`,
-        action: `/inbox?conversation=${conversation.id}`,
-      });
+        });
+      } catch (err) {
+        console.error("[worker:inbound] Failed to create inbound notification", err);
+      }
     }
 
     // --- Flow session resume: takes priority over all other processing ---
