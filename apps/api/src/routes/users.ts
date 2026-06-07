@@ -30,7 +30,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/users/me", async (request, reply) => {
     const user = await fastify.prisma.user.findFirst({
       where: { id: request.auth.userId, organizationId: request.auth.organizationId, isActive: true },
-      select: { id: true, fullName: true, email: true, role: true, organizationId: true },
+      select: { id: true, fullName: true, email: true, role: true, organizationId: true, availability: true },
     });
     if (!user) return reply.status(404).send({ error: { code: "USER_NOT_FOUND", message: "User not found" } });
     return { data: user };
@@ -132,6 +132,29 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       });
       void platform; // stored on User for now; no separate device table needed
       return reply.send({ data: { registered: true } });
+    }
+  );
+
+  fastify.patch<{ Body: { availability: string } }>(
+    "/users/me/availability",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["availability"],
+          properties: {
+            availability: { type: "string", enum: ["online", "away"] },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const updated = await fastify.prisma.user.update({
+        where: { id: request.auth.userId },
+        data: { availability: request.body.availability },
+        select: { id: true, availability: true },
+      });
+      return { data: updated };
     }
   );
 

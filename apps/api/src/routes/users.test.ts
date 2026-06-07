@@ -68,3 +68,33 @@ describe("GET /v1/users/me", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("PATCH /v1/users/me/availability", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("updates availability to away", async () => {
+    mockPrisma.user.update.mockResolvedValue({ id: "user-1", availability: "away" });
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/users/me/availability",
+      payload: { availability: "away" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { availability: "away" },
+      select: { id: true, availability: true },
+    });
+  });
+
+  it("rejects invalid availability values", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/users/me/availability",
+      payload: { availability: "busy" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});

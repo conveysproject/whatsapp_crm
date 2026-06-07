@@ -27,6 +27,9 @@ export default fp(async (fastify: FastifyInstance) => {
     socket.on("join-org", (organizationId: string) => {
       void socket.join(`org:${organizationId}`);
     });
+    socket.on("join-user", (userId: string) => {
+      void socket.join(`user:${userId}`);
+    });
   });
 
   fastify.decorate("io", io);
