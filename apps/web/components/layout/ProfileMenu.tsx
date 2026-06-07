@@ -34,6 +34,7 @@ export function ProfileMenu(): JSX.Element {
   const [showOfflineModal, setShowOfflineModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { signOut } = useClerk();
   const qc = useQueryClient();
 
@@ -56,6 +57,12 @@ export function ProfileMenu(): JSX.Element {
       }).then((r) => r.json()),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["user-me"] }),
   });
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   // Close panel on outside click
   useEffect(() => {
@@ -87,8 +94,9 @@ export function ProfileMenu(): JSX.Element {
   function copyOrgId() {
     if (org?.id) {
       void navigator.clipboard.writeText(org.id);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     }
   }
 
