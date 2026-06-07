@@ -1,53 +1,102 @@
-import type { JSX } from "react";
-import { auth } from "@clerk/nextjs/server";
-import Link from "next/link";
+"use client";
+import { JSX, useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { PermissionsGrid } from "@/components/permissions-grid";
 
 interface Member {
   id: string;
   fullName: string | null;
   email: string;
   role: string;
+  permissions: Record<string, string>;
 }
 
-async function getMembers(token: string): Promise<Member[]> {
-  try {
-    const res = await fetch(
-      `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/users`,
-      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-    );
-    return res.ok ? (await res.json() as { data: Member[] }).data : [];
-  } catch { return []; }
-}
+export default function MembersPage(): JSX.Element {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<Record<string, string>>({});
 
-export default async function MembersPage(): Promise<JSX.Element> {
-  const { getToken } = await auth.protect();
-  const members = await getMembers(await getToken() ?? "");
+  const { data, refetch } = useQuery<{ data: Member[] }>({
+    queryKey: ["team-members"],
+    queryFn: () => fetch("/api/v1/users").then((r) => r.json() as Promise<{ data: Member[] }>),
+  });
+
+  const { data: rolesData } = useQuery<{ data: Record<string, Record<string, string>> }>({
+    queryKey: ["role-permissions"],
+    queryFn: () =>
+      fetch("/api/v1/roles/permissions").then(
+        (r) => r.json() as Promise<{ data: Record<string, Record<string, string>> }>
+      ),
+  });
+
+  const savePermissions = useMutation({
+    mutationFn: (memberId: string) =>
+      fetch(`/api/v1/users/${memberId}/permissions`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permissions }),
+      }).then((r) => r.json()),
+    onSuccess: () => {
+      setEditingId(null);
+      setPermissions({});
+      void refetch();
+    },
+  });
+
+  const members = data?.data ?? [];
+
+  function startEditing(member: Member): void {
+    const roleDefaults = rolesData?.data?.[member.role] ?? {};
+    setEditingId(member.id);
+    setPermissions({ ...roleDefaults, ...member.permissions });
+  }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Members</h1>
-        <Link href="/settings" className="text-sm text-blue-600 hover:underline">
-          ← Back to settings
-        </Link>
-      </div>
+    <div className="max-w-3xl mx-auto p-6 space-y-6">
+      <h1 className="text-2xl font-semibold">Members</h1>
 
-      <div className="bg-white rounded-lg border divide-y">
-        {members.map((user) => (
-          <div key={user.id} className="flex items-center justify-between px-6 py-4">
-            <div>
-              <p className="font-medium text-gray-900">{user.fullName ?? "—"}</p>
-              <p className="text-sm text-gray-500">{user.email}</p>
-            </div>
-            <span className="capitalize rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">
-              {user.role}
-            </span>
+      {editingId ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-medium">
+              Editing: {members.find((m) => m.id === editingId)?.fullName ?? editingId}
+            </h2>
+            <button
+              onClick={() => { setEditingId(null); setPermissions({}); }}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              Cancel
+            </button>
           </div>
-        ))}
-        {members.length === 0 && (
-          <p className="px-6 py-8 text-center text-gray-500">No members yet.</p>
-        )}
-      </div>
+          <PermissionsGrid permissions={permissions} onChange={setPermissions} />
+          <button
+            onClick={() => savePermissions.mutate(editingId)}
+            disabled={savePermissions.isPending}
+            className="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
+          >
+            {savePermissions.isPending ? "Saving..." : "Save Permissions"}
+          </button>
+        </div>
+      ) : (
+        <div className="divide-y border rounded-lg">
+          {members.map((member) => (
+            <div key={member.id} className="flex items-center justify-between px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">{member.fullName ?? member.email}</p>
+                <p className="text-xs text-gray-500 capitalize">{member.role}</p>
+              </div>
+              <button
+                onClick={() => startEditing(member)}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                Edit Permissions
+              </button>
+            </div>
+          ))}
+          {members.length === 0 && (
+            <p className="p-4 text-sm text-gray-400">No members yet.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
