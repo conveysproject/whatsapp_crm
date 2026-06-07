@@ -41,7 +41,7 @@ async function getOrgStatus(token: string): Promise<{
 }
 
 export default async function DashboardLayout({ children }: { children: ReactNode }): Promise<JSX.Element> {
-  const { getToken, orgSlug } = await auth.protect();
+  const { getToken, orgSlug, userId } = await auth.protect();
   const token = await getToken();
 
   if (!orgSlug) {
@@ -60,7 +60,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         <Sidebar />
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           <ImpersonationBanner />
-          <TopBar orgName={orgSlug ?? undefined} />
+          <TopBar orgName={orgSlug ?? undefined} userId={userId ?? undefined} />
           <SetupBanner />
           <main className="flex-1 p-6 overflow-auto min-h-0">
             <BreadcrumbNav />
