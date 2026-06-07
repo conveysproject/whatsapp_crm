@@ -52,6 +52,7 @@ describe("GET /v1/users/me", () => {
       fullName: "Rahul Sharma",
       email: "rahul@test.com",
       role: "admin",
+      availability: "online",
     });
     const res = await app.inject({ method: "GET", url: "/v1/users/me" });
     expect(res.statusCode).toBe(200);

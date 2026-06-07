@@ -29,6 +29,7 @@ export function useSocket(organizationId: string | undefined, userId?: string): 
     return () => {
       socket.off("connect", joinRooms);
       socket.emit("leave-org", organizationId);
+      if (userId) socket.emit("leave-user", userId);
       socket.disconnect();
     };
   }, [organizationId, userId, getToken]);

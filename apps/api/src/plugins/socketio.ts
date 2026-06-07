@@ -30,6 +30,12 @@ export default fp(async (fastify: FastifyInstance) => {
     socket.on("join-user", (userId: string) => {
       void socket.join(`user:${userId}`);
     });
+    socket.on("leave-org", (organizationId: string) => {
+      void socket.leave(`org:${organizationId}`);
+    });
+    socket.on("leave-user", (userId: string) => {
+      void socket.leave(`user:${userId}`);
+    });
   });
 
   fastify.decorate("io", io);

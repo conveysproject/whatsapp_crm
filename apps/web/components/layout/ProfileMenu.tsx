@@ -104,6 +104,7 @@ export function ProfileMenu(): JSX.Element {
     starter: "Starter",
     growth: "Growth",
     professional: "Professional",
+    scale: "Scale",
     enterprise: "Enterprise",
   };
 
