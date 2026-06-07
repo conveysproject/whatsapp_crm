@@ -148,6 +148,20 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
           conversationId: conversation.id,
           contactPhone: conversation.whatsappContactId ?? undefined,
         });
+        await fastify.prisma.notification.create({
+          data: {
+            organizationId,
+            userId: request.body.assignedTo,
+            type: "conversation_assigned",
+            message: "A conversation has been assigned to you",
+            action: `/inbox?conversation=${conversation.id}`,
+          },
+        });
+        getIo()?.to(`user:${request.body.assignedTo}`).emit("notification", {
+          type: "conversation_assigned",
+          message: "A conversation has been assigned to you",
+          action: `/inbox?conversation=${conversation.id}`,
+        });
       }
       return reply.send({ data: updated });
     }

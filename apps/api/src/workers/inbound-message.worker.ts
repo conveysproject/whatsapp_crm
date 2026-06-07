@@ -222,6 +222,32 @@ export const inboundWorker = new Worker<InboundMessageJob>(
 
     const refreshed = await prisma.conversation.findFirst({ where: { id: conversation.id } });
 
+    // --- Notify assigned agent of new inbound message ---
+    if (refreshed?.assignedTo) {
+      const contactForNotif = await prisma.contact.findUnique({
+        where: { id: contact.id },
+        select: { firstName: true, lastName: true, phoneNumber: true },
+      });
+      const displayName =
+        contactForNotif
+          ? (`${contactForNotif.firstName ?? ""} ${contactForNotif.lastName ?? ""}`.trim() || contactForNotif.phoneNumber)
+          : whatsappContactPhone;
+      await prisma.notification.create({
+        data: {
+          organizationId,
+          userId: refreshed.assignedTo,
+          type: "new_message",
+          message: `New message from ${displayName}`,
+          action: `/inbox?conversation=${conversation.id}`,
+        },
+      });
+      getIo()?.to(`user:${refreshed.assignedTo}`).emit("notification", {
+        type: "new_message",
+        message: `New message from ${displayName}`,
+        action: `/inbox?conversation=${conversation.id}`,
+      });
+    }
+
     // --- Flow session resume: takes priority over all other processing ---
     const flowSession = refreshed?.flowSession as FlowSession | null | undefined;
     console.log(`[inbound] conv=${conversation.id} type=${contentType} body=${JSON.stringify(body)} session=${JSON.stringify(flowSession ?? null)}`);
