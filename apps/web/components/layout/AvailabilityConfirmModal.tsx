@@ -1,5 +1,5 @@
 "use client";
-import { JSX } from "react";
+import { JSX, useEffect } from "react";
 
 interface Props {
   onConfirm: () => void;
@@ -7,13 +7,26 @@ interface Props {
 }
 
 export function AvailabilityConfirmModal({ onConfirm, onCancel }: Props): JSX.Element {
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onCancel]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
 
       {/* Dialog */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 flex flex-col items-center gap-5">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="availability-modal-title"
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 flex flex-col items-center gap-5"
+      >
         {/* Orange info icon */}
         <div className="flex items-center justify-center w-16 h-16 rounded-full bg-amber-400">
           <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -21,11 +34,11 @@ export function AvailabilityConfirmModal({ onConfirm, onCancel }: Props): JSX.El
           </svg>
         </div>
 
-        <h2 className="text-xl font-bold text-gray-900">Going Offline?</h2>
+        <h2 id="availability-modal-title" className="text-xl font-bold text-gray-900">Going Offline?</h2>
 
         <ul className="list-disc list-outside pl-5 space-y-2 text-sm text-gray-700 text-left w-full">
           <li>
-            You&apos;re about to go offline. New chats will continue to auto-assigned to you while you&apos;re offline.
+            You&apos;re about to go offline. New chats will continue to be auto-assigned to you while you&apos;re offline.
           </li>
           <li>
             To prevent assignment while offline,{" "}
