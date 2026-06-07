@@ -290,6 +290,7 @@ model User {
   role           Role     @default(agent)
   isActive       Boolean   @default(true) @map("is_active")
   pushToken      String?   @map("push_token")
+  availability   String    @default("online") @map("availability")
   username       String?   @unique
   mobileNumber   String?   @map("mobile_number")
   settings       Json      @default("{}") // notification prefs, language, timezone, UI preferences
