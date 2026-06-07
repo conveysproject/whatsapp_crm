@@ -1,13 +1,11 @@
 "use client";
 
 import { JSX, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
 import { ConversationList } from "@/components/inbox/ConversationList";
 import { MessageThread } from "@/components/inbox/MessageThread";
 import { SendMessageForm } from "@/components/inbox/SendMessageForm";
 import { CannedResponsePicker } from "@/components/canned-response-picker";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
-import { useSocket } from "@/hooks/useSocket";
 import { useBotStatus } from "@/hooks/useBotStatus";
 import { BotPanel } from "@/components/bot-panel";
 import { SmartReplyPanel } from "@/components/smart-reply-panel";
@@ -19,9 +17,7 @@ export default function InboxPage(): JSX.Element {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [prefillText, setPrefillText] = useState("");
   const [showOffer, setShowOffer] = useState(false);
-  const { orgId } = useAuth();
 
-  useSocket(orgId ?? undefined);
   const botActive = useBotStatus(selectedConversationId);
   const { data: conversations } = useConversations();
 
