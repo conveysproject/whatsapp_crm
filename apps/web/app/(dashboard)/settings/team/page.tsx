@@ -20,6 +20,14 @@ export default function TeamPage(): JSX.Element {
     queryFn: () => fetch("/api/v1/users").then((r) => r.json() as Promise<{ data: Member[] }>),
   });
 
+  const { data: rolesData } = useQuery<{ data: Record<string, Record<string, string>> }>({
+    queryKey: ["role-permissions"],
+    queryFn: () =>
+      fetch("/api/v1/roles/permissions").then(
+        (r) => r.json() as Promise<{ data: Record<string, Record<string, string>> }>
+      ),
+  });
+
   const savePermissions = useMutation({
     mutationFn: (memberId: string) =>
       fetch(`/api/v1/users/${memberId}/permissions`, {
@@ -35,6 +43,12 @@ export default function TeamPage(): JSX.Element {
   });
 
   const members = data?.data ?? [];
+
+  function startEditing(member: Member): void {
+    const roleDefaults = rolesData?.data?.[member.role] ?? {};
+    setEditingId(member.id);
+    setPermissions({ ...roleDefaults, ...member.permissions });
+  }
 
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
@@ -71,7 +85,7 @@ export default function TeamPage(): JSX.Element {
                 <p className="text-xs text-gray-500 capitalize">{member.role}</p>
               </div>
               <button
-                onClick={() => { setEditingId(member.id); setPermissions(member.permissions ?? {}); }}
+                onClick={() => startEditing(member)}
                 className="text-sm text-blue-600 hover:underline"
               >
                 Edit Permissions
