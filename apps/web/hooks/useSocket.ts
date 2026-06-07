@@ -4,7 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useEffect } from "react";
 import { getSocket } from "@/lib/socket";
 
-export function useSocket(organizationId: string | undefined): void {
+export function useSocket(organizationId: string | undefined, userId?: string): void {
   const { getToken } = useAuth();
 
   useEffect(() => {
@@ -12,24 +12,24 @@ export function useSocket(organizationId: string | undefined): void {
 
     const socket = getSocket();
 
-    function joinOrg() {
+    function joinRooms() {
       socket.emit("join-org", organizationId);
+      if (userId) socket.emit("join-user", userId);
     }
 
     async function connect() {
       const token = await getToken();
       socket.auth = { token };
-      // Re-join org room on every connect/reconnect
-      socket.on("connect", joinOrg);
+      socket.on("connect", joinRooms);
       socket.connect();
     }
 
     void connect();
 
     return () => {
-      socket.off("connect", joinOrg);
+      socket.off("connect", joinRooms);
       socket.emit("leave-org", organizationId);
       socket.disconnect();
     };
-  }, [organizationId, getToken]);
+  }, [organizationId, userId, getToken]);
 }
