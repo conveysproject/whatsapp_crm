@@ -6,7 +6,6 @@ import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
-const REDIRECT_URI = process.env["NEXT_PUBLIC_META_REDIRECT_URI"] ?? "";
 
 const Spinner = (
   <div className="text-center">
@@ -33,13 +32,13 @@ function WabaCallbackContent(): JSX.Element {
     void (async () => {
       try {
         const token = await getToken();
-        const res = await fetch(`${API_URL}/v1/onboarding/waba-callback`, {
+        const res = await fetch(`${API_URL}/v1/whatsapp-account/connect`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token ?? ""}`,
           },
-          body: JSON.stringify({ code, embedded: true, redirectUri: REDIRECT_URI }),
+          body: JSON.stringify({ code, flow: "onboarding" }),
         });
 
         if (res.ok) {
@@ -48,12 +47,10 @@ function WabaCallbackContent(): JSX.Element {
         }
 
         const body = await res.json().catch(() => ({})) as {
-          detail?: { error?: { message?: string } };
           error?: { message?: string } | string;
         };
         const msg =
-          body?.detail?.error?.message ??
-          (typeof body?.error === "string" ? body.error : body?.error?.message) ??
+          (typeof body?.error === "object" ? body.error?.message : body?.error) ??
           `Server error (HTTP ${res.status})`;
         setError(msg);
       } catch {

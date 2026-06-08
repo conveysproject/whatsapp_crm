@@ -16,17 +16,6 @@ async function buildApp(): Promise<FastifyInstance> {
   return app;
 }
 
-describe("POST /v1/onboarding/waba-callback", () => {
-  let app: FastifyInstance;
-  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
-  afterEach(async () => { await app.close(); });
-
-  it("returns 400 when code is missing", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/onboarding/waba-callback", payload: {} });
-    expect(res.statusCode).toBe(400);
-  });
-});
-
 describe("GET /v1/onboarding/status", () => {
   let app: FastifyInstance;
   beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
