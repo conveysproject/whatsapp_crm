@@ -1,6 +1,7 @@
 "use client";
 import { JSX, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { EmbeddedSignupButton } from "@/components/whatsapp/EmbeddedSignupButton";
 
 async function fetchJson(url: string): Promise<unknown> {
   const res = await fetch(url);
@@ -56,6 +57,22 @@ export default function WhatsAppAccountPage(): JSX.Element {
           Manage your WhatsApp Business connection
         </p>
       </div>
+
+      {/* Connect / Reconnect */}
+      <section className="border rounded-lg p-4 space-y-3">
+        <div>
+          <h2 className="font-medium">Connect / Reconnect</h2>
+          <p className="text-sm text-gray-500">Update your WhatsApp Business Account connection.</p>
+        </div>
+        <EmbeddedSignupButton
+          flow="reconnect"
+          onSuccess={() => {
+            void qc.invalidateQueries({ queryKey: ["wa-health"] });
+            void qc.invalidateQueries({ queryKey: ["wa-profile"] });
+          }}
+          onError={() => undefined}
+        />
+      </section>
 
       {/* Health Status */}
       <section className="border rounded-lg p-4 space-y-2">
