@@ -57,6 +57,20 @@ export function EmbeddedSignupButton({ flow, onSuccess, onError }: EmbeddedSignu
   const wabaIdRef = useRef("");
   const phoneNumberIdRef = useRef("");
 
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+  useEffect(() => { onSuccessRef.current = onSuccess; }, [onSuccess]);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+
+  const postMessageHandlerRef = useRef<((e: MessageEvent) => void) | null>(null);
+  useEffect(() => {
+    return () => {
+      if (postMessageHandlerRef.current) {
+        window.removeEventListener("message", postMessageHandlerRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (document.getElementById("facebook-jssdk")) {
       if (window.FB) setFbReady(true);
@@ -96,14 +110,17 @@ export function EmbeddedSignupButton({ flow, onSuccess, onError }: EmbeddedSignu
         // ignore malformed messages
       }
     }
+    postMessageHandlerRef.current = onPostMessage;
     window.addEventListener("message", onPostMessage);
 
     const configId = isSMB && SMB_CONFIG_ID ? SMB_CONFIG_ID : CONFIG_ID;
 
     window.FB.login(async (response: FBAuthResponse) => {
       window.removeEventListener("message", onPostMessage);
+      postMessageHandlerRef.current = null;
       const code = response.authResponse?.code;
       if (!code) {
+        postMessageHandlerRef.current = null;
         setState("idle");
         return;
       }
@@ -127,14 +144,21 @@ export function EmbeddedSignupButton({ flow, onSuccess, onError }: EmbeddedSignu
           const msg = body.error?.message ?? `Error ${res.status}`;
           setErrorMessage(msg);
           setState("error");
-          onError(msg);
+          onErrorRef.current(msg);
           return;
         }
 
-        const connectResult = body.data!;
+        if (!body.data) {
+          const msg = "Unexpected server response.";
+          setErrorMessage(msg);
+          setState("error");
+          onErrorRef.current(msg);
+          return;
+        }
+        const connectResult = body.data;
         setResult(connectResult);
         setState("success");
-        onSuccess(connectResult);
+        onSuccessRef.current(connectResult);
 
         if (flow === "onboarding") {
           setTimeout(() => {
@@ -145,7 +169,7 @@ export function EmbeddedSignupButton({ flow, onSuccess, onError }: EmbeddedSignu
         const msg = "Network error. Please try again.";
         setErrorMessage(msg);
         setState("error");
-        onError(msg);
+        onErrorRef.current(msg);
       }
     }, { config_id: configId, response_type: "code", override_default_response_type: true });
   }
