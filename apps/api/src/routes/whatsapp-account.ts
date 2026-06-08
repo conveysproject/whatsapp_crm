@@ -210,6 +210,7 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: { code: "APP_NOT_CONFIGURED", message: "Facebook app credentials not configured" } });
     }
 
+    // Meta token exchange uses GET with query params — this is the API-prescribed pattern for server-side flows
     // Step 1: exchange code for access token
     const tokenRes = await fetch(
       `${WA_GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${encodeURIComponent(code)}`,
@@ -302,17 +303,22 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     }
 
     // Step 7: persist to Organization
-    await fastify.prisma.organization.update({
-      where: { id: organizationId },
-      data: {
-        wabaAccessToken: accessToken,
-        whatsappBusinessAccountId: wabaId,
-        ...(phoneNumberId ? { phoneNumberId } : {}),
-        ...(flow === "onboarding"
-          ? { onboardingStep: phoneNumberId ? "done" : "provision_number" }
-          : {}),
-      },
-    });
+    try {
+      await fastify.prisma.organization.update({
+        where: { id: organizationId },
+        data: {
+          wabaAccessToken: accessToken,
+          whatsappBusinessAccountId: wabaId,
+          ...(phoneNumberId ? { phoneNumberId } : {}),
+          ...(flow === "onboarding"
+            ? { onboardingStep: phoneNumberId ? "done" : "provision_number" }
+            : {}),
+        },
+      });
+    } catch (err) {
+      fastify.log.error({ err }, "Failed to persist Organization during /connect");
+      return reply.status(500).send({ error: { code: "DB_ERROR", message: "Failed to save connection" } });
+    }
 
     // Step 8: persist to VendorSettings
     const settingsToSave = [
@@ -324,15 +330,20 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       ...(phoneNumberId ? [{ key: "current_phone_number_id", value: phoneNumberId }] : []),
       ...(displayPhoneNumber ? [{ key: "current_phone_number_number", value: displayPhoneNumber }] : []),
     ];
-    await Promise.all(
-      settingsToSave.map((s) =>
-        fastify.prisma.vendorSetting.upsert({
-          where: { organizationId_key: { organizationId, key: s.key } },
-          create: { organizationId, key: s.key, value: s.value, dataType: "string" },
-          update: { value: s.value },
-        })
-      )
-    );
+    try {
+      await Promise.all(
+        settingsToSave.map((s) =>
+          fastify.prisma.vendorSetting.upsert({
+            where: { organizationId_key: { organizationId, key: s.key } },
+            create: { organizationId, key: s.key, value: s.value, dataType: "string" },
+            update: { value: s.value },
+          })
+        )
+      );
+    } catch (err) {
+      fastify.log.error({ err }, "Failed to persist VendorSettings during /connect");
+      return reply.status(500).send({ error: { code: "DB_ERROR", message: "Failed to save settings" } });
+    }
 
     return reply.send({
       data: {
