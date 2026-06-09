@@ -912,7 +912,7 @@ export const SERVICES: ServiceData[] = [
     metaTitle: "Digital Marketing Services | SEO, Google Ads, Meta Ads | Conveys",
     metaDescription: "SEO, Google Ads, Meta Ads, and content marketing for SMBs. Every result tracked and reported. Fixed monthly management fee.",
     overview: [
-      "SEO, Google Ads, Meta Ads, and content marketing — all managed by specialists who have run campaigns for Indian SMBs across manufacturing, retail, SaaS, and services. Every rupee tracked, every result reported.",
+      "SEO, Google Ads, Meta Ads, and content marketing — all managed by specialists who have run campaigns for SMBs across manufacturing, retail, SaaS, and services. Every result tracked and reported.",
       "No vanity metrics. No mystery black boxes. You see exactly what you spent, what traffic it generated, and what leads or sales it produced.",
     ],
     offerings: [
