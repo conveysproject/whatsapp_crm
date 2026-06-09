@@ -6,7 +6,78 @@
 
 ---
 
-## Problem
+## Google Search Console Report (May 14 – Jun 7, 2026)
+
+### Raw data
+
+| Metric | Value |
+|--------|-------|
+| Total clicks | 4 |
+| Total impressions | 64 |
+| Overall CTR | 6.25% |
+| Date range | ~25 days |
+
+**Performance by country:**
+
+| Country | Impressions | Avg Position | Clicks |
+|---------|-------------|--------------|--------|
+| India | 50 | 9.34 | 4 |
+| United States | 11 | 6.18 | 0 |
+| Italy | 1 | 2 | 0 |
+| Oman | 1 | 5 | 0 |
+| UK | 1 | 6 | 0 |
+
+**Top pages by impressions:**
+
+| Page | Impressions | Avg Position | Clicks |
+|------|-------------|--------------|--------|
+| `/blog/saas-product-development-india-cost-timeline` | 21 | 5.19 | 1 |
+| `https://conveys.in/` | 16 | 5.12 | 1 |
+| `/services/web-development` | 8 | 3.88 | 0 |
+| `/blog/ai-llm-integration-indian-business` | 7 | 5 | 0 |
+| `/blog/ios-android-cross-platform-india-startups` | 7 | 13.43 | 0 |
+| `/about` | 7 | 23.86 | 0 |
+| `/services/ai-solutions` | 6 | 5.33 | 0 |
+| `/services/whatsapp-crm` | 6 | 7.83 | 0 |
+| `http://conveys.in/` | 2 | 1.5 | 2 |
+
+**Top queries (only 4 unique in 25 days):**
+
+| Query | Impressions | Position |
+|-------|-------------|----------|
+| conveys | 3 | 9.33 |
+| cross platform for ios and android | 2 | 15 |
+| in india | 1 | 2 |
+| cross platform for android and ios | 1 | 19 |
+
+**Devices:**
+
+| Device | Impressions | CTR | Clicks |
+|--------|-------------|-----|--------|
+| Desktop | 42 | 7.14% | 3 |
+| Mobile | 22 | 4.55% | 1 |
+
+**Search Appearance:** Empty — no rich results triggered.
+
+### Issues identified from GSC
+
+1. **HTTP/HTTPS canonical split** — `http://conveys.in/` and `https://conveys.in/` appear as separate pages (2 clicks on http, 1 on https). Google is indexing both; link equity is split. Fix: enforce HTTPS redirect + ensure all internal links and sitemaps use `https://`.
+
+2. **Zero impressions for core commercial keywords** — No impressions for "WhatsApp CRM", "SaaS development", "mobile app development agency", etc. The site is not indexed for its primary service keywords yet. Fix: new global blog posts and optimised service page metadata will seed these keywords.
+
+3. **Positions too low to convert** — `/services/whatsapp-crm` at 7.83, `/about` at 23.86, cross-platform blog at 13.43. Clicks require top 3. Fix: content depth + structured data (FAQPage, Service schema) to push closer to top 5.
+
+4. **No rich results** — Search Appearance CSV is empty. None of the FAQPage or Article JSON-LD schemas are triggering rich snippets. Fix: verify structured data is valid with Google's Rich Results Test after deploy; ensure FAQPage JSON-LD is present on all blog posts and service pages.
+
+5. **Only 4 unique queries in 25 days** — Site is not appearing for any long-tail queries because there is no content targeting them. Fix: three new global blog posts each targeting a specific long-tail keyword cluster.
+
+6. **India-only geographic suppression** — US has 11 impressions at position 6.18 but 0 clicks — Google is showing pages to US users but the India-centric framing is hurting CTR. Fix: global-first metadata rewrite.
+
+7. **`/about` at position 23.86** — Too deep to generate clicks. About page likely lacks enough keyword-relevant content. Fix: out of scope for this plan — flagged for future content pass.
+
+---
+
+## Problem Summary
 
 GSC data (May–June 2026) shows 4 total clicks from 64 impressions over ~3.5 weeks. India dominates (50 impressions) while US has 11 impressions at position 6.18 with zero clicks. Root causes:
 
@@ -17,6 +88,8 @@ GSC data (May–June 2026) shows 4 total clicks from 64 impressions over ~3.5 we
 5. Service page titles contain "Mumbai" (e.g. "WhatsApp Business API & CRM — Mumbai").
 6. No `hreflang` tag to signal global English targeting.
 7. GSC shows both `http://` and `https://` homepage — canonical split.
+8. No rich results from existing FAQPage/Article JSON-LD — structured data not validated.
+9. Zero impressions for core service keywords — no content targeting global long-tail queries.
 
 ---
 
