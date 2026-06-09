@@ -26,12 +26,12 @@ export const BLOG_POSTS: BlogPost[] = [
     slug: "whatsapp-business-api-india-guide",
     title: "WhatsApp Business API: Complete Guide for Indian Businesses (2025)",
     description:
-      "Everything Indian businesses need to know about WhatsApp Business API — how it works, cost, approval process, and how it differs from the WhatsApp Business App.",
+      "Everything businesses need to know about WhatsApp Business API — how it works, cost, approval process, and how it differs from the WhatsApp Business App.",
     publishedAt: "2026-05-10",
     category: "WhatsApp CRM",
     readingTime: "8 min read",
     intro:
-      "WhatsApp has over 500 million active users in India — more than any other country. For Indian businesses, it has become the primary channel for customer communication, replacing phone calls and SMS. WhatsApp Business API takes this a step further, turning WhatsApp into a fully automated, scalable business platform. Here is everything you need to know.",
+      "WhatsApp has over 2 billion active users worldwide — and over 500 million in India alone. For businesses across markets, it has become the primary channel for customer communication, replacing phone calls and SMS. WhatsApp Business API takes this a step further, turning WhatsApp into a fully automated, scalable business platform. Here is everything you need to know.",
     sections: [
       { type: "h2", text: "What Is WhatsApp Business API?" },
       { type: "p", text: "WhatsApp Business API (now officially called WhatsApp Cloud API) is a developer-accessible interface that allows businesses to send and receive WhatsApp messages programmatically. Unlike the free WhatsApp Business App — which is a mobile app you install on your phone — the API connects to your CRM, website, or custom software to automate conversations at scale." },
@@ -99,12 +99,12 @@ export const BLOG_POSTS: BlogPost[] = [
     slug: "web-development-company-india-how-to-choose",
     title: "How to Choose a Web Development Company in India (2025 Guide)",
     description:
-      "A practical guide for Indian businesses evaluating web development agencies — what to check, what to avoid, realistic pricing, and the right questions to ask before signing.",
+      "A practical guide for businesses evaluating web development agencies — what to check, what to avoid, realistic pricing, and the right questions to ask before signing.",
     publishedAt: "2026-05-12",
     category: "Web Development",
     readingTime: "7 min read",
     intro:
-      "India has tens of thousands of web development agencies — from solo freelancers to 500-person studios. Prices range from ₹5,000 to ₹50,00,000 for ostensibly similar work. Choosing the wrong partner wastes months and money. This guide gives you a systematic way to evaluate your options.",
+      "There are hundreds of thousands of web development agencies worldwide — from solo freelancers to 500-person studios. Prices vary by 10–20× for ostensibly similar work. Choosing the wrong partner wastes months and money. This guide gives you a systematic way to evaluate your options.",
     sections: [
       { type: "h2", text: "What Does a Web Development Company Actually Deliver?" },
       { type: "p", text: "Before evaluating vendors, be clear on what you need. A 'website' could mean a 5-page brochure site, a 50-page e-commerce store, a customer portal with login and dashboards, or a fully custom web application. The scope determines the right type of partner — a freelancer suits a brochure site; a full-stack agency is necessary for a web application." },
@@ -159,12 +159,12 @@ export const BLOG_POSTS: BlogPost[] = [
     slug: "ios-android-cross-platform-india-startups",
     title: "iOS vs Android vs Cross-Platform: What Indian Startups Should Build First",
     description:
-      "A practical breakdown of iOS, Android, and cross-platform development for Indian startups — cost, timeline, when to choose each, and why most Indian businesses should start with Android.",
+      "A practical breakdown of iOS, Android, and cross-platform development for startups — cost, timeline, when to choose each, and how to pick the right platform for your market.",
     publishedAt: "2026-05-14",
     category: "Mobile App Development",
     readingTime: "6 min read",
     intro:
-      "One of the first decisions in mobile app development is platform: iOS, Android, or both via cross-platform frameworks like React Native or Flutter. For Indian startups, this decision has a clear answer in most cases — but understanding why helps you make the right call for your specific situation.",
+      "One of the first decisions in mobile app development is platform: iOS, Android, or both via cross-platform frameworks like React Native or Flutter. The answer depends on your target market, budget, and product type — but the framework for making the decision is the same everywhere. Here is how to think about it.",
     sections: [
       { type: "h2", text: "India's Mobile Market: The Data That Shapes the Decision" },
       { type: "ul", items: [
@@ -225,12 +225,12 @@ export const BLOG_POSTS: BlogPost[] = [
     slug: "ai-llm-integration-indian-business",
     title: "How to Integrate AI & LLMs Into Your Indian Business (Practical Guide)",
     description:
-      "A practical guide to AI and LLM integration for Indian SMBs — what types of AI exist, real use cases, cost, and how to evaluate vendors. No hype, just actionable information.",
+      "A practical guide to AI and LLM integration for SMBs — what types of AI exist, real use cases, cost, and how to evaluate vendors. No hype, just actionable information.",
     publishedAt: "2026-05-16",
     category: "AI Solutions",
     readingTime: "7 min read",
     intro:
-      "The AI conversation in India has moved past 'should we use AI?' to 'how do we actually implement it without wasting money?' Large language models (LLMs) like Anthropic Claude and OpenAI GPT-4 are now practical tools for business automation — but only if you implement them for the right problems. This guide cuts through the hype.",
+      "The AI conversation in business has moved past 'should we use AI?' to 'how do we actually implement it without wasting money?' Large language models (LLMs) like Anthropic Claude and OpenAI GPT-4 are now practical tools for business automation — but only if you implement them for the right problems. This guide cuts through the hype.",
     sections: [
       { type: "h2", text: "Types of AI Solutions for Businesses" },
       { type: "ul", items: [
@@ -295,12 +295,12 @@ export const BLOG_POSTS: BlogPost[] = [
     slug: "saas-product-development-india-cost-timeline",
     title: "Building a SaaS Product in India: Cost, Timeline & Tech Stack (2025)",
     description:
-      "Everything founders and product teams in India need to know about building a SaaS product — realistic costs, phase-by-phase timelines, tech stack choices, and common mistakes.",
+      "Everything founders and product teams need to know about building a SaaS product — realistic costs, phase-by-phase timelines, tech stack choices, and the mistakes that kill early-stage products.",
     publishedAt: "2026-05-18",
     category: "SaaS Development",
     readingTime: "8 min read",
     intro:
-      "India is the world's second-largest SaaS market by user count and growing. Dozens of Indian SaaS companies have scaled to $1M+ ARR — Zoho, Freshworks, Chargebee started here. If you're building a SaaS product in India, you have access to world-class development talent at competitive prices. Here's a realistic picture of what it takes.",
+      "The global SaaS market exceeded $197 billion in 2023 and continues to grow. World-class SaaS companies have been built everywhere — from San Francisco to Singapore to Mumbai. If you're building a SaaS product, you have access to world-class development talent at competitive prices across multiple markets. Here's a realistic picture of what it takes.",
     sections: [
       { type: "h2", text: "What Is SaaS Development?" },
       { type: "p", text: "SaaS (Software as a Service) is software delivered via the internet, typically on a subscription model. Unlike custom software built for one client, a SaaS product is designed to serve many clients (tenants) simultaneously from a shared infrastructure. This requires multi-tenancy, subscription billing, self-serve onboarding, and robust user management from day one." },
@@ -374,12 +374,12 @@ export const BLOG_POSTS: BlogPost[] = [
     slug: "whatsapp-marketing-vs-email-marketing-india",
     title: "WhatsApp Marketing vs Email Marketing for Indian SMBs: Which Works Better?",
     description:
-      "A data-driven comparison of WhatsApp marketing and email marketing for Indian small businesses — open rates, costs, compliance, and which channel to use for which purpose.",
+      "A data-driven comparison of WhatsApp marketing and email marketing — open rates, costs, compliance, and which channel to use for which purpose.",
     publishedAt: "2026-05-20",
     category: "Digital Marketing",
     readingTime: "6 min read",
     intro:
-      "Indian SMBs spent years building email lists that now get 20% open rates on a good day. Meanwhile, their customers open WhatsApp messages within 3 minutes. WhatsApp marketing via the Business API has changed the calculus of digital marketing for Indian businesses — but it's not a wholesale replacement for email. Here's how to think about both channels.",
+      "Businesses have spent years building email lists that now get 20% open rates on a good day. Meanwhile, customers open WhatsApp messages within 3 minutes. WhatsApp marketing via the Business API has changed the calculus of digital marketing — but it is not a wholesale replacement for email. Here is how to think about both channels.",
     sections: [
       { type: "h2", text: "The Open Rate Gap Is Real" },
       { type: "ul", items: [
