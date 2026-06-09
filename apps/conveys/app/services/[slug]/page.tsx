@@ -33,11 +33,11 @@ export async function generateMetadata(
   if (!service) return {};
   const url = `https://conveys.in/services/${slug}`;
   return {
-    title: `${service.title} Services in India | Conveys`,
-    description: `${service.title} services for Indian businesses — expert team, fixed pricing, and proven delivery. Get a free quote today.`,
+    title: `${service.title} Services | Conveys`,
+    description: `${service.title} services — expert team, fixed pricing, and proven delivery. Get a free quote today.`,
     alternates: { canonical: url },
     robots: { index: true, follow: true },
-    openGraph: { title: `${service.title} | Conveys`, url, siteName: "Conveys", locale: "en_IN", type: "website" },
+    openGraph: { title: `${service.title} | Conveys`, url, siteName: "Conveys", locale: "en_US", type: "website" },
   };
 }
 
@@ -78,7 +78,7 @@ export default async function ServiceSlugPage(
               {service.title}
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-slate-300">
-              Expert {service.title.toLowerCase()} services for Indian businesses — in-house team, fixed pricing, and proven delivery.
+              Expert {service.title.toLowerCase()} services — in-house team, fixed pricing, and proven delivery.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
