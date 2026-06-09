@@ -81,7 +81,7 @@ const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
     {
-      "@type": ["Organization", "LocalBusiness"],
+      "@type": "Organization",
       "@id": "https://conveys.in/#organization",
       name: "Conveys Information Technology",
       url: "https://conveys.in",
