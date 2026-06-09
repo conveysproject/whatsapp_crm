@@ -442,6 +442,68 @@ export const BLOG_POSTS: BlogPost[] = [
       { question: "How do I build a WhatsApp marketing list legally?", answer: "Collect opt-ins through: website forms (with a specific checkbox for WhatsApp communication), in-store sign-up sheets (with WhatsApp opt-in explicitly mentioned), QR codes that link to a WhatsApp chat where users initiate contact, checkout flows for e-commerce, and contests or lead magnets where WhatsApp opt-in is part of the entry. Never buy WhatsApp contact lists — it violates Meta's policies and Indian data protection law." },
     ],
   },
+  {
+    slug: "whatsapp-crm-for-small-business",
+    title: "WhatsApp CRM for Small Business: Complete Guide (2025)",
+    description:
+      "How WhatsApp CRM software works, what features matter, and how small businesses use it to automate conversations, run campaigns, and manage their customer pipeline.",
+    publishedAt: "2026-06-09",
+    category: "WhatsApp CRM",
+    readingTime: "8 min read",
+    intro:
+      "WhatsApp has over 2 billion active users across 180+ countries. For small businesses, it has become the default channel for customer communication — faster than email, more personal than a website form, and already on every customer's phone. WhatsApp CRM software turns that into a structured, scalable sales and support system. Here is everything you need to know.",
+    sections: [
+      { type: "h2", text: "What Is a WhatsApp CRM?" },
+      { type: "p", text: "A WhatsApp CRM is software that connects your business WhatsApp number (via the official WhatsApp Business API) to a customer management platform. Instead of replying to messages one-by-one on your phone, your whole team manages conversations in a shared inbox — with contact history, notes, tags, and automation all in one place." },
+      { type: "h2", text: "WhatsApp Business App vs API vs CRM — What Is the Difference?" },
+      { type: "ul", items: [
+        "WhatsApp Business App: free mobile app, one user, one device, broadcast limited to 256 contacts who must have saved your number, no automation — suitable for very small operations only",
+        "WhatsApp Business API: developer interface from Meta, supports automation, multi-agent teams, unlimited broadcasts to opted-in contacts, requires Meta business verification",
+        "WhatsApp CRM: software built on top of the API — adds a shared team inbox, contact management, campaign builder, chatbot flows, and analytics so non-technical teams can use the API without writing code",
+      ]},
+      { type: "h2", text: "Key Features to Look for in a WhatsApp CRM" },
+      { type: "ul", items: [
+        "Shared team inbox: multiple agents handle conversations simultaneously; conversations can be assigned, transferred, and tracked with full history",
+        "Contact management: import contacts via CSV, add custom fields, tags, notes, and segment into lists",
+        "Broadcast campaigns: send approved message templates to segmented lists; track delivery, read rates, and replies in real time",
+        "Chatbot / flow builder: automate responses, qualify leads, route to the right agent, and collect data — no coding required",
+        "Multi-channel integration: connect to your CRM, e-commerce platform, or website for context-aware conversations",
+        "Analytics dashboard: campaign performance, agent response times, conversation resolution rates, and opt-out tracking",
+      ]},
+      { type: "h2", text: "Use Cases by Business Type" },
+      { type: "ul", items: [
+        "Retail & e-commerce: abandoned cart recovery, order status notifications, post-purchase upsell campaigns",
+        "Service businesses: appointment booking and reminders via chatbot, re-booking campaigns to lapsed clients",
+        "Real estate: chatbot qualifies incoming leads (budget, location, timeline) before handing to an agent",
+        "Education: automated fee reminders, admission updates, parent communication at scale",
+        "Healthcare: appointment confirmations and reminders, test result notifications, follow-up messages",
+        "B2B sales: lead follow-up within 5 minutes of enquiry, proposal delivery, deal stage tracking in the shared inbox",
+      ]},
+      { type: "h2", text: "WhatsApp CRM Pricing" },
+      { type: "ul", items: [
+        "Meta charges per conversation (24-hour window): marketing $0.01–0.09, utility $0.003–0.01, authentication $0.002–0.008 — varies by country",
+        "WhatsApp CRM software: typically $30–200/month for small teams; enterprise platforms can reach $500+/month",
+        "Total monthly cost for 1,000 marketing conversations: $10–90 in Meta fees + $30–50 for the CRM platform",
+        "Most businesses find WhatsApp CRM 3–5× more cost-effective than email when measured by cost per reply",
+      ]},
+      { type: "h2", text: "How to Get Started" },
+      { type: "ul", items: [
+        "Step 1: Get the WhatsApp Business API — requires a Meta Business Manager account with verified business documents",
+        "Step 2: Register your business phone number (new number or migrated from WhatsApp Business App)",
+        "Step 3: Choose a WhatsApp CRM platform that fits your team size and use case",
+        "Step 4: Import your opted-in contact list and create your first Meta-approved message template",
+        "Step 5: Build a basic chatbot flow for incoming messages — at minimum a greeting and routing menu",
+        "Step 6: Run your first broadcast to a small segment; monitor delivery and reply rates before scaling",
+      ]},
+    ],
+    faqs: [
+      { question: "What is the difference between WhatsApp CRM and a regular CRM?", answer: "A regular CRM (Salesforce, HubSpot, Zoho) tracks leads and deals but communicates primarily via email. A WhatsApp CRM is built around WhatsApp as the communication channel — it adds shared inbox, broadcast campaigns, and chatbot automation on top of standard contact management. Some businesses use both: a traditional CRM for pipeline tracking and a WhatsApp CRM for day-to-day customer messaging." },
+      { question: "Can multiple team members use the same WhatsApp number?", answer: "Yes — this is one of the core advantages of the WhatsApp Business API over the WhatsApp Business App. A WhatsApp CRM gives all your agents a shared inbox on the same number. Conversations can be assigned to specific agents, transferred between teams, and tracked with full history. The customer sees one consistent business number regardless of which agent is handling their conversation." },
+      { question: "Do customers need to save my number to receive WhatsApp messages?", answer: "No. Unlike the WhatsApp Business App broadcast feature (which requires contacts to have saved your number), the WhatsApp Business API can message any opted-in customer without them saving your contact. The only requirement is that they have explicitly opted in to receive messages from your business." },
+      { question: "What is a WhatsApp message template and why do I need one?", answer: "WhatsApp requires pre-approved message templates for all business-initiated conversations outside of a 24-hour reply window. Templates are submitted to Meta for review — typically approved within 24–48 hours for marketing templates, faster for utility templates. They can include text, images, buttons, and variable fields for personalisation. Once approved, you can send them to any opted-in contact." },
+      { question: "Is WhatsApp marketing legal and does it require consent?", answer: "Yes — with proper consent collection. WhatsApp requires explicit opt-in before you can send any marketing message. Opt-in must specifically mention WhatsApp communication (a general marketing consent checkbox is not sufficient). In most markets, data protection laws (GDPR in Europe, various national laws elsewhere) also require consent records and immediate honouring of opt-out requests." },
+    ],
+  },
 ]
 
 export const BLOG_SLUGS = BLOG_POSTS.map((p) => p.slug)
