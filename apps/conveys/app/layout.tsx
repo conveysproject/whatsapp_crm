@@ -18,22 +18,18 @@ export const metadata: Metadata = {
     template: "%s | Conveys IT",
   },
   description:
-    "Professional website development, mobile apps, WhatsApp CRM, and AI solutions for businesses across India. In-house team, fixed pricing. Based in Mumbai.",
+    "Professional web development, mobile apps, WhatsApp CRM, and AI solutions for businesses worldwide. In-house team, fixed pricing.",
   keywords: [
-    "website development company",
-    "web design company",
+    "web development agency",
     "website design and development",
-    "web development company India",
-    "web design company Mumbai",
-    "website development Mumbai",
-    "mobile app development",
-    "WhatsApp CRM",
+    "custom software development",
+    "SaaS product development",
+    "mobile app development agency",
+    "cross-platform app development",
+    "WhatsApp CRM software",
     "WhatsApp Business API",
-    "AI solutions India",
-    "IT company Mumbai",
-    "software development company India",
-    "custom website development",
-    "ecommerce website development",
+    "AI solutions for business",
+    "ecommerce development agency",
   ],
   authors: [{ name: "Conveys Information Technology", url: "https://conveys.in" }],
   creator: "Conveys Information Technology",
@@ -46,17 +42,17 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Conveys IT — Web Development, Mobile Apps & AI Solutions",
     description:
-      "Professional website development, mobile apps, WhatsApp CRM, and AI solutions for businesses across India. Get a free quote today.",
+      "Professional web development, mobile apps, WhatsApp CRM, and AI solutions for businesses worldwide. Get a free quote today.",
     url: "https://conveys.in",
     siteName: "Conveys Information Technology",
-    locale: "en_IN",
+    locale: "en_US",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: "Conveys IT — Web Development, Mobile Apps & AI Solutions",
     description:
-      "Professional website development, mobile apps, WhatsApp CRM, and AI solutions for businesses across India.",
+      "Professional web development, mobile apps, WhatsApp CRM, and AI solutions for businesses worldwide.",
   },
   alternates: {
     canonical: "https://conveys.in",
@@ -100,9 +96,9 @@ const jsonLd = {
         postalCode: "421202",
         addressCountry: "IN",
       },
-      areaServed: { "@type": "Country", name: "India" },
+      areaServed: { "@type": "AdministrativeArea", name: "Worldwide" },
       description:
-        "Custom software development company in Mumbai, India. We build web applications, mobile apps, WhatsApp CRM solutions, AI-powered tools, and SaaS products for Indian SMBs and startups.",
+        "Custom software development company. We build web applications, mobile apps, WhatsApp CRM solutions, AI-powered tools, and SaaS products for SMBs and startups globally.",
       sameAs: [],
     },
     {
@@ -122,8 +118,9 @@ const jsonLd = {
 
 export default function RootLayout({ children }: { children: ReactNode }): JSX.Element {
   return (
-    <html lang="en-IN">
+    <html lang="en">
       <head>
+        <link rel="alternate" hrefLang="en" href="https://conveys.in" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
