@@ -5,11 +5,11 @@ import { ConveysHeader } from "@/components/conveys-header";
 import { ConveysFooter } from "@/components/conveys-footer";
 
 export const metadata: Metadata = {
-  title: "WhatsApp Business API & CRM — Mumbai",
+  title: "WhatsApp CRM & Business API for Small Business",
   description:
-    "Set up WhatsApp Business API for your business in India. Automate conversations, run broadcast campaigns, and manage your customer pipeline.",
+    "Set up WhatsApp Business API for your business. Automate conversations, run broadcast campaigns, and manage your entire customer pipeline on WhatsApp.",
   alternates: { canonical: "https://conveys.in/services/whatsapp-crm" },
-  openGraph: { url: "https://conveys.in/services/whatsapp-crm" },
+  openGraph: { url: "https://conveys.in/services/whatsapp-crm", locale: "en_US" },
 };
 
 const OFFERINGS = [
@@ -141,11 +141,11 @@ const jsonLd = {
   "@context": "https://schema.org",
   "@type": "Service",
   "@id": "https://conveys.in/services/whatsapp-crm#service",
-  name: "WhatsApp Business API & CRM",
+  name: "WhatsApp CRM & Business API",
   provider: { "@id": "https://conveys.in/#organization" },
-  areaServed: { "@type": "Country", name: "India" },
+  areaServed: { "@type": "AdministrativeArea", name: "Worldwide" },
   description:
-    "Set up WhatsApp Business API for your business in India. Automate conversations, run broadcast campaigns, and manage your customer pipeline.",
+    "Set up WhatsApp Business API for your business. Automate conversations, run broadcast campaigns, and manage your entire customer pipeline on WhatsApp.",
   url: "https://conveys.in/services/whatsapp-crm",
 };
 
