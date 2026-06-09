@@ -121,7 +121,7 @@ const FAQ = [
   },
   {
     q: "How much does it cost to send WhatsApp messages?",
-    a: "Meta charges per conversation (a 24-hour window), not per message. Rates in India are approximately ₹0.25–0.85 per conversation depending on the template category (marketing, utility, authentication, or service). Our platform subscription fee is separate from these Meta charges.",
+    a: "Meta charges per conversation (a 24-hour window), not per message. Rates vary by country — typically $0.003–$0.09 USD per conversation depending on category (marketing, utility, or authentication). Our platform subscription fee is separate from these Meta charges.",
   },
   {
     q: "Can I import my existing customer contacts?",
@@ -223,7 +223,7 @@ export default function WhatsAppCRMPage(): JSX.Element {
               <rect x="88" y="228" width="102" height="42" rx="12" fill="#128c7e" />
               <text x="96" y="243" fontSize="7.5" fill="white">Great! We offer web</text>
               <text x="96" y="254" fontSize="7.5" fill="white">development starting</text>
-              <text x="96" y="265" fontSize="7.5" fill="white">at ₹25,000. Let me share</text>
+              <text x="96" y="265" fontSize="7.5" fill="white">at $299. Let me share</text>
               <rect x="30" y="280" width="130" height="24" rx="12" fill="#dcf8c6" />
               <text x="40" y="296" fontSize="8" fill="#333">Can I see your portfolio?</text>
               {/* Automated reply badge */}
