@@ -177,6 +177,13 @@ export default function WhatsAppAccountPage(): JSX.Element {
         />
       )}
 
+      {/* Manual Connect */}
+      <ManualConnectSection onSuccess={() => {
+        void qc.invalidateQueries({ queryKey: ["wa-health"] });
+        void qc.invalidateQueries({ queryKey: ["wa-profile"] });
+        setJustConnected(true);
+      }} />
+
       {/* Health Status */}
       <section className="border rounded-lg p-4 space-y-2">
         <h2 className="font-medium">Connection Status</h2>
@@ -341,6 +348,78 @@ function MarketingMessagesSection(): JSX.Element {
       {enable.isError && (
         <p className="text-xs text-red-500">Failed to enable. Check your WhatsApp connection.</p>
       )}
+    </section>
+  );
+}
+
+function ManualConnectSection({ onSuccess }: { onSuccess: () => void }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [wabaId, setWabaId] = useState("");
+  const [phoneNumberId, setPhoneNumberId] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+  const [error, setError] = useState("");
+
+  const connect = useMutation({
+    mutationFn: () =>
+      fetch("/api/v1/whatsapp-account/connect-manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wabaId, phoneNumberId: phoneNumberId || undefined, accessToken }),
+      }).then((r) => r.json()),
+    onSuccess: (res: unknown) => {
+      const r = res as { error?: { message?: string } };
+      if (r.error) { setError(r.error.message ?? "Failed"); return; }
+      setOpen(false);
+      setWabaId(""); setPhoneNumberId(""); setAccessToken(""); setError("");
+      onSuccess();
+    },
+  });
+
+  if (!open) {
+    return (
+      <section className="border border-dashed rounded-lg p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-medium text-sm">Manual Connect</h2>
+            <p className="text-xs text-gray-500">Paste WABA ID + System User access token directly.</p>
+          </div>
+          <button type="button" onClick={() => setOpen(true)} className="px-3 py-1.5 text-xs border rounded hover:bg-gray-50">
+            Open
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="border rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="font-medium text-sm">Manual Connect</h2>
+        <button type="button" onClick={() => setOpen(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+      </div>
+      {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
+      <div className="space-y-2">
+        <div>
+          <label className="block text-xs font-medium mb-1">WABA ID <span className="text-red-500">*</span></label>
+          <input value={wabaId} onChange={(e) => setWabaId(e.target.value)} className="w-full border rounded px-3 py-1.5 text-sm font-mono" placeholder="e.g. 123456789012345" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1">Phone Number ID <span className="text-gray-400">(optional — auto-detected if blank)</span></label>
+          <input value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)} className="w-full border rounded px-3 py-1.5 text-sm font-mono" placeholder="e.g. 1084186771447470" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1">System User Access Token <span className="text-red-500">*</span></label>
+          <textarea value={accessToken} onChange={(e) => setAccessToken(e.target.value)} className="w-full border rounded px-3 py-1.5 text-sm font-mono text-xs" rows={3} placeholder="EAAVpz..." />
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => { setError(""); connect.mutate(); }}
+        disabled={connect.isPending || !wabaId || !accessToken}
+        className="w-full py-2 bg-gray-900 text-white text-sm rounded hover:bg-gray-700 disabled:opacity-50"
+      >
+        {connect.isPending ? "Connecting…" : "Connect"}
+      </button>
     </section>
   );
 }

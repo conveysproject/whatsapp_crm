@@ -449,6 +449,83 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: responseData });
   });
 
+  // Manual connect — bypasses Embedded Signup; accepts WABA ID + access token directly
+  fastify.post<{
+    Body: { wabaId: string; phoneNumberId?: string; accessToken: string };
+  }>("/whatsapp-account/connect-manual", async (request, reply) => {
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "administrative")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "administrative permission required" } });
+    }
+    const { wabaId, phoneNumberId: bodyPhoneNumberId, accessToken } = request.body;
+    if (!wabaId || !accessToken) {
+      return reply.status(400).send({ error: { code: "MISSING_FIELDS", message: "wabaId and accessToken are required" } });
+    }
+
+    const appId = process.env["META_APP_ID"] ?? "";
+
+    // Fetch WABA name
+    let wabaName = "";
+    const wabaRes = await fetch(`${WA_GRAPH}/${wabaId}?fields=name&access_token=${encodeURIComponent(accessToken)}`);
+    if (!wabaRes.ok) {
+      const err = await wabaRes.json() as { error?: { message?: string } };
+      return reply.status(400).send({ error: { code: "INVALID_WABA", message: err.error?.message ?? "Invalid WABA ID or access token" } });
+    }
+    wabaName = ((await wabaRes.json()) as { name?: string }).name ?? "";
+
+    // Resolve phone number
+    let phoneNumberId = bodyPhoneNumberId ?? "";
+    let displayPhoneNumber: string | null = null;
+    if (phoneNumberId) {
+      const r = await fetch(`${WA_GRAPH}/${phoneNumberId}?fields=display_phone_number&access_token=${encodeURIComponent(accessToken)}`).catch(() => null);
+      if (r?.ok) displayPhoneNumber = ((await r.json()) as { display_phone_number?: string }).display_phone_number ?? null;
+    } else {
+      const r = await fetch(`${WA_GRAPH}/${wabaId}/phone_numbers?fields=id,display_phone_number&access_token=${encodeURIComponent(accessToken)}`).catch(() => null);
+      if (r?.ok) {
+        const d = (await r.json()) as { data?: { id: string; display_phone_number: string }[] };
+        const phone = d.data?.[0];
+        if (phone) { phoneNumberId = phone.id; displayPhoneNumber = phone.display_phone_number; }
+      }
+    }
+
+    // Subscribe webhooks
+    const callbackUrl = `${(process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/v1/webhooks/whatsapp`;
+    const verifyToken = createHash("sha1").update(organizationId).digest("hex");
+    await fetch(`${WA_GRAPH}/${wabaId}/subscribed_apps`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ override_callback_uri: callbackUrl, verify_token: verifyToken, subscribed_fields: WA_SUBSCRIBED_FIELDS }),
+    }).catch(() => undefined);
+
+    // Persist to Organization
+    await fastify.prisma.organization.update({
+      where: { id: organizationId },
+      data: { wabaAccessToken: accessToken, whatsappBusinessAccountId: wabaId, ...(phoneNumberId ? { phoneNumberId } : {}) },
+    });
+
+    // Persist to VendorSettings
+    const settingsToSave = [
+      { key: "whatsapp_access_token", value: accessToken },
+      { key: "whatsapp_business_account_id", value: wabaId },
+      { key: "webhook_verified_at", value: new Date().toISOString() },
+      { key: "facebook_app_id", value: appId },
+      { key: "whatsapp_access_token_expired", value: "0" },
+      ...(phoneNumberId ? [{ key: "current_phone_number_id", value: phoneNumberId }] : []),
+      ...(displayPhoneNumber ? [{ key: "current_phone_number_number", value: displayPhoneNumber }] : []),
+    ];
+    await Promise.all(
+      settingsToSave.map((s) =>
+        fastify.prisma.vendorSetting.upsert({
+          where: { organizationId_key: { organizationId, key: s.key } },
+          create: { organizationId, key: s.key, value: s.value, dataType: "string" },
+          update: { value: s.value },
+        })
+      )
+    );
+
+    return reply.send({ data: { wabaId, wabaName, phoneNumberId: phoneNumberId || null, displayPhoneNumber } });
+  });
+
   fastify.post("/whatsapp-account/disconnect-account", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
     if (!canAccess(role, permissions, "administrative")) {
