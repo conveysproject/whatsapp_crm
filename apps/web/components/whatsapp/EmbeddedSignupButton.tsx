@@ -25,10 +25,7 @@ interface FBLoginOptions {
   override_default_response_type: boolean;
   extras?: {
     setup?: Record<string, unknown>;
-    featureType?: string;
     sessionInfoVersion?: string;
-    features?: Array<{ name: string }>;
-    version?: string;
   };
 }
 
@@ -188,10 +185,7 @@ export function EmbeddedSignupButton({ flow, onSuccess, onError, isSMB: isSMBPro
       override_default_response_type: true,
       extras: {
         setup: {},
-        featureType: isSMB ? "whatsapp_business_app_onboarding" : "",
         sessionInfoVersion: "3",
-        features: [{ name: "marketing_messages_lite" }],
-        version: "v3",
       },
     });
   }
