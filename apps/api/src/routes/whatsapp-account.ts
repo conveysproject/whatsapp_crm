@@ -195,11 +195,10 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       phoneNumberId?: string;
       isSMB?: boolean;
       flow?: "onboarding" | "reconnect";
-      redirectUri?: string;
     };
   }>("/whatsapp-account/connect", async (request, reply) => {
     const { organizationId } = request.auth;
-    const { code, wabaId: bodyWabaId, phoneNumberId: bodyPhoneNumberId, isSMB = false, flow = "reconnect", redirectUri: bodyRedirectUri } = request.body;
+    const { code, wabaId: bodyWabaId, phoneNumberId: bodyPhoneNumberId, isSMB = false, flow = "reconnect" } = request.body;
 
     if (!code) {
       return reply.status(400).send({ error: { code: "MISSING_CODE", message: "code is required" } });
@@ -211,9 +210,9 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: { code: "APP_NOT_CONFIGURED", message: "Facebook app credentials not configured" } });
     }
 
-    // Meta token exchange — redirect_uri must exactly match what was used in the OAuth dialog.
-    const redirectUri = bodyRedirectUri ?? process.env["META_REDIRECT_URI"] ?? "";
-    const tokenUrl = `${WA_GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${encodeURIComponent(code)}${redirectUri ? `&redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`;
+    // FB.login popup flow has no redirect_uri — never include one in the token exchange.
+    // META_REDIRECT_URI is only for the separate redirect-based callback flow.
+    const tokenUrl = `${WA_GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${encodeURIComponent(code)}`;
     const tokenRes = await fetch(tokenUrl, { method: "GET" });
     if (!tokenRes.ok) {
       const rawErr = await tokenRes.text();
