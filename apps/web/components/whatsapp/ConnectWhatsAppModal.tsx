@@ -6,12 +6,15 @@ import { EmbeddedSignupButton, type ConnectResult } from "./EmbeddedSignupButton
 interface ConnectWhatsAppModalProps {
   flow: "onboarding" | "reconnect";
   onSuccess: (result: ConnectResult) => void;
-  onClose: () => void;
+  /** Required in modal variant; omit for inline */
+  onClose?: () => void;
+  /** "modal" (default) renders as a fixed overlay; "inline" renders flat on the page */
+  variant?: "modal" | "inline";
 }
 
 type Step = "choose" | "connect";
 
-export function ConnectWhatsAppModal({ flow, onSuccess, onClose }: ConnectWhatsAppModalProps): JSX.Element {
+export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "modal" }: ConnectWhatsAppModalProps): JSX.Element {
   const [step, setStep] = useState<Step>("choose");
   const [isSMB, setIsSMB] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -21,14 +24,14 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose }: ConnectWhatsA
     setStep("connect");
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {step === "choose" ? "Set up WhatsApp API Number" : "Connect your WhatsApp"}
-          </h2>
+  const inner = (
+    <div className={variant === "modal" ? "bg-white rounded-2xl shadow-2xl w-full max-w-xl" : "w-full"}>
+      {/* Header */}
+      <div className={`flex items-center justify-between ${variant === "modal" ? "px-6 pt-6 pb-4 border-b" : "pb-4 border-b"}`}>
+        <h2 className="text-lg font-semibold text-gray-900">
+          {step === "choose" ? "Set up WhatsApp API Number" : "Connect your WhatsApp"}
+        </h2>
+        {variant === "modal" && onClose && (
           <button
             type="button"
             onClick={onClose}
@@ -39,21 +42,29 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose }: ConnectWhatsA
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-        </div>
-
-        {step === "choose" ? (
-          <ChooseStep onChoose={handleChoose} />
-        ) : (
-          <ConnectStep
-            flow={flow}
-            isSMB={isSMB}
-            errorMsg={errorMsg}
-            onBack={() => { setStep("choose"); setErrorMsg(""); }}
-            onSuccess={onSuccess}
-            onError={setErrorMsg}
-          />
         )}
       </div>
+
+      {step === "choose" ? (
+        <ChooseStep onChoose={handleChoose} />
+      ) : (
+        <ConnectStep
+          flow={flow}
+          isSMB={isSMB}
+          errorMsg={errorMsg}
+          onBack={() => { setStep("choose"); setErrorMsg(""); }}
+          onSuccess={onSuccess}
+          onError={setErrorMsg}
+        />
+      )}
+    </div>
+  );
+
+  if (variant === "inline") return inner;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      {inner}
     </div>
   );
 }
