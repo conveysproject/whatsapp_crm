@@ -842,6 +842,86 @@ export const BLOG_POSTS: BlogPost[] = [
       },
     ],
   },
+  {
+    slug: "whatsapp-chatbot-development-guide",
+    title: "WhatsApp Chatbot Development: How to Build One for Your Business (2026)",
+    description:
+      "Everything businesses need to know about WhatsApp chatbot development — what they can do, rule-based vs AI-powered, how they are built, and what they cost.",
+    publishedAt: "2026-07-15",
+    category: "WhatsApp CRM",
+    readingTime: "8 min read",
+    intro:
+      "WhatsApp has over 2 billion active users worldwide, making it the highest-reach messaging channel for customer communication. A WhatsApp chatbot lets you serve customers, qualify leads, and process orders on that channel 24 hours a day — without adding headcount. Here is how to build one that actually works.",
+    sections: [
+      { type: "h2", text: "What Is a WhatsApp Chatbot?" },
+      { type: "p", text: "A WhatsApp chatbot is an automated system connected to a WhatsApp Business API number that sends and receives messages on behalf of your business. It can answer questions, collect information, send updates, route conversations, and take actions in your backend systems — all triggered by incoming messages." },
+      { type: "p", text: "Unlike a human support agent, a chatbot runs 24/7, handles unlimited simultaneous conversations, and responds in milliseconds. It handles repetitive, structured work so your team can focus on conversations that need human judgment." },
+      { type: "h2", text: "Rule-Based vs AI-Powered WhatsApp Chatbots" },
+      { type: "ul", items: [
+        "Rule-based: responds to specific keywords or button selections — predictable, auditable, and easy to build. Best for structured processes like order status, FAQ, or appointment booking",
+        "AI-powered (LLM): uses a language model to understand free-text messages and generate contextual responses. Handles varied phrasing and complex questions. Best for customer support and lead qualification",
+        "Hybrid: rule-based flows for structured tasks, AI for open-ended conversation — the most practical architecture for most businesses",
+        "Cost: rule-based chatbots cost less to build and run; AI chatbots add per-message API costs",
+      ]},
+      { type: "h2", text: "What Can a WhatsApp Chatbot Do for Your Business?" },
+      { type: "ul", items: [
+        "Answer FAQs instantly — product information, pricing, policies, opening hours",
+        "Qualify leads — collect name, budget, timeline, and requirements before routing to sales",
+        "Book appointments — check availability, confirm bookings, send reminders",
+        "Send order updates — shipping confirmation, delivery tracking, return instructions",
+        "Process payments — send payment links and confirm receipt via WhatsApp",
+        "Collect feedback — post-purchase surveys and NPS scoring",
+        "Escalate to humans — detect frustration or complex queries and route to a live agent",
+      ]},
+      { type: "h2", text: "WhatsApp Chatbot vs WhatsApp Business App" },
+      { type: "p", text: "The WhatsApp Business App is a mobile app where all conversations are managed by a human on a device — it supports basic automated messages but does not scale. A WhatsApp chatbot runs on the WhatsApp Business API, a cloud platform that supports unlimited automation, CRM integration, and simultaneous handling of thousands of conversations." },
+      { type: "h2", text: "How to Build a WhatsApp Chatbot: Step-by-Step" },
+      { type: "ul", items: [
+        "Step 1: Get WhatsApp Business API access — register a WABA account with Meta and verify your business",
+        "Step 2: Map your conversation flows — define what the bot handles, the decision tree, and fallback paths",
+        "Step 3: Choose your architecture — rule-based, AI-powered, or hybrid",
+        "Step 4: Build the backend — a Node.js or Python server that receives webhooks from Meta and sends responses",
+        "Step 5: Connect your data sources — CRM, order management system, or database for dynamic responses",
+        "Step 6: Test on real numbers — every flow path, including edge cases and failure scenarios",
+        "Step 7: Go live and monitor — watch delivery rates, completion rates, and escalation triggers",
+      ]},
+      { type: "h2", text: "Use Cases by Industry" },
+      { type: "ul", items: [
+        "E-commerce: order confirmation, shipping tracking, return initiation, product recommendations",
+        "Real estate: property enquiry handling, viewing scheduling, document collection",
+        "Healthcare: appointment booking, prescription reminders, lab result notifications",
+        "Financial services: loan enquiry qualification, document collection, application status",
+        "Education: admission enquiries, fee reminders, exam schedule notifications",
+        "Hospitality: reservation confirmation, check-in instructions, in-stay service requests",
+      ]},
+      { type: "h2", text: "How Much Does WhatsApp Chatbot Development Cost?" },
+      { type: "p", text: "A rule-based chatbot with 5–10 flows and no external integrations typically costs £2,000–£5,000 to build. An AI-powered bot with CRM integration and a custom admin dashboard costs £8,000–£25,000. Ongoing costs include Meta's conversation charges and API hosting." },
+      { type: "h2", text: "SaaS Tool vs Custom WhatsApp Chatbot" },
+      { type: "p", text: "SaaS chatbot platforms offer drag-and-drop bot builders on top of the WhatsApp API. They are faster to deploy and cheaper upfront but have per-conversation pricing that compounds at scale. Custom-built chatbots are better when you need deep integration with your own systems, complex logic, full data ownership, or when the chatbot is a product feature rather than just a support tool." },
+    ],
+    faqs: [
+      {
+        question: "Do I need the WhatsApp Business API for a chatbot?",
+        answer: "Yes. The free WhatsApp Business App does not support chatbot automation at scale. You need a WhatsApp Business API account through Meta's Cloud API. We can set this up for you — Meta business verification typically takes 2–5 business days.",
+      },
+      {
+        question: "Can a WhatsApp chatbot handle payments?",
+        answer: "Yes. The bot can send payment links via Razorpay, Stripe, or PayU, and confirm payment receipt automatically. The entire payment flow happens without the user leaving the WhatsApp conversation.",
+      },
+      {
+        question: "How long does it take to build a WhatsApp chatbot?",
+        answer: "A rule-based chatbot with 5–10 flows takes 2–3 weeks. An AI-powered bot with CRM integration takes 4–6 weeks. The design phase — mapping conversation flows and exception paths — typically takes as long as the technical build.",
+      },
+      {
+        question: "Can a WhatsApp chatbot hand off to a human agent?",
+        answer: "Yes — this is a standard feature we build into every chatbot. When the bot cannot help or the user asks for a human, the conversation is routed to an available agent. The agent sees the full conversation history so there is no repetition for the customer.",
+      },
+      {
+        question: "What languages can a WhatsApp chatbot support?",
+        answer: "A rule-based bot needs separate flows per language. An AI-powered bot detects language automatically and responds accordingly — we typically start with English plus one regional language based on your customer base.",
+      },
+    ],
+  },
 ]
 
 export const BLOG_SLUGS = BLOG_POSTS.map((p) => p.slug)
