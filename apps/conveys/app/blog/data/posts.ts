@@ -922,6 +922,89 @@ export const BLOG_POSTS: BlogPost[] = [
       },
     ],
   },
+  {
+    slug: "custom-software-vs-off-the-shelf",
+    title: "Custom Software vs Off-the-Shelf: Which Is Right for Your Business?",
+    description:
+      "A practical framework for deciding between custom software development and off-the-shelf products — covering cost, flexibility, ownership, and when each option makes sense.",
+    publishedAt: "2026-07-22",
+    category: "Software Development",
+    readingTime: "7 min read",
+    intro:
+      "Every growing business eventually hits the same question: should we buy existing software and adapt our processes to it, or build something tailored to how we actually work? Both options have real trade-offs. This guide gives you a clear framework for making the right call.",
+    sections: [
+      { type: "h2", text: "What Is Custom Software Development?" },
+      { type: "p", text: "Custom software development means building an application from scratch — or substantially modifying existing software — specifically for your business. The result is a system that fits your processes exactly, integrates with your other tools, and gives you complete ownership and control over the code." },
+      { type: "h2", text: "What Is Off-the-Shelf Software?" },
+      { type: "p", text: "Off-the-shelf (COTS) software is built for a broad market and sold to many businesses. Examples include Salesforce for CRM, Shopify for e-commerce, Xero for accounting. These products are subscription-based, maintained by the vendor, and configured — not modified — to fit your business." },
+      { type: "h2", text: "Custom vs Off-the-Shelf: Head-to-Head Comparison" },
+      { type: "ul", items: [
+        "Fit: custom fits your process exactly; off-the-shelf requires you to adapt your process to the software",
+        "Cost: custom has higher upfront build cost (£10,000–£150,000+); off-the-shelf has lower upfront cost but ongoing subscription fees",
+        "Time to deploy: custom takes 8–24 weeks; off-the-shelf can be live in days",
+        "Maintenance: custom requires your team or agency; off-the-shelf is maintained by the vendor",
+        "Ownership: custom — you own the IP; off-the-shelf — you rent access",
+        "Integrations: custom integrates with anything; off-the-shelf integrates with what the vendor supports",
+      ]},
+      { type: "h2", text: "When to Choose Custom Software" },
+      { type: "ul", items: [
+        "Your workflow is genuinely unique — no off-the-shelf product covers it without major workarounds",
+        "You have a competitive advantage tied to how you operate — and a generic tool would eliminate it",
+        "You need deep integrations with proprietary internal systems that no SaaS tool supports",
+        "You are building a software product to sell to your own customers — you need to own the IP",
+        "Compliance or data sovereignty requirements prevent using third-party SaaS platforms",
+        "Long-term, subscription costs of off-the-shelf tools exceed the cost of building custom",
+      ]},
+      { type: "h2", text: "When Off-the-Shelf Is the Better Choice" },
+      { type: "ul", items: [
+        "Your needs are standard — if Shopify handles e-commerce for millions, it will handle yours",
+        "You need to be live quickly — SaaS tools deploy in days vs weeks or months for custom",
+        "Your team lacks technical capacity to maintain custom software after it is built",
+        "You are a startup validating a business model — do not over-engineer before product-market fit",
+        "The domain is mature and well-served — accounting, HR, project management, email marketing",
+      ]},
+      { type: "h2", text: "Hidden Costs of Off-the-Shelf Software" },
+      { type: "ul", items: [
+        "Subscription fees compound — a £200/month tool costs £24,000 over 10 years",
+        "Per-seat pricing adds up as your team grows",
+        "Workarounds to compensate for software limitations are a hidden labour cost",
+        "Migration costs when you eventually outgrow the tool",
+        "Vendor lock-in — if the vendor raises prices or discontinues the product, you have limited options",
+      ]},
+      { type: "h2", text: "How to Estimate the Cost of Custom Software" },
+      { type: "ul", items: [
+        "Small internal tool (1–3 users, no integrations): £5,000–£15,000, 4–8 weeks",
+        "Departmental application (10–50 users, 2–3 integrations): £15,000–£50,000, 8–16 weeks",
+        "Enterprise platform (100+ users, complex logic): £50,000–£200,000+, 20+ weeks",
+        "SaaS product to sell to customers: typical MVPs cost £20,000–£80,000",
+        "Ongoing maintenance: budget 15–20% of the build cost per year",
+      ]},
+      { type: "h2", text: "Making the Decision: A Simple Framework" },
+      { type: "p", text: "Ask three questions. First: does a good off-the-shelf solution cover 80%+ of your requirements without major workarounds? If yes, use it. Second: is the 20% gap something you can live with, or does it break your process? If you can live with it, use off-the-shelf. Third: over five years, will subscription costs exceed the build cost plus maintenance of a custom solution? If so, the economics favour custom." },
+    ],
+    faqs: [
+      {
+        question: "Is custom software always more expensive?",
+        answer: "Not over the long term. Off-the-shelf software has lower upfront cost but ongoing subscription fees that compound over years. A custom system with a £30,000 build cost is often cheaper over five years than a £1,500/month SaaS subscription. The break-even point depends on the specific tools being compared.",
+      },
+      {
+        question: "How long does custom software development take?",
+        answer: "A focused internal tool takes 6–12 weeks from discovery to launch. A complex platform with multiple user roles and integrations takes 16–24 weeks. We always start with a written specification and fixed-price quote before development begins.",
+      },
+      {
+        question: "What happens when my custom software needs to be updated?",
+        answer: "Custom software needs ongoing maintenance — security updates, compatibility updates, and new features as your business evolves. This is handled by your original development partner on a retainer, or by an internal technical team. Budget 15–20% of the original build cost per year.",
+      },
+      {
+        question: "Can custom software integrate with tools I already use?",
+        answer: "Yes — integration is one of the primary reasons companies choose custom development. We routinely build integrations with Salesforce, HubSpot, Stripe, Razorpay, WhatsApp Business API, Google Workspace, Xero, and dozens of other platforms. If the tool has an API, we can integrate with it.",
+      },
+      {
+        question: "What if my business needs change after the software is built?",
+        answer: "Custom software is designed to evolve. A well-structured codebase allows new features to be added without rewriting existing functionality. Your development partner should plan for changeability from the start — clean architecture, documented APIs, and test coverage.",
+      },
+    ],
+  },
 ]
 
 export const BLOG_SLUGS = BLOG_POSTS.map((p) => p.slug)
