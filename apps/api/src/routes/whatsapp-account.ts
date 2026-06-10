@@ -346,39 +346,51 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     }
     fastify.log.info({ phoneNumberId, displayPhoneNumber }, "[WA-CONNECT] 13. resolved phone number");
 
-    // Step 5: subscribe webhooks (fire-and-forget)
+    // Step 5: subscribe webhooks
     const callbackUrl = `${(process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/v1/webhooks/whatsapp`;
     const verifyToken = createHash("sha1").update(organizationId).digest("hex");
-    await fetch(`${WA_GRAPH}/${wabaId}/subscribed_apps`, {
+    const webhookBody = { override_callback_uri: callbackUrl, verify_token: verifyToken, subscribed_fields: WA_SUBSCRIBED_FIELDS };
+    fastify.log.info({ url: `${WA_GRAPH}/${wabaId}/subscribed_apps`, body: webhookBody }, "[WA-CONNECT] 14. webhook subscribe request");
+    const webhookRes = await fetch(`${WA_GRAPH}/${wabaId}/subscribed_apps`, {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ override_callback_uri: callbackUrl, verify_token: verifyToken, subscribed_fields: WA_SUBSCRIBED_FIELDS }),
-    }).catch(() => undefined);
+      body: JSON.stringify(webhookBody),
+    }).catch((e) => { fastify.log.warn({ e }, "[WA-CONNECT] 14. webhook subscribe fetch threw"); return undefined; });
+    if (webhookRes) {
+      const webhookRaw = await webhookRes.text();
+      fastify.log.info({ status: webhookRes.status, body: webhookRaw }, "[WA-CONNECT] 14b. webhook subscribe response");
+    }
 
-    // Step 6: coexistence mode (fire-and-forget)
+    // Step 6: coexistence mode (SMB)
     if (isSMB) {
-      await fetch(`${WA_GRAPH}/${wabaId}/smb_app_data`, {
+      const smbBody = { sync_type: "full" };
+      fastify.log.info({ url: `${WA_GRAPH}/${wabaId}/smb_app_data`, body: smbBody }, "[WA-CONNECT] 15. SMB coexistence request");
+      const smbRes = await fetch(`${WA_GRAPH}/${wabaId}/smb_app_data`, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ sync_type: "full" }),
-      }).catch(() => undefined);
+        body: JSON.stringify(smbBody),
+      }).catch((e) => { fastify.log.warn({ e }, "[WA-CONNECT] 15. SMB coexistence fetch threw"); return undefined; });
+      if (smbRes) {
+        const smbRaw = await smbRes.text();
+        fastify.log.info({ status: smbRes.status, body: smbRaw }, "[WA-CONNECT] 15b. SMB coexistence response");
+      }
+    } else {
+      fastify.log.info("[WA-CONNECT] 15. SMB coexistence skipped (isSMB=false)");
     }
 
     // Step 7: persist to Organization
+    const orgData = {
+      wabaAccessToken: accessToken,
+      whatsappBusinessAccountId: wabaId,
+      ...(phoneNumberId ? { phoneNumberId } : {}),
+      ...(flow === "onboarding" ? { onboardingStep: phoneNumberId ? "done" : "provision_number" } : {}),
+    };
+    fastify.log.info({ organizationId, data: { ...orgData, wabaAccessToken: "***" } }, "[WA-CONNECT] 16. DB org update");
     try {
-      await fastify.prisma.organization.update({
-        where: { id: organizationId },
-        data: {
-          wabaAccessToken: accessToken,
-          whatsappBusinessAccountId: wabaId,
-          ...(phoneNumberId ? { phoneNumberId } : {}),
-          ...(flow === "onboarding"
-            ? { onboardingStep: phoneNumberId ? "done" : "provision_number" }
-            : {}),
-        },
-      });
+      await fastify.prisma.organization.update({ where: { id: organizationId }, data: orgData });
+      fastify.log.info("[WA-CONNECT] 16b. DB org update OK");
     } catch (err) {
-      fastify.log.error({ err }, "Failed to persist Organization during /connect");
+      fastify.log.error({ err }, "[WA-CONNECT] 16. DB org update FAILED");
       return reply.status(500).send({ error: { code: "DB_ERROR", message: "Failed to save connection" } });
     }
 
@@ -392,6 +404,10 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       ...(phoneNumberId ? [{ key: "current_phone_number_id", value: phoneNumberId }] : []),
       ...(displayPhoneNumber ? [{ key: "current_phone_number_number", value: displayPhoneNumber }] : []),
     ];
+    fastify.log.info({
+      keys: settingsToSave.map((s) => s.key),
+      values: settingsToSave.map((s) => (s.key === "whatsapp_access_token" ? "***" : s.value)),
+    }, "[WA-CONNECT] 17. vendor settings upsert");
     try {
       await Promise.all(
         settingsToSave.map((s) =>
@@ -402,13 +418,14 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
           })
         )
       );
+      fastify.log.info("[WA-CONNECT] 17b. vendor settings upsert OK");
     } catch (err) {
-      fastify.log.error({ err }, "Failed to persist VendorSettings during /connect");
+      fastify.log.error({ err }, "[WA-CONNECT] 17. vendor settings upsert FAILED");
       return reply.status(500).send({ error: { code: "DB_ERROR", message: "Failed to save settings" } });
     }
 
     const responseData = { wabaId, wabaName, phoneNumberId: phoneNumberId || null, displayPhoneNumber };
-    fastify.log.info({ responseData }, "[WA-CONNECT] 14. success — sending response");
+    fastify.log.info({ responseData }, "[WA-CONNECT] 18. SUCCESS — sending response");
     return reply.send({ data: responseData });
   });
 
