@@ -225,23 +225,66 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     }
     const { access_token: accessToken } = await tokenRes.json() as { access_token: string };
 
-    // Step 2: resolve WABA ID (from body or debug_token fallback)
+    // Step 2: resolve WABA ID (from body → debug_token → /me/businesses fallback)
     let wabaId = bodyWabaId ?? "";
+
+    // Approach A: debug_token — works for both user and system-user tokens
     if (!wabaId) {
       try {
         const appToken = `${appId}|${appSecret}`;
-        const r = await fetch(
-          `${WA_GRAPH}/debug_token?input_token=${accessToken}&access_token=${encodeURIComponent(appToken)}`
-        );
-        if (r.ok) {
-          const d = await r.json() as { data?: { granular_scopes?: Array<{ scope: string; target_ids?: string[] }> } };
-          const scope = d.data?.granular_scopes?.find((s) => s.scope === "whatsapp_business_messaging");
+        const debugUrl = `${WA_GRAPH}/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`;
+        const r = await fetch(debugUrl);
+        const debugBody = await r.json() as {
+          data?: {
+            type?: string;
+            granular_scopes?: Array<{ scope: string; target_ids?: string[] }>;
+          };
+          error?: { message?: string };
+        };
+        fastify.log.info({ debugBody }, "debug_token response");
+        if (r.ok && debugBody.data) {
+          const scope = debugBody.data.granular_scopes?.find((s) => s.scope === "whatsapp_business_messaging");
           wabaId = scope?.target_ids?.[0] ?? "";
         }
-      } catch {
-        // non-fatal — wabaId stays ""
+      } catch (e) {
+        fastify.log.warn({ e }, "debug_token call failed");
       }
     }
+
+    // Approach B: /me/businesses — needed when system-user token doesn't expose granular_scopes
+    if (!wabaId) {
+      try {
+        const r = await fetch(
+          `${WA_GRAPH}/me/businesses?fields=whatsapp_business_accounts%7Bid%7D&access_token=${encodeURIComponent(accessToken)}`
+        );
+        if (r.ok) {
+          const d = await r.json() as {
+            data?: Array<{ whatsapp_business_accounts?: { data?: Array<{ id: string }> } }>;
+          };
+          fastify.log.info({ d }, "me/businesses response");
+          wabaId = d.data?.[0]?.whatsapp_business_accounts?.data?.[0]?.id ?? "";
+        }
+      } catch (e) {
+        fastify.log.warn({ e }, "me/businesses call failed");
+      }
+    }
+
+    // Approach C: /me/whatsapp_business_accounts — user-token-only endpoint
+    if (!wabaId) {
+      try {
+        const r = await fetch(
+          `${WA_GRAPH}/me/whatsapp_business_accounts?access_token=${encodeURIComponent(accessToken)}`
+        );
+        if (r.ok) {
+          const d = await r.json() as { data?: Array<{ id: string }> };
+          fastify.log.info({ d }, "me/whatsapp_business_accounts response");
+          wabaId = d.data?.[0]?.id ?? "";
+        }
+      } catch (e) {
+        fastify.log.warn({ e }, "me/whatsapp_business_accounts call failed");
+      }
+    }
+
     if (!wabaId) {
       return reply.status(400).send({ error: { code: "NO_WABA", message: "No WhatsApp Business Account found" } });
     }
