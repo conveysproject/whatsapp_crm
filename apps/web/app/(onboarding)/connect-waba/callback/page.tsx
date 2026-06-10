@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, type JSX } from "react";
+import { Suspense, useEffect, useState, type JSX } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
-export default function ConnectWabaCallbackPage(): JSX.Element {
+function CallbackHandler(): JSX.Element {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { getToken } = useAuth();
@@ -94,5 +94,20 @@ export default function ConnectWabaCallbackPage(): JSX.Element {
       <div className="w-8 h-8 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin" aria-hidden="true" />
       <p className="text-gray-600 text-sm">Connecting your WhatsApp account…</p>
     </div>
+  );
+}
+
+export default function ConnectWabaCallbackPage(): JSX.Element {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+          <div className="w-8 h-8 border-4 border-[#1877F2] border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+          <p className="text-gray-600 text-sm">Connecting your WhatsApp account…</p>
+        </div>
+      }
+    >
+      <CallbackHandler />
+    </Suspense>
   );
 }
