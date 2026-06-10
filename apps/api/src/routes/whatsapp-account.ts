@@ -195,10 +195,11 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       phoneNumberId?: string;
       isSMB?: boolean;
       flow?: "onboarding" | "reconnect";
+      redirectUri?: string;
     };
   }>("/whatsapp-account/connect", async (request, reply) => {
     const { organizationId } = request.auth;
-    const { code, wabaId: bodyWabaId, phoneNumberId: bodyPhoneNumberId, isSMB = false, flow = "reconnect" } = request.body;
+    const { code, wabaId: bodyWabaId, phoneNumberId: bodyPhoneNumberId, isSMB = false, flow = "reconnect", redirectUri: bodyRedirectUri } = request.body;
 
     if (!code) {
       return reply.status(400).send({ error: { code: "MISSING_CODE", message: "code is required" } });
@@ -210,10 +211,11 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: { code: "APP_NOT_CONFIGURED", message: "Facebook app credentials not configured" } });
     }
 
-    // Meta token exchange uses GET with query params — this is the API-prescribed pattern for server-side flows
-    // Step 1: exchange code for access token
+    // Meta token exchange — redirect_uri must exactly match what was used in the OAuth dialog.
+    // For FB.login popup flows the frontend passes the redirect_uri it registered; for redirect flows use META_REDIRECT_URI env.
+    const redirectUri = bodyRedirectUri ?? process.env["META_REDIRECT_URI"] ?? "";
     const tokenRes = await fetch(
-      `${WA_GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${encodeURIComponent(code)}`,
+      `${WA_GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${encodeURIComponent(code)}${redirectUri ? `&redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`,
       { method: "GET" }
     );
     if (!tokenRes.ok) {

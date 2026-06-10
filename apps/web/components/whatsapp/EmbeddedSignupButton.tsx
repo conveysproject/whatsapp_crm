@@ -136,6 +136,7 @@ export function EmbeddedSignupButton({ flow, onSuccess, onError }: EmbeddedSignu
               phoneNumberId: phoneNumberIdRef.current || undefined,
               isSMB,
               flow,
+              redirectUri: "https://www.facebook.com/connect/login_success.html",
             }),
           });
 
