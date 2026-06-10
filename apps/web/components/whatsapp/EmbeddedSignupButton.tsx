@@ -23,6 +23,7 @@ interface FBLoginOptions {
   config_id: string;
   response_type: string;
   override_default_response_type: boolean;
+  redirect_uri?: string;
   extras?: {
     setup?: Record<string, unknown>;
     sessionInfoVersion?: string;
@@ -50,6 +51,7 @@ const APP_ID = process.env["NEXT_PUBLIC_META_APP_ID"] ?? "";
 const CONFIG_ID = process.env["NEXT_PUBLIC_META_CONFIG_ID"] ?? "";
 const SMB_CONFIG_ID = process.env["NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID"] ?? "";
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+const REDIRECT_URI = process.env["NEXT_PUBLIC_META_REDIRECT_URI"] ?? "https://wbmsg.com/connect-waba/callback";
 
 export function EmbeddedSignupButton({ flow, onSuccess, onError, isSMB: isSMBProp }: EmbeddedSignupButtonProps): JSX.Element {
   const router = useRouter();
@@ -183,6 +185,7 @@ export function EmbeddedSignupButton({ flow, onSuccess, onError, isSMB: isSMBPro
       config_id: configId,
       response_type: "code",
       override_default_response_type: true,
+      redirect_uri: REDIRECT_URI,
       extras: {
         setup: {},
         sessionInfoVersion: "3",
