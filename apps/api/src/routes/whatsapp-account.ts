@@ -218,10 +218,11 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       client_id: appId,
       client_secret: appSecret,
       code,
+      redirect_uri: "https://www.facebook.com/connect/login_success.html",
     });
     fastify.log.info({
       url: `${WA_GRAPH}/oauth/access_token`,
-      params: { client_id: appId, redirect_uri: "(omitted — embedded signup flow)", code_length: code.length },
+      params: { client_id: appId, redirect_uri: "https://www.facebook.com/connect/login_success.html", code_length: code.length },
     }, "[WA-CONNECT] 3. token exchange request");
 
     const tokenRes = await fetch(`${WA_GRAPH}/oauth/access_token`, {
