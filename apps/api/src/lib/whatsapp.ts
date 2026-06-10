@@ -270,7 +270,7 @@ export async function getHealthStatus(
   for (const k of HEALTH_KEYS) {
     conditions[k] = Boolean(map[k]);
   }
-  conditions["token_not_expired"] = map["whatsapp_access_token_expired"] !== "1";
+  conditions["token_not_expired"] = Boolean(map["whatsapp_access_token"]) && map["whatsapp_access_token_expired"] !== "1";
   const values = Object.values(conditions);
   const status = values.every(Boolean) ? "healthy" : values.every((v) => !v) ? "disconnected" : "degraded";
   return { status, conditions };
