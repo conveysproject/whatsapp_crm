@@ -81,8 +81,33 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
       }
 
       const configId = isSMB && SMB_CONFIG_ID ? SMB_CONFIG_ID : CONFIG_ID;
+
+      let phoneNumberId = "";
+      let wabaId = "";
+
+      const sessionInfoListener = (event: MessageEvent) => {
+        if (event.origin !== "https://www.facebook.com") return;
+        try {
+          const data = JSON.parse(event.data as string) as {
+            type?: string;
+            event?: string;
+            data?: { phone_number_id?: string; waba_id?: string; current_step?: string };
+          };
+          if (data.type === "WA_EMBEDDED_SIGNUP") {
+            if (data.event === "FINISH" || data.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
+              phoneNumberId = data.data?.phone_number_id ?? "";
+              wabaId = data.data?.waba_id ?? "";
+            }
+          }
+        } catch {
+          // non-JSON message — ignore
+        }
+      };
+      window.addEventListener("message", sessionInfoListener);
+
       window.FB!.login(
         (response) => {
+          window.removeEventListener("message", sessionInfoListener);
           const code = response.authResponse?.code;
           if (!code) {
             setLoading(false);
@@ -98,7 +123,7 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${token ?? ""}`,
                 },
-                body: JSON.stringify({ code, isSMB, flow }),
+                body: JSON.stringify({ code, isSMB, flow, wabaId: wabaId || undefined, phoneNumberId: phoneNumberId || undefined }),
               });
               const body = await res.json() as {
                 data?: ConnectResult;
@@ -120,7 +145,13 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
           config_id: configId,
           response_type: "code",
           override_default_response_type: true,
-          extras: { setup: {}, featureType: "", sessionInfoVersion: "2" },
+          extras: {
+            setup: {},
+            featureType: isSMB ? "whatsapp_business_app_onboarding" : "",
+            sessionInfoVersion: "3",
+            features: [{ name: "marketing_messages_lite" }],
+            version: "v3",
+          },
         }
       );
     })();
