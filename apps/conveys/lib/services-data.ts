@@ -114,6 +114,7 @@ export const SERVICE_NAV: ServiceNavItem[] = [
   { slug: "crm-integration", title: "CRM Integration & Setup", column: "Digital & IT Solutions" },
   { slug: "managed-service-provider", title: "Managed Service Provider", column: "Digital & IT Solutions" },
   { slug: "whatsapp-crm", title: "WhatsApp CRM", column: "Digital & IT Solutions" },
+  { slug: "whatsapp-chatbot-development", title: "WhatsApp Chatbot Development", column: "Digital & IT Solutions" },
   { slug: "ai-solutions", title: "AI Solutions", column: "Digital & IT Solutions" },
   // Column 4 — Product Development
   { slug: "saas-product-development", title: "SaaS Product Development", column: "Product Development" },
@@ -1384,6 +1385,130 @@ export const SERVICES: ServiceData[] = [
       { q: "How many products can the catalogue hold?", a: "Facebook Commerce Manager supports up to 100,000 products per catalogue. For most businesses, the practical limit is how fast catalogue images load for customers — we optimise image size as part of the setup." },
     ],
     relatedSlugs: ["whatsapp-business-api", "ecommerce-solutions", "whatsapp-marketing-automation"],
+  },
+
+  // ─── WhatsApp Chatbot Development ────────────────────────────────────────────
+  {
+    slug: "whatsapp-chatbot-development",
+    column: "Digital & IT Solutions",
+    title: "WhatsApp Chatbot Development",
+    tagline: "Automate Customer Conversations on WhatsApp — 24/7",
+    metaTitle: "WhatsApp Chatbot Development Services | Conveys",
+    metaDescription:
+      "Build WhatsApp chatbots that qualify leads, answer FAQs, and handle orders 24/7. Rule-based and AI-powered. Meta-approved API only. Fixed pricing.",
+    overview: [
+      "A WhatsApp chatbot lets you serve customers, qualify leads, and process orders on the world's most-used messaging platform — 24 hours a day, without adding headcount.",
+      "We build rule-based and AI-powered chatbots on the Meta WhatsApp Cloud API, integrated with your CRM, order system, or database. Official API only — no grey-area tools, no account ban risk.",
+    ],
+    offerings: [
+      {
+        title: "Rule-Based Chatbot",
+        description:
+          "Keyword and button-triggered flows for FAQs, menu navigation, appointment booking, and structured data collection. Predictable, auditable, and fast to build.",
+        icon: ICONS.chat,
+      },
+      {
+        title: "AI-Powered Chatbot",
+        description:
+          "Claude or GPT-4o integration for natural language understanding — handles varied phrasing, multi-turn conversations, and intent detection without rigid keyword matching.",
+        icon: ICONS.sparkle,
+      },
+      {
+        title: "Lead Qualification Bot",
+        description:
+          "Automated prospect qualification — collects name, budget, timeline, and requirements, scores the lead, and routes qualified conversations to your sales team in real time.",
+        icon: ICONS.users,
+      },
+      {
+        title: "E-commerce & Order Bot",
+        description:
+          "Product catalogue browsing, order status lookups, return initiation, and payment link delivery — all inside the WhatsApp conversation, connected to your backend.",
+        icon: ICONS.bag,
+      },
+      {
+        title: "Customer Support Automation",
+        description:
+          "Automatic ticket creation, SLA-based routing, status updates, and human escalation triggers. Deflect repetitive queries; route complex ones to the right agent.",
+        icon: ICONS.wrench,
+      },
+      {
+        title: "Analytics Dashboard",
+        description:
+          "Conversation volume, bot deflection rate, handoff rate, and CSAT tracking in a dashboard your team can check without touching code.",
+        icon: ICONS.chart,
+      },
+    ],
+    process: [
+      {
+        step: "01",
+        title: "Discovery & Use Case Mapping",
+        duration: "Day 1–2",
+        body: "We map your target users, top conversation scenarios, integration points, and escalation rules. You receive a written flow diagram for every path — including fallbacks — before development begins.",
+      },
+      {
+        step: "02",
+        title: "Conversation Flow Design",
+        duration: "Day 3–5",
+        body: "Full decision-tree design for every flow: happy path, edge cases, and failure paths. Rule-based vs AI split agreed. You approve the design before we write a line of code.",
+      },
+      {
+        step: "03",
+        title: "Development & API Integration",
+        duration: "Week 2–3",
+        body: "Bot backend built on Node.js and Fastify, connected to your WhatsApp number via the Meta Cloud API. CRM, order system, or database integrations wired and tested.",
+      },
+      {
+        step: "04",
+        title: "Testing & QA",
+        duration: "Week 3",
+        body: "Every flow path tested on real WhatsApp numbers — including edge cases, unexpected inputs, and failure scenarios. Load tested at 10× expected volume.",
+      },
+      {
+        step: "05",
+        title: "Go-Live & Monitoring",
+        duration: "Week 3–4",
+        body: "Production switch flipped. Delivery rate monitoring, fallback alerts, and escalation queue configured. First 48 hours monitored closely.",
+      },
+      {
+        step: "06",
+        title: "Optimisation & Support",
+        duration: "Ongoing",
+        body: "Monthly review of conversation logs — new intents identified, flows improved, and new use cases added. Retainer from ₹8,000/month.",
+      },
+    ],
+    techStack: [
+      { name: "Meta WhatsApp Cloud API", category: "Messaging" },
+      { name: "Node.js / Fastify", category: "Backend" },
+      { name: "Claude API / GPT-4o", category: "AI" },
+      { name: "PostgreSQL", category: "Database" },
+      { name: "Redis / BullMQ", category: "Queue" },
+      { name: "React", category: "Admin Dashboard" },
+      { name: "AWS / Railway", category: "Hosting" },
+      { name: "Sentry", category: "Error Monitoring" },
+    ],
+    faqs: [
+      {
+        q: "Do I need the WhatsApp Business API to use a chatbot?",
+        a: "Yes. The chatbot connects to your WhatsApp number via the Meta Cloud API. We handle the full WABA setup — business verification, number registration, and template approvals — if you do not have it yet. Typical setup time is 3–7 business days.",
+      },
+      {
+        q: "Can the chatbot hand off to a human agent?",
+        a: "Yes. We build escalation triggers into every chatbot — if the bot cannot answer, detects frustration, or the user asks for a human, the conversation is routed to an available agent in real time. The agent sees the full conversation history so there is no repetition for the customer.",
+      },
+      {
+        q: "How long does it take to build a WhatsApp chatbot?",
+        a: "A rule-based chatbot with 5–10 flows takes 2–3 weeks. An AI-powered bot with CRM integration and a custom admin dashboard takes 4–6 weeks. We give you a precise timeline after the discovery call.",
+      },
+      {
+        q: "Can the chatbot handle multiple languages?",
+        a: "Yes. We build multilingual bots that detect the user's language and respond accordingly — typically English plus one regional language (Hindi, Arabic, Tamil, etc.) as a starting point. Additional languages can be added at any time.",
+      },
+      {
+        q: "What happens when the chatbot cannot understand a message?",
+        a: "We design explicit fallback flows: the bot acknowledges it did not understand, offers a structured menu of options, and escalates to a human agent after two consecutive failed attempts. No conversation reaches a dead end.",
+      },
+    ],
+    relatedSlugs: ["whatsapp-crm", "whatsapp-business-api", "whatsapp-marketing-automation"],
   },
 ];
 
