@@ -362,9 +362,10 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
 
     // Step 6: coexistence mode (SMB)
     if (isSMB) {
-      const smbBody = { sync_type: "full" };
-      fastify.log.info({ url: `${WA_GRAPH}/${wabaId}/smb_app_data`, body: smbBody }, "[WA-CONNECT] 15. SMB coexistence request");
-      const smbRes = await fetch(`${WA_GRAPH}/${wabaId}/smb_app_data`, {
+      const smbBody = { messaging_product: "whatsapp", sync_type: "smb_app_state_sync" };
+      const smbTarget = phoneNumberId || wabaId;
+      fastify.log.info({ url: `${WA_GRAPH}/${smbTarget}/smb_app_data`, body: smbBody }, "[WA-CONNECT] 15. SMB coexistence request");
+      const smbRes = await fetch(`${WA_GRAPH}/${smbTarget}/smb_app_data`, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify(smbBody),

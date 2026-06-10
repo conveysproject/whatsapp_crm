@@ -158,8 +158,6 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
       console.log("[WA-CONNECT] 5. Calling FB.login …");
       window.FB!.login(
         (response) => {
-          window.removeEventListener("message", sessionInfoListener);
-
           // ── STEP 6: FB.login callback ──────────────────────────────────────
           console.group("[WA-CONNECT] 6. FB.login callback");
           console.log("raw response      :", JSON.stringify(response, null, 2));
@@ -216,6 +214,7 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
               console.error("[WA-CONNECT] Network error:", e);
               onError("Network error — please try again.");
             } finally {
+              window.removeEventListener("message", sessionInfoListener);
               setLoading(false);
             }
           })();
