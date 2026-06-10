@@ -9,8 +9,16 @@ async function fetchJson(url: string): Promise<unknown> {
   return res.json();
 }
 
+interface DisconnectResult {
+  phoneNumber: string | null;
+  phoneNumberId: string | null;
+  wabaId: string | null;
+  webhookDisconnected: boolean;
+}
+
 export default function WhatsAppAccountPage(): JSX.Element {
   const qc = useQueryClient();
+  const [disconnectResult, setDisconnectResult] = useState<DisconnectResult | null>(null);
 
   const { data: health } = useQuery({
     queryKey: ["wa-health"],
@@ -43,7 +51,11 @@ export default function WhatsAppAccountPage(): JSX.Element {
   const disconnect = useMutation({
     mutationFn: () =>
       fetch("/api/v1/whatsapp-account/disconnect-account", { method: "POST" }).then((r) => r.json()),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["wa-health"] }),
+    onSuccess: (res: unknown) => {
+      void qc.invalidateQueries({ queryKey: ["wa-health"] });
+      const result = (res as { data?: { cleared?: DisconnectResult } })?.data?.cleared;
+      if (result) setDisconnectResult(result);
+    },
   });
 
   const healthData = health as { data?: { status?: "healthy" | "degraded" | "disconnected"; conditions?: Record<string, boolean> } } | undefined;
@@ -51,6 +63,56 @@ export default function WhatsAppAccountPage(): JSX.Element {
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-8">
+
+      {/* Disconnect success modal */}
+      {disconnectResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center text-red-600 text-lg font-bold">!</span>
+              <h2 className="text-lg font-semibold">WhatsApp Account Disconnected</h2>
+            </div>
+            <p className="text-sm text-gray-500">The following data has been cleared from TrustCRM:</p>
+            <ul className="text-sm space-y-2">
+              {disconnectResult.phoneNumber && (
+                <li className="flex justify-between border-b pb-1">
+                  <span className="text-gray-500">Phone number</span>
+                  <span className="font-medium">{disconnectResult.phoneNumber}</span>
+                </li>
+              )}
+              {disconnectResult.phoneNumberId && (
+                <li className="flex justify-between border-b pb-1">
+                  <span className="text-gray-500">Phone number ID</span>
+                  <span className="font-medium font-mono text-xs">{disconnectResult.phoneNumberId}</span>
+                </li>
+              )}
+              {disconnectResult.wabaId && (
+                <li className="flex justify-between border-b pb-1">
+                  <span className="text-gray-500">WhatsApp Business Account ID</span>
+                  <span className="font-medium font-mono text-xs">{disconnectResult.wabaId}</span>
+                </li>
+              )}
+              <li className="flex justify-between border-b pb-1">
+                <span className="text-gray-500">Access token</span>
+                <span className="font-medium text-red-600">Cleared</span>
+              </li>
+              {disconnectResult.webhookDisconnected && (
+                <li className="flex justify-between pb-1">
+                  <span className="text-gray-500">Webhook</span>
+                  <span className="font-medium text-red-600">Disconnected</span>
+                </li>
+              )}
+            </ul>
+            <p className="text-xs text-gray-400">You can reconnect at any time using the Connect button above.</p>
+            <button
+              onClick={() => setDisconnectResult(null)}
+              className="w-full px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
       <div>
         <h1 className="text-2xl font-semibold">WhatsApp Account</h1>
         <p className="text-sm text-gray-500 mt-1">

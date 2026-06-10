@@ -360,6 +360,25 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     if (!canAccess(role, permissions, "administrative")) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "administrative permission required" } });
     }
+
+    // Capture what's being cleared before wiping
+    const [prevSettings, prevOrg] = await Promise.all([
+      fastify.prisma.vendorSetting.findMany({
+        where: { organizationId, key: { in: ["whatsapp_business_account_id", "current_phone_number_number", "current_phone_number_id", "webhook_verified_at"] } },
+        select: { key: true, value: true },
+      }),
+      fastify.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { whatsappBusinessAccountId: true, phoneNumberId: true },
+      }),
+    ]);
+
+    const settingsMap = Object.fromEntries(prevSettings.map((s) => [s.key, s.value]));
+    const clearedPhoneNumber = settingsMap["current_phone_number_number"] || null;
+    const clearedPhoneNumberId = settingsMap["current_phone_number_id"] || prevOrg?.phoneNumberId || null;
+    const clearedWabaId = settingsMap["whatsapp_business_account_id"] || prevOrg?.whatsappBusinessAccountId || null;
+    const webhookWasConnected = Boolean(settingsMap["webhook_verified_at"]);
+
     const waKeys = [
       "whatsapp_access_token",
       "whatsapp_business_account_id",
@@ -380,6 +399,16 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
         data: { wabaAccessToken: null, whatsappBusinessAccountId: null, phoneNumberId: null },
       }),
     ]);
-    return reply.send({ success: true });
+
+    return reply.send({
+      data: {
+        cleared: {
+          phoneNumber: clearedPhoneNumber,
+          phoneNumberId: clearedPhoneNumberId,
+          wabaId: clearedWabaId,
+          webhookDisconnected: webhookWasConnected,
+        },
+      },
+    });
   });
 };
