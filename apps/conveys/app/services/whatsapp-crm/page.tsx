@@ -5,9 +5,9 @@ import { ConveysHeader } from "@/components/conveys-header";
 import { ConveysFooter } from "@/components/conveys-footer";
 
 export const metadata: Metadata = {
-  title: "WhatsApp CRM & Business API for Small Business",
+  title: "WhatsApp CRM Software for Businesses | Conveys",
   description:
-    "Set up WhatsApp Business API for your business. Automate conversations, run broadcast campaigns, and manage your entire customer pipeline on WhatsApp.",
+    "WhatsApp CRM platform for businesses — inbox, contacts, campaigns, chatbots, and analytics. Built on the Meta Cloud API. Free trial available.",
   alternates: { canonical: "https://conveys.in/services/whatsapp-crm" },
   openGraph: { url: "https://conveys.in/services/whatsapp-crm", locale: "en_US" },
 };

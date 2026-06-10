@@ -5,9 +5,9 @@ import { ConveysHeader } from "@/components/conveys-header";
 import { ConveysFooter } from "@/components/conveys-footer";
 
 export const metadata: Metadata = {
-  title: "Site Migration Services India — Zero Downtime",
+  title: "Site Migration Services | Zero Downtime, Fixed Price | Conveys",
   description:
-    "Migrate your website, CMS, database, or hosting stack without losing traffic, data, or SEO rankings. Expert site migration for Indian businesses. Fixed pricing.",
+    "Site migration services — cPanel to cloud, HTTP to HTTPS, domain transfers, and CMS migrations. Zero downtime cutover, fixed pricing, in-house team.",
   alternates: { canonical: "https://conveys.in/services/site-migration" },
   openGraph: { url: "https://conveys.in/services/site-migration" },
 };

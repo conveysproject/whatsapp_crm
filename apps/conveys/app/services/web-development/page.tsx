@@ -5,9 +5,9 @@ import { ConveysHeader } from "@/components/conveys-header";
 import { ConveysFooter } from "@/components/conveys-footer";
 
 export const metadata: Metadata = {
-  title: "Web Development & Design Services — Mumbai",
+  title: "Web Development Company | Next.js, React, Node.js | Conveys",
   description:
-    "Custom websites, web apps, and e-commerce for Indian businesses. Next.js, React, TypeScript — SEO-ready, fast, and built to convert. Fixed pricing.",
+    "Custom websites, web applications, and e-commerce stores for businesses worldwide. Next.js, React, TypeScript — SEO-ready, fast, and built to convert. Fixed pricing.",
   alternates: { canonical: "https://conveys.in/services/web-development" },
   openGraph: { url: "https://conveys.in/services/web-development" },
 };

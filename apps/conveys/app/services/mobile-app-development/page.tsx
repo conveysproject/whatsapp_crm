@@ -5,9 +5,9 @@ import { ConveysHeader } from "@/components/conveys-header";
 import { ConveysFooter } from "@/components/conveys-footer";
 
 export const metadata: Metadata = {
-  title: "iOS & Android App Development — Mumbai",
+  title: "Mobile App Development Company | iOS & Android | Conveys",
   description:
-    "Native and cross-platform mobile app development in Mumbai. Full lifecycle — UX design, development, QA, and App Store submission. React Native & Expo.",
+    "iOS and Android mobile app development for businesses — React Native, Expo, and native Swift/Kotlin. App Store submission included. Fixed pricing.",
   alternates: { canonical: "https://conveys.in/services/mobile-app-development" },
   openGraph: { url: "https://conveys.in/services/mobile-app-development" },
 };
