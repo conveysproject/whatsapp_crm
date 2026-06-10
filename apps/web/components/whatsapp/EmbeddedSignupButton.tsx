@@ -115,62 +115,63 @@ export function EmbeddedSignupButton({ flow, onSuccess, onError }: EmbeddedSignu
 
     const configId = isSMB && SMB_CONFIG_ID ? SMB_CONFIG_ID : CONFIG_ID;
 
-    window.FB.login(async (response: FBAuthResponse) => {
+    window.FB.login((response: FBAuthResponse) => {
       window.removeEventListener("message", onPostMessage);
       postMessageHandlerRef.current = null;
       const code = response.authResponse?.code;
       if (!code) {
-        postMessageHandlerRef.current = null;
         setState("idle");
         return;
       }
 
-      try {
-        const token = await getToken();
-        const res = await fetch(`${API_URL}/v1/whatsapp-account/connect`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
-          body: JSON.stringify({
-            code,
-            wabaId: wabaIdRef.current || undefined,
-            phoneNumberId: phoneNumberIdRef.current || undefined,
-            isSMB,
-            flow,
-          }),
-        });
+      void (async () => {
+        try {
+          const token = await getToken();
+          const res = await fetch(`${API_URL}/v1/whatsapp-account/connect`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+            body: JSON.stringify({
+              code,
+              wabaId: wabaIdRef.current || undefined,
+              phoneNumberId: phoneNumberIdRef.current || undefined,
+              isSMB,
+              flow,
+            }),
+          });
 
-        const body = await res.json() as { data?: ConnectResult; error?: { message?: string } };
-        if (!res.ok) {
-          const msg = body.error?.message ?? `Error ${res.status}`;
+          const body = await res.json() as { data?: ConnectResult; error?: { message?: string } };
+          if (!res.ok) {
+            const msg = body.error?.message ?? `Error ${res.status}`;
+            setErrorMessage(msg);
+            setState("error");
+            onErrorRef.current(msg);
+            return;
+          }
+
+          if (!body.data) {
+            const msg = "Unexpected server response.";
+            setErrorMessage(msg);
+            setState("error");
+            onErrorRef.current(msg);
+            return;
+          }
+          const connectResult = body.data;
+          setResult(connectResult);
+          setState("success");
+          onSuccessRef.current(connectResult);
+
+          if (flow === "onboarding") {
+            setTimeout(() => {
+              router.replace(connectResult.phoneNumberId ? "/checklist" : "/provision-number");
+            }, 1500);
+          }
+        } catch {
+          const msg = "Network error. Please try again.";
           setErrorMessage(msg);
           setState("error");
           onErrorRef.current(msg);
-          return;
         }
-
-        if (!body.data) {
-          const msg = "Unexpected server response.";
-          setErrorMessage(msg);
-          setState("error");
-          onErrorRef.current(msg);
-          return;
-        }
-        const connectResult = body.data;
-        setResult(connectResult);
-        setState("success");
-        onSuccessRef.current(connectResult);
-
-        if (flow === "onboarding") {
-          setTimeout(() => {
-            router.replace(connectResult.phoneNumberId ? "/checklist" : "/provision-number");
-          }, 1500);
-        }
-      } catch {
-        const msg = "Network error. Please try again.";
-        setErrorMessage(msg);
-        setState("error");
-        onErrorRef.current(msg);
-      }
+      })();
     }, { config_id: configId, response_type: "code", override_default_response_type: true });
   }
 
