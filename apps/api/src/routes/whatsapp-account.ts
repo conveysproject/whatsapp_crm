@@ -210,14 +210,14 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: { code: "APP_NOT_CONFIGURED", message: "Facebook app credentials not configured" } });
     }
 
-    // FB.login popup uses https://www.facebook.com/connect/login_success.html as its internal redirect_uri.
-    // Meta binds the code to that URI, so the exchange must include it exactly.
-    const fbPopupRedirectUri = "https://www.facebook.com/connect/login_success.html";
-    const tokenUrl = `${WA_GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(fbPopupRedirectUri)}`;
-    const tokenRes = await fetch(tokenUrl, { method: "GET" });
+    const tokenRes = await fetch(`${WA_GRAPH}/oauth/access_token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: appId, client_secret: appSecret, code }),
+    });
     if (!tokenRes.ok) {
       const rawErr = await tokenRes.text();
-      fastify.log.error({ tokenUrl: tokenUrl.replace(appSecret, "***"), rawErr }, "Meta token exchange failed");
+      fastify.log.error({ rawErr }, "Meta token exchange failed");
       let errMsg = "Failed to exchange code for token";
       try { errMsg = (JSON.parse(rawErr) as { error?: { message?: string } }).error?.message ?? errMsg; } catch { /* ignore */ }
       return reply.status(400).send({ error: { code: "TOKEN_EXCHANGE_FAILED", message: errMsg } });

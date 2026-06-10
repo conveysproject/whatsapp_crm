@@ -23,6 +23,13 @@ interface FBLoginOptions {
   config_id: string;
   response_type: string;
   override_default_response_type: boolean;
+  extras?: {
+    setup?: Record<string, unknown>;
+    featureType?: string;
+    sessionInfoVersion?: string;
+    features?: Array<{ name: string }>;
+    version?: string;
+  };
 }
 
 export interface ConnectResult {
@@ -172,7 +179,18 @@ export function EmbeddedSignupButton({ flow, onSuccess, onError }: EmbeddedSignu
           onErrorRef.current(msg);
         }
       })();
-    }, { config_id: configId, response_type: "code", override_default_response_type: true });
+    }, {
+      config_id: configId,
+      response_type: "code",
+      override_default_response_type: true,
+      extras: {
+        setup: {},
+        featureType: isSMB ? "whatsapp_business_app_onboarding" : "",
+        sessionInfoVersion: "3",
+        features: [{ name: "marketing_messages_lite" }],
+        version: "v3",
+      },
+    });
   }
 
   if (state === "success" && result) {
