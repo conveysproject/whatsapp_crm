@@ -1,5 +1,6 @@
 "use client";
-import { JSX, useState } from "react";
+import { JSX, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ConnectWhatsAppModal } from "@/components/whatsapp/ConnectWhatsAppModal";
 
@@ -18,8 +19,20 @@ interface DisconnectResult {
 
 export default function WhatsAppAccountPage(): JSX.Element {
   const qc = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [disconnectResult, setDisconnectResult] = useState<DisconnectResult | null>(null);
   const [showConnectModal, setShowConnectModal] = useState(false);
+  const [justConnected, setJustConnected] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("connected") === "1") {
+      void qc.invalidateQueries({ queryKey: ["wa-health"] });
+      void qc.invalidateQueries({ queryKey: ["wa-profile"] });
+      setJustConnected(true);
+      router.replace("/settings/whatsapp-account");
+    }
+  }, [searchParams, qc, router]);
 
   const { data: health } = useQuery({
     queryKey: ["wa-health"],
@@ -64,6 +77,19 @@ export default function WhatsAppAccountPage(): JSX.Element {
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-8">
+
+      {/* Reconnect success banner */}
+      {justConnected && (
+        <div className="flex items-center gap-3 rounded-lg bg-green-50 border border-green-200 px-4 py-3">
+          <svg className="w-5 h-5 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <p className="text-sm text-green-800 font-medium">WhatsApp account connected successfully.</p>
+          <button type="button" onClick={() => setJustConnected(false)} className="ml-auto text-green-600 hover:text-green-800">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+      )}
 
       {/* Disconnect success modal */}
       {disconnectResult && (
