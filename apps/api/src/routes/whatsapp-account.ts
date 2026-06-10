@@ -210,9 +210,10 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: { code: "APP_NOT_CONFIGURED", message: "Facebook app credentials not configured" } });
     }
 
-    // FB.login popup flow has no redirect_uri — never include one in the token exchange.
-    // META_REDIRECT_URI is only for the separate redirect-based callback flow.
-    const tokenUrl = `${WA_GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${encodeURIComponent(code)}`;
+    // FB.login popup uses https://www.facebook.com/connect/login_success.html as its internal redirect_uri.
+    // Meta binds the code to that URI, so the exchange must include it exactly.
+    const fbPopupRedirectUri = "https://www.facebook.com/connect/login_success.html";
+    const tokenUrl = `${WA_GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(fbPopupRedirectUri)}`;
     const tokenRes = await fetch(tokenUrl, { method: "GET" });
     if (!tokenRes.ok) {
       const rawErr = await tokenRes.text();
