@@ -43,6 +43,8 @@ export interface EmbeddedSignupButtonProps {
   flow: "onboarding" | "reconnect";
   onSuccess: (result: ConnectResult) => void;
   onError: (message: string) => void;
+  /** When provided the internal checkbox is hidden and this value is used directly */
+  isSMB?: boolean;
 }
 
 type SignupState = "idle" | "connecting" | "success" | "error";
@@ -52,12 +54,13 @@ const CONFIG_ID = process.env["NEXT_PUBLIC_META_CONFIG_ID"] ?? "";
 const SMB_CONFIG_ID = process.env["NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID"] ?? "";
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
-export function EmbeddedSignupButton({ flow, onSuccess, onError }: EmbeddedSignupButtonProps): JSX.Element {
+export function EmbeddedSignupButton({ flow, onSuccess, onError, isSMB: isSMBProp }: EmbeddedSignupButtonProps): JSX.Element {
   const router = useRouter();
   const { getToken } = useAuth();
   const [state, setState] = useState<SignupState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const [isSMB, setIsSMB] = useState(false);
+  const [isSMBInternal, setIsSMBInternal] = useState(false);
+  const isSMB = isSMBProp !== undefined ? isSMBProp : isSMBInternal;
   const [fbReady, setFbReady] = useState(false);
   const [result, setResult] = useState<ConnectResult | null>(null);
 
@@ -243,12 +246,12 @@ export function EmbeddedSignupButton({ flow, onSuccess, onError }: EmbeddedSignu
 
   return (
     <div className="flex flex-col gap-4">
-      {SMB_CONFIG_ID && (
+      {SMB_CONFIG_ID && isSMBProp === undefined && (
         <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
           <input
             type="checkbox"
-            checked={isSMB}
-            onChange={(e) => setIsSMB(e.target.checked)}
+            checked={isSMBInternal}
+            onChange={(e) => setIsSMBInternal(e.target.checked)}
             className="rounded border-gray-300"
           />
           I already use the WhatsApp Business App
