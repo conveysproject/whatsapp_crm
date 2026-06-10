@@ -72,42 +72,104 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
   function handleConnect(): void {
     setLoading(true);
     void (async () => {
+      // ── STEP 1: environment ────────────────────────────────────────────────
+      console.group("[WA-CONNECT] 1. Environment");
+      console.log("page origin        :", window.location.origin);
+      console.log("page href          :", window.location.href);
+      console.log("APP_ID             :", APP_ID);
+      console.log("CONFIG_ID          :", CONFIG_ID);
+      console.log("SMB_CONFIG_ID      :", SMB_CONFIG_ID);
+      console.log("API_URL            :", API_URL);
+      console.log("isSMB              :", isSMB);
+      console.log("flow               :", flow);
+      console.groupEnd();
+
+      // ── STEP 2: load FB SDK ────────────────────────────────────────────────
+      console.group("[WA-CONNECT] 2. Load FB SDK");
       try {
         await loadFBSDK(APP_ID);
-      } catch {
+        console.log("FB SDK loaded OK, window.FB:", !!window.FB);
+      } catch (e) {
+        console.error("FB SDK load FAILED:", e);
+        console.groupEnd();
         setLoading(false);
         onError("Failed to load Facebook SDK. Please try again.");
         return;
       }
+      console.groupEnd();
 
       const configId = isSMB && SMB_CONFIG_ID ? SMB_CONFIG_ID : CONFIG_ID;
+
+      // ── STEP 3: FB.login params ────────────────────────────────────────────
+      const fbLoginParams = {
+        config_id: configId,
+        response_type: "code",
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          featureType: isSMB ? "whatsapp_business_app_onboarding" : "",
+          sessionInfoVersion: "3",
+          features: [{ name: "marketing_messages_lite" }],
+          version: "v3",
+        },
+      };
+      console.group("[WA-CONNECT] 3. FB.login params");
+      console.log(JSON.stringify(fbLoginParams, null, 2));
+      console.groupEnd();
 
       let phoneNumberId = "";
       let wabaId = "";
 
+      // ── STEP 4: postMessage listener ──────────────────────────────────────
       const sessionInfoListener = (event: MessageEvent) => {
-        if (event.origin !== "https://www.facebook.com") return;
+        console.group("[WA-CONNECT] 4. postMessage event");
+        console.log("event.origin :", event.origin);
+        console.log("event.data   :", event.data);
+        if (event.origin !== "https://www.facebook.com") {
+          console.log("→ IGNORED (origin mismatch — expected https://www.facebook.com)");
+          console.groupEnd();
+          return;
+        }
         try {
           const data = JSON.parse(event.data as string) as {
             type?: string;
             event?: string;
             data?: { phone_number_id?: string; waba_id?: string; current_step?: string };
           };
+          console.log("parsed:", JSON.stringify(data, null, 2));
           if (data.type === "WA_EMBEDDED_SIGNUP") {
             if (data.event === "FINISH" || data.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
               phoneNumberId = data.data?.phone_number_id ?? "";
               wabaId = data.data?.waba_id ?? "";
+              console.log("→ FINISH captured — phoneNumberId:", phoneNumberId, "wabaId:", wabaId);
+            } else {
+              console.log("→ event type:", data.event, "current_step:", data.data?.current_step);
             }
           }
-        } catch {
-          // non-JSON message — ignore
+        } catch (e) {
+          console.log("→ non-JSON, skipped:", e);
         }
+        console.groupEnd();
       };
       window.addEventListener("message", sessionInfoListener);
+      console.log("[WA-CONNECT] postMessage listener registered");
 
+      // ── STEP 5: FB.login call ──────────────────────────────────────────────
+      console.log("[WA-CONNECT] 5. Calling FB.login …");
       window.FB!.login(
         (response) => {
           window.removeEventListener("message", sessionInfoListener);
+
+          // ── STEP 6: FB.login callback ──────────────────────────────────────
+          console.group("[WA-CONNECT] 6. FB.login callback");
+          console.log("raw response      :", JSON.stringify(response, null, 2));
+          console.log("authResponse      :", JSON.stringify(response.authResponse, null, 2));
+          console.log("status            :", response.status);
+          console.log("code              :", response.authResponse?.code);
+          console.log("wabaId (message)  :", wabaId);
+          console.log("phoneNumberId (message):", phoneNumberId);
+          console.groupEnd();
+
           const code = response.authResponse?.code;
           if (!code) {
             setLoading(false);
@@ -117,42 +179,48 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
           void (async () => {
             try {
               const token = await getToken();
+              const requestBody = { code, isSMB, flow, wabaId: wabaId || undefined, phoneNumberId: phoneNumberId || undefined };
+
+              // ── STEP 7: API request ──────────────────────────────────────
+              console.group("[WA-CONNECT] 7. POST /v1/whatsapp-account/connect");
+              console.log("URL    :", `${API_URL}/v1/whatsapp-account/connect`);
+              console.log("body   :", JSON.stringify(requestBody, null, 2));
+              console.log("token  :", token ? `${token.slice(0, 20)}…` : "MISSING");
+              console.groupEnd();
+
               const res = await fetch(`${API_URL}/v1/whatsapp-account/connect`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${token ?? ""}`,
                 },
-                body: JSON.stringify({ code, isSMB, flow, wabaId: wabaId || undefined, phoneNumberId: phoneNumberId || undefined }),
+                body: JSON.stringify(requestBody),
               });
               const body = await res.json() as {
                 data?: ConnectResult;
                 error?: { message?: string };
               };
+
+              // ── STEP 8: API response ─────────────────────────────────────
+              console.group("[WA-CONNECT] 8. API response");
+              console.log("status :", res.status, res.statusText);
+              console.log("body   :", JSON.stringify(body, null, 2));
+              console.groupEnd();
+
               if (!res.ok) {
                 onError(body.error?.message ?? `Error ${res.status}`);
                 return;
               }
               onSuccess(body.data!);
-            } catch {
+            } catch (e) {
+              console.error("[WA-CONNECT] Network error:", e);
               onError("Network error — please try again.");
             } finally {
               setLoading(false);
             }
           })();
         },
-        {
-          config_id: configId,
-          response_type: "code",
-          override_default_response_type: true,
-          extras: {
-            setup: {},
-            featureType: isSMB ? "whatsapp_business_app_onboarding" : "",
-            sessionInfoVersion: "3",
-            features: [{ name: "marketing_messages_lite" }],
-            version: "v3",
-          },
-        }
+        fbLoginParams
       );
     })();
   }

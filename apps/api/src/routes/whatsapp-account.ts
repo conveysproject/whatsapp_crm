@@ -200,44 +200,56 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId } = request.auth;
     const { code, wabaId: bodyWabaId, phoneNumberId: bodyPhoneNumberId, isSMB = false, flow = "reconnect" } = request.body;
 
+    fastify.log.info({ body: request.body, organizationId }, "[WA-CONNECT] 1. request received");
+
     if (!code) {
       return reply.status(400).send({ error: { code: "MISSING_CODE", message: "code is required" } });
     }
 
     const appId = process.env["META_APP_ID"] ?? "";
     const appSecret = process.env["META_APP_SECRET"] ?? "";
+    fastify.log.info({ appIdSet: !!appId, appSecretSet: !!appSecret }, "[WA-CONNECT] 2. app credentials check");
     if (!appId || !appSecret) {
       return reply.status(500).send({ error: { code: "APP_NOT_CONFIGURED", message: "Facebook app credentials not configured" } });
     }
 
-    // FB.login() popup internally redirects to login_success.html — token exchange must match
+    // Step 1: exchange code for access token
+    const tokenReqBody = new URLSearchParams({
+      client_id: appId,
+      client_secret: appSecret,
+      code,
+      redirect_uri: "https://www.facebook.com/connect/login_success.html",
+    });
+    fastify.log.info({
+      url: `${WA_GRAPH}/oauth/access_token`,
+      params: { client_id: appId, redirect_uri: "https://www.facebook.com/connect/login_success.html", code_length: code.length },
+    }, "[WA-CONNECT] 3. token exchange request");
+
     const tokenRes = await fetch(`${WA_GRAPH}/oauth/access_token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: appId,
-        client_secret: appSecret,
-        code,
-        redirect_uri: "https://www.facebook.com/connect/login_success.html",
-      }),
+      body: tokenReqBody,
     });
+    const tokenRawText = await tokenRes.text();
+    fastify.log.info({ status: tokenRes.status, body: tokenRawText }, "[WA-CONNECT] 4. token exchange response");
     if (!tokenRes.ok) {
-      const rawErr = await tokenRes.text();
-      fastify.log.error({ rawErr }, "Meta token exchange failed");
       let errMsg = "Failed to exchange code for token";
-      try { errMsg = (JSON.parse(rawErr) as { error?: { message?: string } }).error?.message ?? errMsg; } catch { /* ignore */ }
+      try { errMsg = (JSON.parse(tokenRawText) as { error?: { message?: string } }).error?.message ?? errMsg; } catch { /* ignore */ }
       return reply.status(400).send({ error: { code: "TOKEN_EXCHANGE_FAILED", message: errMsg } });
     }
-    const { access_token: accessToken } = await tokenRes.json() as { access_token: string };
+    const { access_token: accessToken } = JSON.parse(tokenRawText) as { access_token: string };
+    fastify.log.info({ access_token_length: accessToken.length }, "[WA-CONNECT] 5. access token obtained");
 
     // Step 2: resolve WABA ID (from body → debug_token → /me/businesses fallback)
     let wabaId = bodyWabaId ?? "";
+    fastify.log.info({ wabaId_from_body: wabaId, phoneNumberId_from_body: bodyPhoneNumberId }, "[WA-CONNECT] 6. body-provided IDs");
 
-    // Approach A: debug_token — works for both user and system-user tokens
+    // Approach A: debug_token
     if (!wabaId) {
       try {
         const appToken = `${appId}|${appSecret}`;
         const debugUrl = `${WA_GRAPH}/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`;
+        fastify.log.info({ url: debugUrl.replace(accessToken, "***").replace(appToken, "***") }, "[WA-CONNECT] 7a. debug_token request");
         const r = await fetch(debugUrl);
         const debugBody = await r.json() as {
           data?: {
@@ -246,50 +258,50 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
           };
           error?: { message?: string };
         };
-        fastify.log.info({ debugBody }, "debug_token response");
+        fastify.log.info({ status: r.status, debugBody }, "[WA-CONNECT] 7b. debug_token response");
         if (r.ok && debugBody.data) {
           const scope = debugBody.data.granular_scopes?.find((s) => s.scope === "whatsapp_business_messaging");
           wabaId = scope?.target_ids?.[0] ?? "";
+          fastify.log.info({ wabaId_from_debug_token: wabaId }, "[WA-CONNECT] 7c. debug_token wabaId result");
         }
       } catch (e) {
-        fastify.log.warn({ e }, "debug_token call failed");
+        fastify.log.warn({ e }, "[WA-CONNECT] 7. debug_token call failed");
       }
     }
 
-    // Approach B: /me/businesses — needed when system-user token doesn't expose granular_scopes
+    // Approach B: /me/businesses
     if (!wabaId) {
       try {
-        const r = await fetch(
-          `${WA_GRAPH}/me/businesses?fields=whatsapp_business_accounts%7Bid%7D&access_token=${encodeURIComponent(accessToken)}`
-        );
-        if (r.ok) {
-          const d = await r.json() as {
-            data?: Array<{ whatsapp_business_accounts?: { data?: Array<{ id: string }> } }>;
-          };
-          fastify.log.info({ d }, "me/businesses response");
-          wabaId = d.data?.[0]?.whatsapp_business_accounts?.data?.[0]?.id ?? "";
-        }
+        const url = `${WA_GRAPH}/me/businesses?fields=whatsapp_business_accounts%7Bid%7D&access_token=${encodeURIComponent(accessToken)}`;
+        fastify.log.info({ url: url.replace(accessToken, "***") }, "[WA-CONNECT] 8a. me/businesses request");
+        const r = await fetch(url);
+        const d = await r.json() as {
+          data?: Array<{ whatsapp_business_accounts?: { data?: Array<{ id: string }> } }>;
+        };
+        fastify.log.info({ status: r.status, body: d }, "[WA-CONNECT] 8b. me/businesses response");
+        wabaId = d.data?.[0]?.whatsapp_business_accounts?.data?.[0]?.id ?? "";
+        fastify.log.info({ wabaId_from_businesses: wabaId }, "[WA-CONNECT] 8c. me/businesses wabaId result");
       } catch (e) {
-        fastify.log.warn({ e }, "me/businesses call failed");
+        fastify.log.warn({ e }, "[WA-CONNECT] 8. me/businesses call failed");
       }
     }
 
-    // Approach C: /me/whatsapp_business_accounts — user-token-only endpoint
+    // Approach C: /me/whatsapp_business_accounts
     if (!wabaId) {
       try {
-        const r = await fetch(
-          `${WA_GRAPH}/me/whatsapp_business_accounts?access_token=${encodeURIComponent(accessToken)}`
-        );
-        if (r.ok) {
-          const d = await r.json() as { data?: Array<{ id: string }> };
-          fastify.log.info({ d }, "me/whatsapp_business_accounts response");
-          wabaId = d.data?.[0]?.id ?? "";
-        }
+        const url = `${WA_GRAPH}/me/whatsapp_business_accounts?access_token=${encodeURIComponent(accessToken)}`;
+        fastify.log.info({ url: url.replace(accessToken, "***") }, "[WA-CONNECT] 9a. me/whatsapp_business_accounts request");
+        const r = await fetch(url);
+        const d = await r.json() as { data?: Array<{ id: string }> };
+        fastify.log.info({ status: r.status, body: d }, "[WA-CONNECT] 9b. me/whatsapp_business_accounts response");
+        wabaId = d.data?.[0]?.id ?? "";
+        fastify.log.info({ wabaId_from_wba: wabaId }, "[WA-CONNECT] 9c. me/whatsapp_business_accounts wabaId result");
       } catch (e) {
-        fastify.log.warn({ e }, "me/whatsapp_business_accounts call failed");
+        fastify.log.warn({ e }, "[WA-CONNECT] 9. me/whatsapp_business_accounts call failed");
       }
     }
 
+    fastify.log.info({ wabaId_final: wabaId }, "[WA-CONNECT] 10. final wabaId");
     if (!wabaId) {
       return reply.status(400).send({ error: { code: "NO_WABA", message: "No WhatsApp Business Account found" } });
     }
@@ -298,12 +310,11 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     let wabaName = "";
     try {
       const r = await fetch(`${WA_GRAPH}/${wabaId}?fields=name&access_token=${accessToken}`);
-      if (r.ok) {
-        const d = await r.json() as { name?: string };
-        wabaName = d.name ?? "";
-      }
-    } catch {
-      // non-fatal
+      const d = await r.json() as { name?: string };
+      fastify.log.info({ status: r.status, wabaName: d.name }, "[WA-CONNECT] 11. WABA name fetch");
+      if (r.ok) wabaName = d.name ?? "";
+    } catch (e) {
+      fastify.log.warn({ e }, "[WA-CONNECT] 11. WABA name fetch failed (non-fatal)");
     }
 
     // Step 4: resolve phone number
@@ -312,28 +323,29 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     if (phoneNumberId) {
       try {
         const r = await fetch(`${WA_GRAPH}/${phoneNumberId}?fields=display_phone_number&access_token=${accessToken}`);
-        if (r.ok) {
-          const d = await r.json() as { display_phone_number?: string };
-          displayPhoneNumber = d.display_phone_number ?? null;
-        }
-      } catch {
-        // non-fatal
+        const d = await r.json() as { display_phone_number?: string };
+        fastify.log.info({ status: r.status, body: d }, "[WA-CONNECT] 12a. phone number fetch (from body id)");
+        if (r.ok) displayPhoneNumber = d.display_phone_number ?? null;
+      } catch (e) {
+        fastify.log.warn({ e }, "[WA-CONNECT] 12a. phone number fetch failed (non-fatal)");
       }
     } else {
       try {
         const r = await fetch(`${WA_GRAPH}/${wabaId}/phone_numbers?fields=id,display_phone_number&access_token=${accessToken}`);
+        const d = await r.json() as { data?: { id: string; display_phone_number: string }[] };
+        fastify.log.info({ status: r.status, body: d }, "[WA-CONNECT] 12b. phone numbers list from WABA");
         if (r.ok) {
-          const d = await r.json() as { data?: { id: string; display_phone_number: string }[] };
           const phone = d.data?.[0];
           if (phone) {
             phoneNumberId = phone.id;
             displayPhoneNumber = phone.display_phone_number;
           }
         }
-      } catch {
-        // non-fatal
+      } catch (e) {
+        fastify.log.warn({ e }, "[WA-CONNECT] 12b. phone numbers list failed (non-fatal)");
       }
     }
+    fastify.log.info({ phoneNumberId, displayPhoneNumber }, "[WA-CONNECT] 13. resolved phone number");
 
     // Step 5: subscribe webhooks (fire-and-forget)
     const callbackUrl = `${(process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/v1/webhooks/whatsapp`;
@@ -396,14 +408,9 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: { code: "DB_ERROR", message: "Failed to save settings" } });
     }
 
-    return reply.send({
-      data: {
-        wabaId,
-        wabaName,
-        phoneNumberId: phoneNumberId || null,
-        displayPhoneNumber,
-      },
-    });
+    const responseData = { wabaId, wabaName, phoneNumberId: phoneNumberId || null, displayPhoneNumber };
+    fastify.log.info({ responseData }, "[WA-CONNECT] 14. success — sending response");
+    return reply.send({ data: responseData });
   });
 
   fastify.post("/whatsapp-account/disconnect-account", async (request, reply) => {
