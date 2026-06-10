@@ -2,6 +2,7 @@
 
 import { useState, type JSX } from "react";
 import { EmbeddedSignupButton, type ConnectResult } from "./EmbeddedSignupButton";
+export type { ConnectResult };
 
 interface ConnectWhatsAppModalProps {
   flow: "onboarding" | "reconnect";

@@ -210,11 +210,11 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: { code: "APP_NOT_CONFIGURED", message: "Facebook app credentials not configured" } });
     }
 
-    const redirectUri = process.env["META_REDIRECT_URI"] ?? "https://wbmsg.com/connect-waba/callback";
+    // No redirect_uri — codes from FB.login() popup must be exchanged without it
     const tokenRes = await fetch(`${WA_GRAPH}/oauth/access_token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ client_id: appId, client_secret: appSecret, code, redirect_uri: redirectUri }),
+      body: new URLSearchParams({ client_id: appId, client_secret: appSecret, code }),
     });
     if (!tokenRes.ok) {
       const rawErr = await tokenRes.text();
