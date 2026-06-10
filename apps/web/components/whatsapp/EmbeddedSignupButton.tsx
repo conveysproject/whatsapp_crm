@@ -131,8 +131,15 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
           console.groupEnd();
           return;
         }
+        const raw = event.data as string;
+        // xd_arbiter relay messages are URL-encoded query strings, not JSON — skip silently
+        if (typeof raw !== "string" || raw.startsWith("cb=") || !raw.startsWith("{")) {
+          console.log("→ non-JSON (xd_arbiter relay), skipped");
+          console.groupEnd();
+          return;
+        }
         try {
-          const data = JSON.parse(event.data as string) as {
+          const data = JSON.parse(raw) as {
             type?: string;
             event?: string;
             data?: { phone_number_id?: string; waba_id?: string; current_step?: string };
@@ -148,7 +155,7 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
             }
           }
         } catch (e) {
-          console.log("→ non-JSON, skipped:", e);
+          console.log("→ unexpected non-JSON:", e);
         }
         console.groupEnd();
       };
