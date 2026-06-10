@@ -19,6 +19,7 @@ vercel-env-list.txt
 
 # Claude Code
 .claude/settings.json
+.claude/settings.local.json
 
 # Turbo
 .turbo/
