@@ -212,15 +212,15 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     }
 
     // Meta token exchange — redirect_uri must exactly match what was used in the OAuth dialog.
-    // For FB.login popup flows the frontend passes the redirect_uri it registered; for redirect flows use META_REDIRECT_URI env.
     const redirectUri = bodyRedirectUri ?? process.env["META_REDIRECT_URI"] ?? "";
-    const tokenRes = await fetch(
-      `${WA_GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${encodeURIComponent(code)}${redirectUri ? `&redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`,
-      { method: "GET" }
-    );
+    const tokenUrl = `${WA_GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${encodeURIComponent(code)}${redirectUri ? `&redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`;
+    const tokenRes = await fetch(tokenUrl, { method: "GET" });
     if (!tokenRes.ok) {
-      const err = await tokenRes.json() as { error?: { message?: string } };
-      return reply.status(400).send({ error: { code: "TOKEN_EXCHANGE_FAILED", message: err.error?.message ?? "Failed to exchange code for token" } });
+      const rawErr = await tokenRes.text();
+      fastify.log.error({ tokenUrl: tokenUrl.replace(appSecret, "***"), rawErr }, "Meta token exchange failed");
+      let errMsg = "Failed to exchange code for token";
+      try { errMsg = (JSON.parse(rawErr) as { error?: { message?: string } }).error?.message ?? errMsg; } catch { /* ignore */ }
+      return reply.status(400).send({ error: { code: "TOKEN_EXCHANGE_FAILED", message: errMsg } });
     }
     const { access_token: accessToken } = await tokenRes.json() as { access_token: string };
 
