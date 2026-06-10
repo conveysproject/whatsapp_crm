@@ -195,10 +195,11 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       phoneNumberId?: string;
       isSMB?: boolean;
       flow?: "onboarding" | "reconnect";
+      redirectUri?: string;
     };
   }>("/whatsapp-account/connect", async (request, reply) => {
     const { organizationId } = request.auth;
-    const { code, wabaId: bodyWabaId, phoneNumberId: bodyPhoneNumberId, isSMB = false, flow = "reconnect" } = request.body;
+    const { code, wabaId: bodyWabaId, phoneNumberId: bodyPhoneNumberId, isSMB = false, flow = "reconnect", redirectUri } = request.body;
 
     fastify.log.info({ body: { ...request.body, code: request.body.code ? `${request.body.code.slice(0, 20)}…` : "MISSING" }, organizationId }, "[WA-CONNECT] 1. request received");
 
@@ -217,10 +218,11 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       client_id: appId,
       client_secret: appSecret,
       code,
+      ...(redirectUri ? { redirect_uri: redirectUri } : {}),
     });
     fastify.log.info({
       url: `${WA_GRAPH}/oauth/access_token`,
-      params: { client_id: appId, redirect_uri: "(none)", code_length: code.length },
+      params: { client_id: appId, redirect_uri: redirectUri ?? "(none)", code_length: code.length },
     }, "[WA-CONNECT] 3. token exchange request");
 
     const tokenRes = await fetch(`${WA_GRAPH}/oauth/access_token`, {

@@ -119,6 +119,7 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
 
       let phoneNumberId = "";
       let wabaId = "";
+      let capturedRedirectUri = "";
 
       // ── STEP 4: postMessage listener ──────────────────────────────────────
       const sessionInfoListener = (event: MessageEvent) => {
@@ -155,6 +156,21 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
       console.log("[WA-CONNECT] postMessage listener registered");
 
       // ── STEP 5: FB.login call ──────────────────────────────────────────────
+      // Intercept window.open to capture the xd_arbiter redirect_uri Meta uses internally.
+      // FB.login calls window.open synchronously, so we restore immediately after.
+      const originalOpen = window.open;
+      window.open = function (url?: string | URL, target?: string, features?: string): WindowProxy | null {
+        if (typeof url === "string" && url.includes("facebook.com") && url.includes("redirect_uri")) {
+          try {
+            const ru = new URL(url).searchParams.get("redirect_uri");
+            if (ru) {
+              capturedRedirectUri = ru;
+              console.log("[WA-CONNECT] captured redirect_uri:", capturedRedirectUri.slice(0, 80) + "…");
+            }
+          } catch { /* ignore */ }
+        }
+        return originalOpen.call(window, url as string, target, features);
+      };
       console.log("[WA-CONNECT] 5. Calling FB.login …");
       window.FB!.login(
         (response) => {
@@ -177,7 +193,7 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
           void (async () => {
             try {
               const token = await getToken();
-              const requestBody = { code, isSMB, flow, wabaId: wabaId || undefined, phoneNumberId: phoneNumberId || undefined };
+              const requestBody = { code, isSMB, flow, wabaId: wabaId || undefined, phoneNumberId: phoneNumberId || undefined, redirectUri: capturedRedirectUri || undefined };
 
               // ── STEP 7: API request ──────────────────────────────────────
               console.group("[WA-CONNECT] 7. POST /v1/whatsapp-account/connect");
@@ -221,6 +237,8 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
         },
         fbLoginParams
       );
+      // FB.login already opened the popup synchronously — restore window.open immediately
+      window.open = originalOpen;
     })();
   }
 
