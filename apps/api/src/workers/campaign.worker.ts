@@ -99,7 +99,7 @@ export const campaignWorker = new Worker<CampaignJob>(
     const phoneNumberId = org?.phoneNumberId ?? "";
     const accessToken = org?.wabaAccessToken ?? "";
     if (!phoneNumberId || !accessToken) {
-      await prisma.campaign.update({ where: { id: campaignId }, data: { status: "failed" } });
+      await prisma.campaign.update({ where: { id: campaignId }, data: { status: "aborted" } });
       throw new Error("WhatsApp account not connected — campaign aborted");
     }
     const isTemplateCampaign = campaign.campaignType === "template";
