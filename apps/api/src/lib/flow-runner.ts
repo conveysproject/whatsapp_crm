@@ -105,8 +105,8 @@ export async function runFlow(
     where: { id: payload.organizationId },
     select: { phoneNumberId: true, wabaAccessToken: true },
   });
-  const phoneNumberId = org?.phoneNumberId ?? process.env["WA_PHONE_NUMBER_ID"] ?? "";
-  const accessToken = org?.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
+  const phoneNumberId = org?.phoneNumberId ?? "";
+  const accessToken = org?.wabaAccessToken ?? "";
 
   const contact = payload.contactPhone
     ? await prisma.contact.findFirst({

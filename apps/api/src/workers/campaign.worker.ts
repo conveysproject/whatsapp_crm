@@ -96,8 +96,12 @@ export const campaignWorker = new Worker<CampaignJob>(
 
     const phones = await resolveTargetPhones(campaignId, organizationId, segmentId, groupIds);
 
-    const phoneNumberId = org?.phoneNumberId ?? process.env["WA_PHONE_NUMBER_ID"] ?? "";
-    const accessToken = org?.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
+    const phoneNumberId = org?.phoneNumberId ?? "";
+    const accessToken = org?.wabaAccessToken ?? "";
+    if (!phoneNumberId || !accessToken) {
+      await prisma.campaign.update({ where: { id: campaignId }, data: { status: "failed" } });
+      throw new Error("WhatsApp account not connected — campaign aborted");
+    }
     const isTemplateCampaign = campaign.campaignType === "template";
     const templateBody = campaign.templateId ?? "";
     const intervalMs = (campaign.messageInterval ?? 1) * 1000;

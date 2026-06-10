@@ -57,6 +57,14 @@ export async function handleBotMessage(
   const node = nodeMap.get(currentNodeId);
   if (!node) return;
 
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { phoneNumberId: true, wabaAccessToken: true },
+  });
+  const phoneNumberId = org?.phoneNumberId ?? "";
+  const accessToken = org?.wabaAccessToken ?? "";
+  if (!phoneNumberId || !accessToken) return;
+
   const conversation = await prisma.conversation.findFirst({
     where: { id: conversationId },
     include: {
@@ -86,10 +94,10 @@ export async function handleBotMessage(
     const text = substituteTokens(rawText, contact ? { ...contact, customFields: contact.customFields as Record<string, unknown> | undefined } : null, assignedTeamMember);
     if (text && contactPhone) {
       const { messageId } = await sendTextMessage(
-        process.env["WA_PHONE_NUMBER_ID"] ?? "",
+        phoneNumberId,
         contactPhone,
         text,
-        process.env["WA_ACCESS_TOKEN"] ?? ""
+        accessToken
       );
       await recordOutbound(prisma, { conversationId, organizationId, contentType: "text", body: text, whatsappMessageId: messageId });
     }

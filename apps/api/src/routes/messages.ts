@@ -188,12 +188,11 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ error: { code: "NO_WA_CONTACT", message: "No WhatsApp contact on this conversation" } });
       }
 
-      const phoneNumberId = conversation.organization?.phoneNumberId
-        ?? process.env["WA_PHONE_NUMBER_ID"]
-        ?? "";
-      const accessToken = conversation.organization?.wabaAccessToken
-        ?? process.env["WA_ACCESS_TOKEN"]
-        ?? "";
+      const phoneNumberId = conversation.organization?.phoneNumberId ?? "";
+      const accessToken = conversation.organization?.wabaAccessToken ?? "";
+      if (!phoneNumberId || !accessToken) {
+        return reply.status(400).send({ error: { code: "WHATSAPP_NOT_CONNECTED", message: "WhatsApp account not connected" } });
+      }
 
       const contentType = body.contentType ?? "text";
 

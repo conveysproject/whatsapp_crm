@@ -360,16 +360,26 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     if (!canAccess(role, permissions, "administrative")) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "administrative permission required" } });
     }
-    const waKeys = ["whatsapp_access_token", "whatsapp_business_account_id", "current_phone_number_id", "webhook_verified_at"];
-    await Promise.all(
-      waKeys.map((key) =>
+    const waKeys = [
+      "whatsapp_access_token",
+      "whatsapp_business_account_id",
+      "current_phone_number_id",
+      "current_phone_number_number",
+      "webhook_verified_at",
+    ];
+    await Promise.all([
+      ...waKeys.map((key) =>
         fastify.prisma.vendorSetting.upsert({
           where: { organizationId_key: { organizationId, key } },
           create: { organizationId, key, value: "", dataType: "string" },
           update: { value: "" },
         })
-      )
-    );
+      ),
+      fastify.prisma.organization.update({
+        where: { id: organizationId },
+        data: { wabaAccessToken: null, whatsappBusinessAccountId: null, phoneNumberId: null },
+      }),
+    ]);
     return reply.send({ success: true });
   });
 };
