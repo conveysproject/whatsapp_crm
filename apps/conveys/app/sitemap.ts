@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { BLOG_SLUGS } from "@/app/blog/data/posts";
+import { LOCATION_SLUGS } from "@/lib/locations-data";
 
 const SERVICE_SLUGS = [
   // Cloud Services
@@ -27,6 +28,7 @@ const SERVICE_SLUGS = [
   "crm-integration",
   "managed-service-provider",
   "whatsapp-crm",
+  "whatsapp-chatbot-development",
   "ai-solutions",
   // Product Development
   "saas-product-development",
@@ -55,6 +57,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: new Date(),
       changeFrequency: "monthly" as const,
       priority: 0.7,
+    })),
+    { url: `${base}/locations`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.7 },
+    ...LOCATION_SLUGS.map((slug) => ({
+      url: `${base}/locations/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: "monthly" as const,
+      priority: 0.6,
     })),
     { url: `${base}/privacy`, lastModified: new Date(), changeFrequency: "yearly", priority: 0.3 },
     { url: `${base}/terms`, lastModified: new Date(), changeFrequency: "yearly", priority: 0.3 },
