@@ -212,8 +212,8 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
 
     const tokenRes = await fetch(`${WA_GRAPH}/oauth/access_token`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: appId, client_secret: appSecret, code }),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: appId, client_secret: appSecret, code }),
     });
     if (!tokenRes.ok) {
       const rawErr = await tokenRes.text();

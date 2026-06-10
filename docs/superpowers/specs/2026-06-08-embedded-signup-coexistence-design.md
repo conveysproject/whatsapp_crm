@@ -34,12 +34,15 @@ EmbeddedSignupButton (shared client component)
   └── POST /api/v1/whatsapp-account/connect → calls onSuccess / onError prop
 
 Onboarding wizard (connect-waba/page.tsx)
-  └── <EmbeddedSignupButton flow="onboarding" onSuccess={handleSuccess} />
-        └── handleSuccess: phoneNumberId present → /checklist, else → /provision-number
+  └── <EmbeddedSignupButton flow="onboarding" onSuccess={noop} />
+        └── Component shows "Connected!" inline for 1500ms, then:
+              phoneNumberId present → router.replace("/checklist")
+              phoneNumberId absent  → router.replace("/provision-number")
 
 Settings page (settings/whatsapp-account/page.tsx)
   └── <EmbeddedSignupButton flow="reconnect" onSuccess={handleSuccess} />
         └── handleSuccess: invalidate wa-health + wa-profile queries
+              Component stays visible showing "Connected!" — no redirect, no reload
 ```
 
 ---
@@ -76,22 +79,45 @@ interface ConnectResult {
 - Looks for `{ type: "WA_EMBEDDED_SIGNUP", event: "FINISH", data: { waba_id, phone_number_id } }`
 - Stores captured `wabaId` and `phoneNumberId` in refs (not state — avoids stale closure in the FB.login callback)
 
+**Visual states (inline — no page reloads):**
+
+```
+idle       → coexistence toggle (if applicable) + "Connect with Meta" button
+connecting → button replaced by spinner + "Connecting your WhatsApp account…" text
+             (covers both: popup open AND backend API call in flight)
+success    → green check icon + WABA name + phone number
+             onboarding: auto-redirect after 1.5s (checklist or provision-number)
+             reconnect: stays on page, parent re-fetches health/profile queries
+error      → red inline message + "Try again" button (resets to idle)
+```
+
 **Connect flow:**
-1. Set `loading = true`
-2. Call `FB.login(callback, { config_id, response_type: "code", override_default_response_type: true })`
+1. Set state → `connecting`
+2. Attach one-time `window.addEventListener("message", capture)` for postMessage
+3. Call `FB.login(callback, { config_id, response_type: "code", override_default_response_type: true })`
    - `config_id`: `isSMB ? NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID : NEXT_PUBLIC_META_CONFIG_ID`
-3. In callback: extract `authResponse.code`
-4. `POST /api/v1/whatsapp-account/connect` with `{ code, wabaId, phoneNumberId, isSMB, flow }`
-5. Call `onSuccess(result)` or `onError(message)`, set `loading = false`
+4. If user cancels popup (no `authResponse.code`): set state → `idle`
+5. In callback: extract `authResponse.code`; remove postMessage listener
+6. `POST /api/v1/whatsapp-account/connect` with `{ code, wabaId, phoneNumberId, isSMB, flow }`
+7. On success: set state → `success`, call `onSuccess(result)`
+8. On error: set state → `error`, call `onError(message)`
 
 **Coexistence toggle:**
 - Renders only if `process.env.NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID` is non-empty
 - Label: "I already use the WhatsApp Business App"
 - Default: unchecked
+- Hidden once state is `connecting` or `success`
 
-**Button:** Facebook blue (`#1877F2`), full-width, disabled while `loading || !fbReady`
+**Button:** Facebook blue (`#1877F2`) with FB logo icon, full-width, disabled while `!fbReady`
 
-**Error display:** Inline error message below button when `onError` has been called
+**Success display (inline, no redirect yet):**
+- Green checkmark + WABA business name (bold) + phone number
+- Onboarding: "Redirecting…" + spinner, then `router.replace()` after 1500ms
+- Reconnect: "Connected!" stays visible; parent component re-fetches
+
+**Error display:** Red alert with error message + "Try again" button that resets state to `idle`
+
+**Popup cancel handling:** If `FB.login` callback fires without `authResponse` (user closed popup), silently return to `idle` with no error shown.
 
 ---
 
