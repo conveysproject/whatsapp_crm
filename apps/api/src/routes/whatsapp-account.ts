@@ -245,6 +245,7 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     fastify.log.info({ wabaId_from_body: wabaId, phoneNumberId_from_body: bodyPhoneNumberId }, "[WA-CONNECT] 3. body-provided IDs");
 
     // Approach A: debug_token
+    let debugGrantedBusinessId = "";
     if (!wabaId) {
       try {
         const appToken = `${appId}|${appSecret}`;
@@ -260,9 +261,11 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
         };
         fastify.log.info({ status: r.status, debugBody }, "[WA-CONNECT] 7b. debug_token response");
         if (r.ok && debugBody.data) {
-          const scope = debugBody.data.granular_scopes?.find((s) => s.scope === "whatsapp_business_messaging");
-          wabaId = scope?.target_ids?.[0] ?? "";
-          fastify.log.info({ wabaId_from_debug_token: wabaId }, "[WA-CONNECT] 7c. debug_token wabaId result");
+          const wabaScope = debugBody.data.granular_scopes?.find((s) => s.scope === "whatsapp_business_messaging");
+          wabaId = wabaScope?.target_ids?.[0] ?? "";
+          // save business_management Business ID for approach D fallback
+          debugGrantedBusinessId = debugBody.data.granular_scopes?.find((s) => s.scope === "business_management")?.target_ids?.[0] ?? "";
+          fastify.log.info({ wabaId_from_debug_token: wabaId, debugGrantedBusinessId }, "[WA-CONNECT] 7c. debug_token wabaId result");
         }
       } catch (e) {
         fastify.log.warn({ e }, "[WA-CONNECT] 7. debug_token call failed");
@@ -298,6 +301,21 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
         fastify.log.info({ wabaId_from_wba: wabaId }, "[WA-CONNECT] 9c. me/whatsapp_business_accounts wabaId result");
       } catch (e) {
         fastify.log.warn({ e }, "[WA-CONNECT] 9. me/whatsapp_business_accounts call failed");
+      }
+    }
+
+    // Approach D: /{businessId}/whatsapp_business_accounts using business_management scope
+    if (!wabaId && debugGrantedBusinessId) {
+      try {
+        const url = `${WA_GRAPH}/${debugGrantedBusinessId}/whatsapp_business_accounts?access_token=${encodeURIComponent(accessToken)}`;
+        fastify.log.info({ url: url.replace(accessToken, "***"), businessId: debugGrantedBusinessId }, "[WA-CONNECT] 9d. business/wba request");
+        const r = await fetch(url);
+        const d = await r.json() as { data?: Array<{ id: string }> };
+        fastify.log.info({ status: r.status, body: d }, "[WA-CONNECT] 9e. business/wba response");
+        if (r.ok) wabaId = d.data?.[0]?.id ?? "";
+        fastify.log.info({ wabaId_from_business: wabaId }, "[WA-CONNECT] 9f. business/wba result");
+      } catch (e) {
+        fastify.log.warn({ e }, "[WA-CONNECT] 9d. business/wba call failed");
       }
     }
 
