@@ -46,7 +46,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["wa-health"] }),
   });
 
-  const healthData = health as { data?: { status?: string; conditions?: Record<string, boolean> } } | undefined;
+  const healthData = health as { data?: { status?: "healthy" | "degraded" | "disconnected"; conditions?: Record<string, boolean> } } | undefined;
   const profileData = profile as { data?: { about?: string; address?: string } } | undefined;
 
   return (
@@ -80,7 +80,8 @@ export default function WhatsAppAccountPage(): JSX.Element {
         <div className="flex items-center gap-2">
           <span
             className={`w-2.5 h-2.5 rounded-full ${
-              healthData?.data?.status === "healthy" ? "bg-green-500" : "bg-red-500"
+              healthData?.data?.status === "healthy" ? "bg-green-500" :
+              healthData?.data?.status === "degraded" ? "bg-yellow-500" : "bg-red-500"
             }`}
           />
           <span className="text-sm capitalize">{healthData?.data?.status ?? "checking..."}</span>

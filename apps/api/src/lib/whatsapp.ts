@@ -260,7 +260,7 @@ const HEALTH_KEYS = [
 
 export async function getHealthStatus(
   organizationId: string
-): Promise<{ status: "healthy" | "degraded"; conditions: Record<string, boolean> }> {
+): Promise<{ status: "healthy" | "degraded" | "disconnected"; conditions: Record<string, boolean> }> {
   const settings = await prisma.vendorSetting.findMany({
     where: { organizationId },
     select: { key: true, value: true },
@@ -271,7 +271,8 @@ export async function getHealthStatus(
     conditions[k] = Boolean(map[k]);
   }
   conditions["token_not_expired"] = map["whatsapp_access_token_expired"] !== "1";
-  const status = Object.values(conditions).every(Boolean) ? "healthy" : "degraded";
+  const values = Object.values(conditions);
+  const status = values.every(Boolean) ? "healthy" : values.every((v) => !v) ? "disconnected" : "degraded";
   return { status, conditions };
 }
 
