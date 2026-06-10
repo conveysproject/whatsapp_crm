@@ -190,7 +190,7 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{
     Body: {
-      code: string;
+      accessToken: string;
       wabaId?: string;
       phoneNumberId?: string;
       isSMB?: boolean;
@@ -198,51 +198,21 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     };
   }>("/whatsapp-account/connect", async (request, reply) => {
     const { organizationId } = request.auth;
-    const { code, wabaId: bodyWabaId, phoneNumberId: bodyPhoneNumberId, isSMB = false, flow = "reconnect" } = request.body;
+    const { accessToken, wabaId: bodyWabaId, phoneNumberId: bodyPhoneNumberId, isSMB = false, flow = "reconnect" } = request.body;
 
-    fastify.log.info({ body: request.body, organizationId }, "[WA-CONNECT] 1. request received");
+    fastify.log.info({ body: { ...request.body, accessToken: request.body.accessToken ? `${request.body.accessToken.slice(0, 20)}…` : "MISSING" }, organizationId }, "[WA-CONNECT] 1. request received");
 
-    if (!code) {
-      return reply.status(400).send({ error: { code: "MISSING_CODE", message: "code is required" } });
+    if (!accessToken) {
+      return reply.status(400).send({ error: { code: "MISSING_TOKEN", message: "accessToken is required" } });
     }
 
     const appId = process.env["META_APP_ID"] ?? "";
     const appSecret = process.env["META_APP_SECRET"] ?? "";
-    fastify.log.info({ appIdSet: !!appId, appSecretSet: !!appSecret }, "[WA-CONNECT] 2. app credentials check");
-    if (!appId || !appSecret) {
-      return reply.status(500).send({ error: { code: "APP_NOT_CONFIGURED", message: "Facebook app credentials not configured" } });
-    }
-
-    // Step 1: exchange code for access token
-    const tokenReqBody = new URLSearchParams({
-      client_id: appId,
-      client_secret: appSecret,
-      code,
-      redirect_uri: "https://www.facebook.com/connect/login_success.html",
-    });
-    fastify.log.info({
-      url: `${WA_GRAPH}/oauth/access_token`,
-      params: { client_id: appId, redirect_uri: "https://www.facebook.com/connect/login_success.html", code_length: code.length },
-    }, "[WA-CONNECT] 3. token exchange request");
-
-    const tokenRes = await fetch(`${WA_GRAPH}/oauth/access_token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: tokenReqBody,
-    });
-    const tokenRawText = await tokenRes.text();
-    fastify.log.info({ status: tokenRes.status, body: tokenRawText }, "[WA-CONNECT] 4. token exchange response");
-    if (!tokenRes.ok) {
-      let errMsg = "Failed to exchange code for token";
-      try { errMsg = (JSON.parse(tokenRawText) as { error?: { message?: string } }).error?.message ?? errMsg; } catch { /* ignore */ }
-      return reply.status(400).send({ error: { code: "TOKEN_EXCHANGE_FAILED", message: errMsg } });
-    }
-    const { access_token: accessToken } = JSON.parse(tokenRawText) as { access_token: string };
-    fastify.log.info({ access_token_length: accessToken.length }, "[WA-CONNECT] 5. access token obtained");
+    fastify.log.info({ appIdSet: !!appId, appSecretSet: !!appSecret, access_token_length: accessToken.length }, "[WA-CONNECT] 2. token received — skipping code exchange (token flow)");
 
     // Step 2: resolve WABA ID (from body → debug_token → /me/businesses fallback)
     let wabaId = bodyWabaId ?? "";
-    fastify.log.info({ wabaId_from_body: wabaId, phoneNumberId_from_body: bodyPhoneNumberId }, "[WA-CONNECT] 6. body-provided IDs");
+    fastify.log.info({ wabaId_from_body: wabaId, phoneNumberId_from_body: bodyPhoneNumberId }, "[WA-CONNECT] 3. body-provided IDs");
 
     // Approach A: debug_token
     if (!wabaId) {
