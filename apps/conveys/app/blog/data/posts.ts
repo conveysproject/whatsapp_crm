@@ -759,6 +759,89 @@ export const BLOG_POSTS: BlogPost[] = [
       },
     ],
   },
+  {
+    slug: "workflow-automation-tools-and-best-practices",
+    title: "Workflow Automation: Tools, Best Practices, and Getting Started (2026)",
+    description:
+      "A practical guide to workflow automation — what it is, the best tools in 2026, how to choose between SaaS and custom solutions, and how to measure ROI.",
+    publishedAt: "2026-07-08",
+    category: "Automation",
+    readingTime: "8 min read",
+    intro:
+      "Workflow automation connects the dots between your people, tools, and data — so tasks move through your organisation without anyone manually chasing them. Done right, it cuts turnaround time, eliminates hand-off errors, and gives managers real-time visibility into every process.",
+    sections: [
+      { type: "h2", text: "What Is Workflow Automation?" },
+      { type: "p", text: "Workflow automation is the use of software rules to route tasks, data, and approvals between people and systems — replacing manual hand-offs, email chains, and spreadsheet tracking. A workflow defines who does what, when, and under what conditions. Automation makes it execute consistently every time." },
+      { type: "p", text: "Example: a new sales lead arrives, the workflow creates a CRM record, assigns it to the right salesperson based on territory, sends an introduction email, and schedules a follow-up — all without anyone touching it." },
+      { type: "h2", text: "Workflow Automation vs Business Process Automation" },
+      { type: "p", text: "Workflow automation typically refers to routing tasks and approvals between people — orchestrating human work. Business process automation is broader and includes automating tasks entirely with no human in the loop. In practice, most programmes combine both: workflows handle processes where humans must decide; BPA handles the purely mechanical steps." },
+      { type: "h2", text: "Top Workflow Automation Tools: n8n, Zapier, Make, and Custom Solutions" },
+      { type: "ul", items: [
+        "n8n: open-source, self-hostable workflow automation with 400+ nodes. Best for developers who want full data control. Free tier available; cloud plans from $20/month",
+        "Zapier: the most widely adopted no-code tool. 6,000+ app integrations. Best for marketing, sales, and ops teams. Plans from $20/month",
+        "Make (formerly Integromat): visual drag-and-drop scenario builder with powerful branching and data transformation. Plans from $9/month",
+        "Microsoft Power Automate: deeply integrated with Microsoft 365 and Dynamics. Best for enterprises in the Microsoft ecosystem",
+        "Custom-built: necessary for workflows involving proprietary databases, complex business rules, or high-security requirements",
+      ]},
+      { type: "h2", text: "Which Workflows to Automate First" },
+      { type: "p", text: "Prioritise workflows that are high-frequency, involve multiple hand-offs, and currently rely on email or spreadsheets to track status." },
+      { type: "ul", items: [
+        "Lead routing and assignment — from form submission to CRM record to salesperson notification",
+        "Approval workflows — expense approvals, leave requests, purchase orders",
+        "Onboarding sequences — new customer welcome, new employee setup",
+        "Invoice and payment processing — from PO to invoice to payment to reconciliation",
+        "Support ticket triage — from inbound message to categorisation to agent assignment",
+      ]},
+      { type: "h2", text: "How to Map a Workflow Before Automating It" },
+      { type: "ul", items: [
+        "Step 1: Name the trigger — what event starts this workflow?",
+        "Step 2: List every step — what happens next, and who does it?",
+        "Step 3: Identify decision points — where does the path branch based on conditions?",
+        "Step 4: Map exceptions — what happens when a step fails or data is missing?",
+        "Step 5: Define the end state — what does a successfully completed workflow look like?",
+        "Only automate a workflow you have mapped — automating a confused process makes the confusion faster",
+      ]},
+      { type: "h2", text: "Building Custom Workflow Automation vs Using SaaS Tools" },
+      { type: "p", text: "SaaS tools are the right choice for 80% of workflows — faster to deploy, no maintenance, and pre-integrated with common apps. Custom development makes sense when your workflow involves proprietary data that cannot leave your servers, logic too complex for a visual builder, or volume so high that per-task SaaS pricing becomes expensive." },
+      { type: "h2", text: "Workflow Automation for Sales, HR, and Operations" },
+      { type: "ul", items: [
+        "Sales: lead scoring, nurture sequences, deal stage updates, proposal generation, renewal reminders",
+        "HR: job application tracking, interview scheduling, offer letters, onboarding checklists",
+        "Operations: purchase order approval, inventory alerts, incident reporting, compliance checklists",
+        "Finance: invoice generation, payment reminders, expense approval, month-end close checklists",
+      ]},
+      { type: "h2", text: "ROI: How to Measure Workflow Automation Success" },
+      { type: "ul", items: [
+        "Time saved per workflow run × number of runs per month = monthly hours saved",
+        "Monthly hours saved × average hourly cost = monthly labour saving",
+        "Error rate before vs after — calculate the cost of each error (rework, customer impact)",
+        "Cycle time reduction — how much faster does the process complete end to end?",
+        "Typical payback: 1–3 months for SaaS tool implementations; 6–12 months for custom builds",
+      ]},
+    ],
+    faqs: [
+      {
+        question: "What is the easiest workflow to automate first?",
+        answer: "The easiest starting point is a linear, trigger-based workflow with no branching — for example, when a form is submitted, add the data to a spreadsheet and send a confirmation email. This can be live on Zapier or Make in under an hour and gives your team confidence in the technology.",
+      },
+      {
+        question: "Zapier vs custom automation — which is better?",
+        answer: "Zapier is faster and cheaper for standard integrations between well-known apps. Custom automation is better when you have proprietary systems, need to keep data on your own servers, require complex branching logic, or run high enough volume that Zapier's per-task pricing becomes expensive.",
+      },
+      {
+        question: "Can workflow automation work with WhatsApp?",
+        answer: "Yes. Via the Meta WhatsApp Cloud API, you can build workflows that send WhatsApp messages as part of any automated sequence — order confirmations, appointment reminders, lead follow-ups. This requires API access, not just the WhatsApp Business App.",
+      },
+      {
+        question: "How much does workflow automation cost?",
+        answer: "Simple no-code automation costs £0–£200/month in tool subscriptions. A custom workflow automation system for a medium-complexity process typically costs £3,000–£20,000 to build. Compare this against the annual cost of the manual process it replaces to calculate ROI.",
+      },
+      {
+        question: "What technical skills are needed?",
+        answer: "No-code tools like Zapier and Make require no programming skills. n8n requires basic familiarity with APIs and JSON. Custom workflow automation systems require a developer experienced in your chosen backend stack.",
+      },
+    ],
+  },
 ]
 
 export const BLOG_SLUGS = BLOG_POSTS.map((p) => p.slug)
