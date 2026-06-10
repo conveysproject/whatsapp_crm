@@ -14,12 +14,14 @@ declare global {
 }
 
 interface FBLoginResponse {
-  authResponse?: { accessToken?: string; code?: string } | null;
+  authResponse?: { code?: string } | null;
   status?: string;
 }
 
 interface FBLoginParams {
   config_id: string;
+  response_type: string;
+  override_default_response_type: boolean;
   extras: Record<string, unknown>;
 }
 
@@ -101,6 +103,8 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
       // ── STEP 3: FB.login params ────────────────────────────────────────────
       const fbLoginParams = {
         config_id: configId,
+        response_type: "code",
+        override_default_response_type: true,
         extras: {
           setup: {},
           featureType: isSMB ? "whatsapp_business_app_onboarding" : "",
@@ -161,13 +165,13 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
           console.log("raw response      :", JSON.stringify(response, null, 2));
           console.log("authResponse      :", JSON.stringify(response.authResponse, null, 2));
           console.log("status            :", response.status);
-          console.log("accessToken       :", response.authResponse?.accessToken ? `${response.authResponse.accessToken.slice(0, 20)}…` : "MISSING");
+          console.log("code              :", response.authResponse?.code ? `${response.authResponse.code.slice(0, 20)}…` : "MISSING");
           console.log("wabaId (message)  :", wabaId);
           console.log("phoneNumberId (message):", phoneNumberId);
           console.groupEnd();
 
-          const accessToken = response.authResponse?.accessToken;
-          if (!accessToken) {
+          const code = response.authResponse?.code;
+          if (!code) {
             setLoading(false);
             onError("Connection was cancelled.");
             return;
@@ -175,7 +179,7 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
           void (async () => {
             try {
               const token = await getToken();
-              const requestBody = { accessToken, isSMB, flow, wabaId: wabaId || undefined, phoneNumberId: phoneNumberId || undefined };
+              const requestBody = { code, isSMB, flow, wabaId: wabaId || undefined, phoneNumberId: phoneNumberId || undefined };
 
               // ── STEP 7: API request ──────────────────────────────────────
               console.group("[WA-CONNECT] 7. POST /v1/whatsapp-account/connect");
