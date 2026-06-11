@@ -72,98 +72,102 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "moda
 
 function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Element {
   return (
-    <div className="py-5 space-y-4">
+    <div className="py-4 space-y-4">
       <p className="text-sm text-gray-500">You can connect your number in two ways. Here&apos;s how they differ.</p>
       <div className="grid grid-cols-2 gap-4">
 
         {/* WA Business App Number */}
-        <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col">
-          <div className="bg-purple-50 border-b border-purple-100 px-4 py-3">
+        <div className="border border-gray-200 rounded-xl flex flex-col">
+          <div className="bg-purple-50 rounded-t-xl border-b border-purple-100 px-4 py-2.5">
             <p className="text-purple-700 font-semibold text-sm">WA Business App Number</p>
           </div>
-          <div className="px-4 py-3 flex flex-col gap-3 flex-1">
-            <div className="overflow-y-auto max-h-64 pr-1 divide-y divide-gray-100">
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <div className="overflow-y-auto px-4 py-3 space-y-3" style={{ maxHeight: "320px" }}>
               <InfoRow label="Requirements Before Connecting">
-                <span>A number registered on WhatsApp Business App <strong>version 2.24.4+</strong></span>
-                <span>GST Certificate or Active Website needed for verification</span>
+                <BulletItem>A number registered on WhatsApp Business App <strong>version 2.24.4+</strong></BulletItem>
+                <BulletItem>GST Certificate or Active Website needed for verification</BulletItem>
               </InfoRow>
               <InfoRow label="Number">
-                <span>No new number needed</span>
-                <span className="text-gray-400">Use your existing WhatsApp Business App number</span>
+                <BulletItem>No new number needed</BulletItem>
+                <BulletItem muted>Use your existing WhatsApp Business App number</BulletItem>
               </InfoRow>
               <InfoRow label="App Usage">
-                <span>Continue using WhatsApp Business App alongside WBMSG</span>
-                <span className="text-gray-400">Messages sync between WBMSG &amp; app</span>
+                <BulletItem>Continue using WhatsApp Business App alongside WBMSG</BulletItem>
+                <BulletItem muted>Messages sync between WBMSG &amp; app</BulletItem>
               </InfoRow>
               <InfoRow label="Broadcasts">
-                <span className="text-orange-600">Slower Broadcast Speeds</span>
-                <span className="text-gray-400">Broadcast to 10,000 contacts could take an hour to send</span>
+                <BulletItem orange>Slower Broadcast Speeds</BulletItem>
+                <BulletItem muted>Broadcast to 10,000 contacts could take an hour to send</BulletItem>
               </InfoRow>
               <InfoRow label="Chat Automations">
-                <span>Possible to use Chatbots &amp; AI Agent for customer replies</span>
+                <BulletItem>Possible to use Chatbots &amp; AI Agent for customer replies</BulletItem>
               </InfoRow>
               <InfoRow label="Groups, Status &amp; Calling">
-                <span>Groups, Status, and Calling continue to be available on WA Business App</span>
-                <span className="text-gray-400">WA Calling not possible from WBMSG</span>
+                <BulletItem>Groups, Status, and Calling available on WA Business App</BulletItem>
+                <BulletItem muted>WA Calling not possible from WBMSG</BulletItem>
               </InfoRow>
               <InfoRow label="Display Name">
-                <span>Display name depends on contact saving</span>
-                <span className="text-gray-400">Customers see your name only if they saved your number</span>
+                <BulletItem>Display name depends on contact saving</BulletItem>
+                <BulletItem muted>Customers see your name only if they saved your number</BulletItem>
               </InfoRow>
             </div>
-            <button
-              type="button"
-              onClick={() => onChoose(true)}
-              className="mt-auto w-full py-2 border border-purple-400 text-purple-600 hover:bg-purple-50 text-sm font-medium rounded-lg transition-colors"
-            >
-              Proceed with WA Business
-            </button>
+            <div className="px-4 pb-4 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => onChoose(true)}
+                className="w-full py-2 border border-purple-400 text-purple-600 hover:bg-purple-50 text-sm font-medium rounded-lg transition-colors"
+              >
+                Proceed with WA Business
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* New / Dedicated Number */}
-        <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col">
-          <div className="bg-blue-50 border-b border-blue-100 px-4 py-3">
+        {/* New Number */}
+        <div className="border border-gray-200 rounded-xl flex flex-col">
+          <div className="bg-blue-50 rounded-t-xl border-b border-blue-100 px-4 py-2.5">
             <p className="text-blue-700 font-semibold text-sm">New Number</p>
           </div>
-          <div className="px-4 py-3 flex flex-col gap-3 flex-1">
-            <div className="overflow-y-auto max-h-64 pr-1 divide-y divide-gray-100">
-              <InfoRow label="Requirements Before Connecting" variant="blue">
-                <span>Fresh number not on WA Personal/Business</span>
-                <span>Must be able to receive OTP via call or SMS</span>
-                <span>GST Certificate or Active Website needed for verification</span>
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <div className="overflow-y-auto px-4 py-3 space-y-3" style={{ maxHeight: "320px" }}>
+              <InfoRow label="Requirements Before Connecting">
+                <BulletItem>Fresh number not on WA Personal/Business</BulletItem>
+                <BulletItem>Must be able to receive OTP via call or SMS</BulletItem>
+                <BulletItem>GST Certificate or Active Website needed for verification</BulletItem>
               </InfoRow>
-              <InfoRow label="Number" variant="blue">
-                <span>Requires a fresh phone number</span>
-                <span className="text-gray-400">Cannot be already registered on WhatsApp</span>
+              <InfoRow label="Number">
+                <BulletItem>Requires a fresh phone number</BulletItem>
+                <BulletItem muted>Cannot be already registered on WhatsApp</BulletItem>
               </InfoRow>
-              <InfoRow label="App Usage" variant="blue">
-                <span>Cannot use WhatsApp Business/Personal app</span>
-                <span className="text-gray-400">Fully API-based — manage everything inside WBMSG</span>
+              <InfoRow label="App Usage">
+                <BulletItem>Cannot use WhatsApp Business/Personal app</BulletItem>
+                <BulletItem muted>Fully API-based — manage everything inside WBMSG</BulletItem>
               </InfoRow>
-              <InfoRow label="Broadcasts" variant="blue">
-                <span className="text-green-600">Faster Broadcast Speeds</span>
-                <span className="text-gray-400">Broadcast to 10,000 contacts in just a few minutes</span>
+              <InfoRow label="Broadcasts">
+                <BulletItem green>Faster Broadcast Speeds</BulletItem>
+                <BulletItem muted>Broadcast to 10,000 contacts in just a few minutes</BulletItem>
               </InfoRow>
-              <InfoRow label="Chat Automations" variant="blue">
-                <span>Possible to use Chatbots &amp; AI Agent for customer replies</span>
+              <InfoRow label="Chat Automations">
+                <BulletItem>Possible to use Chatbots &amp; AI Agent for customer replies</BulletItem>
               </InfoRow>
-              <InfoRow label="Groups, Status &amp; Calling" variant="blue">
-                <span>Groups &amp; Status sharing won&apos;t be available</span>
-                <span className="text-gray-400">Dedicated API number only — no WA app access</span>
+              <InfoRow label="Groups, Status &amp; Calling">
+                <BulletItem>Groups &amp; Status sharing won&apos;t be available</BulletItem>
+                <BulletItem muted>Dedicated API number only — no WA app access</BulletItem>
               </InfoRow>
-              <InfoRow label="Display Name" variant="blue">
-                <span className="text-green-600">Verified business name after verification</span>
-                <span className="text-gray-400">Customers see your business name even without saving your number</span>
+              <InfoRow label="Display Name">
+                <BulletItem green>Verified business name after verification</BulletItem>
+                <BulletItem muted>Customers see your business name even without saving your number</BulletItem>
               </InfoRow>
             </div>
-            <button
-              type="button"
-              onClick={() => onChoose(false)}
-              className="mt-auto w-full py-2 border border-blue-400 text-blue-600 hover:bg-blue-50 text-sm font-medium rounded-lg transition-colors"
-            >
-              Proceed with New Number
-            </button>
+            <div className="px-4 pb-4 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => onChoose(false)}
+                className="w-full py-2 border border-blue-400 text-blue-600 hover:bg-blue-50 text-sm font-medium rounded-lg transition-colors"
+              >
+                Proceed with New Number
+              </button>
+            </div>
           </div>
         </div>
 
@@ -172,13 +176,22 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
   );
 }
 
-function InfoRow({ label, children, variant = "purple" }: { label: string; children: React.ReactNode; variant?: "purple" | "blue" }): JSX.Element {
-  const labelColor = variant === "blue" ? "text-blue-500" : "text-purple-500";
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
   return (
-    <div className="py-2.5 space-y-1">
-      <p className={`text-xs font-medium ${labelColor}`}>{label}</p>
-      <div className="flex flex-col gap-0.5 text-sm text-gray-700">{children}</div>
+    <div>
+      <p className="text-xs font-medium text-gray-400 mb-1">{label}</p>
+      <div className="space-y-0.5">{children}</div>
     </div>
+  );
+}
+
+function BulletItem({ children, muted, orange, green }: { children: React.ReactNode; muted?: boolean; orange?: boolean; green?: boolean }): JSX.Element {
+  const color = orange ? "text-orange-600" : green ? "text-green-600" : muted ? "text-gray-400" : "text-gray-700";
+  return (
+    <p className={`text-sm ${color} flex gap-1.5`}>
+      <span className="mt-0.5 shrink-0">•</span>
+      <span>{children}</span>
+    </p>
   );
 }
 
