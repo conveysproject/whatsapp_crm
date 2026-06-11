@@ -178,7 +178,7 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
   return (
-    <div>
+    <div className="pb-3 border-b border-gray-100 last:border-b-0 last:pb-0">
       <p className="text-xs font-medium text-gray-400 mb-1">{label}</p>
       <div className="space-y-0.5">{children}</div>
     </div>
