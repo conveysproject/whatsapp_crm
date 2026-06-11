@@ -28,7 +28,7 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "moda
   const inner = (
     <div className={variant === "modal" ? "bg-white rounded-2xl shadow-2xl w-full max-w-xl" : "w-full"}>
       {/* Header */}
-      <div className={`flex items-center justify-between ${variant === "modal" ? "px-6 pt-6 pb-4 border-b" : "pb-4 border-b"}`}>
+      <div className={`flex items-center justify-between ${variant === "modal" ? "px-6 pt-6 pb-4 border-b" : "pb-3 border-b"}`}>
         <h2 className="text-lg font-semibold text-gray-900">
           {step === "choose" ? "Set up WhatsApp API Number" : "Connect your WhatsApp"}
         </h2>
@@ -72,21 +72,20 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "moda
 
 function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Element {
   return (
-    <div className="px-6 py-6 space-y-4">
+    <div className="py-5 space-y-4">
       <p className="text-sm text-gray-500">Choose how you want to connect your WhatsApp number to TrustCRM.</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         {/* WA Business App Number */}
         <div className="border-2 border-purple-200 rounded-xl overflow-hidden flex flex-col">
-          <div className="bg-purple-600 px-4 py-3">
-            <p className="text-white font-semibold text-sm">WA Business App Number</p>
+          <div className="bg-purple-600 px-5 py-3">
+            <p className="text-white font-semibold">WA Business App Number</p>
             <p className="text-purple-200 text-xs mt-0.5">Already using the WhatsApp Business app</p>
           </div>
-          <div className="px-4 py-4 flex flex-col gap-3 flex-1">
+          <div className="px-5 py-4 flex flex-col gap-3 flex-1">
             <ul className="space-y-2 text-sm text-gray-600">
-              <FeatureItem>Number already registered on WA Business App</FeatureItem>
-              <FeatureItem>Keep using the mobile app alongside API</FeatureItem>
-              <FeatureItem>Limited to 1,000 messages/day initially</FeatureItem>
-              <FeatureItem muted>Cannot use WA Business App after upgrade</FeatureItem>
+              <FeatureItem>Your existing WA Business App number</FeatureItem>
+              <FeatureItem>Keep using your mobile app alongside API</FeatureItem>
+              <FeatureItem>Up to 1,000 messages/day to start</FeatureItem>
             </ul>
             <button
               type="button"
@@ -100,16 +99,15 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
 
         {/* New Number */}
         <div className="border-2 border-blue-200 rounded-xl overflow-hidden flex flex-col">
-          <div className="bg-[#1877F2] px-4 py-3">
-            <p className="text-white font-semibold text-sm">New / Dedicated Number</p>
-            <p className="text-blue-200 text-xs mt-0.5">Register a fresh number via Meta</p>
+          <div className="bg-[#1877F2] px-5 py-3">
+            <p className="text-white font-semibold">New / Dedicated Number</p>
+            <p className="text-blue-200 text-xs mt-0.5">Register any number via Meta</p>
           </div>
-          <div className="px-4 py-4 flex flex-col gap-3 flex-1">
+          <div className="px-5 py-4 flex flex-col gap-3 flex-1">
             <ul className="space-y-2 text-sm text-gray-600">
-              <FeatureItem>Use a new or existing SIM card number</FeatureItem>
-              <FeatureItem>Full API access, no daily limits</FeatureItem>
+              <FeatureItem>Any new or existing SIM number</FeatureItem>
+              <FeatureItem>Full Cloud API access from day one</FeatureItem>
               <FeatureItem>Verified business display name</FeatureItem>
-              <FeatureItem>Best for dedicated business lines</FeatureItem>
             </ul>
             <button
               type="button"
