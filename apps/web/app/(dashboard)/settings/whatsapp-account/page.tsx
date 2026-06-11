@@ -250,6 +250,9 @@ export default function WhatsAppAccountPage(): JSX.Element {
       {/* Marketing Messages */}
       <MarketingMessagesSection />
 
+      {/* Connected Channels */}
+      <ConnectedChannelsSection />
+
       {/* QR Code */}
       <QrCodeSection />
 
@@ -349,6 +352,93 @@ function MarketingMessagesSection(): JSX.Element {
         <p className="text-xs text-red-500">Failed to enable. Check your WhatsApp connection.</p>
       )}
     </section>
+  );
+}
+
+function ConnectedChannelsSection(): JSX.Element {
+  const { data: settings } = useQuery({
+    queryKey: ["vendor-settings"],
+    queryFn: () => fetchJson("/api/v1/vendor-settings"),
+  });
+  const s = settings as {
+    data?: {
+      whatsapp_business_account_id?: string;
+      current_phone_number_number?: string;
+      facebook_page_id?: string;
+      instagram_account_id?: string;
+      meta_business_id?: string;
+    };
+  } | undefined;
+
+  const wabaId = s?.data?.whatsapp_business_account_id;
+  const phoneNumber = s?.data?.current_phone_number_number;
+  const pageId = s?.data?.facebook_page_id;
+  const igId = s?.data?.instagram_account_id;
+  const businessId = s?.data?.meta_business_id;
+
+  return (
+    <section className="border rounded-lg p-4 space-y-4">
+      <div>
+        <h2 className="font-medium">Connected Channels</h2>
+        <p className="text-sm text-gray-500">Channels granted during the last Embedded Signup.</p>
+      </div>
+
+      <ChannelRow
+        icon="💬"
+        name="WhatsApp"
+        connected={!!wabaId}
+        detail={phoneNumber ?? wabaId ?? undefined}
+      />
+      <ChannelRow
+        icon="💙"
+        name="Messenger / Facebook Pages"
+        connected={!!pageId}
+        detail={pageId}
+      />
+      <ChannelRow
+        icon="📷"
+        name="Instagram"
+        connected={!!igId}
+        detail={igId}
+      />
+
+      {businessId && (
+        <p className="text-xs text-gray-400">
+          Meta Business ID: <span className="font-mono">{businessId}</span>
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ChannelRow({
+  icon,
+  name,
+  connected,
+  detail,
+}: {
+  icon: string;
+  name: string;
+  connected: boolean;
+  detail?: string;
+}): JSX.Element {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg" aria-hidden="true">{icon}</span>
+        <div>
+          <p className="text-sm font-medium">{name}</p>
+          {detail && <p className="text-xs font-mono text-gray-400">{detail}</p>}
+        </div>
+      </div>
+      <span
+        className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+          connected ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+        }`}
+      >
+        {connected ? "Connected" : "Not connected"}
+      </span>
+    </div>
   );
 }
 
