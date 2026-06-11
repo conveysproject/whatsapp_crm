@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type JSX } from "react";
+import { useEffect, useRef, useState, type JSX } from "react";
 import { useAuth } from "@clerk/nextjs";
 
 declare global {
@@ -30,13 +30,15 @@ export interface ConnectResult {
   wabaName: string;
   phoneNumberId: string | null;
   displayPhoneNumber: string | null;
+  metaBusinessId: string | null;
+  facebookPageIds: string[];
+  instagramAccountIds: string[];
 }
 
 export interface EmbeddedSignupButtonProps {
   flow: "onboarding" | "reconnect";
   onSuccess: (result: ConnectResult) => void;
   onError: (message: string) => void;
-  /** When provided the internal checkbox is hidden and this value is used directly */
   isSMB?: boolean;
 }
 
@@ -45,11 +47,25 @@ const CONFIG_ID = process.env["NEXT_PUBLIC_META_CONFIG_ID"] ?? "";
 const SMB_CONFIG_ID = process.env["NEXT_PUBLIC_META_COEXISTENCE_CONFIG_ID"] ?? "";
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "";
 
+// Module-level coordination: postMessage and FB.login callback race each other.
+// WA_EMBEDDED_SIGNUP fires when user clicks Finish; FB.login callback fires when
+// the popup window closes. In practice postMessage always fires first, but we
+// coordinate with outer vars so the API call fires only when both are available.
+interface SessionData {
+  wabaId: string;
+  phoneNumberId: string;
+  businessId: string;
+  pageIds: string[];
+  instagramAccountIds: string[];
+}
+let sessionDataOuter: SessionData | null = null;
+let codeOuter: string | null = null;
+
 function loadFBSDK(appId: string): Promise<void> {
   return new Promise((resolve) => {
     if (window.FB) { resolve(); return; }
     window.fbAsyncInit = function () {
-      window.FB!.init({ appId, version: "v25.0", xfbml: false, autoLogAppEvents: true });
+      window.FB!.init({ appId, version: "v24.0", xfbml: false, autoLogAppEvents: true });
       resolve();
     };
     if (!document.getElementById("facebook-jssdk")) {
@@ -63,190 +79,205 @@ function loadFBSDK(appId: string): Promise<void> {
   });
 }
 
-export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onError }: EmbeddedSignupButtonProps): JSX.Element {
+export function EmbeddedSignupButton({
+  flow,
+  isSMB: isSMBProp,
+  onSuccess,
+  onError,
+}: EmbeddedSignupButtonProps): JSX.Element {
   const { getToken } = useAuth();
   const [isSMBInternal, setIsSMBInternal] = useState(false);
   const [loading, setLoading] = useState(false);
   const isSMB = isSMBProp !== undefined ? isSMBProp : isSMBInternal;
 
-  function handleConnect(): void {
-    setLoading(true);
-    void (async () => {
-      // ── STEP 1: environment ────────────────────────────────────────────────
-      console.group("[WA-CONNECT] 1. Environment");
-      console.log("page origin        :", window.location.origin);
-      console.log("page href          :", window.location.href);
-      console.log("APP_ID             :", APP_ID);
-      console.log("CONFIG_ID          :", CONFIG_ID);
-      console.log("SMB_CONFIG_ID      :", SMB_CONFIG_ID);
-      console.log("API_URL            :", API_URL);
-      console.log("isSMB              :", isSMB);
-      console.log("flow               :", flow);
-      console.groupEnd();
+  const esInProgressRef = useRef(false);
+  const popupWindowRef = useRef<Window | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-      // ── STEP 2: load FB SDK ────────────────────────────────────────────────
-      console.group("[WA-CONNECT] 2. Load FB SDK");
-      try {
-        await loadFBSDK(APP_ID);
-        console.log("FB SDK loaded OK, window.FB:", !!window.FB);
-      } catch (e) {
-        console.error("FB SDK load FAILED:", e);
-        console.groupEnd();
-        setLoading(false);
-        onError("Failed to load Facebook SDK. Please try again.");
+  // Always-current API call function — assign on every render so it captures
+  // the latest isSMB, flow, onSuccess, onError without stale closures.
+  const callApiRef = useRef<((code: string, sd: SessionData) => Promise<void>) | null>(null);
+  callApiRef.current = async (code: string, sd: SessionData): Promise<void> => {
+    try {
+      const token = await getToken();
+      const body = {
+        code,
+        isSMB,
+        flow,
+        ...(sd.wabaId ? { wabaId: sd.wabaId } : {}),
+        ...(sd.phoneNumberId ? { phoneNumberId: sd.phoneNumberId } : {}),
+        ...(sd.businessId ? { businessId: sd.businessId } : {}),
+        ...(sd.pageIds.length > 0 ? { pageIds: sd.pageIds } : {}),
+        ...(sd.instagramAccountIds.length > 0 ? { instagramAccountIds: sd.instagramAccountIds } : {}),
+      };
+      const res = await fetch(`${API_URL}/v1/whatsapp-account/connect`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
+        body: JSON.stringify(body),
+      });
+      const json = (await res.json()) as { data?: ConnectResult; error?: { message?: string } };
+      if (!res.ok) {
+        onError(json.error?.message ?? `Error ${res.status}`);
         return;
       }
-      console.groupEnd();
+      onSuccess(json.data!);
+    } catch {
+      onError("Network error — please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      const configId = isSMB && SMB_CONFIG_ID ? SMB_CONFIG_ID : CONFIG_ID;
+  // Register the postMessage listener for the entire component lifetime.
+  // This must live in useEffect so it is cleaned up on unmount.
+  useEffect(() => {
+    void loadFBSDK(APP_ID);
 
-      // ── STEP 3: FB.login params ────────────────────────────────────────────
-      const fbLoginParams = {
-        config_id: configId,
-        response_type: "code",
-        override_default_response_type: true,
-        extras: {
-          setup: {},
-          featureType: isSMB ? "whatsapp_business_app_onboarding" : "",
-          sessionInfoVersion: "3",
-          features: [{ name: "marketing_messages_lite" }],
-          version: "v3",
-        },
-      };
-      console.group("[WA-CONNECT] 3. FB.login params");
-      console.log(JSON.stringify(fbLoginParams, null, 2));
-      console.groupEnd();
+    const stopPolling = () => {
+      if (pollTimerRef.current !== null) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
 
-      let phoneNumberId = "";
-      let wabaId = "";
-      let capturedRedirectUri = "";
-
-      // ── STEP 4: postMessage listener ──────────────────────────────────────
-      const sessionInfoListener = (event: MessageEvent) => {
-        console.group("[WA-CONNECT] 4. postMessage event");
-        console.log("event.origin :", event.origin);
-        console.log("event.data   :", event.data);
-        if (event.origin !== "https://www.facebook.com") {
-          console.log("→ IGNORED (origin mismatch — expected https://www.facebook.com)");
-          console.groupEnd();
-          return;
-        }
-        const raw = event.data as string;
-        // xd_arbiter relay messages are URL-encoded query strings, not JSON — skip silently
-        if (typeof raw !== "string" || raw.startsWith("cb=") || !raw.startsWith("{")) {
-          console.log("→ non-JSON (xd_arbiter relay), skipped");
-          console.groupEnd();
-          return;
-        }
-        try {
-          const data = JSON.parse(raw) as {
-            type?: string;
-            event?: string;
-            data?: { phone_number_id?: string; waba_id?: string; current_step?: string };
+    const cb = (event: MessageEvent) => {
+      // Reference pattern: accept any *.facebook.com origin, not just www
+      if (!event.origin.endsWith("facebook.com")) return;
+      const raw = event.data as string;
+      if (typeof raw !== "string" || !raw.startsWith("{")) return;
+      try {
+        const data = JSON.parse(raw) as {
+          type?: string;
+          data?: {
+            waba_id?: string;
+            phone_number_id?: string;
+            business_id?: string;
+            page_ids?: string[];
+            instagram_account_ids?: string[];
+            current_step?: string;
           };
-          console.log("parsed:", JSON.stringify(data, null, 2));
-          if (data.type === "WA_EMBEDDED_SIGNUP") {
-            if (data.event === "FINISH" || data.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
-              phoneNumberId = data.data?.phone_number_id ?? "";
-              wabaId = data.data?.waba_id ?? "";
-              console.log("→ FINISH captured — phoneNumberId:", phoneNumberId, "wabaId:", wabaId);
-            } else {
-              console.log("→ event type:", data.event, "current_step:", data.data?.current_step);
-            }
+        };
+        if (data.type === "WA_EMBEDDED_SIGNUP") {
+          if (data.data?.current_step) {
+            // User closed the popup mid-flow — clear state, stop polling
+            esInProgressRef.current = false;
+            popupWindowRef.current = null;
+            stopPolling();
+          } else {
+            // Flow complete — capture all channel data
+            sessionDataOuter = {
+              wabaId: data.data?.waba_id ?? "",
+              phoneNumberId: data.data?.phone_number_id ?? "",
+              businessId: data.data?.business_id ?? "",
+              pageIds: data.data?.page_ids ?? [],
+              instagramAccountIds: data.data?.instagram_account_ids ?? [],
+            };
+            // If FB.login callback already fired, proceed immediately
+            if (codeOuter) void callApiRef.current?.(codeOuter, sessionDataOuter);
           }
-        } catch (e) {
-          console.log("→ unexpected non-JSON:", e);
         }
-        console.groupEnd();
-      };
-      window.addEventListener("message", sessionInfoListener);
-      console.log("[WA-CONNECT] postMessage listener registered");
+      } catch {
+        // Non-JSON or non-ES messages from Facebook iframes — ignore
+      }
+    };
 
-      // ── STEP 5: FB.login call ──────────────────────────────────────────────
-      // Intercept window.open to capture the xd_arbiter redirect_uri Meta uses internally.
-      // FB.login calls window.open synchronously, so we restore immediately after.
-      const originalOpen = window.open;
-      window.open = function (url?: string | URL, target?: string, features?: string): WindowProxy | null {
-        if (typeof url === "string" && url.includes("facebook.com") && url.includes("redirect_uri")) {
-          try {
-            const ru = new URL(url).searchParams.get("redirect_uri");
-            if (ru) {
-              capturedRedirectUri = ru;
-              console.log("[WA-CONNECT] captured redirect_uri:", capturedRedirectUri.slice(0, 80) + "…");
-            }
-          } catch { /* ignore */ }
+    window.addEventListener("message", cb);
+    return () => {
+      window.removeEventListener("message", cb);
+      stopPolling();
+    };
+  }, []); // empty deps — refs and module-level vars never change identity
+
+  function handleConnect(): void {
+    setLoading(true);
+    // Reset coordination state for this attempt
+    sessionDataOuter = null;
+    codeOuter = null;
+    esInProgressRef.current = true;
+    popupWindowRef.current = null;
+
+    if (!window.FB) {
+      setLoading(false);
+      onError("Facebook SDK is still loading. Please try again in a moment.");
+      return;
+    }
+
+    const configId = isSMB && SMB_CONFIG_ID ? SMB_CONFIG_ID : CONFIG_ID;
+
+    // v4 config — key changes from v3:
+    //   version: "v4" (was "v3")
+    //   features: ["app_only_install"] (was ["marketing_messages_lite"])
+    //   featureType: omitted entirely when not SMB (reference deletes empty featureType)
+    //   setup: {} removed (not present in Meta reference)
+    const fbLoginParams: FBLoginParams = {
+      config_id: configId,
+      response_type: "code",
+      override_default_response_type: true,
+      extras: {
+        sessionInfoVersion: "3",
+        version: "v4",
+        ...(isSMB ? { featureType: "whatsapp_business_app_onboarding" } : {}),
+        features: [{ name: "app_only_install" }],
+      },
+    };
+
+    // Capture the popup window reference. FB.login opens the popup synchronously
+    // before invoking any callback, so we intercept window.open briefly.
+    const originalWindowOpen = window.open;
+    window.open = function (...args: Parameters<typeof window.open>): Window | null {
+      const popup = originalWindowOpen.apply(window, args);
+      if (popup) popupWindowRef.current = popup;
+      window.open = originalWindowOpen; // restore immediately
+      return popup;
+    };
+
+    window.FB.login((response) => {
+      // Popup has closed — clear ES in-progress state and polling
+      esInProgressRef.current = false;
+      popupWindowRef.current = null;
+      if (pollTimerRef.current !== null) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+
+      if (response.authResponse?.code) {
+        codeOuter = response.authResponse.code;
+        if (sessionDataOuter) {
+          // postMessage already arrived — fire API immediately
+          void callApiRef.current?.(codeOuter, sessionDataOuter);
         }
-        return originalOpen.call(window, url as string, target, features);
-      };
-      console.log("[WA-CONNECT] 5. Calling FB.login …");
-      window.FB!.login(
-        (response) => {
-          // ── STEP 6: FB.login callback ──────────────────────────────────────
-          console.group("[WA-CONNECT] 6. FB.login callback");
-          console.log("raw response      :", JSON.stringify(response, null, 2));
-          console.log("authResponse      :", JSON.stringify(response.authResponse, null, 2));
-          console.log("status            :", response.status);
-          console.log("code              :", response.authResponse?.code ? `${response.authResponse.code.slice(0, 20)}…` : "MISSING");
-          console.log("wabaId (message)  :", wabaId);
-          console.log("phoneNumberId (message):", phoneNumberId);
-          console.groupEnd();
+        // else: postMessage handler will call callApiRef when WA_EMBEDDED_SIGNUP arrives
+      } else {
+        // User cancelled the dialog
+        sessionDataOuter = null;
+        codeOuter = null;
+        setLoading(false);
+        onError("Connection was cancelled.");
+      }
+    }, fbLoginParams);
 
-          const code = response.authResponse?.code;
-          if (!code) {
-            setLoading(false);
-            onError("Connection was cancelled.");
-            return;
-          }
-          void (async () => {
-            try {
-              const token = await getToken();
-              const requestBody = { code, isSMB, flow, wabaId: wabaId || undefined, phoneNumberId: phoneNumberId || undefined, redirectUri: capturedRedirectUri || undefined };
-
-              // ── STEP 7: API request ──────────────────────────────────────
-              console.group("[WA-CONNECT] 7. POST /v1/whatsapp-account/connect");
-              console.log("URL    :", `${API_URL}/v1/whatsapp-account/connect`);
-              console.log("body   :", JSON.stringify(requestBody, null, 2));
-              console.log("token  :", token ? `${token.slice(0, 20)}…` : "MISSING");
-              console.groupEnd();
-
-              const res = await fetch(`${API_URL}/v1/whatsapp-account/connect`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token ?? ""}`,
-                },
-                body: JSON.stringify(requestBody),
-              });
-              const body = await res.json() as {
-                data?: ConnectResult;
-                error?: { message?: string };
-              };
-
-              // ── STEP 8: API response ─────────────────────────────────────
-              console.group("[WA-CONNECT] 8. API response");
-              console.log("status :", res.status, res.statusText);
-              console.log("body   :", JSON.stringify(body, null, 2));
-              console.groupEnd();
-
-              if (!res.ok) {
-                onError(body.error?.message ?? `Error ${res.status}`);
-                return;
-              }
-              onSuccess(body.data!);
-            } catch (e) {
-              console.error("[WA-CONNECT] Network error:", e);
-              onError("Network error — please try again.");
-            } finally {
-              window.removeEventListener("message", sessionInfoListener);
-              setLoading(false);
-            }
-          })();
-        },
-        fbLoginParams
-      );
-      // FB.login already opened the popup synchronously — restore window.open immediately
-      window.open = originalOpen;
-    })();
+    // Poll every 500ms to detect external popup close (user closed without completing)
+    if (pollTimerRef.current !== null) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    pollTimerRef.current = setInterval(() => {
+      if (!esInProgressRef.current) {
+        clearInterval(pollTimerRef.current!);
+        pollTimerRef.current = null;
+        return;
+      }
+      if (popupWindowRef.current?.closed) {
+        esInProgressRef.current = false;
+        popupWindowRef.current = null;
+        clearInterval(pollTimerRef.current!);
+        pollTimerRef.current = null;
+        setLoading(false);
+      }
+    }, 500);
   }
 
   return (
@@ -270,7 +301,10 @@ export function EmbeddedSignupButton({ flow, isSMB: isSMBProp, onSuccess, onErro
       >
         {loading ? (
           <>
-            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+            <span
+              className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
+              aria-hidden="true"
+            />
             Connecting…
           </>
         ) : (

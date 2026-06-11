@@ -42,6 +42,9 @@ model Organization {
   subCategory               String?  @map("sub_category")
   revenue                   String?
   whatsappUpdates           Boolean? @map("whatsapp_updates")
+  facebookPageId            String?  @map("facebook_page_id")
+  instagramAccountId        String?  @map("instagram_account_id")
+  metaBusinessId            String?  @map("meta_business_id")
   registeredAt              DateTime? @map("registered_at")
   settings                  Json     @default("{}")
   createdAt                 DateTime @default(now()) @map("created_at")

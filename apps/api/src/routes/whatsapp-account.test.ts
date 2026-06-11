@@ -72,34 +72,73 @@ describe("POST /v1/whatsapp-account/connect", () => {
   function setupFetch(opts: {
     tokenOk?: boolean;
     wabaIdFromDebugToken?: string;
+    wabaIdFromBusiness?: string;
     phones?: { id: string; display_phone_number: string }[];
   } = {}): void {
     const {
       tokenOk = true,
       wabaIdFromDebugToken = "waba-1",
+      wabaIdFromBusiness = "",
       phones = [{ id: "pn-1", display_phone_number: "+919000000001" }],
     } = opts;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url: RequestInfo | URL) => {
-      const urlStr = url.toString();
-      if (urlStr.includes("oauth/access_token")) {
-        if (!tokenOk)
-          return new Response(JSON.stringify({ error: { message: "Invalid code" } }), { status: 400 });
-        return new Response(JSON.stringify({ access_token: "tok-123" }), { status: 200 });
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const u = url.toString();
+
+      if (u.includes("oauth/access_token")) {
+        if (!tokenOk) return new Response(JSON.stringify({ error: { message: "bad code" } }), { status: 400 });
+        return new Response(JSON.stringify({ access_token: "tok-1" }), { status: 200 });
       }
-      if (urlStr.includes("debug_token")) {
-        const scopes = wabaIdFromDebugToken
-          ? [{ scope: "whatsapp_business_messaging", target_ids: [wabaIdFromDebugToken] }]
-          : [];
-        return new Response(JSON.stringify({ data: { granular_scopes: scopes } }), { status: 200 });
+
+      // businessId direct WABA lookup: /{businessId}/whatsapp_business_accounts
+      if (u.includes("/biz-1/whatsapp_business_accounts")) {
+        const wabaId = wabaIdFromBusiness || wabaIdFromDebugToken;
+        return new Response(JSON.stringify({ data: wabaId ? [{ id: wabaId }] : [] }), { status: 200 });
       }
-      if (urlStr.includes("phone_numbers")) {
+
+      if (u.includes("debug_token")) {
+        return new Response(
+          JSON.stringify({
+            data: {
+              granular_scopes: wabaIdFromDebugToken
+                ? [
+                    { scope: "whatsapp_business_messaging", target_ids: [wabaIdFromDebugToken] },
+                    { scope: "business_management", target_ids: ["biz-debug"] },
+                  ]
+                : [],
+            },
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (/\/waba-\d+\?fields=name/.test(u)) {
+        return new Response(JSON.stringify({ name: "Test WABA" }), { status: 200 });
+      }
+
+      if (u.includes("/phone_numbers")) {
         return new Response(JSON.stringify({ data: phones }), { status: 200 });
       }
-      if (urlStr.includes("subscribed_apps") || urlStr.includes("smb_app_data")) {
+
+      if (u.includes("/pn-1?fields=display_phone_number")) {
+        return new Response(JSON.stringify({ display_phone_number: "+919000000001" }), { status: 200 });
+      }
+
+      // WhatsApp webhook subscription
+      if (/\/waba-\d+\/subscribed_apps/.test(u)) {
         return new Response(JSON.stringify({ success: true }), { status: 200 });
       }
-      // WABA name lookup or phone display lookup
-      return new Response(JSON.stringify({ id: "waba-1", name: "My WABA", display_phone_number: "+919000000001" }), { status: 200 });
+
+      // Facebook Page webhook subscription
+      if (/\/page-\d+\/subscribed_apps/.test(u)) {
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+
+      if (u.includes("smb_app_data")) {
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+
+      return new Response(JSON.stringify({}), { status: 200 });
     });
   }
 
@@ -212,5 +251,84 @@ describe("POST /v1/whatsapp-account/connect", () => {
     });
     const updateCall = mockPrisma.organization.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
     expect(updateCall?.data).not.toHaveProperty("onboardingStep");
+  });
+
+  it("uses businessId as primary WABA lookup when provided", async () => {
+    setupFetch({ wabaIdFromBusiness: "waba-from-biz" });
+    mockPrisma.organization.update.mockResolvedValue({});
+    mockPrisma.vendorSetting.upsert.mockResolvedValue({});
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/whatsapp-account/connect",
+      payload: { code: "abc", businessId: "biz-1" },
+    });
+    expect(res.statusCode).toBe(200);
+    const fetchSpy = vi.mocked(globalThis.fetch);
+    const bizCall = fetchSpy.mock.calls.find(([url]) => url.toString().includes("/biz-1/whatsapp_business_accounts"));
+    expect(bizCall).toBeDefined();
+    // debug_token should NOT have been called since businessId resolved first
+    const debugCall = fetchSpy.mock.calls.find(([url]) => url.toString().includes("debug_token"));
+    expect(debugCall).toBeUndefined();
+  });
+
+  it("subscribes Facebook Page webhook when pageIds provided", async () => {
+    setupFetch({});
+    mockPrisma.organization.update.mockResolvedValue({});
+    mockPrisma.vendorSetting.upsert.mockResolvedValue({});
+    await app.inject({
+      method: "POST",
+      url: "/v1/whatsapp-account/connect",
+      payload: { code: "abc", wabaId: "waba-1", pageIds: ["page-1", "page-2"] },
+    });
+    const fetchSpy = vi.mocked(globalThis.fetch);
+    const pageCalls = fetchSpy.mock.calls.filter(([url]) =>
+      /\/page-\d+\/subscribed_apps/.test(url.toString()),
+    );
+    expect(pageCalls).toHaveLength(2);
+  });
+
+  it("persists facebookPageId and instagramAccountId to Organization", async () => {
+    setupFetch({});
+    mockPrisma.organization.update.mockResolvedValue({});
+    mockPrisma.vendorSetting.upsert.mockResolvedValue({});
+    await app.inject({
+      method: "POST",
+      url: "/v1/whatsapp-account/connect",
+      payload: {
+        code: "abc",
+        wabaId: "waba-1",
+        businessId: "biz-1",
+        pageIds: ["page-1"],
+        instagramAccountIds: ["ig-1"],
+      },
+    });
+    expect(mockPrisma.organization.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          facebookPageId: "page-1",
+          instagramAccountId: "ig-1",
+          metaBusinessId: "biz-1",
+        }),
+      }),
+    );
+  });
+
+  it("returns facebookPageIds and instagramAccountIds in response", async () => {
+    setupFetch({});
+    mockPrisma.organization.update.mockResolvedValue({});
+    mockPrisma.vendorSetting.upsert.mockResolvedValue({});
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/whatsapp-account/connect",
+      payload: {
+        code: "abc",
+        wabaId: "waba-1",
+        pageIds: ["page-1"],
+        instagramAccountIds: ["ig-1"],
+      },
+    });
+    const body = res.json<{ data: { facebookPageIds: string[]; instagramAccountIds: string[] } }>();
+    expect(body.data.facebookPageIds).toEqual(["page-1"]);
+    expect(body.data.instagramAccountIds).toEqual(["ig-1"]);
   });
 });

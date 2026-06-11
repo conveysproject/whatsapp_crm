@@ -1,0 +1,14 @@
+{
+  "type": "WA_EMBEDDED_SIGNUP",
+  "event": "FINISH",
+  "data": {
+    "waba_id": "123456789012345",
+    "business_id": "987654321098765",
+    "phone_number_id": "1084186771447470",
+    "page_ids": ["111222333444555"],
+    "instagram_account_ids": ["ig-account-001"],
+    "ad_account_ids": [],
+    "catalog_ids": [],
+    "dataset_ids": []
+  }
+}

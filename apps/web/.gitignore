@@ -5,7 +5,7 @@
 .vercel
 
 # Playwright — all E2E test files are local-only
-e2e/
+/e2e/
 playwright.config.ts
 .env.test
 .env.test.example
