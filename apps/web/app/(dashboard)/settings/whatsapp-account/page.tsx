@@ -59,7 +59,8 @@ export default function WhatsAppAccountPage(): JSX.Element {
 
   const syncPhones = useMutation({
     mutationFn: () =>
-      fetch("/api/v1/whatsapp-account/sync-phone-numbers", { method: "POST" }).then((r) => r.json()),
+      fetch("/api/v1/whatsapp-account/sync-phone-numbers", { method: "POST" })
+        .then((r) => r.json() as Promise<{ data?: Array<{ id: string; displayPhoneNumber: string; verifiedName: string }> }>),
   });
 
   const disconnect = useMutation({
@@ -236,15 +237,40 @@ export default function WhatsAppAccountPage(): JSX.Element {
       </section>
 
       {/* Phone Numbers */}
-      <section className="border rounded-lg p-4 space-y-2">
-        <h2 className="font-medium">Phone Numbers</h2>
-        <button
-          onClick={() => syncPhones.mutate()}
-          disabled={syncPhones.isPending}
-          className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
-        >
-          {syncPhones.isPending ? "Syncing..." : "Sync from Meta"}
-        </button>
+      <section className="border rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-medium">Phone Numbers</h2>
+          <button
+            onClick={() => syncPhones.mutate()}
+            disabled={syncPhones.isPending}
+            className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {syncPhones.isPending ? "Syncing..." : "Sync from Meta"}
+          </button>
+        </div>
+        {syncPhones.isSuccess && (
+          (() => {
+            const phones = syncPhones.data?.data ?? [];
+            return phones.length === 0 ? (
+              <p className="text-sm text-gray-500">No phone numbers found for this WABA.</p>
+            ) : (
+              <ul className="divide-y">
+                {phones.map((p) => (
+                  <li key={p.id} className="py-2 flex items-center justify-between text-sm">
+                    <div>
+                      <p className="font-medium">{p.displayPhoneNumber}</p>
+                      <p className="text-gray-500 text-xs">{p.verifiedName} · ID: {p.id}</p>
+                    </div>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Active</span>
+                  </li>
+                ))}
+              </ul>
+            );
+          })()
+        )}
+        {syncPhones.isError && (
+          <p className="text-xs text-red-500">Sync failed. Ensure your WhatsApp account is connected.</p>
+        )}
       </section>
 
       {/* Marketing Messages */}
@@ -278,11 +304,11 @@ export default function WhatsAppAccountPage(): JSX.Element {
 function QrCodeSection(): JSX.Element {
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["wa-qr-code"],
-    queryFn: () => fetchJson("/api/v1/whatsapp-account/qr-code"),
+    queryFn: () => fetchJson("/api/v1/whatsapp-account/qr-code?format=json"),
     enabled: false,
   });
-  const qrData = data as { data?: { data?: { url?: string }[] } } | undefined;
-  const qrUrl = qrData?.data?.data?.[0]?.url;
+  const qrData = data as { data?: { url?: string; qrDataUrl?: string } } | undefined;
+  const qrUrl = qrData?.data?.qrDataUrl;
 
   return (
     <section className="border rounded-lg p-4 space-y-3">
@@ -297,10 +323,13 @@ function QrCodeSection(): JSX.Element {
       >
         {isFetching ? "Loading…" : isLoading && !data ? "Load QR Code" : "Refresh QR Code"}
       </button>
-      {isError && <p className="text-xs text-red-500">Failed to load QR code. Ensure WhatsApp is connected.</p>}
+      {isError && <p className="text-xs text-red-500">Sync phone numbers first, then refresh the QR code.</p>}
       {qrUrl && (
         <div className="flex flex-col items-start gap-2">
           <img src={qrUrl} alt="WhatsApp QR Code" className="w-48 h-48 border rounded" />
+          {qrData?.data?.url && (
+            <p className="text-xs text-gray-500 font-mono break-all">{qrData.data.url}</p>
+          )}
           <a href={qrUrl} download="whatsapp-qr.png" className="text-xs text-blue-600 hover:underline">
             Download QR Code
           </a>
