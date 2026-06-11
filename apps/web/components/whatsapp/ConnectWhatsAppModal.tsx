@@ -129,11 +129,36 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
             <p className="text-blue-200 text-xs mt-0.5">Register any number via Meta</p>
           </div>
           <div className="px-5 py-4 flex flex-col gap-3 flex-1">
-            <ul className="space-y-2 text-sm text-gray-600">
-              <FeatureItem>Any new or existing SIM number</FeatureItem>
-              <FeatureItem>Full Cloud API access from day one</FeatureItem>
-              <FeatureItem>Verified business display name</FeatureItem>
-            </ul>
+            <div className="space-y-0 divide-y divide-gray-100 text-sm">
+              <InfoRow label="Requirements" variant="blue">
+                <span>Fresh number — <strong>not on WA Personal or Business</strong></span>
+                <span className="text-gray-400">Must receive OTP via call or SMS</span>
+                <span className="text-gray-400">GST Certificate or Active Website for verification</span>
+              </InfoRow>
+              <InfoRow label="Number" variant="blue">
+                <span>Requires a fresh phone number</span>
+                <span className="text-gray-400">Cannot be already registered on WhatsApp</span>
+              </InfoRow>
+              <InfoRow label="App Usage" variant="blue">
+                <span>Cannot use WA Business/Personal app</span>
+                <span className="text-gray-400">Fully API-based — manage everything inside WBMSG</span>
+              </InfoRow>
+              <InfoRow label="Broadcasts" variant="blue">
+                <span className="text-green-600 font-medium">Faster broadcast speeds</span>
+                <span className="text-gray-400">10,000 contacts in just a few minutes</span>
+              </InfoRow>
+              <InfoRow label="Automations" variant="blue">
+                Chatbots &amp; AI Agent available for customer replies
+              </InfoRow>
+              <InfoRow label="Groups / Status" variant="blue">
+                <span>Groups &amp; Status sharing not available</span>
+                <span className="text-gray-400">Dedicated API number only — no WA app access</span>
+              </InfoRow>
+              <InfoRow label="Display Name" variant="blue">
+                <span className="text-green-600 font-medium">Verified business name shown</span>
+                <span className="text-gray-400">Customers see your business name even without saving your number</span>
+              </InfoRow>
+            </div>
             <button
               type="button"
               onClick={() => onChoose(false)}
@@ -148,30 +173,16 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
   );
 }
 
-function InfoRow({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
+function InfoRow({ label, children, variant = "purple" }: { label: string; children: React.ReactNode; variant?: "purple" | "blue" }): JSX.Element {
+  const labelColor = variant === "blue" ? "text-blue-700" : "text-purple-700";
   return (
     <div className="py-2 flex gap-3">
-      <span className="text-xs font-semibold text-purple-700 uppercase tracking-wide w-28 shrink-0 pt-0.5">{label}</span>
+      <span className={`text-xs font-semibold ${labelColor} uppercase tracking-wide w-28 shrink-0 pt-0.5`}>{label}</span>
       <div className="flex flex-col gap-0.5 text-xs text-gray-700 min-w-0">{children}</div>
     </div>
   );
 }
 
-function FeatureItem({ children, muted = false }: { children: React.ReactNode; muted?: boolean }): JSX.Element {
-  return (
-    <li className={`flex items-start gap-2 ${muted ? "text-gray-400" : ""}`}>
-      <svg
-        className={`w-4 h-4 mt-0.5 shrink-0 ${muted ? "text-gray-300" : "text-green-500"}`}
-        fill="none" viewBox="0 0 24 24" stroke="currentColor"
-      >
-        {muted
-          ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />}
-      </svg>
-      <span>{children}</span>
-    </li>
-  );
-}
 
 interface ConnectStepProps {
   flow: "onboarding" | "reconnect";
