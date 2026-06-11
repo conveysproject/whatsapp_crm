@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type JSX } from "react";
+import { useState, type JSX, type ChangeEvent } from "react";
 import { EmbeddedSignupButton, type ConnectResult } from "./EmbeddedSignupButton";
 export type { ConnectResult };
 
@@ -71,9 +71,13 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "moda
 }
 
 function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Element {
+  const [hasAppVersion, setHasAppVersion] = useState(false);
+  const [hasVerification, setHasVerification] = useState(false);
+  const smbReady = hasAppVersion && hasVerification;
+
   return (
     <div className="py-5 space-y-4">
-      <p className="text-sm text-gray-500">Choose how you want to connect your WhatsApp number to TrustCRM.</p>
+      <p className="text-sm text-gray-500">Choose how you want to connect your WhatsApp number to WBMSG.</p>
       <div className="grid grid-cols-2 gap-4">
         {/* WA Business App Number */}
         <div className="border-2 border-purple-200 rounded-xl overflow-hidden flex flex-col">
@@ -83,10 +87,29 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
           </div>
           <div className="px-5 py-4 flex flex-col gap-3 flex-1">
             <div className="space-y-0 divide-y divide-gray-100 text-sm">
-              <InfoRow label="Requirements">
-                <span>WA Business App <strong>v2.24.4+</strong></span>
-                <span className="text-gray-400">GST Certificate or Active Website for verification</span>
-              </InfoRow>
+              <div className="py-2 flex gap-3">
+                <span className="text-xs font-semibold text-purple-700 uppercase tracking-wide w-28 shrink-0 pt-0.5">Requirements</span>
+                <div className="flex flex-col gap-2 text-xs min-w-0">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={hasAppVersion}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setHasAppVersion(e.target.checked)}
+                      className="mt-0.5 accent-purple-600"
+                    />
+                    <span>My WA Business App is <strong>version 2.24.4 or higher</strong></span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={hasVerification}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setHasVerification(e.target.checked)}
+                      className="mt-0.5 accent-purple-600"
+                    />
+                    <span>I have a <strong>GST Certificate</strong> or <strong>Active Website</strong> ready for Meta verification</span>
+                  </label>
+                </div>
+              </div>
               <InfoRow label="Number">
                 No new number needed — use your existing WA Business App number
               </InfoRow>
@@ -117,9 +140,10 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
             <button
               type="button"
               onClick={() => onChoose(true)}
-              className="mt-auto w-full py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
+              disabled={!smbReady}
+              className="mt-auto w-full py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Proceed
+              {smbReady ? "Proceed" : "Confirm requirements above"}
             </button>
           </div>
         </div>
