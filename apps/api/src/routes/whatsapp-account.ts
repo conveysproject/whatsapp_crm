@@ -193,13 +193,29 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       code: string;
       wabaId?: string;
       phoneNumberId?: string;
+      businessId?: string;
+      pageIds?: string[];
+      instagramAccountIds?: string[];
       isSMB?: boolean;
       flow?: "onboarding" | "reconnect";
       redirectUri?: string;
     };
   }>("/whatsapp-account/connect", async (request, reply) => {
     const { organizationId } = request.auth;
-    const { code, wabaId: bodyWabaId, phoneNumberId: bodyPhoneNumberId, isSMB = false, flow = "reconnect", redirectUri } = request.body;
+    const {
+      code,
+      wabaId: bodyWabaId,
+      phoneNumberId: bodyPhoneNumberId,
+      businessId: bodyBusinessId,
+      pageIds: bodyPageIds,
+      instagramAccountIds: bodyInstagramAccountIds,
+      isSMB = false,
+      flow = "reconnect",
+      redirectUri,
+    } = request.body;
+
+    const pageIds = bodyPageIds ?? [];
+    const instagramAccountIds = bodyInstagramAccountIds ?? [];
 
     fastify.log.info({ body: { ...request.body, code: request.body.code ? `${request.body.code.slice(0, 20)}…` : "MISSING" }, organizationId }, "[WA-CONNECT] 1. request received");
 
@@ -244,7 +260,21 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     let wabaId = bodyWabaId ?? "";
     fastify.log.info({ wabaId_from_body: wabaId, phoneNumberId_from_body: bodyPhoneNumberId }, "[WA-CONNECT] 3. body-provided IDs");
 
-    // Approach A: debug_token
+    // Approach A: businessId from v4 session event — most reliable, avoids debug_token round-trip
+    if (!wabaId && bodyBusinessId) {
+      try {
+        const url = `${WA_GRAPH}/${bodyBusinessId}/whatsapp_business_accounts?access_token=${encodeURIComponent(accessToken)}`;
+        fastify.log.info({ url: url.replace(accessToken, "***"), businessId: bodyBusinessId }, "[WA-CONNECT] 7-A. businessId direct WABA lookup");
+        const r = await fetch(url);
+        const d = await r.json() as { data?: Array<{ id: string }> };
+        fastify.log.info({ status: r.status, body: d }, "[WA-CONNECT] 7-A result");
+        if (r.ok) wabaId = d.data?.[0]?.id ?? "";
+      } catch (e) {
+        fastify.log.warn({ e }, "[WA-CONNECT] 7-A businessId lookup failed");
+      }
+    }
+
+    // Approach B (legacy): debug_token
     let debugGrantedBusinessId = "";
     if (!wabaId) {
       try {
@@ -380,6 +410,21 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       fastify.log.info({ status: webhookRes.status, body: webhookRaw }, "[WA-CONNECT] 14b. webhook subscribe response");
     }
 
+    // Step 5b: subscribe Facebook Page webhooks (Messenger)
+    for (const pageId of pageIds) {
+      const pageWebhookRes = await fetch(`${WA_GRAPH}/${pageId}/subscribed_apps`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subscribed_fields: ["messages", "messaging_postbacks", "messaging_optins"],
+        }),
+      }).catch((e) => { fastify.log.warn({ e, pageId }, "[WA-CONNECT] 14c. page webhook subscribe threw"); return undefined; });
+      if (pageWebhookRes) {
+        const raw = await pageWebhookRes.text();
+        fastify.log.info({ status: pageWebhookRes.status, pageId, body: raw }, "[WA-CONNECT] 14c. page webhook subscribe response");
+      }
+    }
+
     // Step 6: coexistence mode (SMB)
     if (isSMB) {
       const smbBody = { messaging_product: "whatsapp", sync_type: "smb_app_state_sync" };
@@ -403,6 +448,9 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       wabaAccessToken: accessToken,
       whatsappBusinessAccountId: wabaId,
       ...(phoneNumberId ? { phoneNumberId } : {}),
+      ...(bodyBusinessId ? { metaBusinessId: bodyBusinessId } : {}),
+      ...(pageIds[0] ? { facebookPageId: pageIds[0] } : {}),
+      ...(instagramAccountIds[0] ? { instagramAccountId: instagramAccountIds[0] } : {}),
       ...(flow === "onboarding" ? { onboardingStep: phoneNumberId ? "done" : "provision_number" } : {}),
     };
     fastify.log.info({ organizationId, data: { ...orgData, wabaAccessToken: "***" } }, "[WA-CONNECT] 16. DB org update");
@@ -423,6 +471,11 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       { key: "whatsapp_access_token_expired", value: "0" },
       ...(phoneNumberId ? [{ key: "current_phone_number_id", value: phoneNumberId }] : []),
       ...(displayPhoneNumber ? [{ key: "current_phone_number_number", value: displayPhoneNumber }] : []),
+      ...(bodyBusinessId ? [{ key: "meta_business_id", value: bodyBusinessId }] : []),
+      ...(pageIds[0] ? [{ key: "facebook_page_id", value: pageIds[0] }] : []),
+      ...(instagramAccountIds[0] ? [{ key: "instagram_account_id", value: instagramAccountIds[0] }] : []),
+      ...(pageIds.length > 1 ? [{ key: "facebook_page_ids", value: JSON.stringify(pageIds) }] : []),
+      ...(instagramAccountIds.length > 1 ? [{ key: "instagram_account_ids", value: JSON.stringify(instagramAccountIds) }] : []),
     ];
     fastify.log.info({
       keys: settingsToSave.map((s) => s.key),
@@ -444,7 +497,15 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: { code: "DB_ERROR", message: "Failed to save settings" } });
     }
 
-    const responseData = { wabaId, wabaName, phoneNumberId: phoneNumberId || null, displayPhoneNumber };
+    const responseData = {
+      wabaId,
+      wabaName,
+      phoneNumberId: phoneNumberId || null,
+      displayPhoneNumber,
+      metaBusinessId: bodyBusinessId || null,
+      facebookPageIds: pageIds,
+      instagramAccountIds,
+    };
     fastify.log.info({ responseData }, "[WA-CONNECT] 18. SUCCESS — sending response");
     return reply.send({ data: responseData });
   });
