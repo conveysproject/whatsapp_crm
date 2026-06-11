@@ -83,7 +83,7 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
             <p className="text-purple-200 text-xs mt-0.5">Already using the WhatsApp Business app</p>
           </div>
           <div className="px-5 py-4 flex flex-col gap-3 flex-1">
-            <div className="space-y-0 divide-y divide-gray-100 text-sm">
+            <div className="overflow-y-auto max-h-64 pr-1 space-y-0 divide-y divide-gray-100 text-sm">
               <InfoRow label="Requirements">
                 <span>WA Business App <strong>v2.24.4+</strong></span>
                 <span className="text-gray-400">GST Certificate or Active Website needed for verification</span>
@@ -129,7 +129,7 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
             <p className="text-blue-200 text-xs mt-0.5">Register any number via Meta</p>
           </div>
           <div className="px-5 py-4 flex flex-col gap-3 flex-1">
-            <div className="space-y-0 divide-y divide-gray-100 text-sm">
+            <div className="overflow-y-auto max-h-64 pr-1 space-y-0 divide-y divide-gray-100 text-sm">
               <InfoRow label="Requirements" variant="blue">
                 <span>Fresh number — <strong>not on WA Personal or Business</strong></span>
                 <span className="text-gray-400">Must receive OTP via call or SMS</span>
