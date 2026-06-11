@@ -74,7 +74,7 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
   return (
     <div className="py-4 space-y-4">
       <p className="text-sm text-gray-500">You can connect your number in two ways. Here&apos;s how they differ.</p>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-6">
 
         {/* WA Business App Number */}
         <div className="border border-gray-200 rounded-xl flex flex-col">
