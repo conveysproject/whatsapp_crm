@@ -72,7 +72,7 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "moda
 
 function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Element {
   return (
-    <div className="py-4 space-y-4">
+    <div className="py-4 space-y-4 px-6 pt-6 pb-4 border-b">
       <p className="text-sm text-gray-500">You can connect your number in two ways. Here&apos;s how they differ.</p>
       <div className="grid grid-cols-2 gap-6">
 
