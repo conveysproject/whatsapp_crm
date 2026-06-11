@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { createHash } from "node:crypto";
 import { canAccess } from "../lib/permissions.js";
+import { uploadToR2 } from "../lib/r2.js";
 import {
   getBusinessProfile,
   updateBusinessProfile,
@@ -173,6 +174,39 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       return reply.send(buffer);
     }
   );
+
+  // ── Business verification document upload ────────────────────────────────
+  fastify.post("/whatsapp-account/verification-upload", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const data = await request.file({ limits: { fileSize: 5 * 1024 * 1024 } }); // 5 MB max
+    if (!data) {
+      return reply.status(400).send({ error: { code: "NO_FILE", message: "No file uploaded" } });
+    }
+
+    const ext = (data.filename.split(".").pop() ?? "").toLowerCase();
+    const allowedExts = ["pdf", "jpg", "jpeg", "png"];
+    if (!allowedExts.includes(ext)) {
+      // Drain stream to avoid memory leak
+      data.file.resume();
+      return reply.status(400).send({ error: { code: "INVALID_TYPE", message: "Only PDF, JPG and PNG files are supported" } });
+    }
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of data.file) chunks.push(chunk as Buffer);
+    const buf = Buffer.concat(chunks);
+
+    const mimeMap: Record<string, string> = { pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png" };
+    const mimeType = mimeMap[ext] ?? "application/octet-stream";
+    const { url } = await uploadToR2(buf, `${organizationId}/verification`, mimeType);
+
+    await fastify.prisma.vendorSetting.upsert({
+      where: { organizationId_key: { organizationId, key: "verification_document_url" } },
+      create: { organizationId, key: "verification_document_url", value: url, dataType: "string" },
+      update: { value: url },
+    });
+
+    return reply.send({ data: { url, filename: data.filename, sizeBytes: buf.byteLength } });
+  });
 
   // GAP-S57: generate QR for an arbitrary URL (e.g. UPI address)
   fastify.get<{ Querystring: { url: string } }>(
