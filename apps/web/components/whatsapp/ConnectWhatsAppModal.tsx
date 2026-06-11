@@ -26,7 +26,7 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "moda
   }
 
   const inner = (
-    <div className={variant === "modal" ? "bg-white rounded-2xl shadow-2xl w-full max-w-xl" : "w-full"}>
+    <div className={variant === "modal" ? `bg-white rounded-2xl shadow-2xl w-full ${step === "choose" ? "max-w-3xl" : "max-w-xl"}` : "w-full"}>
       {/* Header */}
       <div className={`flex items-center justify-between ${variant === "modal" ? "px-6 pt-6 pb-4 border-b" : "pb-3 border-b"}`}>
         <h2 className="text-lg font-semibold text-gray-900">
@@ -82,11 +82,38 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
             <p className="text-purple-200 text-xs mt-0.5">Already using the WhatsApp Business app</p>
           </div>
           <div className="px-5 py-4 flex flex-col gap-3 flex-1">
-            <ul className="space-y-2 text-sm text-gray-600">
-              <FeatureItem>Your existing WA Business App number</FeatureItem>
-              <FeatureItem>Keep using your mobile app alongside API</FeatureItem>
-              <FeatureItem>Up to 1,000 messages/day to start</FeatureItem>
-            </ul>
+            <div className="space-y-0 divide-y divide-gray-100 text-sm">
+              <InfoRow label="Requirements">
+                <span>WA Business App <strong>v2.24.4+</strong></span>
+                <span className="text-gray-400">GST Certificate or Active Website for verification</span>
+              </InfoRow>
+              <InfoRow label="Number">
+                No new number needed — use your existing WA Business App number
+              </InfoRow>
+              <InfoRow label="App Usage">
+                <span>Continue using WA Business App alongside WBMSG</span>
+                <span className="text-gray-400">Messages sync between WBMSG &amp; app</span>
+              </InfoRow>
+              <InfoRow label="Broadcasts">
+                <span className="text-orange-600 font-medium">Slower speeds</span>
+                <span className="text-gray-400">10,000 contacts could take ~1 hour to send</span>
+              </InfoRow>
+              <InfoRow label="Catalog">
+                <span>Must be created in WhatsApp app</span>
+                <span className="text-gray-400">No API/CSV import · No Shopify sync</span>
+              </InfoRow>
+              <InfoRow label="Automations">
+                Chatbots &amp; AI Agent available for customer replies
+              </InfoRow>
+              <InfoRow label="Groups / Status / Calling">
+                <span>Groups, Status &amp; Calling available on WA Business App</span>
+                <span className="text-gray-400">WA Calling not possible from WBMSG</span>
+              </InfoRow>
+              <InfoRow label="Display Name">
+                <span>Depends on contact saving</span>
+                <span className="text-gray-400">Customers see your name only if they saved your number</span>
+              </InfoRow>
+            </div>
             <button
               type="button"
               onClick={() => onChoose(true)}
@@ -119,6 +146,15 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
+  return (
+    <div className="py-2 flex gap-3">
+      <span className="text-xs font-semibold text-purple-700 uppercase tracking-wide w-28 shrink-0 pt-0.5">{label}</span>
+      <div className="flex flex-col gap-0.5 text-xs text-gray-700 min-w-0">{children}</div>
     </div>
   );
 }
