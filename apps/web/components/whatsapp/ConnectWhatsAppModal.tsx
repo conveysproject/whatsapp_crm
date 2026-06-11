@@ -206,8 +206,9 @@ function VerifyStep({ onBack, onContinue }: { onBack: () => void; onContinue: ()
   function handleFile(e: ChangeEvent<HTMLInputElement>): void {
     const file = e.target.files?.[0];
     if (!file) return;
-    const allowed = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
-    if (!allowed.includes(file.type)) {
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const allowedExts = ["pdf", "jpg", "jpeg", "png"];
+    if (!allowedExts.includes(ext)) {
       setGstError("Only PDF, JPEG, JPG and PNG files are supported. Do not use screenshots.");
       setGstFile(null);
     } else {
@@ -279,11 +280,17 @@ function VerifyStep({ onBack, onContinue }: { onBack: () => void; onContinue: ()
               </ul>
 
               {gstFile ? (
-                <div className="flex items-center justify-between border border-green-300 bg-green-50 rounded-lg px-3 py-2 text-xs text-green-700">
-                  <span className="truncate">{gstFile.name}</span>
-                  <button type="button" onClick={() => { setGstFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="ml-2 shrink-0 text-red-400 hover:text-red-600">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                  </button>
+                <div className="border border-green-400 bg-green-50 rounded-lg px-3 py-2.5 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-green-700 min-w-0">
+                      <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                      <span className="text-xs font-medium truncate">{gstFile.name}</span>
+                    </div>
+                    <button type="button" onClick={() => { setGstFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="ml-2 shrink-0 text-red-400 hover:text-red-600">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  </div>
+                  <p className="text-xs text-green-600">Document ready — will be submitted after connecting</p>
                 </div>
               ) : (
                 <button
