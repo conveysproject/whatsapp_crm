@@ -30,7 +30,7 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "moda
       {/* Header */}
       <div className={`flex items-center justify-between ${variant === "modal" ? "px-6 pt-6 pb-4 border-b" : "pb-3 border-b"}`}>
         <h2 className="text-lg font-semibold text-gray-900">
-          {step === "choose" ? "Set up WhatsApp API Number" : "Connect your WhatsApp"}
+          {step === "choose" ? "2 Ways to Setup WhatsApp API Number" : "Connect your WhatsApp"}
         </h2>
         {variant === "modal" && onClose && (
           <button
@@ -71,114 +71,113 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "moda
 }
 
 function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Element {
-
   return (
     <div className="py-5 space-y-4">
-      <p className="text-sm text-gray-500">Choose how you want to connect your WhatsApp number to WBMSG.</p>
+      <p className="text-sm text-gray-500">You can connect your number in two ways. Here&apos;s how they differ.</p>
       <div className="grid grid-cols-2 gap-4">
+
         {/* WA Business App Number */}
-        <div className="border-2 border-purple-200 rounded-xl overflow-hidden flex flex-col">
-          <div className="bg-purple-600 px-5 py-3">
-            <p className="text-white font-semibold">WA Business App Number</p>
-            <p className="text-purple-200 text-xs mt-0.5">Already using the WhatsApp Business app</p>
+        <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col">
+          <div className="bg-purple-50 border-b border-purple-100 px-4 py-3">
+            <p className="text-purple-700 font-semibold text-sm">WA Business App Number</p>
           </div>
-          <div className="px-5 py-4 flex flex-col gap-3 flex-1">
-            <div className="overflow-y-auto max-h-64 pr-1 space-y-0 divide-y divide-gray-100 text-sm">
-              <InfoRow label="Requirements">
-                <span>WA Business App <strong>v2.24.4+</strong></span>
-                <span className="text-gray-400">GST Certificate or Active Website needed for verification</span>
+          <div className="px-4 py-3 flex flex-col gap-3 flex-1">
+            <div className="overflow-y-auto max-h-64 pr-1 divide-y divide-gray-100">
+              <InfoRow label="Requirements Before Connecting">
+                <span>A number registered on WhatsApp Business App <strong>version 2.24.4+</strong></span>
+                <span>GST Certificate or Active Website needed for verification</span>
               </InfoRow>
               <InfoRow label="Number">
-                No new number needed — use your existing WA Business App number
+                <span>No new number needed</span>
+                <span className="text-gray-400">Use your existing WhatsApp Business App number</span>
               </InfoRow>
               <InfoRow label="App Usage">
-                <span>Continue using WA Business App alongside WBMSG</span>
+                <span>Continue using WhatsApp Business App alongside WBMSG</span>
                 <span className="text-gray-400">Messages sync between WBMSG &amp; app</span>
               </InfoRow>
               <InfoRow label="Broadcasts">
-                <span className="text-orange-600 font-medium">Slower speeds</span>
-                <span className="text-gray-400">10,000 contacts could take ~1 hour to send</span>
+                <span className="text-orange-600">Slower Broadcast Speeds</span>
+                <span className="text-gray-400">Broadcast to 10,000 contacts could take an hour to send</span>
               </InfoRow>
-
-              <InfoRow label="Automations">
-                Chatbots &amp; AI Agent available for customer replies
+              <InfoRow label="Chat Automations">
+                <span>Possible to use Chatbots &amp; AI Agent for customer replies</span>
               </InfoRow>
-              <InfoRow label="Groups / Status / Calling">
-                <span>Groups, Status &amp; Calling available on WA Business App</span>
+              <InfoRow label="Groups, Status &amp; Calling">
+                <span>Groups, Status, and Calling continue to be available on WA Business App</span>
                 <span className="text-gray-400">WA Calling not possible from WBMSG</span>
               </InfoRow>
               <InfoRow label="Display Name">
-                <span>Depends on contact saving</span>
+                <span>Display name depends on contact saving</span>
                 <span className="text-gray-400">Customers see your name only if they saved your number</span>
               </InfoRow>
             </div>
             <button
               type="button"
               onClick={() => onChoose(true)}
-              className="mt-auto w-full py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
+              className="mt-auto w-full py-2 border border-purple-400 text-purple-600 hover:bg-purple-50 text-sm font-medium rounded-lg transition-colors"
             >
-              Proceed
+              Proceed with WA Business
             </button>
           </div>
         </div>
 
-        {/* New Number */}
-        <div className="border-2 border-blue-200 rounded-xl overflow-hidden flex flex-col">
-          <div className="bg-[#1877F2] px-5 py-3">
-            <p className="text-white font-semibold">New / Dedicated Number</p>
-            <p className="text-blue-200 text-xs mt-0.5">Register any number via Meta</p>
+        {/* New / Dedicated Number */}
+        <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col">
+          <div className="bg-blue-50 border-b border-blue-100 px-4 py-3">
+            <p className="text-blue-700 font-semibold text-sm">New Number</p>
           </div>
-          <div className="px-5 py-4 flex flex-col gap-3 flex-1">
-            <div className="overflow-y-auto max-h-64 pr-1 space-y-0 divide-y divide-gray-100 text-sm">
-              <InfoRow label="Requirements" variant="blue">
-                <span>Fresh number — <strong>not on WA Personal or Business</strong></span>
-                <span className="text-gray-400">Must receive OTP via call or SMS</span>
-                <span className="text-gray-400">GST Certificate or Active Website for verification</span>
+          <div className="px-4 py-3 flex flex-col gap-3 flex-1">
+            <div className="overflow-y-auto max-h-64 pr-1 divide-y divide-gray-100">
+              <InfoRow label="Requirements Before Connecting" variant="blue">
+                <span>Fresh number not on WA Personal/Business</span>
+                <span>Must be able to receive OTP via call or SMS</span>
+                <span>GST Certificate or Active Website needed for verification</span>
               </InfoRow>
               <InfoRow label="Number" variant="blue">
                 <span>Requires a fresh phone number</span>
                 <span className="text-gray-400">Cannot be already registered on WhatsApp</span>
               </InfoRow>
               <InfoRow label="App Usage" variant="blue">
-                <span>Cannot use WA Business/Personal app</span>
+                <span>Cannot use WhatsApp Business/Personal app</span>
                 <span className="text-gray-400">Fully API-based — manage everything inside WBMSG</span>
               </InfoRow>
               <InfoRow label="Broadcasts" variant="blue">
-                <span className="text-green-600 font-medium">Faster broadcast speeds</span>
-                <span className="text-gray-400">10,000 contacts in just a few minutes</span>
+                <span className="text-green-600">Faster Broadcast Speeds</span>
+                <span className="text-gray-400">Broadcast to 10,000 contacts in just a few minutes</span>
               </InfoRow>
-              <InfoRow label="Automations" variant="blue">
-                Chatbots &amp; AI Agent available for customer replies
+              <InfoRow label="Chat Automations" variant="blue">
+                <span>Possible to use Chatbots &amp; AI Agent for customer replies</span>
               </InfoRow>
-              <InfoRow label="Groups / Status" variant="blue">
-                <span>Groups &amp; Status sharing not available</span>
+              <InfoRow label="Groups, Status &amp; Calling" variant="blue">
+                <span>Groups &amp; Status sharing won&apos;t be available</span>
                 <span className="text-gray-400">Dedicated API number only — no WA app access</span>
               </InfoRow>
               <InfoRow label="Display Name" variant="blue">
-                <span className="text-green-600 font-medium">Verified business name shown</span>
+                <span className="text-green-600">Verified business name after verification</span>
                 <span className="text-gray-400">Customers see your business name even without saving your number</span>
               </InfoRow>
             </div>
             <button
               type="button"
               onClick={() => onChoose(false)}
-              className="mt-auto w-full py-2 bg-[#1877F2] hover:bg-[#166fe5] text-white text-sm font-medium rounded-lg transition-colors"
+              className="mt-auto w-full py-2 border border-blue-400 text-blue-600 hover:bg-blue-50 text-sm font-medium rounded-lg transition-colors"
             >
-              Proceed
+              Proceed with New Number
             </button>
           </div>
         </div>
+
       </div>
     </div>
   );
 }
 
 function InfoRow({ label, children, variant = "purple" }: { label: string; children: React.ReactNode; variant?: "purple" | "blue" }): JSX.Element {
-  const labelColor = variant === "blue" ? "text-blue-700" : "text-purple-700";
+  const labelColor = variant === "blue" ? "text-blue-500" : "text-purple-500";
   return (
-    <div className="py-2 flex gap-3">
-      <span className={`text-xs font-semibold ${labelColor} uppercase tracking-wide w-28 shrink-0 pt-0.5`}>{label}</span>
-      <div className="flex flex-col gap-0.5 text-xs text-gray-700 min-w-0">{children}</div>
+    <div className="py-2.5 space-y-1">
+      <p className={`text-xs font-medium ${labelColor}`}>{label}</p>
+      <div className="flex flex-col gap-0.5 text-sm text-gray-700">{children}</div>
     </div>
   );
 }
