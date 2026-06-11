@@ -1,19 +1,23 @@
 "use client";
 
-import { useState, type JSX } from "react";
+import { useState, useRef, type JSX, type ChangeEvent } from "react";
 import { EmbeddedSignupButton, type ConnectResult } from "./EmbeddedSignupButton";
 export type { ConnectResult };
 
 interface ConnectWhatsAppModalProps {
   flow: "onboarding" | "reconnect";
   onSuccess: (result: ConnectResult) => void;
-  /** Required in modal variant; omit for inline */
   onClose?: () => void;
-  /** "modal" (default) renders as a fixed overlay; "inline" renders flat on the page */
   variant?: "modal" | "inline";
 }
 
-type Step = "choose" | "connect";
+type Step = "choose" | "verify" | "connect";
+
+const STEP_LABELS: Record<Step, string> = {
+  choose: "Step 1 of 3 — Number Type",
+  verify: "Step 2 of 3 — Business Verification",
+  connect: "Step 3 of 3 — Connect",
+};
 
 export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "modal" }: ConnectWhatsAppModalProps): JSX.Element {
   const [step, setStep] = useState<Step>("choose");
@@ -22,23 +26,35 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "moda
 
   function handleChoose(smb: boolean): void {
     setIsSMB(smb);
-    setStep("connect");
+    setStep("verify");
   }
 
+  const isWide = step === "choose";
+
   const inner = (
-    <div className={variant === "modal" ? `bg-white rounded-2xl shadow-2xl w-full ${step === "choose" ? "max-w-3xl" : "max-w-xl"}` : "w-full"}>
+    <div className={variant === "modal" ? `bg-white rounded-2xl shadow-2xl w-full ${isWide ? "max-w-3xl" : "max-w-xl"}` : "w-full"}>
+      {/* Step indicator */}
+      {variant === "modal" && (
+        <div className="px-6 pt-4 pb-0 flex items-center gap-3">
+          <span className="text-xs text-gray-400">{STEP_LABELS[step]}</span>
+          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-green-500 rounded-full transition-all"
+              style={{ width: step === "choose" ? "33%" : step === "verify" ? "66%" : "100%" }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Header */}
-      <div className={`flex items-center justify-between ${variant === "modal" ? "px-6 pt-6 pb-4 border-b" : "pb-3 border-b"}`}>
+      <div className={`flex items-center justify-between ${variant === "modal" ? "px-6 pt-4 pb-4 border-b" : "pb-3 border-b"}`}>
         <h2 className="text-lg font-semibold text-gray-900">
-          {step === "choose" ? "2 Ways to Setup WhatsApp API Number" : "Connect your WhatsApp"}
+          {step === "choose" ? "2 Ways to Setup WhatsApp API Number" :
+           step === "verify" ? "Verify Your Business" :
+           "Connect your WhatsApp"}
         </h2>
         {variant === "modal" && onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
+          <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600 transition-colors">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -48,12 +64,17 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "moda
 
       {step === "choose" ? (
         <ChooseStep onChoose={handleChoose} />
+      ) : step === "verify" ? (
+        <VerifyStep
+          onBack={() => setStep("choose")}
+          onContinue={() => setStep("connect")}
+        />
       ) : (
         <ConnectStep
           flow={flow}
           isSMB={isSMB}
           errorMsg={errorMsg}
-          onBack={() => { setStep("choose"); setErrorMsg(""); }}
+          onBack={() => { setStep("verify"); setErrorMsg(""); }}
           onSuccess={onSuccess}
           onError={setErrorMsg}
         />
@@ -171,6 +192,156 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
           </div>
         </div>
 
+      </div>
+    </div>
+  );
+}
+
+function VerifyStep({ onBack, onContinue }: { onBack: () => void; onContinue: () => void }): JSX.Element {
+  const [alreadyVerified, setAlreadyVerified] = useState(false);
+  const [gstFile, setGstFile] = useState<File | null>(null);
+  const [gstError, setGstError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleFile(e: ChangeEvent<HTMLInputElement>): void {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
+    if (!allowed.includes(file.type)) {
+      setGstError("Only PDF, JPEG, JPG and PNG files are supported. Do not use screenshots.");
+      setGstFile(null);
+    } else {
+      setGstError("");
+      setGstFile(file);
+    }
+  }
+
+  return (
+    <div className="px-6 py-5 space-y-5">
+      {/* Back + title */}
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={onBack} className="text-gray-400 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h3 className="font-semibold text-gray-900">Verify Your Business</h3>
+        <span className="text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Recommended</span>
+      </div>
+      <p className="text-sm text-gray-500 -mt-2">Verification helps increase your messaging limits and improves trust.</p>
+
+      {/* Why verify */}
+      <div className="border border-gray-200 rounded-lg px-4 py-3 space-y-1">
+        <p className="text-sm font-semibold text-gray-700">Why Verification is Important:</p>
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <svg className="w-4 h-4 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          Messaging limit increases from <strong className="mx-1">250 → 1,000</strong> customers per day
+        </div>
+      </div>
+
+      {/* Already verified checkbox */}
+      <label className="flex items-start gap-3 border border-gray-200 rounded-lg px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors">
+        <input
+          type="checkbox"
+          checked={alreadyVerified}
+          onChange={(e) => setAlreadyVerified(e.target.checked)}
+          className="mt-0.5 accent-green-600"
+        />
+        <div>
+          <p className="text-sm font-medium text-gray-800">My business is already verified by Meta</p>
+          <p className="text-xs text-gray-400 mt-0.5">Select this if you have already completed Meta Business Verification</p>
+        </div>
+      </label>
+
+      {/* Verification methods */}
+      {!alreadyVerified && (
+        <div>
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">Verification Method</p>
+          <div className="grid grid-cols-2 gap-4">
+
+            {/* GST Certificate */}
+            <div className="border border-green-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <p className="font-semibold text-sm text-gray-800">Verify using GST Certificate</p>
+                <span className="text-xs font-medium bg-green-600 text-white px-2 py-0.5 rounded-full">Fastest</span>
+              </div>
+              <ul className="space-y-1.5 text-xs text-gray-500">
+                <li className="flex items-start gap-1.5">
+                  <svg className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  Takes a few minutes to a few hours
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <svg className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  Supported: PDF, JPEG, JPG &amp; PNG (no screenshots)
+                </li>
+              </ul>
+
+              {gstFile ? (
+                <div className="flex items-center justify-between border border-green-300 bg-green-50 rounded-lg px-3 py-2 text-xs text-green-700">
+                  <span className="truncate">{gstFile.name}</span>
+                  <button type="button" onClick={() => { setGstFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="ml-2 shrink-0 text-red-400 hover:text-red-600">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-2 border border-dashed border-green-400 text-green-600 hover:bg-green-50 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                  Upload GST Certificate
+                </button>
+              )}
+              <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFile} />
+              {gstError && <p className="text-xs text-red-500">{gstError}</p>}
+            </div>
+
+            {/* Website Domain */}
+            <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+              <p className="font-semibold text-sm text-gray-800">Verify using Website Domain</p>
+              <ul className="space-y-1.5 text-xs text-gray-500">
+                <li className="flex items-start gap-1.5">
+                  <svg className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  Takes 3–5 working days
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <svg className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  Requires a verifiable website with additional details
+                </li>
+              </ul>
+              <a
+                href="https://www.facebook.com/business/help/2058515294227817"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-medium rounded-lg transition-colors text-center"
+              >
+                Watch how to verify
+              </a>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+        <button
+          type="button"
+          onClick={onContinue}
+          className="text-sm text-gray-500 hover:text-gray-700 underline underline-offset-2"
+        >
+          Connect without Verification
+        </button>
+        <button
+          type="button"
+          onClick={onContinue}
+          className="px-6 py-2 bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium rounded-lg transition-colors"
+        >
+          Connect Number
+        </button>
       </div>
     </div>
   );
