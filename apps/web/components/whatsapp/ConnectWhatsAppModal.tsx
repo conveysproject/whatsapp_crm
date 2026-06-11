@@ -255,8 +255,8 @@ function VerifyStep({ onBack, onContinue }: { onBack: () => void; onContinue: ()
         </div>
       </label>
 
-      {/* Verification methods */}
-      {!alreadyVerified && (
+      {/* Verification methods — always visible, dimmed when already verified */}
+      <div className={alreadyVerified ? "opacity-40 pointer-events-none select-none" : ""}>
         <div>
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">Verification Method</p>
           <div className="grid grid-cols-2 gap-4">
@@ -324,24 +324,36 @@ function VerifyStep({ onBack, onContinue }: { onBack: () => void; onContinue: ()
 
           </div>
         </div>
-      )}
+      </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <button
-          type="button"
-          onClick={onContinue}
-          className="text-sm text-gray-500 hover:text-gray-700 underline underline-offset-2"
-        >
-          Connect without Verification
-        </button>
-        <button
-          type="button"
-          onClick={onContinue}
-          className="px-6 py-2 bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          Connect Number
-        </button>
+      <div className="pt-2 border-t border-gray-100">
+        {alreadyVerified ? (
+          <button
+            type="button"
+            onClick={onContinue}
+            className="w-full py-2.5 bg-gray-900 hover:bg-black text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Connect Number
+          </button>
+        ) : (
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={onContinue}
+              className="text-sm text-gray-500 hover:text-gray-700 underline underline-offset-2"
+            >
+              Connect without Verification
+            </button>
+            <button
+              type="button"
+              onClick={onContinue}
+              className="px-6 py-2 bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              Connect Number
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
