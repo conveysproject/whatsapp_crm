@@ -13,6 +13,13 @@ export default function SignInScreen() {
       const result = await signIn.create({ identifier: email, password });
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
+      } else if (result.status === "needs_client_trust") {
+        Alert.alert(
+          "Verification required",
+          "You are signing in from a new device. Please check your email or authenticator app to verify."
+        );
+      } else {
+        Alert.alert("Sign in incomplete", "Additional verification is required to continue.");
       }
     } catch (err: unknown) {
       Alert.alert("Sign in failed", err instanceof Error ? err.message : "Unknown error");
