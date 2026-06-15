@@ -14,6 +14,8 @@ export function BlogScrollTracker({ postSlug, postTitle }: BlogScrollTrackerProp
   const firedRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
+    firedRef.current = new Set();
+
     function handleScroll(): void {
       const scrollable = document.documentElement.scrollHeight - window.innerHeight;
       if (scrollable <= 0) return;
@@ -27,6 +29,7 @@ export function BlogScrollTracker({ postSlug, postTitle }: BlogScrollTrackerProp
     }
 
     window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, [postSlug, postTitle]);
 
