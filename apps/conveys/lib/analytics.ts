@@ -48,10 +48,10 @@ export function trackFormError(errorMessage: string): void {
   trackEvent("contact_form_error", { error_message: errorMessage });
 }
 
-export function trackFormAbandon(lastField: string, serviceSelected: string): void {
+export function trackFormAbandon(lastField: string, serviceSelected?: string): void {
   trackEvent("contact_form_abandon", {
     last_field_touched: lastField,
-    service_selected: serviceSelected,
+    ...(serviceSelected ? { service_selected: serviceSelected } : {}),
   });
 }
 

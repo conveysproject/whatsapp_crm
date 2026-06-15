@@ -95,4 +95,17 @@ describe("analytics", () => {
       post_title: "SaaS Product Development India",
     });
   });
+
+  it("trackFormAbandon omits service_selected when not provided", () => {
+    trackFormAbandon("name");
+    expect(mockGtag).toHaveBeenCalledWith("event", "contact_form_abandon", {
+      last_field_touched: "name",
+    });
+  });
+
+  it("is a no-op when window is undefined (SSR)", () => {
+    vi.unstubAllGlobals();
+    expect(() => trackPhoneClick("homepage")).not.toThrow();
+    expect(mockGtag).not.toHaveBeenCalled();
+  });
 });
