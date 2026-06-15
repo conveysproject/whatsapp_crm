@@ -1,5 +1,5 @@
 import * as Notifications from "expo-notifications";
-import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
+import { ClerkProvider, useAuth } from "@clerk/expo";
 import * as SecureStore from "expo-secure-store";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";

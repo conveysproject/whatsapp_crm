@@ -1,4 +1,4 @@
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth } from "@clerk/expo";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 
 export default function SettingsScreen() {
