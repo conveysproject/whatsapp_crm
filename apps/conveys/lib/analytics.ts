@@ -19,10 +19,42 @@ export function trackLead(service?: string): void {
   });
 }
 
-export function trackCTAClick(label: string, destination: string): void {
+export function trackCTAClick(label: string, destination: string, pageSection?: string): void {
   trackEvent("cta_click", {
     event_category: "engagement",
     event_label: label,
     destination,
+    ...(pageSection !== undefined ? { page_section: pageSection } : {}),
   });
+}
+
+export function trackPhoneClick(location: string): void {
+  trackEvent("phone_click", { label: "phone", location });
+}
+
+export function trackEmailClick(location: string): void {
+  trackEvent("email_click", { label: "email", location });
+}
+
+export function trackServiceCardClick(serviceName: string, destination: string): void {
+  trackEvent("service_card_click", { service_name: serviceName, destination });
+}
+
+export function trackFormStart(): void {
+  trackEvent("contact_form_start");
+}
+
+export function trackFormError(errorMessage: string): void {
+  trackEvent("contact_form_error", { error_message: errorMessage });
+}
+
+export function trackFormAbandon(lastField: string, serviceSelected: string): void {
+  trackEvent("contact_form_abandon", {
+    last_field_touched: lastField,
+    service_selected: serviceSelected,
+  });
+}
+
+export function trackBlogScroll(milestone: number, postSlug: string, postTitle: string): void {
+  trackEvent("blog_scroll", { milestone, post_slug: postSlug, post_title: postTitle });
 }
