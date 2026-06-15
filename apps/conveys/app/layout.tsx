@@ -132,6 +132,8 @@ export default function RootLayout({ children }: { children: ReactNode }): JSX.E
         style={{ fontFamily: "var(--font-conveys), system-ui, sans-serif" }}
       >
         {children}
+
+      {/* Google Analytics 4 */}
       <Script
         src="https://www.googletagmanager.com/gtag/js?id=G-4Q09E6BQC1"
         strategy="afterInteractive"
@@ -141,9 +143,26 @@ export default function RootLayout({ children }: { children: ReactNode }): JSX.E
           window.dataLayer = window.dataLayer || [];
           function gtag(){dataLayer.push(arguments);}
           gtag('js', new Date());
-          gtag('config', 'G-4Q09E6BQC1');
+          gtag('config', 'G-4Q09E6BQC1', {
+            send_page_view: true,
+            allow_google_signals: true,
+            allow_ad_personalization_signals: false
+          });
         `}
       </Script>
+
+      {/* Microsoft Clarity — sign up free at clarity.microsoft.com, add NEXT_PUBLIC_CLARITY_ID to Vercel env vars */}
+      {process.env.NEXT_PUBLIC_CLARITY_ID && (
+        <Script id="clarity-init" strategy="afterInteractive">
+          {`
+            (function(c,l,a,r,i,t,y){
+              c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+              t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+              y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+            })(window,document,"clarity","script","${process.env.NEXT_PUBLIC_CLARITY_ID}");
+          `}
+        </Script>
+      )}
       </body>
     </html>
   );

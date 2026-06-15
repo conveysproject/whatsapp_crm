@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ChangeEvent, FormEvent, JSX } from "react";
 import Link from "next/link";
+import { trackLead } from "@/lib/analytics";
 
 const STATS = [
   { value: "50+", label: "Projects Delivered" },
@@ -251,6 +252,7 @@ export function ConveysHome(): JSX.Element {
         setErrorMsg(data.error ?? "Something went wrong, please try again.");
       } else {
         setStatus("success");
+        trackLead(form.service);
       }
     } catch {
       setStatus("error");
