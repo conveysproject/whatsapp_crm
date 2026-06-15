@@ -5,9 +5,9 @@ import { ConveysHeader } from "@/components/conveys-header";
 import { ConveysFooter } from "@/components/conveys-footer";
 
 export const metadata: Metadata = {
-  title: "Web Development Company in India | Fast, SEO-Ready Websites | Conveys",
+  title: "Web Development Company | Fast, SEO-Ready Websites | Conveys",
   description:
-    "Professional website development for businesses in India. Mobile-friendly, fast-loading, SEO-optimised websites with fixed pricing. 100% in-house team. Get a free quote.",
+    "Professional website development for businesses worldwide. Mobile-friendly, fast-loading, SEO-optimised websites with fixed pricing. 100% in-house team. Get a free quote.",
   alternates: { canonical: "https://conveys.in/services/web-development" },
   openGraph: { url: "https://conveys.in/services/web-development" },
 };
