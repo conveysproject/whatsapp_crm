@@ -5,9 +5,9 @@ import { ConveysHeader } from "@/components/conveys-header";
 import { ConveysFooter } from "@/components/conveys-footer";
 
 export const metadata: Metadata = {
-  title: "AI Solutions Company | LLM Integration & Chatbots | Conveys",
+  title: "AI Solutions for Business in India | Chatbots & Automation | Conveys",
   description:
-    "AI solutions for businesses — LLM integration, AI chatbots, document processing, and workflow automation. Claude API, OpenAI GPT-4o. Fixed pricing.",
+    "Practical AI solutions for Indian businesses — AI chatbots, automated workflows, document processing, and smart analytics. Fixed pricing. Free consultation.",
   alternates: { canonical: "https://conveys.in/services/ai-solutions" },
   openGraph: { url: "https://conveys.in/services/ai-solutions" },
 };
