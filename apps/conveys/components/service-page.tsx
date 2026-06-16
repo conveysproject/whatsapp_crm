@@ -5,6 +5,7 @@ import { ConveysHeader } from "@/components/conveys-header";
 import { ConveysFooter } from "@/components/conveys-footer";
 import type { ServiceData } from "@/lib/services-data";
 import { SERVICE_NAV } from "@/lib/services-data";
+import { TrackedServiceCTA } from "@/components/tracked-link";
 
 // ─── Metadata helper (call from each page's generateMetadata) ────────────────
 export function buildMetadata(data: ServiceData): Metadata {
@@ -287,12 +288,12 @@ export function ServicePage({ data }: { data: ServiceData }): JSX.Element {
               Tell us about your project and we&apos;ll respond within 24 hours with a scoped proposal.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-4">
-              <Link
-                href="/#contact"
+              <TrackedServiceCTA
+                title={data.title}
                 className="inline-flex items-center rounded-full bg-white px-8 py-3.5 text-sm font-bold text-blue-700 shadow-lg transition hover:bg-blue-50"
               >
                 Get a Free Quote →
-              </Link>
+              </TrackedServiceCTA>
             </div>
           </div>
         </section>
