@@ -6,6 +6,7 @@ import { ConveysHeader } from "@/components/conveys-header";
 import { ConveysFooter } from "@/components/conveys-footer";
 import { BLOG_POSTS } from "@/app/blog/data/posts";
 import type { BlogSection } from "@/app/blog/data/posts";
+import { BlogScrollTracker } from "@/components/blog-scroll-tracker";
 
 export function generateStaticParams(): Array<{ slug: string }> {
   return BLOG_POSTS.map((p) => ({ slug: p.slug }));
@@ -165,6 +166,8 @@ export default async function BlogPostPage(
         <div className="mt-8">
           {post.sections.map((section, i) => renderSection(section, i))}
         </div>
+
+        <BlogScrollTracker postSlug={post.slug} postTitle={post.title} />
 
         {/* FAQ */}
         <section className="mt-16 border-t border-slate-100 pt-12">
