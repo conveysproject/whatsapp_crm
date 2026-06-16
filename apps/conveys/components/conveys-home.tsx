@@ -1,9 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { ChangeEvent, FormEvent, JSX } from "react";
 import Link from "next/link";
-import { trackLead } from "@/lib/analytics";
+import {
+  trackCTAClick,
+  trackEmailClick,
+  trackFormAbandon,
+  trackFormError,
+  trackFormStart,
+  trackLead,
+  trackPhoneClick,
+  trackServiceCardClick,
+} from "@/lib/analytics";
 
 const STATS = [
   { value: "50+", label: "Projects Delivered" },
@@ -232,8 +241,29 @@ export function ConveysHome(): JSX.Element {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
+  const hasStarted = useRef(false);
+  const lastField = useRef("");
+
+  useEffect(() => {
+    function handleBeforeUnload(): void {
+      if (hasStarted.current && status !== "success") {
+        trackFormAbandon(lastField.current, form.service);
+      }
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [status, form.service]);
+
   function handleChange(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+  }
+
+  function handleFocus(fieldName: string): void {
+    if (!hasStarted.current) {
+      hasStarted.current = true;
+      trackFormStart();
+    }
+    lastField.current = fieldName;
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -249,14 +279,18 @@ export function ConveysHome(): JSX.Element {
       const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) {
         setStatus("error");
-        setErrorMsg(data.error ?? "Something went wrong, please try again.");
+        const msg = data.error ?? "Something went wrong, please try again.";
+        setErrorMsg(msg);
+        trackFormError(msg);
       } else {
         setStatus("success");
         trackLead(form.service);
       }
     } catch {
+      const msg = "Network error. Please check your connection and try again.";
       setStatus("error");
-      setErrorMsg("Network error. Please check your connection and try again.");
+      setErrorMsg(msg);
+      trackFormError(msg);
     }
   }
 
@@ -287,12 +321,14 @@ export function ConveysHome(): JSX.Element {
           <div className="mt-10 flex flex-wrap justify-center gap-4">
             <a
               href="#contact"
+              onClick={() => trackCTAClick("Start a Project", "#contact", "hero")}
               className="inline-flex items-center justify-center rounded-full bg-white px-8 py-3.5 text-sm font-bold text-blue-700 shadow-lg transition hover:bg-blue-50"
             >
               Start a Project →
             </a>
             <a
               href="#services"
+              onClick={() => trackCTAClick("See Our Services", "#services", "hero")}
               className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/5 px-8 py-3.5 text-sm font-bold text-white backdrop-blur-sm transition hover:bg-white/10"
             >
               See Our Services
@@ -360,6 +396,7 @@ export function ConveysHome(): JSX.Element {
                   </ul>
                   <Link
                     href={service.href}
+                    onClick={() => trackServiceCardClick(service.label, service.href)}
                     className="mt-8 inline-flex items-center gap-2 rounded-full bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-blue-700"
                   >
                     Learn More
@@ -391,6 +428,7 @@ export function ConveysHome(): JSX.Element {
               </p>
               <Link
                 href="/#contact"
+                onClick={() => trackCTAClick("Work With Us", "/#contact", "why-us")}
                 className="mt-8 inline-flex rounded-full bg-blue-700 px-6 py-3 text-sm font-bold text-white shadow-md transition hover:bg-blue-800"
               >
                 Work With Us →
@@ -425,6 +463,7 @@ export function ConveysHome(): JSX.Element {
             </div>
             <a
               href="#contact"
+              onClick={() => trackCTAClick("Book a Free Call", "#contact", "mid-banner")}
               className="inline-flex flex-shrink-0 items-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-bold text-blue-700 shadow-lg transition hover:bg-blue-50"
             >
               Book a Free Call
@@ -512,10 +551,10 @@ export function ConveysHome(): JSX.Element {
                     Mumbai, Maharashtra 421202
                   </p>
                 </div>
-                <a href="mailto:info@conveys.in" className="block text-blue-100 hover:text-white">
+                <a href="mailto:info@conveys.in" onClick={() => trackEmailClick("homepage")} className="block text-blue-100 hover:text-white">
                   info@conveys.in
                 </a>
-                <a href="tel:+919907072035" className="block font-bold text-white hover:text-blue-200">
+                <a href="tel:+919907072035" onClick={() => trackPhoneClick("homepage")} className="block font-bold text-white hover:text-blue-200">
                   +91 99070 72035
                 </a>
               </div>
@@ -548,6 +587,7 @@ export function ConveysHome(): JSX.Element {
                       placeholder="Your name"
                       value={form.name}
                       onChange={handleChange}
+                      onFocus={() => handleFocus("name")}
                       disabled={status === "loading"}
                       className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
                     />
@@ -562,6 +602,7 @@ export function ConveysHome(): JSX.Element {
                       placeholder="Email address"
                       value={form.email}
                       onChange={handleChange}
+                      onFocus={() => handleFocus("email")}
                       disabled={status === "loading"}
                       className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
                     />
@@ -575,6 +616,7 @@ export function ConveysHome(): JSX.Element {
                       placeholder="Phone number (optional)"
                       value={form.phone}
                       onChange={handleChange}
+                      onFocus={() => handleFocus("phone")}
                       disabled={status === "loading"}
                       className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
                     />
@@ -587,6 +629,7 @@ export function ConveysHome(): JSX.Element {
                       required
                       value={form.service}
                       onChange={handleChange}
+                      onFocus={() => handleFocus("service")}
                       disabled={status === "loading"}
                       className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
                     >
@@ -608,6 +651,7 @@ export function ConveysHome(): JSX.Element {
                       placeholder="Tell us about your project…"
                       value={form.message}
                       onChange={handleChange}
+                      onFocus={() => handleFocus("message")}
                       disabled={status === "loading"}
                       className="w-full resize-none rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
                     />
