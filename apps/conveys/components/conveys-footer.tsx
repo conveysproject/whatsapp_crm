@@ -1,6 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { JSX } from "react";
+import { TrackedLink } from "@/components/tracked-link";
+import { trackEmailClick, trackPhoneClick } from "@/lib/analytics";
 
 export function ConveysFooter(): JSX.Element {
   return (
@@ -56,14 +58,22 @@ export function ConveysFooter(): JSX.Element {
                 Mumbai, Maharashtra 421202
               </p>
               <p>
-                <a href="mailto:info@conveys.in" className="transition hover:text-white">
+                <TrackedLink
+                  href="mailto:info@conveys.in"
+                  onTrack={() => trackEmailClick("footer")}
+                  className="transition hover:text-white"
+                >
                   info@conveys.in
-                </a>
+                </TrackedLink>
               </p>
               <p>
-                <a href="tel:+919907072035" className="font-semibold text-white transition hover:text-blue-400">
+                <TrackedLink
+                  href="tel:+919907072035"
+                  onTrack={() => trackPhoneClick("footer")}
+                  className="font-semibold text-white transition hover:text-blue-400"
+                >
                   +91 99070 72035
-                </a>
+                </TrackedLink>
               </p>
             </address>
           </div>
