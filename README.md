@@ -1,121 +1,153 @@
 # WBMSG
 
-> WhatsApp-first CRM for Indian SMBs — transparent pricing, AI-augmented, built for 1–50 person teams.
+> WhatsApp-first CRM for SMBs — built to convert conversations into customers.
 
-Indian MSMEs have 535M WhatsApp users and no CRM that treats WhatsApp as a first-class channel. WBMSG closes that gap with a purpose-built platform that combines a real inbox, contact management, campaign automation, and AI-powered replies — with white-label sub-account support for agencies.
+<!-- Add a screenshot or demo GIF here -->
 
-**Project code:** TRUST-2026 · **GA target:** March 2027 · **Status:** Sprint 1 complete (bootstrapping)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)
+![Node.js](https://img.shields.io/badge/Node.js-24.x-green)
+![License](https://img.shields.io/badge/license-proprietary-red)
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Web | Next.js 15 (App Router) + React 18 + Tailwind CSS |
-| API | Fastify 4 + Node.js 20 + TypeScript (ESM) |
-| Mobile | React Native + Expo 51 |
-| Database | PostgreSQL 16 (Aurora) + Prisma ORM |
-| Cache / Queue | Redis 7 + BullMQ |
-| Search | Meilisearch |
-| Auth | Clerk |
-| Billing | Stripe |
-| WhatsApp | Meta WhatsApp Cloud API |
-| AI / LLM | Anthropic Claude API |
-| Infra | AWS (ECS, RDS, ElastiCache, S3) + Terraform |
-| CI/CD | GitHub Actions |
-| Monorepo | Turborepo + pnpm workspaces |
+| Layer      | Technology                                      |
+|------------|-------------------------------------------------|
+| API        | Fastify 4, Node.js, TypeScript, Socket.io       |
+| Web        | Next.js 15 (App Router), React 18, Tailwind CSS |
+| Mobile     | React Native 0.74.1 + Expo 51                   |
+| Database   | PostgreSQL 16 + Prisma 7                        |
+| Cache      | Redis 7                                         |
+| Auth       | Clerk                                           |
+| Queue      | BullMQ                                          |
+| Storage    | Cloudflare R2                                   |
+| AI         | OpenAI (gpt-4o-mini)                            |
+| Payments   | Stripe                                          |
+| Monitoring | Sentry                                          |
+| Deploy     | Railway (API) · Vercel (Web)                    |
 
 ---
 
-## Repository Structure
+## Getting Started
+
+### Prerequisites
+
+- Node.js 20+
+- pnpm 9+
+- Docker (for local PostgreSQL, Redis)
+
+### Local Setup
+
+```bash
+git clone <repo-url>
+cd WhatsApp_CRM
+pnpm install
+cp .env.example .env        # fill in your keys
+docker compose up -d        # start local services
+pnpm dev                    # start all apps
+```
+
+Apps will be available at:
+- Web → http://localhost:3000
+- API → http://localhost:4000
+
+---
+
+## Project Structure
 
 ```
 apps/
-  api/        Fastify REST API — Node 20, ESM, TypeScript
-  web/        Next.js 15 App Router
-  mobile/     React Native + Expo 51
+  api/      Fastify REST API (port 4000)
+  web/      Next.js web app (port 3000)
+  mobile/   React Native + Expo
+  conveys/  Marketing site
 packages/
-  shared/     Branded domain types, API response types, constants
-  tsconfig/   Shared TypeScript base configs
-  eslint-config/  Shared ESLint 8 config
-docs/         Project specifications converted to Markdown
-infra/
-  terraform/  AWS infrastructure (Terraform IaC stub)
+  shared/        Domain types, API response types, constants
+  tsconfig/      Shared TypeScript configs
+  eslint-config/ Shared ESLint config
+services/
+  ml/       ML service (Python / FastAPI)
+scripts/    Utility scripts
 ```
 
 ---
 
-## Quick Start
+## Modules
 
-**Prerequisites:** Node.js 20+, pnpm 10+, Docker Desktop
-
-```bash
-# Clone
-git clone https://github.com/conveysproject/whatsapp_crm.git
-cd whatsapp_crm
-
-# Install dependencies
-pnpm install
-
-# Start local infrastructure (Postgres 16, Redis 7, Meilisearch)
-docker compose up -d
-
-# Copy env and fill in values
-cp .env.example .env
-
-# Start all apps in parallel
-pnpm dev
-```
-
-| App | URL |
-|---|---|
-| Web | http://localhost:3000 |
-| API | http://localhost:4000 |
-| API health check | http://localhost:4000/health |
-| Meilisearch | http://localhost:7700 |
+| # | Module                        | Status      |
+|---|-------------------------------|-------------|
+| M1 | Auth & Multi-Tenancy         | Live        |
+| M2 | Contact & Lead Management    | In Progress |
+| M3 | WhatsApp Inbox               | In Progress |
+| M4 | Template & Campaign Manager  | In Progress |
+| M5 | AI Agents & Automation       | Planned     |
+| M6 | Analytics & Reporting        | Planned     |
+| M7 | Billing & Subscription       | Planned     |
+| M8 | Agency / Sub-Account Mode    | Planned     |
+| M9 | Marketplace & Integrations   | Planned     |
 
 ---
 
-## Development
+## Environment Variables
 
-```bash
-pnpm type-check          # TypeScript check all packages
-pnpm lint                # ESLint all packages
-pnpm test                # Run all tests (Vitest)
-pnpm build               # Build all packages
+Copy `.env.example` to `.env` and fill in the values.
 
-# Scoped commands
-pnpm --filter @WBMSG/api test
-pnpm --filter @WBMSG/web dev
-```
+### API
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, commit conventions, and PR process.
+| Variable               | Description                      |
+|------------------------|----------------------------------|
+| `DATABASE_URL`         | PostgreSQL connection string     |
+| `REDIS_URL`            | Redis connection string          |
+| `CLERK_SECRET_KEY`     | Clerk auth secret                |
+| `CLERK_WEBHOOK_SECRET` | Clerk webhook secret             |
+| `OPENAI_API_KEY`       | OpenAI API key                   |
+| `WA_ACCESS_TOKEN`      | WhatsApp Business API token      |
+| `WA_PHONE_NUMBER_ID`   | WhatsApp phone number ID         |
+| `WA_VERIFY_TOKEN`      | WhatsApp webhook verify token    |
+| `WA_WEBHOOK_SECRET`    | WhatsApp webhook secret          |
+| `META_APP_ID`          | Meta app ID                      |
+| `META_APP_SECRET`      | Meta app secret                  |
+| `R2_BUCKET_NAME`       | Cloudflare R2 bucket name        |
+| `R2_ENDPOINT`          | Cloudflare R2 endpoint           |
+| `R2_ACCESS_KEY_ID`     | Cloudflare R2 access key         |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 secret key         |
+| `API_PORT`             | API port (default: 4000)         |
+| `CORS_ORIGIN`          | Allowed CORS origin              |
+
+### Web
+
+| Variable                            | Description                  |
+|-------------------------------------|------------------------------|
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk public key             |
+| `CLERK_SECRET_KEY`                  | Clerk secret key             |
+| `CLERK_WEBHOOK_SECRET`              | Clerk webhook secret         |
+| `NEXT_PUBLIC_API_URL`               | API base URL                 |
+| `NEXT_PUBLIC_META_APP_ID`           | Meta app ID (public)         |
+| `NEXT_PUBLIC_META_REDIRECT_URI`     | Meta OAuth redirect URI      |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL`     | Clerk sign-in path           |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_URL`     | Clerk sign-up path           |
 
 ---
 
-## Product Modules
+## Deployment
 
-| # | Module | Sprint Range |
-|---|---|---|
-| M1 | Auth & Multi-Tenancy | S1–S3 |
-| M2 | Contact & Lead Management | S2–S6 |
-| M3 | WhatsApp Inbox & Conversations | S4–S10 |
-| M4 | Template & Campaign Manager | S7–S12 |
-| M5 | AI Agents & Automation Builder | S9–S16 |
-| M6 | Analytics & Reporting | S11–S18 |
-| M7 | Billing & Subscription | S13–S17 |
-| M8 | Agency / Sub-Account Mode | S15–S20 |
-| M9 | Marketplace & Integrations | S18–S24 |
+| App | Platform | URL                             |
+|-----|----------|---------------------------------|
+| API | Railway  | wbmsg-production.up.railway.app |
+| Web | Vercel   | wbmsg.com                       |
 
 ---
 
-## Documentation
+## Contributing
 
-All project specifications are in [`docs/`](docs/). Start with [`docs/PROJECT_REFERENCE.md`](docs/PROJECT_REFERENCE.md) for a full overview — tech stack, database schema, API conventions, sprint roadmap, and links to every detailed spec.
+1. Branch from `develop` — `feat/WBMSG-123-description` or `fix/WBMSG-456-description`
+2. Follow Conventional Commits — `feat(scope):` / `fix(scope):` / `chore(scope):`
+3. Run `pnpm test` and `pnpm lint` before opening a PR
+4. 1 approval + all CI checks required to merge
 
 ---
 
 ## License
 
-Proprietary — All rights reserved. © 2026 WBMSG.
+© 2026 WBMSG. All rights reserved.
