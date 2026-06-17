@@ -176,3 +176,26 @@ describe("POST /v1/conversations/:id/typing", () => {
     expect(res.statusCode).toBe(204);
   });
 });
+
+describe("GET /v1/conversations — lastMessage", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("includes lastMessage on each conversation", async () => {
+    mockPrisma.conversation.findMany.mockResolvedValue([
+      {
+        id: "conv-1",
+        organizationId: "org-1",
+        status: "open",
+        lastMessageAt: "2026-05-01T10:00:00Z",
+        messages: [{ id: "msg-1", body: "Hello", direction: "inbound", contentType: "text" }],
+        contact: null,
+      },
+    ]);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Array<{ lastMessage: { id: string; body: string } }> }>();
+    expect(body.data[0]?.lastMessage).toMatchObject({ id: "msg-1", body: "Hello" });
+  });
+});

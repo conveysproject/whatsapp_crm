@@ -101,6 +101,7 @@ interface ContactPatchBody {
   whatsappOptOut?: boolean;
   disableBot?: boolean;
   groupIds?: string[];
+  notes?: string;
 }
 
 export const contactsRouter: FastifyPluginAsync = async (fastify) => {
@@ -426,6 +427,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           ...(request.body.languageCode !== undefined ? { languageCode: request.body.languageCode } : {}),
           ...(request.body.whatsappOptOut !== undefined ? { whatsappOptOut: request.body.whatsappOptOut } : {}),
           ...(request.body.disableBot !== undefined ? { disableBot: request.body.disableBot } : {}),
+          ...(request.body.notes !== undefined ? { notes: request.body.notes } : {}),
         },
       });
 

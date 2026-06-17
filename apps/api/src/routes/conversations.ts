@@ -25,7 +25,10 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
 
     const conversations = await fastify.prisma.conversation.findMany({
       where,
-      include: { contact: { select: { id: true, firstName: true, lastName: true, phoneNumber: true, tags: true } } },
+      include: {
+        contact: { select: { id: true, firstName: true, lastName: true, phoneNumber: true, tags: true } },
+        messages: { orderBy: { sentAt: "desc" }, take: 1, select: { id: true, body: true, direction: true, contentType: true } },
+      },
       orderBy: { lastMessageAt: "desc" },
       skip: (pageNum - 1) * 50,
       take: 50,
@@ -38,6 +41,8 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       ...c,
       contact: hidePhone && c.contact ? { ...c.contact, phoneNumber: maskPhone(c.contact.phoneNumber) } : c.contact,
       serviceWindowActive: c.lastInboundAt != null && now - c.lastInboundAt.getTime() < 86_400_000,
+      lastMessage: c.messages?.[0] ?? null,
+      messages: undefined,  // remove the array from response
     }));
     return reply.send({ data });
   });
