@@ -216,6 +216,7 @@ describe("GET /v1/conversations/search", () => {
     const res = await app.inject({ method: "GET", url: "/v1/conversations/search?q=a" });
     expect(res.statusCode).toBe(200);
     expect(res.json<{ data: unknown[] }>().data).toHaveLength(0);
+    expect(mockPrisma.conversation.findMany).not.toHaveBeenCalled();
   });
 
   it("calls findMany with OR filter and org scope when q is valid", async () => {

@@ -49,13 +49,17 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Full-text search across contact names and message bodies ───────────
   fastify.get<{ Querystring: { q?: string } }>("/conversations/search", async (request, reply) => {
-    const { organizationId, permissions } = request.auth;
+    const { userId, organizationId, permissions } = request.auth;
     const q = request.query.q?.trim() ?? "";
     if (q.length < 2) return reply.send({ data: [] });
 
+    const where: Record<string, unknown> = { organizationId };
+    // agents with assigned_chats_only permission see only their own conversations
+    if (permissions["assigned_chats_only"] === "allow") where.assignedTo = userId;
+
     const conversations = await fastify.prisma.conversation.findMany({
       where: {
-        organizationId,
+        ...where,
         OR: [
           { contact: { OR: [
             { firstName: { contains: q, mode: "insensitive" } },
@@ -78,7 +82,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       ...c,
       contact: hidePhone && c.contact ? { ...c.contact, phoneNumber: maskPhone(c.contact.phoneNumber) } : c.contact,
       serviceWindowActive: c.lastInboundAt != null && now - c.lastInboundAt.getTime() < 86_400_000,
-      lastMessage: c.messages[0] ?? null,
+      lastMessage: c.messages?.[0] ?? null,
       messages: undefined,
     }));
     return reply.send({ data });
