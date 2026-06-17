@@ -62,7 +62,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <ImpersonationBanner />
           <TopBar orgName={orgSlug ?? undefined} userId={userId ?? undefined} />
           <SetupBanner />
-          <main className="flex-1 p-6 overflow-auto min-h-0">
+          <main className="flex flex-col flex-1 p-6 overflow-auto min-h-0">
             <BreadcrumbNav />
             {children}
           </main>
