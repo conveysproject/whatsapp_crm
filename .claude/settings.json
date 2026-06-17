@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm *)",
+      "Bash(turbo *)",
+      "Bash(docker compose *)",
+      "Bash(prisma *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git status*)",
+      "Bash(git branch*)",
+      "Bash(git show*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'pnpm type-check 2>&1 | tail -20'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'cat | grep -q \"git commit\" && git status --short || true'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'echo \"[WBMSG] $(git branch --show-current) | $(git status --porcelain | wc -l | tr -d \" \") uncommitted file(s)\"'"
+          }
+        ]
+      }
+    ]
+  }
+}
