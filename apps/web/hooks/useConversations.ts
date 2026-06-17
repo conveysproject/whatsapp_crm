@@ -5,6 +5,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { getSocket } from "@/lib/socket";
 
+export interface LastMessage {
+  id: string;
+  body: string | null;
+  direction: string;
+  contentType: string | null;
+}
+
 export interface Conversation {
   id: string;
   organizationId: string;
@@ -13,6 +20,8 @@ export interface Conversation {
   assignedTo: string | null;
   lastMessageAt: string | null;
   unreadCount: number;
+  serviceWindowActive?: boolean;
+  lastMessage: LastMessage | null;
   contact?: { id: string; firstName: string | null; lastName: string | null; phoneNumber: string; tags: string[] } | null;
 }
 
@@ -20,11 +29,12 @@ interface ConversationsResponse {
   data: Conversation[];
 }
 
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+
 async function fetchConversations(token: string, status?: string): Promise<Conversation[]> {
-  const apiUrl = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
   const params = new URLSearchParams();
   if (status && status !== "all") params.set("status", status);
-  const res = await fetch(`${apiUrl}/v1/conversations?${params.toString()}`, {
+  const res = await fetch(`${API_URL}/v1/conversations?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error("Failed to fetch conversations");
@@ -62,4 +72,22 @@ export function useConversations(status?: string) {
   }, [queryClient]);
 
   return query;
+}
+
+export function useSearchConversations(q: string) {
+  const { getToken } = useAuth();
+  return useQuery({
+    queryKey: ["conversations-search", q],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/conversations/search?q=${encodeURIComponent(q)}`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (!res.ok) throw new Error("Search failed");
+      const json = await res.json() as ConversationsResponse;
+      return json.data;
+    },
+    enabled: q.trim().length >= 2,
+    staleTime: 10_000,
+  });
 }
