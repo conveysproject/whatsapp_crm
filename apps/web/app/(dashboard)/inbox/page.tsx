@@ -1,25 +1,30 @@
 "use client";
 
-import { JSX, useState } from "react";
+import { JSX, useState, useCallback } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useQueryClient } from "@tanstack/react-query";
 import { ConversationList } from "@/components/inbox/ConversationList";
 import { MessageThread } from "@/components/inbox/MessageThread";
 import { SendMessageForm } from "@/components/inbox/SendMessageForm";
-import { CannedResponsePicker } from "@/components/canned-response-picker";
+import { ConversationHeader } from "@/components/inbox/ConversationHeader";
+import { ContactPanel } from "@/components/inbox/ContactPanel";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
 import { useBotStatus } from "@/hooks/useBotStatus";
-import { BotPanel } from "@/components/bot-panel";
-import { SmartReplyPanel } from "@/components/smart-reply-panel";
 import { useConversations } from "@/hooks/useConversations";
 import { CreateOfferModal } from "@/components/deals/CreateOfferModal";
-import { ContactTrustBadge } from "@/components/trust-score/ContactTrustBadge";
+
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 export default function InboxPage(): JSX.Element {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [prefillText, setPrefillText] = useState("");
   const [showOffer, setShowOffer] = useState(false);
+  const [contactPanelOpen, setContactPanelOpen] = useState(false);
 
   const botActive = useBotStatus(selectedConversationId);
   const { data: conversations } = useConversations();
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
 
   const selectedConversation = selectedConversationId
     ? conversations?.find((c) => c.id === selectedConversationId) ?? null
@@ -30,10 +35,22 @@ export default function InboxPage(): JSX.Element {
     ? [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.phoneNumber
     : null;
 
+  const handleStatusChange = useCallback(async (status: string) => {
+    if (!selectedConversationId) return;
+    const token = await getToken();
+    await fetch(`${API_URL}/v1/conversations/${selectedConversationId}/status`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+  }, [selectedConversationId, getToken, queryClient]);
+
   return (
     <WhatsAppGate feature="Inbox">
-      <div className="w-72 border-r border-gray-200 bg-white flex flex-col overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-200">
+      {/* Conversation sidebar */}
+      <div className="w-72 border-r border-gray-200 bg-white flex flex-col overflow-hidden shrink-0">
+        <div className="px-4 py-3 border-b border-gray-200 shrink-0">
           <h2 className="text-sm font-semibold text-gray-900">Conversations</h2>
         </div>
         <ConversationList
@@ -42,42 +59,20 @@ export default function InboxPage(): JSX.Element {
         />
       </div>
 
-      <div className="flex flex-col flex-1 bg-gray-50 overflow-hidden">
-        {/* Conversation header — shown when a conversation is selected */}
-        {selectedConversation && (
-          <div className="flex items-center justify-between px-4 py-2.5 bg-white border-b border-gray-200 shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                <span className="text-xs font-semibold text-green-700">
-                  {(contactName ?? "?")[0]?.toUpperCase()}
-                </span>
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{contactName ?? contact?.phoneNumber ?? "Unknown"}</p>
-                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                  <span className={[
-                    "text-xs capitalize",
-                    selectedConversation.status === "open" ? "text-green-600" :
-                    selectedConversation.status === "pending" ? "text-amber-600" :
-                    "text-gray-400",
-                  ].join(" ")}>
-                    {selectedConversation.status}
-                  </span>
-                  {contact?.tags && contact.tags.length > 0 && (
-                    <>
-                      <span className="text-gray-200">·</span>
-                      {contact.tags.slice(0, 3).map((tag) => (
-                        <span key={tag} className="inline-flex items-center h-4 px-1.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-500">{tag}</span>
-                      ))}
-                      {contact.tags.length > 3 && (
-                        <span className="text-[10px] text-gray-400">+{contact.tags.length - 3}</span>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-              {contact && <ContactTrustBadge contactId={contact.id} />}
-            </div>
+      {/* Main message panel */}
+      <div className="flex flex-col flex-1 bg-gray-50 overflow-hidden min-w-0">
+        {/* Conversation header */}
+        {selectedConversation && contact && contactName ? (
+          <ConversationHeader
+            conversation={selectedConversation}
+            contact={contact}
+            contactName={contactName}
+            onToggleContactPanel={() => setContactPanelOpen((v) => !v)}
+            onStatusChange={handleStatusChange}
+          />
+        ) : selectedConversation && (
+          <div className="px-4 py-2.5 bg-white border-b border-gray-200 shrink-0">
+            <p className="text-sm font-medium text-gray-500">Unknown contact</p>
           </div>
         )}
 
@@ -85,7 +80,7 @@ export default function InboxPage(): JSX.Element {
 
         {/* Bot responding indicator */}
         {botActive && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-t border-amber-200 text-amber-700 text-xs">
+          <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-t border-amber-200 text-amber-700 text-xs shrink-0">
             <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
@@ -94,23 +89,6 @@ export default function InboxPage(): JSX.Element {
           </div>
         )}
 
-        <div className="relative px-2 flex items-center gap-2">
-          <CannedResponsePicker
-            conversationId={selectedConversationId}
-            onSelect={(content) => {
-              const substituted = content
-                .replace(/\{\{first_name\}\}/g, contact?.firstName ?? "")
-                .replace(/\{\{last_name\}\}/g, contact?.lastName ?? "");
-              setPrefillText(substituted);
-            }}
-          />
-          {selectedConversationId && (
-            <SmartReplyPanel
-              conversationId={selectedConversationId}
-              onSelect={(text) => setPrefillText(text)}
-            />
-          )}
-        </div>
         <SendMessageForm
           conversationId={selectedConversationId}
           prefillText={prefillText}
@@ -118,11 +96,21 @@ export default function InboxPage(): JSX.Element {
           onCreateDeal={contact ? () => setShowOffer(true) : undefined}
           contact={contact}
         />
-        {selectedConversationId && (
-          <BotPanel conversationId={selectedConversationId} />
-        )}
       </div>
 
+      {/* Contact detail panel */}
+      {contactPanelOpen && contact && contactName && selectedConversation && (
+        <ContactPanel
+          contactId={contact.id}
+          contactName={contactName}
+          conversationStatus={selectedConversation.status}
+          lastMessageAt={selectedConversation.lastMessageAt}
+          onCreateDeal={() => setShowOffer(true)}
+          onClose={() => setContactPanelOpen(false)}
+        />
+      )}
+
+      {/* Create deal modal */}
       {showOffer && contact && (
         <CreateOfferModal
           contactId={contact.id}
