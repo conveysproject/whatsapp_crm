@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode, JSX } from "react";
+import Link from "next/link";
 import { trackCTAClick } from "@/lib/analytics";
 
 interface TrackedLinkProps {
@@ -26,12 +27,12 @@ interface TrackedServiceCTAProps {
 
 export function TrackedServiceCTA({ title, className, children }: TrackedServiceCTAProps): JSX.Element {
   return (
-    <a
+    <Link
       href="/#contact"
       className={className}
       onClick={() => trackCTAClick(title, "/#contact", "service-page")}
     >
       {children}
-    </a>
+    </Link>
   );
 }
