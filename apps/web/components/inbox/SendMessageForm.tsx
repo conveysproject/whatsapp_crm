@@ -9,6 +9,8 @@ import { InteractiveMessagePicker } from "./InteractiveMessagePicker";
 import type { InteractivePayload } from "./InteractiveMessagePicker";
 import { TemplatePicker } from "./TemplatePicker";
 import { MediaAssetPicker, type MediaAsset } from "@/components/media-asset-picker";
+import { CannedResponsePicker } from "@/components/canned-response-picker";
+import { SmartReplyPanel } from "@/components/smart-reply-panel";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -51,11 +53,16 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
   const [templateSearch, setTemplateSearch] = useState("");
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [botPanelOpen, setBotPanelOpen] = useState(false);
+  const [bots, setBots] = useState<Array<{ id: string; name: string; startTrigger: string | null }>>([]);
+  const [botContactId, setBotContactId] = useState<string | null>(null);
+  const [sendingBot, setSendingBot] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingMediaTypeRef = useRef<string>("document");
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const slashMenuRef = useRef<HTMLDivElement>(null);
   const templateMenuRef = useRef<HTMLDivElement>(null);
+  const botPanelRef = useRef<HTMLDivElement>(null);
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
 
@@ -80,10 +87,38 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
       if (templateMenuRef.current && !templateMenuRef.current.contains(e.target as Node)) {
         setTemplateOpen(false);
       }
+      if (botPanelRef.current && !botPanelRef.current.contains(e.target as Node)) {
+        setBotPanelOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!botPanelOpen || !conversationId) return;
+    let cancelled = false;
+    async function fetchBotData() {
+      const token = await getToken();
+      const api = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+      const convRes = await fetch(`${api}/v1/conversations/${conversationId}`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (!convRes.ok || cancelled) return;
+      const convBody = await convRes.json() as { data: { contactId: string | null } };
+      const cid = convBody.data.contactId;
+      if (!cid || cancelled) return;
+      setBotContactId(cid);
+      const botsRes = await fetch(`${api}/v1/chatbots/active-for/${cid}`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (!botsRes.ok || cancelled) return;
+      const botsBody = await botsRes.json() as { data: Array<{ id: string; name: string; startTrigger: string | null }> };
+      if (!cancelled) setBots(botsBody.data);
+    }
+    void fetchBotData();
+    return () => { cancelled = true; };
+  }, [botPanelOpen, conversationId, getToken]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -224,8 +259,22 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
     }
   }
 
+  async function handleBotSend(chatbotId: string) {
+    if (!botContactId) return;
+    setSendingBot(chatbotId);
+    try {
+      const token = await getToken();
+      await fetch(
+        `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/chatbots/${chatbotId}/quick-send/${botContactId}`,
+        { method: "POST", headers: { Authorization: `Bearer ${token ?? ""}` } }
+      );
+    } finally {
+      setSendingBot(null);
+    }
+  }
+
   return (
-    <form onSubmit={(e) => { void handleSubmit(e); }} className="flex items-center gap-2 p-3 border-t border-gray-200 bg-white">
+    <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col gap-1 p-3 border-t border-gray-200 bg-white shrink-0">
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -234,217 +283,283 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
         onChange={(e) => { void handleFileSelected(e); }}
       />
 
-      {/* Template picker */}
-      <div className="relative" ref={templateMenuRef}>
-        <button
-          type="button"
-          onClick={() => { setTemplateOpen((v) => !v); setTemplateSearch(""); setAttachMenuOpen(false); setInteractiveOpen(false); }}
-          disabled={!conversationId || sending || uploading}
-          className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${templateOpen ? "text-green-600 bg-green-50" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
-          title="Send template (or type /)"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-        </button>
-        {templateOpen && conversationId && (
-          <TemplatePicker
+      {/* Quick actions row: canned responses + AI replies */}
+      {conversationId && (
+        <div className="flex items-center gap-2 px-1 pb-1">
+          <CannedResponsePicker
             conversationId={conversationId}
-            initialSearch={templateSearch}
-            onSent={() => { void queryClient.invalidateQueries({ queryKey: ["messages", conversationId] }); onSent?.(); }}
-            onClose={() => setTemplateOpen(false)}
+            onSelect={(content) => {
+              const substituted = content
+                .replace(/\{\{first_name\}\}/g, contact?.firstName ?? "")
+                .replace(/\{\{last_name\}\}/g, contact?.lastName ?? "");
+              setText(substituted);
+            }}
           />
-        )}
-      </div>
-
-      {/* Interactive message picker */}
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => { setInteractiveOpen((v) => !v); setAttachMenuOpen(false); setTemplateOpen(false); }}
-          disabled={!conversationId || sending || uploading}
-          className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
-          title="Send interactive message"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-          </svg>
-        </button>
-        {interactiveOpen && (
-          <InteractiveMessagePicker
-            onSend={(payload) => { void handleInteractiveSend(payload); }}
-            onClose={() => setInteractiveOpen(false)}
+          <SmartReplyPanel
+            conversationId={conversationId}
+            onSelect={(t) => setText(t)}
           />
-        )}
-      </div>
-
-      {/* Attachment menu */}
-      <div className="relative" ref={attachMenuRef}>
-        <button
-          type="button"
-          onClick={() => setAttachMenuOpen((v) => !v)}
-          disabled={!conversationId || uploading}
-          className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
-          title="Attach file"
-        >
-          {uploading ? (
-            <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v4m0 8v4M4 12h4m8 0h4" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-            </svg>
-          )}
-        </button>
-
-        {attachMenuOpen && (
-          <div className="absolute bottom-full left-0 mb-1 w-44 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden z-10">
-            {(["image", "video", "document", "audio"] as const).map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => openFilePicker(type)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 capitalize"
-              >
-                <AttachIcon type={type} />
-                {type}
-              </button>
-            ))}
-            <div className="border-t border-gray-100 mt-1 pt-1">
-              <button
-                type="button"
-                onClick={() => { setLibraryOpen(true); setAttachMenuOpen(false); }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              >
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                Media Library
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Create Deal */}
-      {onCreateDeal && (
-        <button
-          type="button"
-          onClick={onCreateDeal}
-          disabled={!conversationId}
-          className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
-          title="Create Deal"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-          </svg>
-        </button>
+        </div>
       )}
 
-      {/* Slash command palette */}
-      <div className="relative flex-1" ref={slashMenuRef}>
-        {slashMenuOpen && conversationId && (() => {
-          const query = text.slice(1).toLowerCase();
-          const COMMANDS = [
-            { id: "template", icon: "⚡", label: "template", desc: "Send a WhatsApp template message" },
-          ];
-          const matchedCommands = COMMANDS.filter((c) => c.label.startsWith(query));
-          const matchedCanned = (cannedData?.data ?? []).filter((r) => {
-            const sc = (r.shortcut ?? "").toLowerCase();
-            return sc.length > 1 && sc.slice(1).startsWith(query);
-          });
-          if (!matchedCommands.length && !matchedCanned.length) return null;
-          return (
-            <div className="absolute bottom-full left-0 mb-2 w-72 bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden z-20">
-              {matchedCommands.length > 0 && (
-                <>
-                  <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Commands</p>
-                  {matchedCommands.map((cmd) => (
-                    <button
-                      key={cmd.id}
-                      type="button"
-                      onClick={() => {
-                        setSlashMenuOpen(false);
-                        setText("");
-                        if (cmd.id === "template") {
-                          setTemplateSearch("");
-                          setTemplateOpen(true);
-                        }
-                      }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
-                    >
-                      <span className="text-lg">{cmd.icon}</span>
-                      <div>
-                        <p className="text-sm font-medium text-gray-800">/{cmd.label}</p>
-                        <p className="text-xs text-gray-500">{cmd.desc}</p>
-                      </div>
-                    </button>
-                  ))}
-                </>
-              )}
-              {matchedCanned.length > 0 && (
-                <>
-                  <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Canned Responses</p>
-                  {matchedCanned.map((r) => (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => { void handleCannedShortcut(r); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
-                    >
-                      <span className="text-lg">💬</span>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-gray-800">{r.shortcut}</p>
-                          {r.mediaData && <span className="text-xs text-gray-400">📎</span>}
-                        </div>
-                        <p className="text-xs text-gray-500 truncate">{r.content}</p>
-                      </div>
-                    </button>
-                  ))}
-                </>
-              )}
-            </div>
-          );
-        })()}
+      {/* Icon buttons row: template, interactive, attach, deal, bot + input + send */}
+      <div className="flex items-center gap-2">
+        {/* Template picker */}
+        <div className="relative" ref={templateMenuRef}>
+          <button
+            type="button"
+            onClick={() => { setTemplateOpen((v) => !v); setTemplateSearch(""); setAttachMenuOpen(false); setInteractiveOpen(false); }}
+            disabled={!conversationId || sending || uploading}
+            className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${templateOpen ? "text-green-600 bg-green-50" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
+            title="Send template (or type /)"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </button>
+          {templateOpen && conversationId && (
+            <TemplatePicker
+              conversationId={conversationId}
+              initialSearch={templateSearch}
+              onSent={() => { void queryClient.invalidateQueries({ queryKey: ["messages", conversationId] }); onSent?.(); }}
+              onClose={() => setTemplateOpen(false)}
+            />
+          )}
+        </div>
 
-        <Input
-          className="w-full"
-          placeholder={conversationId ? "Type a message… or /" : "Select a conversation first"}
-          value={text}
-          onChange={(e) => {
-            const val = e.target.value;
-            setText(val);
-            if (val.startsWith("/")) {
-              setSlashMenuOpen(true);
-              setAttachMenuOpen(false);
-              setInteractiveOpen(false);
-            } else {
-              setSlashMenuOpen(false);
-            }
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") { setSlashMenuOpen(false); return; }
-            if (e.key === "Enter" && slashMenuOpen) {
-              const query = text.slice(1).toLowerCase();
-              const all = cannedData?.data ?? [];
-              const exact = all.find((r) => (r.shortcut ?? "").toLowerCase() === `/${query}`);
-              const first = all.find((r) => {
-                const sc = (r.shortcut ?? "").toLowerCase();
-                return sc.length > 1 && sc.slice(1).startsWith(query);
-              });
-              const match = exact ?? first;
-              if (match) { e.preventDefault(); void handleCannedShortcut(match); }
-            }
-          }}
-          disabled={!conversationId || sending || uploading}
-        />
+        {/* Interactive message picker */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => { setInteractiveOpen((v) => !v); setAttachMenuOpen(false); setTemplateOpen(false); }}
+            disabled={!conversationId || sending || uploading}
+            className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
+            title="Send interactive message"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          </button>
+          {interactiveOpen && (
+            <InteractiveMessagePicker
+              onSend={(payload) => { void handleInteractiveSend(payload); }}
+              onClose={() => setInteractiveOpen(false)}
+            />
+          )}
+        </div>
+
+        {/* Attachment menu */}
+        <div className="relative" ref={attachMenuRef}>
+          <button
+            type="button"
+            onClick={() => setAttachMenuOpen((v) => !v)}
+            disabled={!conversationId || uploading}
+            className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
+            title="Attach file"
+          >
+            {uploading ? (
+              <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v4m0 8v4M4 12h4m8 0h4" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+            )}
+          </button>
+
+          {attachMenuOpen && (
+            <div className="absolute bottom-full left-0 mb-1 w-44 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden z-10">
+              {(["image", "video", "document", "audio"] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => openFilePicker(type)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 capitalize"
+                >
+                  <AttachIcon type={type} />
+                  {type}
+                </button>
+              ))}
+              <div className="border-t border-gray-100 mt-1 pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setLibraryOpen(true); setAttachMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  Media Library
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Create Deal */}
+        {onCreateDeal && (
+          <button
+            type="button"
+            onClick={onCreateDeal}
+            disabled={!conversationId}
+            className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
+            title="Create Deal"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+            </svg>
+          </button>
+        )}
+
+        {/* Bot Automations */}
+        <div className="relative" ref={botPanelRef}>
+          <button
+            type="button"
+            onClick={() => { setBotPanelOpen((v) => !v); setAttachMenuOpen(false); setTemplateOpen(false); setInteractiveOpen(false); }}
+            disabled={!conversationId}
+            className={`p-2 rounded-lg transition-colors disabled:opacity-40 ${botPanelOpen ? "text-green-600 bg-green-50" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
+            title="Bot Automations"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </button>
+          {botPanelOpen && (
+            <div className="absolute bottom-full left-0 mb-1 w-64 bg-white rounded-xl border border-gray-200 shadow-lg z-20 overflow-hidden">
+              <p className="px-3 py-2 text-xs font-semibold text-gray-500 border-b border-gray-100">Bot Automations</p>
+              <div className="p-2 flex flex-col gap-1.5 max-h-48 overflow-y-auto">
+                {bots.length === 0 ? (
+                  <p className="text-xs text-gray-400 px-1 py-2">No active bots for this contact.</p>
+                ) : bots.map((bot) => (
+                  <div key={bot.id} className="flex items-center justify-between gap-2 px-2 py-1.5 border border-gray-100 rounded-lg">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{bot.name}</p>
+                      {bot.startTrigger && (
+                        <p className="text-xs text-gray-400 truncate">Trigger: {bot.startTrigger}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { void handleBotSend(bot.id); }}
+                      disabled={sendingBot === bot.id}
+                      className="text-xs px-2 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 shrink-0"
+                    >
+                      {sendingBot === bot.id ? "…" : "Send"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Slash command palette + input */}
+        <div className="relative flex-1" ref={slashMenuRef}>
+          {slashMenuOpen && conversationId && (() => {
+            const query = text.slice(1).toLowerCase();
+            const COMMANDS = [
+              { id: "template", icon: "⚡", label: "template", desc: "Send a WhatsApp template message" },
+            ];
+            const matchedCommands = COMMANDS.filter((c) => c.label.startsWith(query));
+            const matchedCanned = (cannedData?.data ?? []).filter((r) => {
+              const sc = (r.shortcut ?? "").toLowerCase();
+              return sc.length > 1 && sc.slice(1).startsWith(query);
+            });
+            if (!matchedCommands.length && !matchedCanned.length) return null;
+            return (
+              <div className="absolute bottom-full left-0 mb-2 w-72 bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden z-20">
+                {matchedCommands.length > 0 && (
+                  <>
+                    <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Commands</p>
+                    {matchedCommands.map((cmd) => (
+                      <button
+                        key={cmd.id}
+                        type="button"
+                        onClick={() => {
+                          setSlashMenuOpen(false);
+                          setText("");
+                          if (cmd.id === "template") {
+                            setTemplateSearch("");
+                            setTemplateOpen(true);
+                          }
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                      >
+                        <span className="text-lg">{cmd.icon}</span>
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">/{cmd.label}</p>
+                          <p className="text-xs text-gray-500">{cmd.desc}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
+                {matchedCanned.length > 0 && (
+                  <>
+                    <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Canned Responses</p>
+                    {matchedCanned.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => { void handleCannedShortcut(r); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                      >
+                        <span className="text-lg">💬</span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-gray-800">{r.shortcut}</p>
+                            {r.mediaData && <span className="text-xs text-gray-400">📎</span>}
+                          </div>
+                          <p className="text-xs text-gray-500 truncate">{r.content}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
+          <Input
+            className="w-full"
+            placeholder={conversationId ? "Type a message… or /" : "Select a conversation first"}
+            value={text}
+            onChange={(e) => {
+              const val = e.target.value;
+              setText(val);
+              if (val.startsWith("/")) {
+                setSlashMenuOpen(true);
+                setAttachMenuOpen(false);
+                setInteractiveOpen(false);
+              } else {
+                setSlashMenuOpen(false);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") { setSlashMenuOpen(false); return; }
+              if (e.key === "Enter" && slashMenuOpen) {
+                const query = text.slice(1).toLowerCase();
+                const all = cannedData?.data ?? [];
+                const exact = all.find((r) => (r.shortcut ?? "").toLowerCase() === `/${query}`);
+                const first = all.find((r) => {
+                  const sc = (r.shortcut ?? "").toLowerCase();
+                  return sc.length > 1 && sc.slice(1).startsWith(query);
+                });
+                const match = exact ?? first;
+                if (match) { e.preventDefault(); void handleCannedShortcut(match); }
+              }
+            }}
+            disabled={!conversationId || sending || uploading}
+          />
+        </div>
+
+        <Button type="submit" disabled={!conversationId || !text.trim() || sending || uploading}>
+          {sending ? "Sending…" : "Send"}
+        </Button>
       </div>
-      <Button type="submit" disabled={!conversationId || !text.trim() || sending || uploading}>
-        {sending ? "Sending…" : "Send"}
-      </Button>
+
       <MediaAssetPicker
         open={libraryOpen}
         onClose={() => setLibraryOpen(false)}
