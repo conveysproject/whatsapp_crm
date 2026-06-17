@@ -42,13 +42,13 @@ export async function getOverviewMetrics(
   ] = await Promise.all([
     prisma.conversation.count({ where: { organizationId, status: "open" } }),
     prisma.contact.count({ where: { organizationId } }),
-    prisma.message.count({ where: { organizationId, createdAt: { gte: startOfDay } } }),
+    prisma.message.count({ where: { organizationId, createdAt: { gte: startOfDay }, isSystemMessage: false } }),
     prisma.invitation.count({ where: { organizationId, status: "pending" } }),
     prisma.campaign.count({
       where: { organizationId, status: "completed", sentAt: { gte: startOfMonth } },
     }),
     prisma.conversation.count({
-      where: { organizationId, status: "bot", lastMessageAt: { gte: startOfDay } },
+      where: { organizationId, status: "bot" },
     }),
     prisma.message.findMany({
       where: { organizationId, direction: "outbound", isSystemMessage: false, createdAt: { gte: since30d } },
@@ -95,7 +95,8 @@ export async function getConversationVolume(
   days = 14
 ): Promise<DailyVolume[]> {
   const since = new Date();
-  since.setDate(since.getDate() - days);
+  since.setDate(since.getDate() - (days - 1));
+  since.setHours(0, 0, 0, 0);
 
   const messages = await prisma.message.findMany({
     where: { organizationId, createdAt: { gte: since } },
@@ -191,9 +192,12 @@ export async function getMyWork(
     where: { organizationId, assignedTo: userId, createdAt: { gte: since30d } },
     select: { id: true, createdAt: true },
   });
+
+  // Fetch first outbound for all assigned convs (SLA check) + 30d convs (response time calc)
+  const allConvIds = [...new Set([...convs30d.map((c) => c.id), ...assignedConvs.map((c) => c.id)])];
   const firstOutbounds = await prisma.message.findMany({
     where: {
-      conversationId: { in: convs30d.map((c) => c.id) },
+      conversationId: { in: allConvIds },
       direction: "outbound",
       isSystemMessage: false,
     },
@@ -215,9 +219,14 @@ export async function getMyWork(
     }
   }
 
-  const slaBreaches = assignedConvs.filter(
-    (c) => c.sla && c.createdAt.getTime() + c.sla.firstResponseSecs * 1000 < now.getTime()
-  ).length;
+  const slaBreaches = assignedConvs.filter((c) => {
+    if (!c.sla) return false;
+    const deadline = c.createdAt.getTime() + c.sla.firstResponseSecs * 1000;
+    const firstResponse = firstByConv.get(c.id);
+    // Responded but after deadline, or no response yet and deadline passed
+    if (firstResponse) return firstResponse.getTime() > deadline;
+    return now.getTime() > deadline;
+  }).length;
 
   const topConversations: ConversationPreview[] = assignedConvs.slice(0, 3).map((c) => {
     const contact = c.contact;
@@ -279,6 +288,7 @@ export async function getTeamStats(
     prisma.conversation.findMany({
       where: { organizationId, assignedTo: { in: userIds }, status: { in: ["open", "pending"] } },
       select: {
+        id: true,
         assignedTo: true,
         createdAt: true,
         slaId: true,
@@ -301,12 +311,15 @@ export async function getTeamStats(
   ]);
 
   const conv30dIds = convs30d.map((c) => c.id);
+  const openConvIds = openConvs.map((c) => c.id);
   const convAssignMap = new Map(
     convs30d.map((c) => [c.id, { assignedTo: c.assignedTo, createdAt: c.createdAt }])
   );
 
+  // Include open conv IDs so we can check actual first-response time for SLA
+  const allConvIdsForTeam = [...new Set([...conv30dIds, ...openConvIds])];
   const firstOutbounds = await prisma.message.findMany({
-    where: { conversationId: { in: conv30dIds }, direction: "outbound", isSystemMessage: false },
+    where: { conversationId: { in: allConvIdsForTeam }, direction: "outbound", isSystemMessage: false },
     select: { conversationId: true, createdAt: true },
     orderBy: { createdAt: "asc" },
   });
@@ -321,8 +334,11 @@ export async function getTeamStats(
   for (const c of openConvs) {
     const uid = c.assignedTo!;
     openCountByUser.set(uid, (openCountByUser.get(uid) ?? 0) + 1);
-    if (c.sla && c.createdAt.getTime() + c.sla.firstResponseSecs * 1000 < now.getTime()) {
-      slaBreachByUser.set(uid, (slaBreachByUser.get(uid) ?? 0) + 1);
+    if (c.sla) {
+      const deadline = c.createdAt.getTime() + c.sla.firstResponseSecs * 1000;
+      const firstResponse = firstByConv.get(c.id);
+      const isBreach = firstResponse ? firstResponse.getTime() > deadline : now.getTime() > deadline;
+      if (isBreach) slaBreachByUser.set(uid, (slaBreachByUser.get(uid) ?? 0) + 1);
     }
   }
 
@@ -406,10 +422,13 @@ export async function getAgentDetail(
   ]);
 
   const conv30dIds = convsSince.map((c) => c.id);
+  const openConvIds = openConvs.map((c) => c.id);
   const convCreatedMap = new Map(convsSince.map((c) => [c.id, c.createdAt]));
 
+  // Include open conv IDs so SLA breach uses actual first-response timing
+  const allConvIdsForAgent = [...new Set([...conv30dIds, ...openConvIds])];
   const firstOutbounds = await prisma.message.findMany({
-    where: { conversationId: { in: conv30dIds }, direction: "outbound", isSystemMessage: false },
+    where: { conversationId: { in: allConvIdsForAgent }, direction: "outbound", isSystemMessage: false },
     select: { conversationId: true, createdAt: true },
     orderBy: { createdAt: "asc" },
   });
@@ -429,9 +448,13 @@ export async function getAgentDetail(
     }
   }
 
-  const slaBreaches = openConvs.filter(
-    (c) => c.sla && c.createdAt.getTime() + c.sla.firstResponseSecs * 1000 < now.getTime()
-  ).length;
+  const slaBreaches = openConvs.filter((c) => {
+    if (!c.sla) return false;
+    const deadline = c.createdAt.getTime() + c.sla.firstResponseSecs * 1000;
+    const firstResponse = firstByConv.get(c.id);
+    if (firstResponse) return firstResponse.getTime() > deadline;
+    return now.getTime() > deadline;
+  }).length;
 
   const topIds = openConvs.slice(0, 10).map((c) => c.id);
   const lastMessages = await prisma.message.findMany({
