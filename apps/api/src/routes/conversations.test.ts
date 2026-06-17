@@ -199,3 +199,47 @@ describe("GET /v1/conversations — lastMessage", () => {
     expect(body.data[0]?.lastMessage).toMatchObject({ id: "msg-1", body: "Hello" });
   });
 });
+
+describe("GET /v1/conversations/search", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns empty array when q is missing", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/search" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: unknown[] }>().data).toHaveLength(0);
+    expect(mockPrisma.conversation.findMany).not.toHaveBeenCalled();
+  });
+
+  it("returns empty array when q is under 2 chars", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/search?q=a" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: unknown[] }>().data).toHaveLength(0);
+  });
+
+  it("calls findMany with OR filter and org scope when q is valid", async () => {
+    mockPrisma.conversation.findMany.mockResolvedValue([]);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/search?q=dev" });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.conversation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ organizationId: "org-1" }),
+        take: 20,
+      })
+    );
+  });
+
+  it("returns conversations with lastMessage", async () => {
+    mockPrisma.conversation.findMany.mockResolvedValue([
+      {
+        id: "conv-1", organizationId: "org-1", status: "open", lastMessageAt: null,
+        messages: [{ id: "msg-1", body: "dev test", direction: "inbound", contentType: "text" }],
+        contact: null,
+      },
+    ]);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/search?q=dev" });
+    const body = res.json<{ data: Array<{ lastMessage: { id: string } }> }>();
+    expect(body.data[0]?.lastMessage?.id).toBe("msg-1");
+  });
+});

@@ -47,6 +47,43 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data });
   });
 
+  // ── Full-text search across contact names and message bodies ───────────
+  fastify.get<{ Querystring: { q?: string } }>("/conversations/search", async (request, reply) => {
+    const { organizationId, permissions } = request.auth;
+    const q = request.query.q?.trim() ?? "";
+    if (q.length < 2) return reply.send({ data: [] });
+
+    const conversations = await fastify.prisma.conversation.findMany({
+      where: {
+        organizationId,
+        OR: [
+          { contact: { OR: [
+            { firstName: { contains: q, mode: "insensitive" } },
+            { lastName: { contains: q, mode: "insensitive" } },
+          ]}},
+          { messages: { some: { body: { contains: q, mode: "insensitive" } } } },
+        ],
+      },
+      include: {
+        contact: { select: { id: true, firstName: true, lastName: true, phoneNumber: true, tags: true } },
+        messages: { orderBy: { sentAt: "desc" }, take: 1, select: { id: true, body: true, direction: true, contentType: true } },
+      },
+      orderBy: { lastMessageAt: "desc" },
+      take: 20,
+    });
+
+    const hidePhone = permissions["hide_contact_phone_numbers"] === "allow";
+    const now = Date.now();
+    const data = conversations.map((c) => ({
+      ...c,
+      contact: hidePhone && c.contact ? { ...c.contact, phoneNumber: maskPhone(c.contact.phoneNumber) } : c.contact,
+      serviceWindowActive: c.lastInboundAt != null && now - c.lastInboundAt.getTime() < 86_400_000,
+      lastMessage: c.messages[0] ?? null,
+      messages: undefined,
+    }));
+    return reply.send({ data });
+  });
+
   fastify.get<{ Params: { id: ConversationId }; Querystring: { cursor?: string; limit?: string } }>(
     "/conversations/:id/messages",
     async (request, reply) => {
