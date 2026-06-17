@@ -15,6 +15,32 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
+function formatDateLabel(iso: string): string {
+  const date = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  if (sameDay(date, today)) return "Today";
+  if (sameDay(date, yesterday)) return "Yesterday";
+  return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+function DateSeparator({ label }: { label: string }): JSX.Element {
+  return (
+    <div className="flex items-center gap-3 my-3 px-2">
+      <div className="flex-1 h-px bg-gray-200" />
+      <span className="text-xs text-gray-400 font-medium shrink-0">{label}</span>
+      <div className="flex-1 h-px bg-gray-200" />
+    </div>
+  );
+}
+
 interface CarouselCard {
   headerFormat?: string | null;
   headerMediaUrl?: string | null;
@@ -209,11 +235,20 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevScrollHeight = useRef<number>(0);
 
+  const isFirstLoad = useRef(true);
+
   const lastMessageId = messages[messages.length - 1]?.id;
 
-  // Scroll to bottom on initial load and whenever a new message arrives
+  // Reset isFirstLoad when conversation changes so initial load scrolls instantly
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    isFirstLoad.current = true;
+  }, [conversationId]);
+
+  // Scroll to bottom on initial load (instant) and on new message (smooth)
+  useEffect(() => {
+    if (!bottomRef.current) return;
+    bottomRef.current.scrollIntoView({ behavior: isFirstLoad.current ? "auto" : "smooth" });
+    isFirstLoad.current = false;
   }, [conversationId, lastMessageId]);
 
   // Restore scroll position after older messages are prepended
@@ -248,7 +283,7 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
   }
 
   return (
-    <div ref={scrollRef} className="flex flex-col gap-2 p-4 overflow-y-auto flex-1">
+    <div ref={scrollRef} className="flex flex-col gap-2 p-4 overflow-y-auto flex-1 min-h-0">
       {hasNextPage && (
         <div className="flex justify-center py-1">
           <button
@@ -260,44 +295,51 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
           </button>
         </div>
       )}
-      {messages.map((msg) => (
-        <div
-          key={msg.id}
-          className={`flex ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}
-        >
-          <div
-            className={[
-              "max-w-xs lg:max-w-md px-4 py-2 rounded-2xl text-sm",
-              msg.direction === "outbound"
-                ? "bg-wa-light text-gray-900 rounded-br-none"
-                : "bg-white border border-gray-200 text-gray-900 rounded-bl-none shadow-card",
-            ].join(" ")}
-          >
-            {msg.contentType === "audio" && msg.mediaUrl ? (
-              <VoicePlayer mediaUrl={msg.mediaUrl} messageId={msg.id} />
-            ) : msg.contentType === "template" && msg.body ? (
-              <TemplateMessageBubble body={msg.body} />
-            ) : msg.contentType === "interactive" ? (
-              msg.body
-                ? <InteractiveMessageBubble body={msg.body} />
-                : <span className="text-xs text-gray-400 italic">Interactive message</span>
-            ) : msg.mediaUrl != null && msg.contentType !== "text" ? (
-              <MediaMessage mediaUrl={msg.mediaUrl} contentType={msg.contentType ?? "document"} />
-            ) : (
-              <>
-                <p dangerouslySetInnerHTML={{ __html: msg.body ? formatWhatsAppText(msg.body) : "[media]" }} />
-                {msg.direction === "inbound" && msg.body && (
-                  <IntentBadge messageId={msg.id} text={msg.body} direction={msg.direction} />
+      {messages.map((msg, idx) => {
+        const prevMsg = messages[idx - 1];
+        const showSeparator =
+          !prevMsg ||
+          new Date(msg.sentAt).toDateString() !== new Date(prevMsg.sentAt).toDateString();
+
+        return (
+          <div key={msg.id}>
+            {showSeparator && <DateSeparator label={formatDateLabel(msg.sentAt)} />}
+            <div className={`flex ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}>
+              <div
+                className={[
+                  "max-w-xs lg:max-w-md px-4 py-2 rounded-2xl text-sm",
+                  msg.direction === "outbound"
+                    ? "bg-wa-light text-gray-900 rounded-br-none"
+                    : "bg-white border border-gray-200 text-gray-900 rounded-bl-none shadow-card",
+                ].join(" ")}
+              >
+                {msg.contentType === "audio" && msg.mediaUrl ? (
+                  <VoicePlayer mediaUrl={msg.mediaUrl} messageId={msg.id} />
+                ) : msg.contentType === "template" && msg.body ? (
+                  <TemplateMessageBubble body={msg.body} />
+                ) : msg.contentType === "interactive" ? (
+                  msg.body
+                    ? <InteractiveMessageBubble body={msg.body} />
+                    : <span className="text-xs text-gray-400 italic">Interactive message</span>
+                ) : msg.mediaUrl != null && msg.contentType !== "text" ? (
+                  <MediaMessage mediaUrl={msg.mediaUrl} contentType={msg.contentType ?? "document"} />
+                ) : (
+                  <>
+                    <p dangerouslySetInnerHTML={{ __html: msg.body ? formatWhatsAppText(msg.body) : "[media]" }} />
+                    {msg.direction === "inbound" && msg.body && (
+                      <IntentBadge messageId={msg.id} text={msg.body} direction={msg.direction} />
+                    )}
+                  </>
                 )}
-              </>
-            )}
-            <p className="text-xs text-gray-400 mt-1 text-right flex items-center justify-end gap-0.5">
-              {formatTime(msg.sentAt)}
-              {msg.direction === "outbound" && <MessageTicks status={msg.status} />}
-            </p>
+                <p className="text-xs text-gray-400 mt-1 text-right flex items-center justify-end gap-0.5">
+                  {formatTime(msg.sentAt)}
+                  {msg.direction === "outbound" && <MessageTicks status={msg.status} />}
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
       <div ref={bottomRef} />
     </div>
   );
