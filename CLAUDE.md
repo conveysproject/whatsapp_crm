@@ -2,8 +2,26 @@
 
 ## Project
 
-WhatsApp-first CRM for SMBs globally. GA target: March 2027. Sprint 1 complete.
-9 product modules (M1–M9). M1 (Auth) live; M2 (Contacts), M3 (Inbox), M4 (Campaigns) in progress.
+WhatsApp-first CRM for SMBs globally. © 2026 WBMSG.
+9 product modules (M1–M9). M1 live; M2–M4 in progress; M5–M9 planned.
+
+**Production:** Web → [wbmsg.com](https://wbmsg.com) · API → wbmsg-production.up.railway.app
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| API | Fastify 4, Node.js 24.x, TypeScript, Socket.io |
+| Web | Next.js 15 (App Router), React 18, Tailwind CSS |
+| Mobile | React Native 0.74.1 + Expo 51 |
+| Database | PostgreSQL 16 + Prisma 7 |
+| Cache / Queue | Redis 7 + BullMQ |
+| Auth | Clerk |
+| AI | OpenAI (gpt-4o-mini) |
+| Storage | Cloudflare R2 |
+| Payments | Stripe |
+| Monitoring | Sentry |
+| Deploy | Railway (API) · Vercel (Web) |
 
 ## Quick Commands
 
@@ -21,7 +39,7 @@ pnpm --filter @WBMSG/mobile  <cmd>
 pnpm --filter @WBMSG/shared  <cmd>
 ```
 
-Local infra (Postgres 16, Redis 7, Meilisearch): `docker compose up -d`
+Local infra (Postgres 16, Redis 7): `docker compose up -d`
 
 ## Repository Map
 
@@ -35,8 +53,8 @@ packages/
   shared/        Branded domain types, API response types, constants
   tsconfig/      Shared TypeScript base configs
   eslint-config/ Shared ESLint 8 config
-  ml/            ML utilities
-infra/           Terraform IaC stubs (AWS ECS, RDS, ElastiCache, S3)
+services/
+  ml/       ML service — Python / FastAPI
 ```
 
 Key entry points:
@@ -49,10 +67,10 @@ Key entry points:
 
 ## Architecture
 
-- **Web → API**: Next.js calls Fastify over HTTP REST. Web has no direct DB access.
+- **Web → API**: Next.js calls Fastify over HTTP REST + Socket.io for real-time. Web has no direct DB access.
 - **Auth**: Clerk on both web and API. Every API request carries a Clerk JWT validated in `apps/api/src/lib/clerk.ts`.
 - **Queue**: BullMQ (Redis) for async jobs — campaign dispatch, contact import, flow execution, conversation summarisation. Workers in `apps/api/src/workers/`.
-- **Search**: Meilisearch (port 7700) for full-text search on contacts and conversations.
+- **Storage**: Cloudflare R2 for media and file uploads.
 - **Multi-tenant**: Every DB model has `organizationId`. **Always scope Prisma queries to it — never query cross-org.**
 
 ## Database / Prisma
@@ -71,36 +89,35 @@ Key entry points:
 - RAG helpers: `apps/api/src/lib/ai-rag.ts`
 - Context window: 6 messages when `Contact.pastAiSummary` exists (`AI_CONTEXT_SHORT`); 30 messages otherwise (`AI_CONTEXT_LONG`)
 - Summaries refreshed by `apps/api/src/workers/conversation-summary.worker.ts`
-- M5 (AI Agents, S9+) will migrate to the Anthropic Claude API
 
 ## Coding Conventions
 
 - **Commits**: `feat(scope): description` / `fix(scope):` / `chore(scope):` — Conventional Commits
-- **Branches**: `feat/TRUST-123-description` / `fix/TRUST-456-description` — branch from `develop`, not `main`
+- **Branches**: `feat/WBMSG-123-description` / `fix/WBMSG-456-description` — branch from `develop`, not `main`
 - **TypeScript**: strict mode everywhere — no `any`, no implicit returns
 - **Imports**: API is ESM-only — use `.js` extensions in imports even for `.ts` source files
 - **Logging**: no `console.log` in production — use Fastify logger (`request.log`) or pino
 - **Exports**: named exports only in `packages/shared/` — no default exports
-- **Tests**: TDD preferred. Vitest for all packages. Run `pnpm test` before opening a PR.
+- **Tests**: TDD preferred. Vitest for all packages. Run `pnpm test` and `pnpm lint` before opening a PR.
 - **PRs**: branch from `develop`, 1 approval + all CI checks required, one feature/fix per PR.
 
-## Module / Sprint Status
+## Module Status
 
 | # | Module | Status |
 |---|---|---|
 | M1 | Auth & Multi-Tenancy | Live |
-| M2 | Contact & Lead Management | In progress |
-| M3 | WhatsApp Inbox & Conversations | In progress |
-| M4 | Template & Campaign Manager | In progress |
-| M5 | AI Agents & Automation Builder | Planned (S9+) |
-| M6 | Analytics & Reporting | Planned (S11+) |
-| M7 | Billing & Subscription | Planned (S13+) |
-| M8 | Agency / Sub-Account Mode | Planned (S15+) |
-| M9 | Marketplace & Integrations | Planned (S18+) |
+| M2 | Contact & Lead Management | In Progress |
+| M3 | WhatsApp Inbox | In Progress |
+| M4 | Template & Campaign Manager | In Progress |
+| M5 | AI Agents & Automation | Planned |
+| M6 | Analytics & Reporting | Planned |
+| M7 | Billing & Subscription | Planned |
+| M8 | Agency / Sub-Account Mode | Planned |
+| M9 | Marketplace & Integrations | Planned |
 
 ## Environment
 
 - `.env` — main vars (git-ignored; copy from `.env.example`)
-- `.env.local` — local overrides
-- Docker services required: `docker compose up -d` (Postgres 16, Redis 7, Meilisearch)
-- Key vars: `DATABASE_URL`, `REDIS_URL`, `CLERK_SECRET_KEY`, `OPENAI_API_KEY`, `META_WHATSAPP_TOKEN`, `STRIPE_SECRET_KEY`
+- Docker services required: `docker compose up -d` (Postgres 16, Redis 7)
+- Key API vars: `DATABASE_URL`, `REDIS_URL`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`, `OPENAI_API_KEY`, `WA_ACCESS_TOKEN`, `WA_PHONE_NUMBER_ID`, `WA_VERIFY_TOKEN`, `WA_WEBHOOK_SECRET`, `META_APP_ID`, `META_APP_SECRET`, `R2_BUCKET_NAME`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
+- Key Web vars: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_REDIRECT_URI`
