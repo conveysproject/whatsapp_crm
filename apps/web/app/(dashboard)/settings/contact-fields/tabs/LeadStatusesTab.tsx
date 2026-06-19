@@ -3,6 +3,9 @@
 import { JSX, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import StatusSlideOver, { type StatusDraft } from "./StatusSlideOver";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -59,6 +62,20 @@ export default function LeadStatusesTab(): JSX.Element {
     onError: (e: Error) => setError(e.message),
   });
 
+  const reorder = useMutation({
+    mutationFn: async (orderedIds: string[]) => {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/lead-statuses/reorder`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ orderedIds }),
+      });
+      if (!res.ok) throw new Error("Failed to reorder statuses");
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["lead-statuses"] }),
+    onError: (e: Error) => setError(e.message),
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -73,27 +90,42 @@ export default function LeadStatusesTab(): JSX.Element {
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="bg-white rounded-xl border border-gray-200">
-        <div className="grid grid-cols-[1fr_auto] gap-4 px-4 py-3 text-xs font-medium text-gray-500 border-b border-gray-100">
+        <div className="grid grid-cols-[auto_1fr_auto_auto] gap-4 px-4 py-3 text-xs font-medium text-gray-500 border-b border-gray-100">
+          <span />
           <span>Status Name</span>
           <span>Colour</span>
+          <span />
         </div>
         {isLoading ? (
           <p className="p-6 text-sm text-gray-400 text-center">Loading…</p>
         ) : statuses.length === 0 ? (
           <p className="p-8 text-sm text-gray-400 text-center">No lead statuses yet.</p>
         ) : (
-          <div className="divide-y divide-gray-50">
-            {statuses.map((s) => (
-              <div key={s.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-4 px-4 py-3">
-                <span className="text-sm font-medium text-gray-900">{s.name}</span>
-                <span className="w-5 h-5 rounded-full" style={{ backgroundColor: s.color }} />
-                <div className="flex items-center gap-3">
-                  <button onClick={() => { setError(null); setEditing({ id: s.id, name: s.name, color: s.color }); }} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium">Edit</button>
-                  <button onClick={() => remove.mutate(s.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
-                </div>
+          <DndContext
+            collisionDetection={closestCenter}
+            onDragEnd={(e: DragEndEvent) => {
+              const { active, over } = e;
+              if (!over || active.id === over.id) return;
+              const oldIndex = statuses.findIndex((s) => s.id === active.id);
+              const newIndex = statuses.findIndex((s) => s.id === over.id);
+              const ordered = arrayMove(statuses, oldIndex, newIndex);
+              qc.setQueryData<LeadStatus[]>(["lead-statuses"], ordered);
+              reorder.mutate(ordered.map((s) => s.id));
+            }}
+          >
+            <SortableContext items={statuses.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+              <div className="divide-y divide-gray-50">
+                {statuses.map((s) => (
+                  <SortableStatusRow
+                    key={s.id}
+                    status={s}
+                    onEdit={() => { setError(null); setEditing({ id: s.id, name: s.name, color: s.color }); }}
+                    onDelete={() => remove.mutate(s.id)}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
 
@@ -105,6 +137,30 @@ export default function LeadStatusesTab(): JSX.Element {
           onClose={() => setEditing(undefined)}
         />
       )}
+    </div>
+  );
+}
+
+function SortableStatusRow({
+  status,
+  onEdit,
+  onDelete,
+}: {
+  status: LeadStatus;
+  onEdit: () => void;
+  onDelete: () => void;
+}): JSX.Element {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: status.id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  return (
+    <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 px-4 py-3 bg-white">
+      <button {...attributes} {...listeners} aria-label="Drag to reorder" className="cursor-grab text-gray-300 hover:text-gray-500">⋮⋮</button>
+      <span className="text-sm font-medium text-gray-900">{status.name}</span>
+      <span className="w-5 h-5 rounded-full" style={{ backgroundColor: status.color }} />
+      <div className="flex items-center gap-3">
+        <button onClick={onEdit} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium">Edit</button>
+        <button onClick={onDelete} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
+      </div>
     </div>
   );
 }
