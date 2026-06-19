@@ -15,6 +15,7 @@ const mockPrisma = {
   organization: { findFirst: vi.fn() },
   conversation: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   message: { create: vi.fn() },
+  inboundMessageDump: { create: vi.fn().mockResolvedValue(undefined) },
 };
 
 async function buildApp(): Promise<FastifyInstance> {
@@ -102,7 +103,8 @@ describe("POST /v1/webhooks/whatsapp", () => {
         whatsappContactPhone: "+919876543210",
         body: "Hello WBMSG",
         whatsappMessageId: "wamid.abc",
-      })
+      }),
+      expect.objectContaining({ jobId: "wamsg-wamid.abc" })
     );
   });
 
