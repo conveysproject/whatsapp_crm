@@ -3,6 +3,7 @@
 import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/Button";
+import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -12,7 +13,7 @@ export type MatchMode = "all" | "any";
 
 export type FilterRule =
   | { field: "firstName" | "lastName" | "email" | "phoneNumber"; operator: "contains" | "equals" | "startsWith" | "isEmpty" | "isNotEmpty"; value?: string }
-  | { field: "lifecycleStage"; operator: "equals" | "isNot"; value: string }
+  | { field: "leadStatusId"; operator: "equals" | "isNot"; value: string }
   | { field: "tags"; operator: "contains" | "doesNotContain"; value: string }
   | { field: "countryCode" | "languageCode"; operator: "equals" | "isNot"; value: string }
   | { field: "assignedUserId"; operator: "equals" | "isNot" | "isEmpty"; value?: string }
@@ -36,7 +37,7 @@ const STATIC_FIELD_GROUPS: FieldGroup[] = [
     { value: "phoneNumber", label: "Phone number" },
   ]},
   { label: "Status", fields: [
-    { value: "lifecycleStage", label: "Lifecycle stage" },
+    { value: "leadStatusId", label: "Lead Status" },
     { value: "whatsappOptOut", label: "WhatsApp opt-out" },
     { value: "disableBot", label: "Bot disabled" },
   ]},
@@ -70,7 +71,7 @@ function getOperators(field: string): OperatorOption[] {
       { value: "isEmpty", label: "is empty" },
       { value: "isNotEmpty", label: "is not empty" },
     ];
-  if (field === "lifecycleStage")
+  if (field === "leadStatusId")
     return [{ value: "equals", label: "is" }, { value: "isNot", label: "is not" }];
   if (field === "tags")
     return [{ value: "contains", label: "contains" }, { value: "doesNotContain", label: "does not contain" }];
@@ -111,8 +112,8 @@ function defaultRuleForField(field: string): FilterRule {
   const op = getOperators(field)[0].value;
   if (["whatsappOptOut", "disableBot"].includes(field))
     return { field: field as "whatsappOptOut" | "disableBot", operator: op as "isTrue" | "isFalse" };
-  if (field === "lifecycleStage")
-    return { field: "lifecycleStage", operator: "equals", value: "lead" };
+  if (field === "leadStatusId")
+    return { field: "leadStatusId", operator: "equals", value: "" };
   if (field === "customField")
     return { field: "customField", operator: "contains", customFieldId: "", value: "" };
   if (["createdAt", "lastMessageAt"].includes(field))
@@ -134,17 +135,19 @@ function ValueInput({
   customFields: Array<{ id: string; inputName: string }>;
   onChange: (patch: Partial<FilterRule>) => void;
 }): JSX.Element | null {
+  const { data: leadStatuses } = useLeadStatuses();
   if (!needsValue(rule.operator)) return null;
 
-  if (rule.field === "lifecycleStage") {
+  if (rule.field === "leadStatusId") {
     return (
       <select
         className={selectClass}
         value={rule.value}
         onChange={(e) => onChange({ value: e.target.value } as Partial<FilterRule>)}
       >
-        {["lead", "prospect", "customer", "loyal", "churned"].map((s) => (
-          <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+        <option value="">— Select status —</option>
+        {leadStatuses.map((s) => (
+          <option key={s.id} value={s.id}>{s.name}</option>
         ))}
       </select>
     );
@@ -280,7 +283,7 @@ export function SegmentBuilder({
   function addRule() {
     const next = [
       ...entries,
-      { id: crypto.randomUUID(), rule: { field: "lifecycleStage", operator: "equals", value: "lead" } as FilterRule },
+      { id: crypto.randomUUID(), rule: { field: "leadStatusId", operator: "equals", value: "" } as FilterRule },
     ];
     setEntries(next);
     onChange(next.map((e) => e.rule));

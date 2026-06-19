@@ -6,8 +6,6 @@ import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { SegmentBuilder, type FilterRule, type MatchMode } from "@/components/segments/SegmentBuilder";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 interface ContactPreview {
@@ -15,7 +13,7 @@ interface ContactPreview {
   firstName: string | null;
   lastName: string | null;
   phoneNumber: string;
-  lifecycleStage: string | null;
+  leadStatus: { name: string; color: string } | null;
 }
 
 interface Segment {
@@ -24,10 +22,6 @@ interface Segment {
   filters: FilterRule[];
   match: MatchMode;
 }
-
-const stageVariant: Record<string, "green" | "blue" | "yellow" | "red" | "gray"> = {
-  customer: "green", prospect: "blue", lead: "yellow", churned: "red", loyal: "green",
-};
 
 export default function SegmentDetailPage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
@@ -149,8 +143,11 @@ export default function SegmentDetailPage(): JSX.Element {
                 </td>
                 <td className="px-4 py-2 text-gray-600">{c.phoneNumber}</td>
                 <td className="px-4 py-2">
-                  {c.lifecycleStage ? (
-                    <Badge variant={stageVariant[c.lifecycleStage] ?? "gray"}>{c.lifecycleStage}</Badge>
+                  {c.leadStatus ? (
+                    <span className="inline-flex items-center gap-1.5 text-sm text-gray-700">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.leadStatus.color }} />
+                      {c.leadStatus.name}
+                    </span>
                   ) : (
                     <span className="text-gray-400">—</span>
                   )}
