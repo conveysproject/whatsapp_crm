@@ -42,6 +42,7 @@ import { mediaRouter } from "./media.js";
 import { infoMaterialsRouter } from "./info-materials.js";
 import { mediaAssetsRouter } from "./media-assets.js";
 import { customFieldsRouter } from "./custom-fields.js";
+import { leadStatusesRouter } from "./lead-statuses.js";
 import { webhookEndpointsRouter } from "./webhook-endpoints.js";
 import { countriesRouter } from "./countries.js";
 import { rolesRouter } from "./roles.js";
@@ -91,6 +92,7 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(infoMaterialsRouter, { prefix: "/v1" });
   await fastify.register(mediaAssetsRouter, { prefix: "/v1" });
   await fastify.register(customFieldsRouter, { prefix: "/v1" });
+  await fastify.register(leadStatusesRouter, { prefix: "/v1" });
   await fastify.register(webhookEndpointsRouter, { prefix: "/v1" });
   await fastify.register(countriesRouter, { prefix: "/v1" });
   await fastify.register(rolesRouter, { prefix: "/v1" });
