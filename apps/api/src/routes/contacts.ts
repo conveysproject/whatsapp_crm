@@ -1,6 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import type { LifecycleStage } from "@prisma/client";
 import { evaluateSegment, type FilterRule, type MatchMode } from "../lib/segment-evaluator.js";
 import { paginate, parsePaginationParams } from "../lib/pagination.js";
 
@@ -26,7 +25,7 @@ async function buildExportWhere(
   const rawSearch = rawUrl.split("?")[1] ?? "";
   const usp = new URLSearchParams(rawSearch);
 
-  const lifecycleStages = usp.getAll("lifecycleStage");
+  const leadStatusIds = usp.getAll("leadStatusId");
   const tags = usp.getAll("tags");
   const segmentId = usp.get("segmentId") ?? undefined;
   const groupIds = usp.getAll("groupIds");
@@ -66,7 +65,7 @@ async function buildExportWhere(
   return {
     organizationId,
     deletedAt: null,
-    ...(lifecycleStages.length > 0 && { lifecycleStage: { in: lifecycleStages as LifecycleStage[] } }),
+    ...(leadStatusIds.length > 0 && { leadStatusId: { in: leadStatusIds } }),
     ...(tags.length > 0 && { tags: { hasEvery: tags } }),
     ...(segmentContactIds !== undefined && { id: { in: segmentContactIds } }),
     ...(groupIds.length > 0 && { groupContacts: { some: { contactGroupId: { in: groupIds } } } }),
@@ -86,6 +85,7 @@ interface ContactBody {
   disableBot?: boolean;
   groupIds?: string[];
   customFields?: Record<string, unknown>;
+  leadStatusId?: string;
 }
 
 interface ContactPatchBody {
@@ -93,7 +93,7 @@ interface ContactPatchBody {
   firstName?: string;
   lastName?: string;
   email?: string;
-  lifecycleStage?: string;
+  leadStatusId?: string;
   tags?: string[];
   customFields?: Record<string, unknown>;
   countryId?: number | null;
@@ -172,6 +172,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       fastify.prisma.contact.findMany({
         where,
         include: {
+          leadStatus: { select: { name: true } },
           groupContacts: { include: { contactGroup: { select: { title: true } } } },
         },
         orderBy: { createdAt: "asc" },
@@ -180,7 +181,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
 
     const fixedHeaders = [
       "Full Phone", "First Name", "Last Name", "Email", "Country Code",
-      "Lifecycle Stage", "Tags", "Groups", "Notes", "Created At",
+      "Lead Status", "Tags", "Groups", "Notes", "Created At",
     ];
     const cfHeaders = customFields.map((cf) => cf.inputName);
     const header = [...fixedHeaders, ...cfHeaders].map(csvEscape).join(",");
@@ -193,7 +194,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
         csvEscape(c.lastName ?? ""),
         csvEscape(c.email ?? ""),
         csvEscape(c.countryCode ?? ""),
-        csvEscape(c.lifecycleStage ?? ""),
+        csvEscape(c.leadStatus?.name ?? ""),
         csvEscape(c.tags.join("|")),
         csvEscape(c.groupContacts.map((gc) => gc.contactGroup.title).join("|")),
         csvEscape((c.notes ?? "").replace(/[\r\n]+/g, " ")),
@@ -267,7 +268,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           ],
         } : {}),
       },
-      select: { id: true, organizationId: true, name: true, phoneNumber: true, email: true, lifecycleStage: true },
+      select: { id: true, organizationId: true, name: true, phoneNumber: true, email: true, leadStatus: { select: { id: true, name: true, color: true } } },
       take: 20,
       orderBy: { createdAt: "desc" },
     });
@@ -297,7 +298,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           ],
         } : {}),
       },
-      include: { country: true, groupContacts: { include: { contactGroup: { select: { id: true, title: true } } } } },
+      include: { country: true, leadStatus: { select: { id: true, name: true, color: true } }, groupContacts: { include: { contactGroup: { select: { id: true, title: true } } } } },
       take: limit + 1,
       orderBy: { id: "asc" },
     });
@@ -321,6 +322,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       where: { id: request.params.id, organizationId, deletedAt: null },
       include: {
         country: true,
+        leadStatus: { select: { id: true, name: true, color: true } },
         groupContacts: { select: { contactGroupId: true } },
       },
     });
@@ -348,6 +350,10 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     if (!limitCheck.allowed) {
       return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Contact limit of ${limitCheck.limit} reached` } });
     }
+    if (request.body.leadStatusId) {
+      const ls = await fastify.prisma.leadStatus.findFirst({ where: { id: request.body.leadStatusId, organizationId } });
+      if (!ls) return reply.status(400).send({ error: { code: "INVALID_LEAD_STATUS", message: "leadStatusId not found in organization" } });
+    }
     let contact: Awaited<ReturnType<typeof fastify.prisma.contact.create>>;
     try {
       const { firstName, lastName, name, phoneNumber: rawPhone, email, countryId, languageCode, whatsappOptOut, disableBot, groupIds, customFields } = request.body;
@@ -365,6 +371,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           whatsappOptOut: whatsappOptOut ?? false,
           disableBot: disableBot ?? false,
           ...(customFields ? { customFields: customFields as Prisma.InputJsonValue } : {}),
+          ...(request.body.leadStatusId ? { leadStatusId: request.body.leadStatusId } : {}),
         },
       });
       if (groupIds && groupIds.length > 0) {
@@ -406,6 +413,11 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       if (!existing) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
       }
+      if (request.body.leadStatusId !== undefined && request.body.leadStatusId !== null) {
+        const ls = await fastify.prisma.leadStatus.findFirst({ where: { id: request.body.leadStatusId, organizationId } });
+        if (!ls) return reply.status(400).send({ error: { code: "INVALID_LEAD_STATUS", message: "leadStatusId not found in organization" } });
+      }
+
       const { firstName, lastName } = request.body;
       const derivedName =
         request.body.name ??
@@ -420,7 +432,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           ...(firstName !== undefined ? { firstName } : {}),
           ...(lastName !== undefined ? { lastName } : {}),
           ...(request.body.email !== undefined ? { email: request.body.email } : {}),
-          ...(request.body.lifecycleStage !== undefined ? { lifecycleStage: request.body.lifecycleStage as LifecycleStage } : {}),
+          ...(request.body.leadStatusId !== undefined ? { leadStatusId: request.body.leadStatusId } : {}),
           ...(request.body.tags !== undefined ? { tags: request.body.tags } : {}),
           ...(request.body.customFields !== undefined ? { customFields: request.body.customFields as Prisma.InputJsonValue } : {}),
           ...(request.body.countryId !== undefined ? { countryId: request.body.countryId } : {}),
@@ -454,7 +466,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           void dispatchFlowTrigger(fastify.prisma, organizationId, "tag_added", dispatchBase);
         }
       }
-      if (request.body.lifecycleStage !== undefined && request.body.lifecycleStage !== existing.lifecycleStage) {
+      if (request.body.leadStatusId !== undefined && request.body.leadStatusId !== existing.leadStatusId) {
         void dispatchFlowTrigger(fastify.prisma, organizationId, "lifecycle_change", dispatchBase);
       }
 

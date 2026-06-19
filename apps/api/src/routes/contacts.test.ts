@@ -35,6 +35,12 @@ const mockPrisma = {
   segment: {
     findFirst: vi.fn().mockResolvedValue(null),
   },
+  leadStatus: {
+    findFirst: vi.fn(),
+  },
+  flow: {
+    findMany: vi.fn().mockResolvedValue([]),
+  },
   $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
 };
 
@@ -81,7 +87,7 @@ describe("POST /v1/contacts", () => {
   afterEach(async () => { await app.close(); });
 
   it("creates a contact and returns 201", async () => {
-    const created = { id: "c-2", organizationId: "org-1", phoneNumber: "919000000002", name: "Bob", email: null, lifecycleStage: "lead" };
+    const created = { id: "c-2", organizationId: "org-1", phoneNumber: "919000000002", name: "Bob", email: null };
     mockPrisma.contact.create.mockResolvedValue(created);
     const res = await app.inject({
       method: "POST",
@@ -90,6 +96,55 @@ describe("POST /v1/contacts", () => {
     });
     expect(res.statusCode).toBe(201);
     expect(res.json<{ data: { id: string } }>().data.id).toBe("c-2");
+  });
+
+  it("creates a contact with leadStatusId", async () => {
+    const created = { id: "c-3", organizationId: "org-1", phoneNumber: "919000000003", name: "Carol", leadStatusId: "ls-1" };
+    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "ls-1", organizationId: "org-1", name: "New Lead" });
+    mockPrisma.contact.create.mockResolvedValue(created);
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/contacts",
+      payload: { phoneNumber: "919000000003", name: "Carol", leadStatusId: "ls-1" },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(mockPrisma.contact.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ leadStatusId: "ls-1" }) })
+    );
+  });
+
+  it("rejects create with a leadStatusId from another org", async () => {
+    mockPrisma.leadStatus.findFirst.mockResolvedValue(null);
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/contacts",
+      payload: { phoneNumber: "919000000004", name: "Dave", leadStatusId: "bad" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.contact.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("PATCH /v1/contacts/:id — leadStatusId", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("updates a contact's leadStatusId", async () => {
+    const existing = { id: "c-1", organizationId: "org-1", phoneNumber: "919000000001", tags: [], leadStatusId: "ls-1" };
+    const updated = { ...existing, leadStatusId: "ls-2", phoneNumber: "919000000001" };
+    mockPrisma.contact.findFirst.mockResolvedValue(existing);
+    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "ls-2", organizationId: "org-1", name: "Qualified" });
+    mockPrisma.contact.update.mockResolvedValue(updated);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/contacts/c-1",
+      payload: { leadStatusId: "ls-2" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.contact.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ leadStatusId: "ls-2" }) })
+    );
   });
 });
 
@@ -122,7 +177,7 @@ describe("GET /v1/contacts/export", () => {
   it("returns CSV with correct headers and data", async () => {
     mockPrisma.contactCustomField.findMany.mockResolvedValue([]);
     mockPrisma.contact.findMany.mockResolvedValue([
-      { id: "c-1", organizationId: "org-1", phoneNumber: "919000000001", firstName: "Alice", lastName: null, email: "alice@example.com", countryCode: "IN", lifecycleStage: "lead", tags: [], notes: null, createdAt: new Date(), groupContacts: [], customFields: {} },
+      { id: "c-1", organizationId: "org-1", phoneNumber: "919000000001", firstName: "Alice", lastName: null, email: "alice@example.com", countryCode: "IN", leadStatus: null, tags: [], notes: null, createdAt: new Date(), groupContacts: [], customFields: {} },
     ]);
     const res = await app.inject({ method: "GET", url: "/v1/contacts/export" });
     expect(res.statusCode).toBe(200);
@@ -296,17 +351,17 @@ describe("GET /v1/contacts/export/count", () => {
     mockAuth.permissions = {};
   });
 
-  it("applies lifecycleStage filter", async () => {
+  it("applies leadStatusId filter", async () => {
     mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
     mockPrisma.contact.count.mockResolvedValue(5);
     const res = await app.inject({
       method: "GET",
-      url: "/v1/contacts/export/count?lifecycleStage=lead&lifecycleStage=prospect",
+      url: "/v1/contacts/export/count?leadStatusId=ls-1&leadStatusId=ls-2",
     });
     expect(res.statusCode).toBe(200);
     expect(mockPrisma.contact.count).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ lifecycleStage: { in: ["lead", "prospect"] } }),
+        where: expect.objectContaining({ leadStatusId: { in: ["ls-1", "ls-2"] } }),
       })
     );
     mockAuth.permissions = {};
@@ -403,7 +458,7 @@ describe("GET /v1/contacts/export (new rich CSV)", () => {
     phoneNumber: "919000000001",
     email: "priya@example.com",
     countryCode: "IN",
-    lifecycleStage: "lead",
+    leadStatus: { name: "New Lead" },
     tags: ["vip", "premium"],
     notes: "VIP customer\nnew line",
     createdAt: new Date("2026-01-15T10:30:00.000Z"),
@@ -420,7 +475,7 @@ describe("GET /v1/contacts/export (new rich CSV)", () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/csv");
     expect(res.body).toContain("Full Phone");
-    expect(res.body).toContain("Lifecycle Stage");
+    expect(res.body).toContain("Lead Status");
     expect(res.body).toContain("Groups");
     expect(res.body).toContain("Notes");
     mockAuth.permissions = {};
@@ -472,14 +527,14 @@ describe("GET /v1/contacts/export (new rich CSV)", () => {
     mockAuth.permissions = {};
   });
 
-  it("applies lifecycleStage filter", async () => {
+  it("applies leadStatusId filter", async () => {
     mockAuth.permissions = { manage_contacts: "allow", "manage_contacts.export_contacts": "allow" };
     mockPrisma.contactCustomField.findMany.mockResolvedValue([]);
     mockPrisma.contact.findMany.mockResolvedValue([]);
-    await app.inject({ method: "GET", url: "/v1/contacts/export?lifecycleStage=lead" });
+    await app.inject({ method: "GET", url: "/v1/contacts/export?leadStatusId=ls-1" });
     expect(mockPrisma.contact.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ lifecycleStage: { in: ["lead"] } }),
+        where: expect.objectContaining({ leadStatusId: { in: ["ls-1"] } }),
       })
     );
     mockAuth.permissions = {};
