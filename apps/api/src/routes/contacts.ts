@@ -432,7 +432,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           ...(firstName !== undefined ? { firstName } : {}),
           ...(lastName !== undefined ? { lastName } : {}),
           ...(request.body.email !== undefined ? { email: request.body.email } : {}),
-          ...(request.body.leadStatusId !== undefined ? { leadStatusId: request.body.leadStatusId } : {}),
+          ...(request.body.leadStatusId ? { leadStatusId: request.body.leadStatusId } : {}),
           ...(request.body.tags !== undefined ? { tags: request.body.tags } : {}),
           ...(request.body.customFields !== undefined ? { customFields: request.body.customFields as Prisma.InputJsonValue } : {}),
           ...(request.body.countryId !== undefined ? { countryId: request.body.countryId } : {}),
