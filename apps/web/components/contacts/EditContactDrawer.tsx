@@ -310,11 +310,11 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
               </div>
             </div>
 
-            {/* ── Lifecycle ────────────────────────────────────── */}
-            <SectionHeader title="Lifecycle" />
+            {/* ── Status ────────────────────────────────────── */}
+            <SectionHeader title="Status" />
             <div className="space-y-3 pb-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-500">Stage</label>
+                <label className="text-xs font-medium text-gray-500">Lead Status</label>
                 <select
                   className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-colors"
                   value={form.leadStatusId}
