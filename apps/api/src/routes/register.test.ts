@@ -12,6 +12,7 @@ const mockPrisma = {
   user: { findUnique: vi.fn(), create: vi.fn() },
   organization: { create: vi.fn(), update: vi.fn() },
   vendorSetting: { createMany: vi.fn() },
+  leadStatus: { count: vi.fn(), createMany: vi.fn() },
 };
 
 async function buildApp(): Promise<FastifyInstance> {
@@ -28,6 +29,8 @@ describe("POST /register", () => {
     mockPrisma.organization.create.mockResolvedValue({ id: "org-new" });
     mockPrisma.user.create.mockResolvedValue({});
     mockPrisma.vendorSetting.createMany.mockResolvedValue({ count: 4 });
+    mockPrisma.leadStatus.count.mockResolvedValue(0);
+    mockPrisma.leadStatus.createMany.mockResolvedValue({ count: 7 });
   });
 
   it("seeds default role permissions for new org", async () => {
