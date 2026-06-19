@@ -1,7 +1,7 @@
 "use client";
 import { JSX, useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useClerk } from "@clerk/nextjs";
+import { useClerk, useUser } from "@clerk/nextjs";
 import { AvailabilityConfirmModal } from "./AvailabilityConfirmModal";
 
 interface UserMe {
@@ -36,6 +36,7 @@ export function ProfileMenu(): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { signOut, openUserProfile } = useClerk();
+  const { user: clerkUser } = useUser();
   const qc = useQueryClient();
 
   const { data: userData } = useQuery<{ data: UserMe }>({
@@ -77,6 +78,7 @@ export function ProfileMenu(): JSX.Element {
   const org = orgData?.data;
   const isOnline = user?.availability !== "away";
   const userInitials = initials(user?.fullName, user?.email ?? "");
+  const imageUrl = clerkUser?.imageUrl;
 
   function handleAvailabilityToggle() {
     if (isOnline) {
@@ -121,9 +123,14 @@ export function ProfileMenu(): JSX.Element {
         {/* Avatar button */}
         <button
           onClick={() => setOpen((v) => !v)}
-          className="relative flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500 text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          className="relative flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500 text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400 overflow-hidden"
         >
-          {userInitials}
+          {imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imageUrl} alt={user?.fullName ?? "avatar"} className="w-full h-full object-cover" />
+          ) : (
+            userInitials
+          )}
           {/* Online/Away dot */}
           <span
             className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${
@@ -141,8 +148,13 @@ export function ProfileMenu(): JSX.Element {
                 User Details
               </p>
               <div className="flex items-center gap-3 mb-4">
-                <div className="relative flex-shrink-0 w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold text-base">
-                  {userInitials}
+                <div className="relative flex-shrink-0 w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold text-base overflow-hidden">
+                  {imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={imageUrl} alt={user?.fullName ?? "avatar"} className="w-full h-full object-cover" />
+                  ) : (
+                    userInitials
+                  )}
                   <span
                     className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
                       isOnline ? "bg-emerald-400" : "bg-gray-400"
