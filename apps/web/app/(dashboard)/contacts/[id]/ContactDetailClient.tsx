@@ -64,7 +64,6 @@ export function ContactDetailClient({ contact: initial }: { contact: Contact }):
     email: contact.email,
     countryId: contact.countryId,
     languageCode: contact.languageCode,
-    lifecycleStage: contact.lifecycleStage,
     tags: contact.tags,
     whatsappOptOut: contact.whatsappOptOut,
     disableBot: contact.disableBot,

@@ -4,6 +4,7 @@ import { JSX, FormEvent, useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
+import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 
 export interface Contact {
   id: string;
@@ -12,7 +13,7 @@ export interface Contact {
   firstName: string | null;
   lastName: string | null;
   email: string | null;
-  lifecycleStage: string;
+  leadStatusId?: string;
   languageCode: string | null;
   createdAt: string;
   whatsappOptOut: boolean;
@@ -29,7 +30,7 @@ export interface EditableContact {
   email: string | null;
   countryId: number | null;
   languageCode: string | null;
-  lifecycleStage: string;
+  leadStatusId?: string;
   tags: string[];
   whatsappOptOut: boolean;
   disableBot: boolean;
@@ -157,6 +158,7 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 
 export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Element {
   const { getToken } = useAuth();
+  const { data: leadStatuses } = useLeadStatuses();
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -164,6 +166,7 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
     email: "",
     countryId: "",
     languageCode: "",
+    leadStatusId: "",
     groupIds: [] as string[],
     whatsappOptOut: false,
     disableBot: false,
@@ -213,7 +216,7 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
 
   useEffect(() => {
     if (!open) {
-      setForm({ firstName: "", lastName: "", phoneNumber: "", email: "", countryId: "", languageCode: "", groupIds: [], whatsappOptOut: false, disableBot: false });
+      setForm({ firstName: "", lastName: "", phoneNumber: "", email: "", countryId: "", languageCode: "", leadStatusId: "", groupIds: [], whatsappOptOut: false, disableBot: false });
       setCustomFieldValues({});
       setGroupDropdownOpen(false);
       setError(null);
@@ -287,6 +290,7 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
         groupIds: form.groupIds.length > 0 ? form.groupIds : undefined,
         whatsappOptOut: form.whatsappOptOut,
         disableBot: form.disableBot,
+        leadStatusId: form.leadStatusId || undefined,
       };
       const hasCustom = Object.values(customFieldValues).some((v) => v.trim());
       if (hasCustom) {
@@ -395,6 +399,20 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
               />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-700">Status</label>
+              <select
+                className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-colors"
+                value={form.leadStatusId}
+                onChange={(e) => setForm((f) => ({ ...f, leadStatusId: e.target.value }))}
+              >
+                <option value="">— Select status —</option>
+                {leadStatuses.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
             </div>
 
             {groups.length > 0 && (

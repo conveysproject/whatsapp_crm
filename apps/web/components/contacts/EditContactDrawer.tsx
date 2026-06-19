@@ -6,10 +6,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import type { Contact, EditableContact } from "./AddContactModal";
 import { Toggle, SectionHeader, FieldSkeleton, LANGUAGES } from "./contact-shared";
+import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
-
-const LIFECYCLE_STAGES = ["lead", "prospect", "customer", "loyal", "churned"] as const;
 
 interface Country { id: number; name: string; isoCode: string | null; phoneCode: number | null }
 interface ContactGroup { id: string; title: string }
@@ -36,6 +35,7 @@ interface Props {
 
 export function EditContactDrawer({ open, loading = false, contact, onClose, onUpdated }: Props): JSX.Element {
   const { getToken } = useAuth();
+  const { data: leadStatuses } = useLeadStatuses();
 
   const initials = [contact?.firstName, contact?.lastName]
     .filter(Boolean)
@@ -54,7 +54,7 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
     email: contact?.email ?? "",
     countryId: contact?.countryId != null ? String(contact.countryId) : "",
     languageCode: contact?.languageCode ?? "",
-    lifecycleStage: contact?.lifecycleStage ?? "lead",
+    leadStatusId: contact?.leadStatusId ?? "",
     groupIds: contact?.groupIds ?? ([] as string[]),
     whatsappOptOut: contact?.whatsappOptOut ?? false,
     disableBot: contact?.disableBot ?? false,
@@ -167,7 +167,7 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
         email: form.email || undefined,
         countryId: form.countryId ? Number(form.countryId) : undefined,
         languageCode: form.languageCode || undefined,
-        lifecycleStage: form.lifecycleStage,
+        leadStatusId: form.leadStatusId || undefined,
         tags,
         groupIds: form.groupIds,
         whatsappOptOut: form.whatsappOptOut,
@@ -317,11 +317,12 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
                 <label className="text-xs font-medium text-gray-500">Stage</label>
                 <select
                   className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-colors"
-                  value={form.lifecycleStage}
-                  onChange={(e) => setForm((f) => ({ ...f, lifecycleStage: e.target.value }))}
+                  value={form.leadStatusId}
+                  onChange={(e) => setForm((f) => ({ ...f, leadStatusId: e.target.value }))}
                 >
-                  {LIFECYCLE_STAGES.map((s) => (
-                    <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                  <option value="">— Select status —</option>
+                  {leadStatuses.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
               </div>
