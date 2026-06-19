@@ -124,7 +124,7 @@ export default function SegmentDetailPage(): JSX.Element {
             <tr>
               <th className="text-left px-4 py-2 font-medium text-gray-600">Name</th>
               <th className="text-left px-4 py-2 font-medium text-gray-600">Phone</th>
-              <th className="text-left px-4 py-2 font-medium text-gray-600">Stage</th>
+              <th className="text-left px-4 py-2 font-medium text-gray-600">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
