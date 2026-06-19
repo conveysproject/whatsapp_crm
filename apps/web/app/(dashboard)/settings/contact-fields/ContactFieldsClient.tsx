@@ -4,6 +4,7 @@ import { JSX } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import FieldsTab from "./tabs/FieldsTab";
 import ComingSoon from "./tabs/ComingSoon";
+import LeadStatusesTab from "./tabs/LeadStatusesTab";
 
 const TABS = [
   { key: "lead-statuses", label: "Lead Statuses" },
@@ -50,7 +51,13 @@ export function ContactFieldsClient(): JSX.Element {
         ))}
       </div>
 
-      {active === "fields" ? <FieldsTab /> : <ComingSoon label={TABS.find((t) => t.key === active)!.label} />}
+      {active === "fields" ? (
+        <FieldsTab />
+      ) : active === "lead-statuses" ? (
+        <LeadStatusesTab />
+      ) : (
+        <ComingSoon label={TABS.find((t) => t.key === active)!.label} />
+      )}
     </div>
   );
 }
