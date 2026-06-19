@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { verifyClerkToken } from "../lib/clerk.js";
 import { DEFAULT_ROLE_PERMISSIONS } from "../lib/default-role-permissions.js";
+import { seedLeadStatuses } from "../lib/seed-lead-statuses.js";
 
 interface RegisterBody {
   companyName: string;
@@ -121,6 +122,7 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
           },
         });
         organizationId = org.id;
+        await seedLeadStatuses(fastify.prisma, organizationId);
 
         // GAP-S02: if vendor activation is required, start inactive until superAdmin approves
         const requireActivation = process.env["REQUIRE_VENDOR_ACTIVATION"] === "true";

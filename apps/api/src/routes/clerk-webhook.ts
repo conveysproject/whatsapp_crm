@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { Webhook } from "svix";
+import { seedLeadStatuses } from "../lib/seed-lead-statuses.js";
 
 interface ClerkOrg {
   id: string;
@@ -93,6 +94,7 @@ export const clerkWebhookRouter: FastifyPluginAsync = async (fastify) => {
           create: { id: org.id, name: org.name || "My Organization" },
           update: { name: org.name || "My Organization" },
         });
+        await seedLeadStatuses(fastify.prisma, org.id);
         fastify.log.info({ orgId: org.id }, "Organization provisioned");
       }
 
