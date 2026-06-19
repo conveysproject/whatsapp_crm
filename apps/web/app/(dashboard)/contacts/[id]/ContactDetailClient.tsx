@@ -17,7 +17,7 @@ export interface Contact {
   lastName: string | null;
   name: string | null;
   email: string | null;
-  lifecycleStage: string;
+  leadStatus?: { id: string; name: string; color: string } | null;
   tags: string[];
   notes: string | null;
   assignedUserId: string | null;

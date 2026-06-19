@@ -150,15 +150,21 @@ export function ContactDetailSidebar({ contact }: Props): JSX.Element {
         </div>
       </div>
 
-      {/* ── Lifecycle & Tags ─────────────────────────────────── */}
-      <SectionHeader title="Lifecycle & Tags" />
+      {/* ── Status & Tags ────────────────────────────────────── */}
+      <SectionHeader title="Status & Tags" />
       <div className="space-y-3 pb-3">
         <div className="flex flex-col gap-1">
-          <span className={labelCls}>Stage</span>
+          <span className={labelCls}>Status</span>
           <div>
-            <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-brand-50 text-brand-700 border border-brand-200">
-              {contact.lifecycleStage.charAt(0).toUpperCase() + contact.lifecycleStage.slice(1)}
-            </span>
+            {contact.leadStatus ? (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: contact.leadStatus.color }}
+                />
+                {contact.leadStatus.name}
+              </span>
+            ) : emptyDash}
           </div>
         </div>
 
@@ -294,7 +300,7 @@ export function ContactDetailSidebar({ contact }: Props): JSX.Element {
               </span>
             </div>
             <p className="text-xs text-gray-500">
-              Lifecycle: {contact.lifecycleStage.charAt(0).toUpperCase() + contact.lifecycleStage.slice(1)}
+              Status: {contact.leadStatus?.name ?? "—"}
             </p>
           </div>
         ) : (

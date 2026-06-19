@@ -3,6 +3,7 @@
 import { JSX, useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { TagInput } from "./TagInput";
+import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -16,23 +17,15 @@ interface Props {
   onClose: () => void;
 }
 
-const LIFECYCLE_OPTIONS = [
-  { value: "lead", label: "Lead" },
-  { value: "prospect", label: "Prospect" },
-  { value: "customer", label: "Customer" },
-  { value: "loyal", label: "Loyal" },
-  { value: "churned", label: "Churned" },
-];
-
 function buildParams(
-  lifecycleStages: string[],
+  leadStatusIds: string[],
   tags: string[],
   segmentId: string | null,
   groupIds: string[],
   cfFilters: CfFilter[],
 ): URLSearchParams {
   const p = new URLSearchParams();
-  lifecycleStages.forEach((s) => p.append("lifecycleStage", s));
+  leadStatusIds.forEach((id) => p.append("leadStatusId", id));
   tags.forEach((t) => p.append("tags", t));
   if (segmentId) p.set("segmentId", segmentId);
   groupIds.forEach((g) => p.append("groupIds", g));
@@ -42,6 +35,7 @@ function buildParams(
 
 export function ExportModal({ open, onClose }: Props): JSX.Element | null {
   const { getToken } = useAuth();
+  const { data: leadStatuses } = useLeadStatuses();
 
   const [segments, setSegments] = useState<Segment[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -49,7 +43,7 @@ export function ExportModal({ open, onClose }: Props): JSX.Element | null {
   const [segmentsError, setSegmentsError] = useState(false);
   const [groupsError, setGroupsError] = useState(false);
 
-  const [lifecycleStages, setLifecycleStages] = useState<string[]>([]);
+  const [leadStatusIds, setLeadStatusIds] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [segmentId, setSegmentId] = useState<string | null>(null);
   const [groupIds, setGroupIds] = useState<string[]>([]);
@@ -87,7 +81,7 @@ export function ExportModal({ open, onClose }: Props): JSX.Element | null {
   // Reset filter state when modal opens
   useEffect(() => {
     if (open) {
-      setLifecycleStages([]);
+      setLeadStatusIds([]);
       setTags([]);
       setSegmentId(null);
       setGroupIds([]);
@@ -98,14 +92,14 @@ export function ExportModal({ open, onClose }: Props): JSX.Element | null {
   }, [open]);
 
   const fetchCount = useCallback(async (
-    lc: string[], t: string[], seg: string | null, gids: string[], cf: CfFilter[]
+    lsIds: string[], t: string[], seg: string | null, gids: string[], cf: CfFilter[]
   ) => {
     const token = await getToken();
     if (!token) return;
     setCounting(true);
     setCountError(false);
     try {
-      const params = buildParams(lc, t, seg, gids, cf);
+      const params = buildParams(lsIds, t, seg, gids, cf);
       const res = await fetch(`${API_URL}/v1/contacts/export/count?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -124,17 +118,17 @@ export function ExportModal({ open, onClose }: Props): JSX.Element | null {
     if (!open) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      void fetchCount(lifecycleStages, tags, segmentId, groupIds, cfFilters);
+      void fetchCount(leadStatusIds, tags, segmentId, groupIds, cfFilters);
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [open, lifecycleStages, tags, segmentId, groupIds, cfFilters, fetchCount]);
+  }, [open, leadStatusIds, tags, segmentId, groupIds, cfFilters, fetchCount]);
 
   async function handleDownload() {
     const token = await getToken();
     if (!token) return;
     setDownloading(true);
     try {
-      const params = buildParams(lifecycleStages, tags, segmentId, groupIds, cfFilters);
+      const params = buildParams(leadStatusIds, tags, segmentId, groupIds, cfFilters);
       const res = await fetch(`${API_URL}/v1/contacts/export?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -155,9 +149,9 @@ export function ExportModal({ open, onClose }: Props): JSX.Element | null {
     }
   }
 
-  function toggleLifecycle(value: string) {
-    setLifecycleStages((prev) =>
-      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]
+  function toggleLeadStatus(id: string) {
+    setLeadStatusIds((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
     );
   }
 
@@ -201,22 +195,26 @@ export function ExportModal({ open, onClose }: Props): JSX.Element | null {
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
 
-          {/* Lifecycle Stage */}
+          {/* Lead Status */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Lifecycle Stage</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Lead Status</label>
             <div className="flex flex-wrap gap-2">
-              {LIFECYCLE_OPTIONS.map(({ value, label }) => (
+              {leadStatuses.map(({ id, name, color }) => (
                 <button
-                  key={value}
+                  key={id}
                   type="button"
-                  onClick={() => toggleLifecycle(value)}
-                  className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${
-                    lifecycleStages.includes(value)
+                  onClick={() => toggleLeadStatus(id)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium border transition-colors ${
+                    leadStatusIds.includes(id)
                       ? "bg-brand-600 text-white border-brand-600"
                       : "bg-white text-gray-700 border-gray-300 hover:border-brand-400"
                   }`}
                 >
-                  {label}
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: leadStatusIds.includes(id) ? "#fff" : color }}
+                  />
+                  {name}
                 </button>
               ))}
             </div>
