@@ -481,6 +481,8 @@ model Contact {
   email          String?
   languageCode   String?        @map("language_code") // drives template language selection
   lifecycleStage LifecycleStage @default(lead) @map("lifecycle_stage")
+  leadStatusId   String?        @map("lead_status_id")
+  leadStatus     LeadStatus?    @relation(fields: [leadStatusId], references: [id])
   tags           String[]
   customFields   Json           @default("{}") @map("custom_fields")
   externalId     String?        @map("external_id")  // external CRM/ERP reference (WhatsJet: bsuid)
@@ -555,6 +557,21 @@ model Segment {
 
   @@index([organizationId])
   @@map("segments")
+}
+
+model LeadStatus {
+  id             String    @id @default(uuid())
+  organizationId String    @map("organization_id")
+  name           String
+  color          String
+  sortOrder      Int       @default(0) @map("sort_order")
+  isClosure      Boolean   @default(false) @map("is_closure")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  contacts       Contact[]
+
+  @@index([organizationId, sortOrder])
+  @@map("lead_statuses")
 }
 
 model Pipeline {
