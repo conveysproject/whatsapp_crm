@@ -146,6 +146,19 @@ describe("PATCH /v1/contacts/:id — leadStatusId", () => {
       expect.objectContaining({ data: expect.objectContaining({ leadStatusId: "ls-2" }) })
     );
   });
+
+  it("rejects PATCH with a leadStatusId from another org", async () => {
+    const existing = { id: "c-1", organizationId: "org-1", phoneNumber: "919000000001", tags: [], leadStatusId: "ls-1" };
+    mockPrisma.contact.findFirst.mockResolvedValue(existing);
+    mockPrisma.leadStatus.findFirst.mockResolvedValue(null);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/contacts/c-1",
+      payload: { leadStatusId: "bad" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.contact.update).not.toHaveBeenCalled();
+  });
 });
 
 describe("DELETE /v1/contacts/:id", () => {
@@ -390,7 +403,7 @@ describe("GET /v1/contacts/export/count", () => {
     });
     mockEvaluateSegment.mockResolvedValue({
       count: 1,
-      contacts: [{ id: "c-1", firstName: null, lastName: null, phoneNumber: "919", lifecycleStage: null }],
+      contacts: [{ id: "c-1", firstName: null, lastName: null, phoneNumber: "919" }],
     });
     mockPrisma.contact.count.mockResolvedValue(1);
     const res = await app.inject({

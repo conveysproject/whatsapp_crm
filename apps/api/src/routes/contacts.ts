@@ -413,7 +413,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       if (!existing) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
       }
-      if (request.body.leadStatusId !== undefined && request.body.leadStatusId !== null) {
+      if (request.body.leadStatusId) {
         const ls = await fastify.prisma.leadStatus.findFirst({ where: { id: request.body.leadStatusId, organizationId } });
         if (!ls) return reply.status(400).send({ error: { code: "INVALID_LEAD_STATUS", message: "leadStatusId not found in organization" } });
       }
