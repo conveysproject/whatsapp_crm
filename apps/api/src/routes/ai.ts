@@ -153,7 +153,7 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
         firstName: true,
         lastName: true,
         phoneNumber: true,
-        lifecycleStage: true,
+        leadStatus: { select: { name: true } },
         conversations: {
           select: {
             messages: {

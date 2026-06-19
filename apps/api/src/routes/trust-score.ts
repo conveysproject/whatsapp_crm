@@ -110,6 +110,7 @@ export const trustScoreRouter: FastifyPluginAsync = async (fastify) => {
 
     const contact = await fastify.prisma.contact.findFirst({
       where: { id: request.params.id, organizationId },
+      include: { leadStatus: { select: { name: true } } },
     });
     if (!contact) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
@@ -134,7 +135,7 @@ export const trustScoreRouter: FastifyPluginAsync = async (fastify) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        lifecycle_stage: contact.lifecycleStage,
+        lifecycle_stage: contact.leadStatus?.name ?? null,
         message_count: messages.length,
         inbound_count: messages.filter((m) => m.direction === "inbound").length,
         outbound_count: messages.filter((m) => m.direction === "outbound").length,
