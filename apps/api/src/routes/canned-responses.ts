@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { Prisma } from "@prisma/client";
+import { canAccess } from "../lib/permissions.js";
 
 interface CannedResponseBody {
   name: string;
@@ -20,7 +21,10 @@ export const cannedResponsesRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Body: CannedResponseBody }>("/canned-responses", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_bot_replies")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_bot_replies" } });
+    }
     const { name, shortcut, content, mediaData } = request.body;
     const data = await fastify.prisma.cannedResponse.create({
       data: { organizationId, name, shortcut: shortcut ?? null, content, mediaData: (mediaData !== undefined ? mediaData as Prisma.InputJsonValue : Prisma.DbNull), category: "general" },
@@ -31,7 +35,10 @@ export const cannedResponsesRouter: FastifyPluginAsync = async (fastify) => {
   fastify.put<{ Params: { id: string }; Body: Partial<CannedResponseBody> }>(
     "/canned-responses/:id",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccess(role, permissions, "manage_bot_replies")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_bot_replies" } });
+      }
       const existing = await fastify.prisma.cannedResponse.findFirst({
         where: { id: request.params.id, organizationId },
       });
@@ -51,7 +58,10 @@ export const cannedResponsesRouter: FastifyPluginAsync = async (fastify) => {
   );
 
   fastify.delete<{ Params: { id: string } }>("/canned-responses/:id", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_bot_replies")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_bot_replies" } });
+    }
     const existing = await fastify.prisma.cannedResponse.findFirst({
       where: { id: request.params.id, organizationId },
     });

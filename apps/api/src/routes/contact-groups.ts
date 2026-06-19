@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { CampaignRecipientStatus, Prisma } from "@prisma/client";
+import { canAccess } from "../lib/permissions.js";
 
 interface GroupBody {
   title: string;
@@ -44,7 +45,10 @@ export const contactGroupsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Body: GroupBody }>("/contact-groups", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_contacts")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+    }
     const data = await fastify.prisma.contactGroup.create({
       data: { organizationId, title: request.body.title, description: request.body.description ?? null },
     });
@@ -54,7 +58,10 @@ export const contactGroupsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.put<{ Params: { id: string }; Body: Partial<GroupBody> }>(
     "/contact-groups/:id",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccess(role, permissions, "manage_contacts")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+      }
       const existing = await fastify.prisma.contactGroup.findFirst({ where: { id: request.params.id, organizationId } });
       if (!existing) return reply.status(404).send({ error: "Not found" });
       const data = await fastify.prisma.contactGroup.update({
@@ -69,7 +76,10 @@ export const contactGroupsRouter: FastifyPluginAsync = async (fastify) => {
   );
 
   fastify.delete<{ Params: { id: string } }>("/contact-groups/:id", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_contacts")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+    }
     const existing = await fastify.prisma.contactGroup.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: "Not found" });
     await fastify.prisma.contactGroup.delete({ where: { id: request.params.id } });
@@ -77,7 +87,10 @@ export const contactGroupsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Params: { id: string } }>("/contact-groups/:id/archive", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_contacts")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+    }
     const existing = await fastify.prisma.contactGroup.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: "Not found" });
     const data = await fastify.prisma.contactGroup.update({ where: { id: request.params.id }, data: { isArchived: true } });
@@ -85,7 +98,10 @@ export const contactGroupsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Params: { id: string } }>("/contact-groups/:id/unarchive", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_contacts")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+    }
     const existing = await fastify.prisma.contactGroup.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: "Not found" });
     const data = await fastify.prisma.contactGroup.update({ where: { id: request.params.id }, data: { isArchived: false } });
@@ -112,7 +128,10 @@ export const contactGroupsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string }; Body: { contactIds: string[] } }>(
     "/contact-groups/:id/contacts",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccess(role, permissions, "manage_contacts")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+      }
       const existing = await fastify.prisma.contactGroup.findFirst({ where: { id: request.params.id, organizationId } });
       if (!existing) return reply.status(404).send({ error: "Not found" });
       await fastify.prisma.groupContact.createMany({
@@ -126,7 +145,10 @@ export const contactGroupsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { id: string }; Body: { contactIds: string[] } }>(
     "/contact-groups/:id/contacts",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccess(role, permissions, "manage_contacts")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+      }
       const existing = await fastify.prisma.contactGroup.findFirst({ where: { id: request.params.id, organizationId } });
       if (!existing) return reply.status(404).send({ error: "Not found" });
       await fastify.prisma.groupContact.deleteMany({
@@ -149,7 +171,10 @@ export const contactGroupsRouter: FastifyPluginAsync = async (fastify) => {
       filter?: ContactFilterFields;
     };
   }>("/contact-groups/build", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_contacts")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+    }
     const { title, description, mode, campaignId, statuses, filter } = request.body;
 
     const group = await fastify.prisma.contactGroup.create({

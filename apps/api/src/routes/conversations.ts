@@ -103,6 +103,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       const messages = await fastify.prisma.message.findMany({
         where: {
           conversationId: request.params.id,
+          organizationId,
           ...(cursor ? { id: { lt: cursor } } : {}),
         },
         orderBy: { sentAt: "desc" },

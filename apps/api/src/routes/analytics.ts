@@ -38,7 +38,10 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get("/analytics/team", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role } = request.auth;
+    if (role === "agent" || role === "viewer") {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Team analytics requires manager or admin role" } });
+    }
     const query = request.query as Record<string, string>;
     const days = parseInt(query["days"] ?? "30", 10);
     const key = orgKey(organizationId, `analytics:team:${days}`);
@@ -80,8 +83,12 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get("/analytics/agent/:id", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, userId, role } = request.auth;
     const params = request.params as { id: string };
+    // Agents may only view their own stats; managers and admins see any agent
+    if ((role === "agent" || role === "viewer") && params.id !== userId) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Agents can only view their own analytics" } });
+    }
     const query = request.query as Record<string, string>;
     const days = parseInt(query["days"] ?? "30", 10);
     const key = orgKey(organizationId, `analytics:agent:${params.id}:${days}`);
@@ -117,9 +124,12 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get("/analytics/export", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role } = request.auth;
     const query = request.query as Record<string, string>;
     const tab = query["tab"] ?? "overview";
+    if (tab === "team" && (role === "agent" || role === "viewer")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Team analytics export requires manager or admin role" } });
+    }
     const days = parseInt(query["days"] ?? "30", 10);
     const filename = `analytics-${tab}-${days}d.csv`;
 

@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { Prisma, AutoReplyTriggerType } from "@prisma/client";
+import { canAccess } from "../lib/permissions.js";
 
 interface AutoReply {
   id: string;
@@ -60,7 +61,10 @@ export const autoRepliesRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Body: AutoReplyBody }>("/auto-replies", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_bot_replies")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_bot_replies" } });
+    }
     const { name, triggerType, triggerKeyword, replyText, replyData, flowId, parentId, priorityIndex, isActive } = request.body;
     const data = await fastify.prisma.autoReply.create({
       data: {
@@ -80,7 +84,10 @@ export const autoRepliesRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.patch<{ Params: { id: string }; Body: Partial<AutoReplyBody> }>("/auto-replies/:id", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_bot_replies")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_bot_replies" } });
+    }
     const existing = await fastify.prisma.autoReply.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Auto-reply not found" } });
     const { name, triggerType, triggerKeyword, replyText, replyData, flowId, parentId, priorityIndex, isActive } = request.body;
@@ -102,7 +109,10 @@ export const autoRepliesRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.delete<{ Params: { id: string } }>("/auto-replies/:id", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_bot_replies")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_bot_replies" } });
+    }
     const existing = await fastify.prisma.autoReply.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Auto-reply not found" } });
     await fastify.prisma.autoReply.delete({ where: { id: request.params.id } });
@@ -110,7 +120,10 @@ export const autoRepliesRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Params: { id: string } }>("/auto-replies/:id/duplicate", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_bot_replies")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_bot_replies" } });
+    }
     const original = await fastify.prisma.autoReply.findFirst({
       where: { id: request.params.id, organizationId },
     }) as AutoReply | null;

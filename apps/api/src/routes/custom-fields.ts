@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { checkPlanLimit } from "../lib/plan-limits.js";
+import { canAccess } from "../lib/permissions.js";
 
 interface CustomFieldBody {
   inputName: string;
@@ -44,7 +45,10 @@ export const customFieldsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: CustomFieldBody }>(
     "/contacts/custom-fields",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccess(role, permissions, "manage_contacts")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+      }
       const {
         inputName,
         fieldKey,
@@ -98,7 +102,10 @@ export const customFieldsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.patch<{ Params: { id: string }; Body: CustomFieldPatchBody }>(
     "/contacts/custom-fields/:id",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccess(role, permissions, "manage_contacts")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+      }
       const existing = await fastify.prisma.contactCustomField.findFirst({
         where: { id: request.params.id, organizationId },
       });
@@ -145,7 +152,10 @@ export const customFieldsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { id: string } }>(
     "/contacts/custom-fields/:id",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccess(role, permissions, "manage_contacts")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+      }
       const field = await fastify.prisma.contactCustomField.findFirst({
         where: { id: request.params.id, organizationId },
       });

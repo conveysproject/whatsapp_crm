@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { DealId } from "@WBMSG/shared";
+import { canAccess } from "../lib/permissions.js";
 
 interface DealBody {
   title: string;
@@ -48,7 +49,10 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Body: DealBody }>("/deals", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_deals")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_deals" } });
+    }
     const deal = await fastify.prisma.deal.create({
       data: {
         organizationId,
@@ -65,7 +69,10 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.patch<{ Params: { id: DealId }; Body: Partial<DealBody> }>("/deals/:id", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_deals")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_deals" } });
+    }
     const existing = await fastify.prisma.deal.findFirst({
       where: { id: request.params.id, organizationId },
     });
@@ -94,7 +101,10 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.patch<{ Params: { id: DealId }; Body: { stage: string } }>(
     "/deals/:id/stage",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccess(role, permissions, "manage_deals")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_deals" } });
+      }
       const existing = await fastify.prisma.deal.findFirst({
         where: { id: request.params.id, organizationId },
       });
@@ -115,7 +125,10 @@ export const dealsRouter: FastifyPluginAsync = async (fastify) => {
   );
 
   fastify.delete<{ Params: { id: DealId } }>("/deals/:id", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "manage_deals")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_deals" } });
+    }
     const existing = await fastify.prisma.deal.findFirst({
       where: { id: request.params.id, organizationId },
     });
