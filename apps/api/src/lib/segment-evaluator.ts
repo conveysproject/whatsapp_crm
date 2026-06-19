@@ -4,7 +4,7 @@ export type MatchMode = "all" | "any";
 
 export type FilterRule =
   | { field: "firstName" | "lastName" | "email" | "phoneNumber"; operator: "contains" | "equals" | "startsWith" | "isEmpty" | "isNotEmpty"; value?: string }
-  | { field: "lifecycleStage"; operator: "equals" | "isNot"; value: string }
+  | { field: "leadStatusId"; operator: "equals" | "isNot"; value: string }
   | { field: "tags"; operator: "contains" | "doesNotContain"; value: string }
   | { field: "countryCode" | "languageCode"; operator: "equals" | "isNot"; value: string }
   | { field: "assignedUserId"; operator: "equals" | "isNot" | "isEmpty"; value?: string }
@@ -20,7 +20,7 @@ export interface EvaluateResult {
     firstName: string | null;
     lastName: string | null;
     phoneNumber: string;
-    lifecycleStage: string | null;
+    leadStatus: { name: string; color: string } | null;
   }>;
 }
 
@@ -37,9 +37,9 @@ function buildClause(rule: FilterRule): Record<string, unknown> {
       if (rule.operator === "startsWith") return { [col]: { startsWith: rule.value, mode: "insensitive" } };
       return { [col]: { equals: rule.value, mode: "insensitive" } };
     }
-    case "lifecycleStage":
-      if (rule.operator === "isNot") return { NOT: { lifecycleStage: rule.value } };
-      return { lifecycleStage: rule.value };
+    case "leadStatusId":
+      if (rule.operator === "isNot") return { NOT: { leadStatusId: rule.value } };
+      return { leadStatusId: rule.value };
     case "tags":
       if (rule.operator === "doesNotContain") return { NOT: { tags: { has: rule.value } } };
       return { tags: { has: rule.value } };
@@ -99,7 +99,7 @@ export async function evaluateSegment(
       firstName: true,
       lastName: true,
       phoneNumber: true,
-      lifecycleStage: true,
+      leadStatus: { select: { name: true, color: true } },
     },
   });
 

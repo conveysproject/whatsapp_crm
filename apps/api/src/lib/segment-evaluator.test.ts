@@ -10,18 +10,29 @@ const mockPrisma = {
 beforeEach(() => { vi.clearAllMocks(); });
 
 describe("evaluateSegment", () => {
-  it("returns count and contacts for lifecycleStage equals", async () => {
+  it("returns count and contacts for leadStatusId equals", async () => {
     const { evaluateSegment } = await import("./segment-evaluator.js");
     mockFindMany.mockResolvedValue([
-      { id: "c1", firstName: "Ravi", lastName: "Kumar", phoneNumber: "+919000000001", lifecycleStage: "lead" },
+      { id: "c1", firstName: "Ravi", lastName: "Kumar", phoneNumber: "+919000000001", leadStatus: { name: "New Lead", color: "#F97316" } },
     ]);
     const result = await evaluateSegment(mockPrisma, "org-1", [
-      { field: "lifecycleStage", operator: "equals", value: "lead" },
+      { field: "leadStatusId", operator: "equals", value: "ls-1" },
     ], "all");
     expect(result.count).toBe(1);
     expect(result.contacts[0].phoneNumber).toBe("+919000000001");
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ AND: [{ lifecycleStage: "lead" }] }),
+      where: expect.objectContaining({ AND: [{ leadStatusId: "ls-1" }] }),
+    }));
+  });
+
+  it("builds a NOT clause for leadStatusId isNot", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    await evaluateSegment(mockPrisma, "org-1", [
+      { field: "leadStatusId", operator: "isNot", value: "ls-9" },
+    ], "all");
+    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ AND: [{ NOT: { leadStatusId: "ls-9" } }] }),
     }));
   });
 
@@ -29,7 +40,7 @@ describe("evaluateSegment", () => {
     const { evaluateSegment } = await import("./segment-evaluator.js");
     mockFindMany.mockResolvedValue([]);
     await evaluateSegment(mockPrisma, "org-1", [
-      { field: "lifecycleStage", operator: "equals", value: "lead" },
+      { field: "leadStatusId", operator: "equals", value: "ls-1" },
       { field: "tags", operator: "contains", value: "VIP" },
     ], "any");
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -88,7 +99,7 @@ describe("evaluateSegment", () => {
   it("returns empty contacts when no filters", async () => {
     const { evaluateSegment } = await import("./segment-evaluator.js");
     mockFindMany.mockResolvedValue([
-      { id: "c1", firstName: "A", lastName: null, phoneNumber: "+91900", lifecycleStage: null },
+      { id: "c1", firstName: "A", lastName: null, phoneNumber: "+91900", leadStatus: null },
     ]);
     const result = await evaluateSegment(mockPrisma, "org-1", [], "all");
     expect(result.count).toBe(1);
