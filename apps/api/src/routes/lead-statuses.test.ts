@@ -78,4 +78,68 @@ describe("lead-statuses API", () => {
     const res = await app.inject({ method: "POST", url: "/v1/lead-statuses", payload: { name: "X", color: "#FACC15" } });
     expect(res.statusCode).toBe(403);
   });
+
+  it("PATCH /:id returns 404 when status not found", async () => {
+    mockPrisma.leadStatus.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "PATCH", url: "/v1/lead-statuses/s1", payload: { name: "Updated" } });
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("NOT_FOUND");
+  });
+
+  it("PATCH /:id returns 200 and updates when status exists", async () => {
+    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "s1", organizationId: "org-1", name: "Old", color: "#000000" });
+    mockPrisma.leadStatus.update.mockResolvedValue({ id: "s1", name: "Updated", color: "#FFFFFF" });
+    const res = await app.inject({ method: "PATCH", url: "/v1/lead-statuses/s1", payload: { name: "Updated", color: "#FFFFFF" } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.leadStatus.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "s1" },
+      data: expect.objectContaining({ name: "Updated", color: "#FFFFFF" }),
+    }));
+  });
+
+  it("PATCH /reorder returns 400 (INVALID_ORDER) when orderedIds does not match org's id set", async () => {
+    mockPrisma.leadStatus.findMany.mockResolvedValue([{ id: "a" }, { id: "b" }]);
+    const res = await app.inject({ method: "PATCH", url: "/v1/lead-statuses/reorder", payload: { orderedIds: ["a"] } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_ORDER");
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("PATCH /reorder passes correct sortOrder values in transaction", async () => {
+    mockPrisma.leadStatus.findMany.mockResolvedValue([{ id: "a" }, { id: "b" }, { id: "c" }]);
+    mockPrisma.$transaction.mockResolvedValue([]);
+    const res = await app.inject({ method: "PATCH", url: "/v1/lead-statuses/reorder", payload: { orderedIds: ["c", "a", "b"] } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    const transactionArg = mockPrisma.$transaction.mock.calls[0][0];
+    expect(Array.isArray(transactionArg)).toBe(true);
+    expect(transactionArg.length).toBe(3);
+  });
+
+  it("PATCH /:id returns 403 without manage_contacts permission", async () => {
+    auth = { userId: "u", organizationId: "org-1", role: "agent", permissions: { other: "allow" } };
+    app = await buildApp();
+    const res = await app.inject({ method: "PATCH", url: "/v1/lead-statuses/s1", payload: { name: "X" } });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.leadStatus.findFirst).not.toHaveBeenCalled();
+    expect(mockPrisma.leadStatus.update).not.toHaveBeenCalled();
+  });
+
+  it("DELETE returns 403 without manage_contacts permission", async () => {
+    auth = { userId: "u", organizationId: "org-1", role: "agent", permissions: { other: "allow" } };
+    app = await buildApp();
+    const res = await app.inject({ method: "DELETE", url: "/v1/lead-statuses/s1" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.leadStatus.findFirst).not.toHaveBeenCalled();
+    expect(mockPrisma.leadStatus.delete).not.toHaveBeenCalled();
+  });
+
+  it("PATCH /reorder returns 403 without manage_contacts permission", async () => {
+    auth = { userId: "u", organizationId: "org-1", role: "agent", permissions: { other: "allow" } };
+    app = await buildApp();
+    const res = await app.inject({ method: "PATCH", url: "/v1/lead-statuses/reorder", payload: { orderedIds: ["a"] } });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.leadStatus.findMany).not.toHaveBeenCalled();
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
 });
