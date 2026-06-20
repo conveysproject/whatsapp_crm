@@ -14,7 +14,7 @@ export interface WizardState {
   mapping: FieldMapping;
   batchTags: string[];
   batchGroupIds: string[];
-  lifecycleStage: string;
+  leadStatusId: string;
   analysisResult: ImportAnalysisResult | null;
   updateExisting: boolean;
   importJobId: string | null;
@@ -47,7 +47,7 @@ const INITIAL_STATE: WizardState = {
   mapping: [],
   batchTags: [],
   batchGroupIds: [],
-  lifecycleStage: "lead",
+  leadStatusId: "",
   analysisResult: null,
   updateExisting: true,
   importJobId: null,

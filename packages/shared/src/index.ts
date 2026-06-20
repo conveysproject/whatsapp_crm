@@ -22,7 +22,7 @@ export type DbField =
   | "fullName"
   | "name"
   | "email"
-  | "lifecycleStage"
+  | "leadStatusId"
   | "tags"
   | `customField:${string}`
   | "skip";

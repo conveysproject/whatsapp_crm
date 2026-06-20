@@ -5,10 +5,10 @@ import { useAuth } from "@clerk/nextjs";
 import { useWizard } from "../ImportWizard";
 import { TagInput } from "@/components/contacts/TagInput";
 import { Button } from "@/components/ui/Button";
+import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 import type { DbField, FieldMappingEntry } from "@WBMSG/shared";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
-const LIFECYCLE_STAGES = ["lead", "prospect", "customer", "loyal", "churned"] as const;
 
 interface GroupOption { id: string; title: string }
 interface CustomFieldMeta { id: string; inputName: string; isRequired: boolean }
@@ -22,7 +22,7 @@ function autoSuggest(col: string): DbField {
   if (lower === "lastname" || lower === "lname" || lower === "surname") return "lastName";
   if (lower === "name" || lower === "fullname" || lower === "contactname") return "fullName";
   if (lower.includes("email") || lower.includes("mail")) return "email";
-  if (lower.includes("lifecycle") || lower.includes("stage")) return "lifecycleStage";
+  if (lower.includes("lifecycle") || lower.includes("stage") || lower.includes("status")) return "leadStatusId";
   if (lower.includes("tag")) return "tags";
   return "skip";
 }
@@ -53,6 +53,7 @@ function getRequiredNotMapped(mapping: FieldMappingEntry[], customFields: Custom
 export function Step2MapFields(): JSX.Element {
   const { state, setState, nextStep, prevStep } = useWizard();
   const { getToken } = useAuth();
+  const { data: leadStatuses } = useLeadStatuses();
   const [groups, setGroups] = useState<GroupOption[]>([]);
   const [customFields, setCustomFields] = useState<CustomFieldMeta[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
@@ -143,7 +144,7 @@ export function Step2MapFields(): JSX.Element {
           fieldMapping: state.mapping,
           batchTags: state.batchTags,
           batchGroupIds: state.batchGroupIds,
-          lifecycleStage: state.lifecycleStage,
+          leadStatusId: state.leadStatusId || undefined,
           updateExisting: state.updateExisting,
           totalRows: state.totalRows,
         }),
@@ -205,7 +206,7 @@ export function Step2MapFields(): JSX.Element {
                     </optgroup>
                     <optgroup label="Contact Info">
                       <option value="countryCode">Country Code</option>
-                      <option value="lifecycleStage">Lifecycle Stage</option>
+                      <option value="leadStatusId">Lead Status</option>
                       <option value="tags">Tags</option>
                     </optgroup>
                     {customFields.length > 0 && (
@@ -235,14 +236,15 @@ export function Step2MapFields(): JSX.Element {
         <h3 className="text-sm font-medium text-gray-900">Batch settings</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Lifecycle stage</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Default lead status</label>
             <select
-              value={state.lifecycleStage}
-              onChange={(e) => setState({ lifecycleStage: e.target.value })}
+              value={state.leadStatusId}
+              onChange={(e) => setState({ leadStatusId: e.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
-              {LIFECYCLE_STAGES.map((s) => (
-                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+              <option value="">— None —</option>
+              {leadStatuses.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
           </div>
