@@ -15,6 +15,7 @@ vi.mock("../lib/prisma.js", () => ({
   prisma: {
     organization: {
       findUniqueOrThrow: vi.fn().mockResolvedValue(mockOrg),
+      findUnique: vi.fn().mockResolvedValue({ settings: {} }),
       update: vi.fn().mockResolvedValue({ ...mockOrg, name: "Updated Corp" }),
     },
     $disconnect: vi.fn(),
@@ -51,6 +52,25 @@ describe("organizations routes", () => {
     });
     expect(res.statusCode).toBe(200);
     expect((res.json() as { data: { name: string } }).data.name).toBe("Updated Corp");
+  });
+
+  it("deep-merges nested settings.contactConfig (no sibling-key data loss)", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    vi.mocked(prisma.organization.findUnique).mockResolvedValueOnce({
+      settings: { contactConfig: { defaultLeadStatusId: "ls-1", closureDeadlineDays: 7 } },
+    } as unknown as Organization);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/organizations/me",
+      payload: { settings: { contactConfig: { assignmentFallbackEnabled: true } } },
+    });
+    expect(res.statusCode).toBe(200);
+    const updateArg = vi.mocked(prisma.organization.update).mock.calls.at(-1)![0] as unknown as { data: { settings: { contactConfig: Record<string, unknown> } } };
+    expect(updateArg.data.settings.contactConfig).toEqual({
+      defaultLeadStatusId: "ls-1",
+      closureDeadlineDays: 7,
+      assignmentFallbackEnabled: true,
+    });
   });
 });
 

@@ -44,11 +44,20 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
         });
         const current = (existing?.settings as Record<string, unknown>) ?? {};
         const incoming = request.body.settings;
-        // Strip protected keys from the incoming patch, then merge over existing
-        const safe = Object.fromEntries(
-          Object.entries(incoming).filter(([k]) => !PROTECTED_SETTINGS_KEYS.has(k))
-        );
-        settingsUpdate = { ...current, ...safe } as Prisma.InputJsonValue;
+        // Strip protected keys from the incoming patch, then merge over existing.
+        // Nested plain-object values (e.g. contactConfig) are merged one level deep so
+        // that updating one sub-key (e.g. assignmentFallbackEnabled) does not clobber
+        // sibling sub-keys written by other settings sections (e.g. defaultLeadStatusId).
+        const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+          typeof v === "object" && v !== null && !Array.isArray(v);
+        const merged: Record<string, unknown> = { ...current };
+        for (const [k, v] of Object.entries(incoming)) {
+          if (PROTECTED_SETTINGS_KEYS.has(k)) continue;
+          merged[k] = isPlainObject(v) && isPlainObject(current[k])
+            ? { ...(current[k] as Record<string, unknown>), ...v }
+            : v;
+        }
+        settingsUpdate = merged as Prisma.InputJsonValue;
       }
 
       const org = await prisma.organization.update({
