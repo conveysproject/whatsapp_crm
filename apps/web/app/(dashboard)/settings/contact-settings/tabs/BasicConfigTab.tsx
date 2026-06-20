@@ -82,22 +82,23 @@ export default function BasicConfigTab(): JSX.Element {
       {/* Closure Statuses */}
       <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
         <h3 className="text-sm font-semibold text-gray-900">Select Closure Statuses</h3>
-        <div className="flex flex-wrap gap-2">
+        <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 overflow-hidden">
+          {leadStatuses.length === 0 && (
+            <p className="px-4 py-3 text-sm text-gray-400">No statuses defined yet.</p>
+          )}
           {leadStatuses.map((s) => {
-            const selected = closureIds.includes(s.id);
+            const checked = closureIds.includes(s.id);
             return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => toggleClosure(s.id)}
-                className={[
-                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium border transition-colors",
-                  selected ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50",
-                ].join(" ")}
-              >
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: selected ? "#fff" : s.color }} />
-                {s.name}
-              </button>
+              <label key={s.id} className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleClosure(s.id)}
+                  className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 accent-emerald-600"
+                />
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                <span className="text-sm text-gray-800">{s.name}</span>
+              </label>
             );
           })}
         </div>
