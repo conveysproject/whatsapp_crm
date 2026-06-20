@@ -560,6 +560,7 @@ model LeadStatus {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   contacts       Contact[]
 
+  @@unique([organizationId, name])
   @@index([organizationId, sortOrder])
   @@map("lead_statuses")
 }

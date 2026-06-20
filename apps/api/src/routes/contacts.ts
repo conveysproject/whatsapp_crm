@@ -354,6 +354,16 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       const ls = await fastify.prisma.leadStatus.findFirst({ where: { id: request.body.leadStatusId, organizationId } });
       if (!ls) return reply.status(400).send({ error: { code: "INVALID_LEAD_STATUS", message: "leadStatusId not found in organization" } });
     }
+    // Apply the org's default lead status (Basic Configuration) when none is provided
+    let effectiveLeadStatusId: string | null = request.body.leadStatusId ?? null;
+    if (!effectiveLeadStatusId) {
+      const org = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { settings: true } });
+      const defaultId = ((org?.settings as Record<string, unknown> | null)?.["contactConfig"] as { defaultLeadStatusId?: string | null } | undefined)?.defaultLeadStatusId;
+      if (defaultId) {
+        const def = await fastify.prisma.leadStatus.findFirst({ where: { id: defaultId, organizationId }, select: { id: true } });
+        if (def) effectiveLeadStatusId = def.id;
+      }
+    }
     let contact: Awaited<ReturnType<typeof fastify.prisma.contact.create>>;
     try {
       const { firstName, lastName, name, phoneNumber: rawPhone, email, countryId, languageCode, whatsappOptOut, disableBot, groupIds, customFields } = request.body;
@@ -371,7 +381,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           whatsappOptOut: whatsappOptOut ?? false,
           disableBot: disableBot ?? false,
           ...(customFields ? { customFields: customFields as Prisma.InputJsonValue } : {}),
-          ...(request.body.leadStatusId ? { leadStatusId: request.body.leadStatusId } : {}),
+          ...(effectiveLeadStatusId ? { leadStatusId: effectiveLeadStatusId } : {}),
         },
       });
       if (groupIds && groupIds.length > 0) {

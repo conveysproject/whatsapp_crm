@@ -38,6 +38,9 @@ const mockPrisma = {
   leadStatus: {
     findFirst: vi.fn(),
   },
+  organization: {
+    findUnique: vi.fn().mockResolvedValue({ settings: {} }),
+  },
   flow: {
     findMany: vi.fn().mockResolvedValue([]),
   },
@@ -110,6 +113,21 @@ describe("POST /v1/contacts", () => {
     expect(res.statusCode).toBe(201);
     expect(mockPrisma.contact.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ leadStatusId: "ls-1" }) })
+    );
+  });
+
+  it("applies the org default lead status when none is provided", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ settings: { contactConfig: { defaultLeadStatusId: "ls-def" } } });
+    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "ls-def" });
+    mockPrisma.contact.create.mockResolvedValue({ id: "c-9", organizationId: "org-1", phoneNumber: "919000000009", leadStatusId: "ls-def" });
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/contacts",
+      payload: { phoneNumber: "919000000009" },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(mockPrisma.contact.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ leadStatusId: "ls-def" }) })
     );
   });
 

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import FieldsTab from "./tabs/FieldsTab";
 import ComingSoon from "./tabs/ComingSoon";
 import LeadStatusesTab from "./tabs/LeadStatusesTab";
+import BasicConfigTab from "./tabs/BasicConfigTab";
 
 const TABS = [
   { key: "lead-statuses", label: "Lead Statuses" },
@@ -55,6 +56,8 @@ export function ContactFieldsClient(): JSX.Element {
         <FieldsTab />
       ) : active === "lead-statuses" ? (
         <LeadStatusesTab />
+      ) : active === "basic-config" ? (
+        <BasicConfigTab />
       ) : (
         <ComingSoon label={TABS.find((t) => t.key === active)!.label} />
       )}

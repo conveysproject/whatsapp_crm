@@ -5,6 +5,8 @@ import type { PrismaClient } from "@prisma/client";
 const mockPrisma = {
   leadStatus: { findMany: vi.fn(), create: vi.fn(), findFirst: vi.fn(), update: vi.fn(), delete: vi.fn(), aggregate: vi.fn() },
   contact: { count: vi.fn() },
+  organization: { findUnique: vi.fn() },
+  $queryRaw: vi.fn(),
   $transaction: vi.fn(),
 };
 
@@ -24,6 +26,9 @@ describe("lead-statuses API", () => {
   beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks();
     auth = { userId: "user-1", organizationId: "org-1", role: "admin", permissions: {} };
+    // Safe defaults for the DELETE guard's extra checks (not referenced)
+    mockPrisma.organization.findUnique.mockResolvedValue({ settings: {} });
+    mockPrisma.$queryRaw.mockResolvedValue([{ exists: false }]);
     app = await buildApp();
   });
   afterEach(async () => { await app.close(); });
@@ -141,5 +146,33 @@ describe("lead-statuses API", () => {
     expect(res.statusCode).toBe(403);
     expect(mockPrisma.leadStatus.findMany).not.toHaveBeenCalled();
     expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("POST returns 409 DUPLICATE_NAME on unique violation", async () => {
+    mockPrisma.leadStatus.aggregate.mockResolvedValue({ _max: { sortOrder: 0 } });
+    mockPrisma.leadStatus.create.mockRejectedValue({ code: "P2002" });
+    const res = await app.inject({ method: "POST", url: "/v1/lead-statuses", payload: { name: "New Lead", color: "#F97316" } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("DUPLICATE_NAME");
+  });
+
+  it("DELETE returns 409 when status is a default/closure status in settings", async () => {
+    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "s1", organizationId: "org-1" });
+    mockPrisma.contact.count.mockResolvedValue(0);
+    mockPrisma.organization.findUnique.mockResolvedValue({ settings: { contactConfig: { defaultLeadStatusId: "s1", closureLeadStatusIds: [] } } });
+    const res = await app.inject({ method: "DELETE", url: "/v1/lead-statuses/s1" });
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("STATUS_IN_USE");
+    expect(mockPrisma.leadStatus.delete).not.toHaveBeenCalled();
+  });
+
+  it("DELETE returns 409 when status is referenced by a flow", async () => {
+    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "s1", organizationId: "org-1" });
+    mockPrisma.contact.count.mockResolvedValue(0);
+    mockPrisma.organization.findUnique.mockResolvedValue({ settings: {} });
+    mockPrisma.$queryRaw.mockResolvedValue([{ exists: true }]);
+    const res = await app.inject({ method: "DELETE", url: "/v1/lead-statuses/s1" });
+    expect(res.statusCode).toBe(409);
+    expect(mockPrisma.leadStatus.delete).not.toHaveBeenCalled();
   });
 });
