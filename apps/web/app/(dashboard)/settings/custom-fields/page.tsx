@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function CustomFieldsRedirect(): never {
-  redirect("/settings/contact-fields?tab=fields");
+  redirect("/settings/contact-settings?tab=fields");
 }

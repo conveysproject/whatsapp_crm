@@ -25,7 +25,7 @@ const LABELS: Record<string, string> = {
   routing: "Routing Rules",
   "media-library": "Media Library",
   "custom-fields": "Custom Fields",
-  "contact-fields": "Contact Fields",
+  "contact-settings": "Contact Settings",
   "webhook-actions": "Webhook Actions",
   notifications: "Notifications",
 };

@@ -48,7 +48,7 @@ export default async function SettingsPage(): Promise<JSX.Element> {
           { href: "/settings/whatsapp-account", label: "WhatsApp Account", desc: "Connect your WABA" },
           { href: "/settings/branding", label: "Branding", desc: "Logo, colors, favicon" },
           { href: "/settings/labels", label: "Labels", desc: "Color-coded contact tags" },
-          { href: "/settings/contact-fields", label: "Contact Fields", desc: "Default & custom contact fields" },
+          { href: "/settings/contact-settings", label: "Contact Settings", desc: "Fields, statuses, configuration & assignment rules" },
           { href: "/settings/notifications", label: "Notifications", desc: "Sound and alert preferences" },
           { href: "/settings/vendor-settings", label: "Advanced Settings", desc: "Bot timing, API token" },
           { href: "/settings/webhook-actions", label: "Webhook Actions", desc: "Trigger external webhooks" },
