@@ -99,28 +99,50 @@ export default function AssignmentRulesTab(): JSX.Element {
         Account Owner auto-assignment runs Custom Rules first. If none apply, the Fallback Rule is used when enabled.
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Custom Rules</p>
           <button onClick={() => setEditing(EMPTY_DRAFT)} className="px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700">Add Rule</button>
         </div>
-        {rules.length === 0 ? (
-          <p className="p-8 text-sm text-gray-400 text-center">No result found</p>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {rules.map((r) => (
-              <div key={r.id} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-3 px-4 py-3 text-sm">
-                <span className="font-medium text-gray-900">{r.name}</span>
-                <span className="text-gray-600">{TRIGGERS.find((t) => t.value === r.trigger)?.label ?? r.trigger}</span>
-                <span className="text-gray-600">{r.assignType === "team" ? "Team" : "Agent"}: {assigneeLabel(r)}</span>
-                <div className="flex items-center gap-3">
-                  <button onClick={() => setEditing({ ...r })} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium">Edit</button>
-                  <button onClick={() => remove.mutate(r.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              {["Rule Name", "Trigger", "Fields", "Fields Value", "Assignment Type", "Assignees"].map((h) => (
+                <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
+              ))}
+              <th className="px-4 py-2.5" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rules.length === 0 ? (
+              <tr><td colSpan={7} className="px-4 py-8 text-sm text-gray-400 text-center">No rules yet. Click &quot;Add Rule&quot; to create one.</td></tr>
+            ) : rules.map((r) => {
+              const conds = r.conditions as Condition[];
+              const firstField = conds.find((c) => c.kind === "field");
+              const firstTag  = conds.find((c) => c.kind === "tags");
+              const fieldLabel = firstField
+                ? (FIELD_OPTIONS.find((f) => f.value === firstField.field)?.label ?? firstField.field ?? "—")
+                : firstTag ? "Tags" : "—";
+              const fieldValue = firstField?.value ?? firstTag?.value ?? "—";
+              return (
+                <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{r.name}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{TRIGGERS.find((t) => t.value === r.trigger)?.label ?? r.trigger}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fieldLabel}{conds.length > 1 ? <span className="ml-1 text-xs text-gray-400">+{conds.length - 1}</span> : null}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fieldValue}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.assignType === "team" ? "Team" : "Agent"}</td>
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{assigneeLabel(r)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => setEditing({ ...r })} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium">Edit</button>
+                      <button onClick={() => remove.mutate(r.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between">
