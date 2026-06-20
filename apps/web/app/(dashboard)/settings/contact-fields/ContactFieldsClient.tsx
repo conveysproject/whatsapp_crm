@@ -6,6 +6,7 @@ import FieldsTab from "./tabs/FieldsTab";
 import ComingSoon from "./tabs/ComingSoon";
 import LeadStatusesTab from "./tabs/LeadStatusesTab";
 import BasicConfigTab from "./tabs/BasicConfigTab";
+import AssignmentRulesTab from "./tabs/AssignmentRulesTab";
 
 const TABS = [
   { key: "lead-statuses", label: "Lead Statuses" },
@@ -58,6 +59,8 @@ export function ContactFieldsClient(): JSX.Element {
         <LeadStatusesTab />
       ) : active === "basic-config" ? (
         <BasicConfigTab />
+      ) : active === "assignment-rules" ? (
+        <AssignmentRulesTab />
       ) : (
         <ComingSoon label={TABS.find((t) => t.key === active)!.label} />
       )}

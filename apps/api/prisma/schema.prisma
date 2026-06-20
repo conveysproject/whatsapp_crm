@@ -568,6 +568,24 @@ model LeadStatus {
   @@map("lead_statuses")
 }
 
+model ContactAssignmentRule {
+  id              String   @id @default(uuid())
+  organizationId  String   @map("organization_id")
+  name            String
+  trigger         String
+  conditions      Json     @default("[]")
+  assignType      String   @default("user") @map("assign_type")
+  assignTo        String   @map("assign_to")
+  replacePrevious Boolean  @default(false) @map("replace_previous")
+  sortOrder       Int      @default(0) @map("sort_order")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId, sortOrder])
+  @@map("contact_assignment_rules")
+}
+
 model Pipeline {
   id             String   @id @default(uuid())
   organizationId String   @map("organization_id")
