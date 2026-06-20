@@ -317,11 +317,11 @@ export async function runFlow(
         }
 
         case "update_stage": {
-          const stage = node.config["lifecycleStage"] as string;
-          if (stage && payload.contactPhone) {
+          const leadStatusId = node.config["leadStatusId"] as string | undefined;
+          if (leadStatusId && payload.contactPhone) {
             await prisma.contact.updateMany({
               where: { organizationId: payload.organizationId, phoneNumber: payload.contactPhone },
-              data: { lifecycleStage: stage as "lead" | "prospect" | "customer" | "loyal" | "churned" },
+              data: { leadStatusId },
             });
           }
           break;
