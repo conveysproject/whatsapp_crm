@@ -533,7 +533,7 @@ model ContactImport {
   fieldMapping   Json                @map("field_mapping")
   batchTags      String[]            @map("batch_tags")
   batchGroupIds  String[]            @default([])   @map("batch_group_ids")
-  lifecycleStage LifecycleStage      @map("lifecycle_stage")
+  leadStatusId   String?             @map("lead_status_id")
   updateExisting Boolean             @default(false) @map("update_existing")
   errorSummary   Json?               @map("error_summary")
   createdAt      DateTime            @default(now()) @map("created_at")
