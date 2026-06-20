@@ -10,6 +10,7 @@ const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 interface ContactConfig {
   defaultLeadStatusId: string | null;
   closureLeadStatusIds: string[];
+  closureDeadlineDays: number | null;
 }
 
 export default function BasicConfigTab(): JSX.Element {
@@ -24,18 +25,20 @@ export default function BasicConfigTab(): JSX.Element {
       const res = await fetch(`${API_URL}/v1/organizations/me`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
       const json = (await res.json()) as { data?: { settings?: { contactConfig?: Partial<ContactConfig> } } };
       const cc = json.data?.settings?.contactConfig ?? {};
-      return { defaultLeadStatusId: cc.defaultLeadStatusId ?? null, closureLeadStatusIds: cc.closureLeadStatusIds ?? [] };
+      return { defaultLeadStatusId: cc.defaultLeadStatusId ?? null, closureLeadStatusIds: cc.closureLeadStatusIds ?? [], closureDeadlineDays: cc.closureDeadlineDays ?? null };
     },
   });
 
   const [defaultId, setDefaultId] = useState<string>("");
   const [closureIds, setClosureIds] = useState<string[]>([]);
+  const [deadlineDays, setDeadlineDays] = useState<string>("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (config) {
       setDefaultId(config.defaultLeadStatusId ?? "");
       setClosureIds(config.closureLeadStatusIds ?? []);
+      setDeadlineDays(config.closureDeadlineDays != null ? String(config.closureDeadlineDays) : "");
     }
   }, [config]);
 
@@ -45,7 +48,7 @@ export default function BasicConfigTab(): JSX.Element {
       const res = await fetch(`${API_URL}/v1/organizations/me`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ settings: { contactConfig: { defaultLeadStatusId: defaultId || null, closureLeadStatusIds: closureIds } } }),
+        body: JSON.stringify({ settings: { contactConfig: { defaultLeadStatusId: defaultId || null, closureLeadStatusIds: closureIds, closureDeadlineDays: deadlineDays.trim() ? Math.max(0, parseInt(deadlineDays, 10) || 0) : null } } }),
       });
       if (!res.ok) throw new Error("Failed to save");
     },
@@ -100,6 +103,23 @@ export default function BasicConfigTab(): JSX.Element {
         </div>
         <p className="text-xs text-gray-500">
           Statuses that mark a contact as closed/terminal in your sales cycle.
+        </p>
+      </section>
+
+      {/* Closure Deadline */}
+      <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+        <h3 className="text-sm font-semibold text-gray-900">Default Closure Deadline</h3>
+        <input
+          type="number"
+          min={0}
+          value={deadlineDays}
+          onChange={(e) => setDeadlineDays(e.target.value)}
+          placeholder="Enter No. of Days from Creation Date"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+        <p className="text-xs text-gray-500">
+          A contact&apos;s closure deadline is its creation date plus this many days. If the contact
+          isn&apos;t in a closure status by then, the account owner is alerted. Leave blank to disable.
         </p>
       </section>
 

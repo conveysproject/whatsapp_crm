@@ -131,6 +131,16 @@ describe("POST /v1/contacts", () => {
     );
   });
 
+  it("sets closureDeadline when a status is assigned and closureDeadlineDays is configured", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ settings: { contactConfig: { defaultLeadStatusId: "ls-def", closureDeadlineDays: 7 } } });
+    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "ls-def" });
+    mockPrisma.contact.create.mockResolvedValue({ id: "c-10", organizationId: "org-1", phoneNumber: "919000000010" });
+    const res = await app.inject({ method: "POST", url: "/v1/contacts", payload: { phoneNumber: "919000000010" } });
+    expect(res.statusCode).toBe(201);
+    const arg = mockPrisma.contact.create.mock.calls[0][0] as { data: { closureDeadline?: unknown } };
+    expect(arg.data.closureDeadline).toBeInstanceOf(Date);
+  });
+
   it("rejects create with a leadStatusId from another org", async () => {
     mockPrisma.leadStatus.findFirst.mockResolvedValue(null);
     const res = await app.inject({

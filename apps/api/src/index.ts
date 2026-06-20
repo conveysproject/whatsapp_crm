@@ -20,6 +20,7 @@ import "./workers/no-reply.worker.js";
 import "./workers/resume-flow.worker.js";
 import { startMessageCleanupWorker, scheduleMessageCleanupCron } from "./workers/message-cleanup.js";
 import { startTrustScoreWorker, scheduleTrustScoreCron } from "./workers/trust-score.js";
+import { startClosureDeadlineWorker, scheduleClosureDeadlineCron } from "./workers/closure-deadline.worker.js";
 console.log("[startup] all workers ready");
 
 if (process.env["NODE_ENV"] === "production" && process.env["IS_DEMO_MODE"] === "true") {
@@ -63,6 +64,8 @@ async function start() {
   scheduleMessageCleanupCron().catch((err) => server.log.warn({ err }, "Message cleanup cron schedule failed"));
   startTrustScoreWorker();
   scheduleTrustScoreCron().catch((err) => server.log.warn({ err }, "Trust score cron schedule failed"));
+  startClosureDeadlineWorker();
+  scheduleClosureDeadlineCron().catch((err) => server.log.warn({ err }, "Closure deadline cron schedule failed"));
 }
 
 start().catch((err) => {

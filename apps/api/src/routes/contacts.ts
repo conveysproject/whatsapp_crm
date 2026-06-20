@@ -8,6 +8,7 @@ import { maskPhone, maskEmail, canAccess, hasSubPermission } from "../lib/permis
 import { checkPlanLimit } from "../lib/plan-limits.js";
 import { normalizeFullPhone } from "../lib/phone-normalize.js";
 import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
+import { computeClosureDeadline } from "../lib/closure-deadline.js";
 
 function csvEscape(value: string): string {
   const str = value.replace(/"/g, '""');
@@ -354,16 +355,21 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       const ls = await fastify.prisma.leadStatus.findFirst({ where: { id: request.body.leadStatusId, organizationId } });
       if (!ls) return reply.status(400).send({ error: { code: "INVALID_LEAD_STATUS", message: "leadStatusId not found in organization" } });
     }
-    // Apply the org's default lead status (Basic Configuration) when none is provided
+    // Basic Configuration: default lead status (when none given) + closure deadline
+    const orgForConfig = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { settings: true } });
+    const contactConfig = ((orgForConfig?.settings as Record<string, unknown> | null)?.["contactConfig"] ?? {}) as {
+      defaultLeadStatusId?: string | null;
+      closureDeadlineDays?: number | null;
+    };
     let effectiveLeadStatusId: string | null = request.body.leadStatusId ?? null;
-    if (!effectiveLeadStatusId) {
-      const org = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { settings: true } });
-      const defaultId = ((org?.settings as Record<string, unknown> | null)?.["contactConfig"] as { defaultLeadStatusId?: string | null } | undefined)?.defaultLeadStatusId;
-      if (defaultId) {
-        const def = await fastify.prisma.leadStatus.findFirst({ where: { id: defaultId, organizationId }, select: { id: true } });
-        if (def) effectiveLeadStatusId = def.id;
-      }
+    if (!effectiveLeadStatusId && contactConfig.defaultLeadStatusId) {
+      const def = await fastify.prisma.leadStatus.findFirst({ where: { id: contactConfig.defaultLeadStatusId, organizationId }, select: { id: true } });
+      if (def) effectiveLeadStatusId = def.id;
     }
+    const closureDays = typeof contactConfig.closureDeadlineDays === "number" ? contactConfig.closureDeadlineDays : null;
+    const closureDeadline = effectiveLeadStatusId && closureDays && closureDays > 0
+      ? computeClosureDeadline(new Date(), closureDays)
+      : null;
     let contact: Awaited<ReturnType<typeof fastify.prisma.contact.create>>;
     try {
       const { firstName, lastName, name, phoneNumber: rawPhone, email, countryId, languageCode, whatsappOptOut, disableBot, groupIds, customFields } = request.body;
@@ -382,6 +388,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           disableBot: disableBot ?? false,
           ...(customFields ? { customFields: customFields as Prisma.InputJsonValue } : {}),
           ...(effectiveLeadStatusId ? { leadStatusId: effectiveLeadStatusId } : {}),
+          ...(closureDeadline ? { closureDeadline } : {}),
         },
       });
       if (groupIds && groupIds.length > 0) {

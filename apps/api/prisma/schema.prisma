@@ -474,6 +474,8 @@ model Contact {
   languageCode   String?        @map("language_code") // drives template language selection
   leadStatusId   String?        @map("lead_status_id")
   leadStatus     LeadStatus?    @relation(fields: [leadStatusId], references: [id])
+  closureDeadline  DateTime?    @map("closure_deadline")
+  closureAlertedAt DateTime?    @map("closure_alerted_at")
   tags           String[]
   customFields   Json           @default("{}") @map("custom_fields")
   externalId     String?        @map("external_id")  // external CRM/ERP reference (WhatsJet: bsuid)
@@ -505,6 +507,7 @@ model Contact {
 
   @@unique([organizationId, phoneNumber])
   @@index([organizationId])
+  @@index([organizationId, closureDeadline])
   @@index([organizationId, whatsappOptOut])
   @@index([organizationId, deletedAt])
   @@index([countryId])
