@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID, createHmac, timingSafeEqual } from "crypto";
 import Papa from "papaparse";
-import type { LifecycleStage, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { redis } from "../lib/redis.js";
 import { contactImportQueue } from "../lib/queue.js";
 import { normalizeFullPhone, normalizeSplitPhone } from "../lib/phone-normalize.js";
@@ -210,13 +210,13 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
       fieldMapping: FieldMapping;
       batchTags: string[];
       batchGroupIds?: string[];
-      lifecycleStage: string;
+      leadStatusId?: string | null;
       updateExisting: boolean;
       totalRows: number;
     };
   }>("/contacts/import/start", async (request, reply) => {
     const { organizationId } = request.auth;
-    const { sessionId, fieldMapping, batchTags, batchGroupIds = [], lifecycleStage, updateExisting, totalRows } = request.body;
+    const { sessionId, fieldMapping, batchTags, batchGroupIds = [], leadStatusId, updateExisting, totalRows } = request.body;
 
     const importRecord = await fastify.prisma.contactImport.create({
       data: {
@@ -226,7 +226,7 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
         fieldMapping: fieldMapping as unknown as Prisma.InputJsonValue,
         batchTags,
         batchGroupIds,
-        lifecycleStage: lifecycleStage as LifecycleStage,
+        leadStatusId: leadStatusId ?? null,
         updateExisting,
       },
     });
@@ -238,7 +238,7 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
       fieldMapping,
       batchTags,
       batchGroupIds,
-      lifecycleStage,
+      leadStatusId: leadStatusId ?? null,
       updateExisting,
     });
 

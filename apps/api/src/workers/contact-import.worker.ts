@@ -1,12 +1,13 @@
 import { Worker, UnrecoverableError } from "bullmq";
 import Papa from "papaparse";
 
-import type { LifecycleStage, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { redisConnection } from "../lib/queue.js";
 import { redis } from "../lib/redis.js";
 import { prisma } from "../lib/prisma.js";
 import { getIo } from "../lib/io-ref.js";
 import { normalizeFullPhone, normalizeSplitPhone } from "../lib/phone-normalize.js";
+import { resolveLeadStatusId } from "../lib/resolve-lead-status.js";
 import type { FieldMapping } from "@WBMSG/shared";
 
 const IMPORT_LOCK_TTL_SECONDS = 3600;
@@ -19,7 +20,7 @@ interface ContactImportJob {
   fieldMapping: FieldMapping;
   batchTags: string[];
   batchGroupIds: string[];
-  lifecycleStage: string;
+  leadStatusId?: string | null;
   updateExisting: boolean;
 }
 
@@ -136,7 +137,7 @@ async function writeProgress(
 export const contactImportWorker = new Worker<ContactImportJob>(
   "contact-import",
   async (job) => {
-    const { importId, sessionId, organizationId, fieldMapping, batchTags, batchGroupIds, lifecycleStage, updateExisting } = job.data;
+    const { importId, sessionId, organizationId, fieldMapping, batchTags, batchGroupIds, leadStatusId: batchLeadStatusId, updateExisting } = job.data;
     console.log(`[contact-import] job started importId=${importId}`);
 
     const lockKey = `import:lock:${organizationId}`;
@@ -185,6 +186,11 @@ export const contactImportWorker = new Worker<ContactImportJob>(
       select: { id: true, inputName: true },
     });
     const cfInputNameMap = new Map(customFieldMeta.map((cf) => [cf.id, cf.inputName]));
+
+    // Lead status lookup for resolving CSV status text (or the batch default) to a leadStatusId
+    const leadStatusRows = await prisma.leadStatus.findMany({ where: { organizationId }, select: { id: true, name: true } });
+    const leadStatusNameToId = new Map(leadStatusRows.map((s) => [s.name.trim().toLowerCase(), s.id]));
+    const validLeadStatusIds = new Set(leadStatusRows.map((s) => s.id));
 
     let created = 0;
     let updated = 0;
@@ -235,8 +241,8 @@ export const contactImportWorker = new Worker<ContactImportJob>(
           const tags = mergeTagsUnion(extractField(row, fieldMapping, "tags"), batchTags);
           const { firstName, lastName, name } = extractFirstLastName(row, fieldMapping);
           const email = extractField(row, fieldMapping, "email") ?? null;
-          const csvLifecycle = extractField(row, fieldMapping, "lifecycleStage");
-          const stage = (csvLifecycle || lifecycleStage) as LifecycleStage;
+          const csvStatus = extractField(row, fieldMapping, "leadStatusId");
+          const leadStatusId = resolveLeadStatusId(csvStatus, leadStatusNameToId, validLeadStatusIds, batchLeadStatusId ?? null);
           const countryRaw = extractField(row, fieldMapping, "country");
           const countryId = countryRaw ? (countryLookup.get(countryRaw.toLowerCase()) ?? null) : null;
           const customFields = extractCustomFields(row, fieldMapping, cfInputNameMap);
@@ -249,7 +255,8 @@ export const contactImportWorker = new Worker<ContactImportJob>(
             toUpdate.push({
               id: existing.id, phone, restored: existing.softDeleted,
               data: {
-                firstName, lastName, name, email, lifecycleStage: stage, tags,
+                firstName, lastName, name, email, tags,
+                ...(leadStatusId ? { leadStatus: { connect: { id: leadStatusId } } } : {}),
                 ...(existing.softDeleted && { deletedAt: null }),
                 ...(countryId !== null && { countryId }),
                 ...(customFieldsValue !== undefined && { customFields: customFieldsValue }),
@@ -257,7 +264,7 @@ export const contactImportWorker = new Worker<ContactImportJob>(
             });
           } else if (!existing) {
             toCreate.push({
-              organizationId, phoneNumber: phone, firstName, lastName, name, email, lifecycleStage: stage, tags,
+              organizationId, phoneNumber: phone, firstName, lastName, name, email, leadStatusId, tags,
               ...(countryId !== null && { countryId }),
               ...(customFieldsValue !== undefined && { customFields: customFieldsValue }),
             });
