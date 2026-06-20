@@ -9,6 +9,7 @@ import { checkPlanLimit } from "../lib/plan-limits.js";
 import { normalizeFullPhone } from "../lib/phone-normalize.js";
 import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
 import { computeClosureDeadline } from "../lib/closure-deadline.js";
+import { applyAssignmentRules } from "../lib/assignment-engine.js";
 
 function csvEscape(value: string): string {
   const str = value.replace(/"/g, '""');
@@ -485,6 +486,14 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       }
       if (request.body.leadStatusId !== undefined && request.body.leadStatusId !== existing.leadStatusId) {
         void dispatchFlowTrigger(fastify.prisma, organizationId, "lifecycle_change", dispatchBase);
+      }
+
+      // Account-owner auto-assignment on trait/tag changes (best-effort).
+      const traitChanged = ["tags", "leadStatusId", "email", "name", "firstName", "lastName", "countryId", "languageCode"]
+        .some((k) => (request.body as Record<string, unknown>)[k] !== undefined);
+      if (traitChanged) {
+        void applyAssignmentRules(fastify.prisma, organizationId, contact.id, "trait_tag_updated")
+          .catch((err: unknown) => request.log.error({ err }, "assignment trait_tag_updated failed"));
       }
 
       return reply.send({ data: contact });

@@ -13,6 +13,7 @@ import { isFeatureEnabled } from "../lib/plan-limits.js";
 import { dispatchFlowTrigger, cancelNoReplyJobs } from "../lib/trigger-dispatcher.js";
 import { runFlow } from "../lib/flow-runner.js";
 import type { FlowDefinition, FlowSession } from "../lib/flow-runner.js";
+import { applyAssignmentRules } from "../lib/assignment-engine.js";
 import Expo from "expo-server-sdk";
 
 function interpolateAutoReply(
@@ -104,12 +105,21 @@ export const inboundWorker = new Worker<InboundMessageJob>(
 
     // Ensure a contact record always exists for this phone number so that
     // flow actions (add_label, update_stage, opt_out, etc.) can find it.
+    const contactExisted = await prisma.contact.findUnique({
+      where: { organizationId_phoneNumber: { organizationId, phoneNumber: whatsappContactPhone } },
+      select: { id: true },
+    });
     const contact = await prisma.contact.upsert({
       where: { organizationId_phoneNumber: { organizationId, phoneNumber: whatsappContactPhone } },
       create: { organizationId, phoneNumber: whatsappContactPhone },
       update: {},
       select: { id: true, firstName: true, lastName: true, phoneNumber: true },
     });
+    // Account-owner auto-assignment for newly created WA-DM contacts (best-effort).
+    if (!contactExisted) {
+      await applyAssignmentRules(prisma, organizationId, contact.id, "contact_created")
+        .catch((err: unknown) => console.error(`[assignment] contact_created failed: ${(err as Error).message}`));
+    }
 
     let conversation = await prisma.conversation.findFirst({
       where: { organizationId, whatsappContactId: whatsappContactPhone },
