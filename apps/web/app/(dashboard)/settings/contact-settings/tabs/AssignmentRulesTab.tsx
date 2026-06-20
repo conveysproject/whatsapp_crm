@@ -244,7 +244,9 @@ function RuleSlideOver({
                 )}
               </div>
             ))}
-            <button onClick={addCondition} className="text-sm text-emerald-600 hover:text-emerald-800 font-medium">+ Add Condition</button>
+            {draft.conditions.length === 0 && (
+              <button onClick={addCondition} className="text-sm text-emerald-600 hover:text-emerald-800 font-medium">+ Add Condition</button>
+            )}
           </div>
 
           <div className="space-y-2">
