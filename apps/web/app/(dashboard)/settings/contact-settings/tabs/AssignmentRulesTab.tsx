@@ -10,16 +10,28 @@ const TRIGGERS = [
   { value: "contact_created", label: "New Contact Created via WA DM" },
   { value: "trait_tag_updated", label: "Trait or Tag Updated" },
 ] as const;
-const FIELD_OPTIONS = [
-  { value: "firstName", label: "First Name" },
-  { value: "lastName", label: "Last Name" },
-  { value: "email", label: "Email" },
-  { value: "phoneNumber", label: "Phone Number" },
-  { value: "leadStatusId", label: "Lead Status" },
-  { value: "countryCode", label: "Country Code" },
-  { value: "languageCode", label: "Language" },
-] as const;
 
+type FieldType = "text" | "number" | "date" | "boolean" | "select";
+
+const STATIC_FIELDS: { value: string; label: string; type: FieldType }[] = [
+  { value: "firstName",    label: "First Name",    type: "text" },
+  { value: "lastName",     label: "Last Name",     type: "text" },
+  { value: "email",        label: "Email",         type: "text" },
+  { value: "phoneNumber",  label: "Phone Number",  type: "text" },
+  { value: "leadStatusId", label: "Lead Status",   type: "select" },
+  { value: "countryCode",  label: "Country Code",  type: "text" },
+  { value: "languageCode", label: "Language",      type: "text" },
+];
+
+const OPERATORS_BY_TYPE: Record<FieldType, { value: string; label: string }[]> = {
+  text:    [{ value: "equals", label: "is" }, { value: "isNot", label: "is not" }, { value: "contains", label: "contains" }, { value: "startsWith", label: "starts with" }],
+  number:  [{ value: "equals", label: "equals" }, { value: "isNot", label: "is not" }, { value: "gt", label: "greater than" }, { value: "lt", label: "less than" }],
+  date:    [{ value: "before", label: "before" }, { value: "after", label: "after" }, { value: "equals", label: "on" }],
+  boolean: [{ value: "isTrue", label: "is true" }, { value: "isFalse", label: "is false" }],
+  select:  [{ value: "equals", label: "is" }, { value: "isNot", label: "is not" }],
+};
+
+interface CustomFieldOpt { id: string; inputName: string; fieldKey: string; inputType: string }
 interface Condition { kind: "field" | "tags"; field?: string; operator: string; value: string }
 interface Rule {
   id: string;
@@ -57,6 +69,10 @@ export default function AssignmentRulesTab(): JSX.Element {
   const { data: teams = [] } = useQuery<TeamOpt[]>({
     queryKey: ["teams-list"],
     queryFn: async () => (await (await authed("/v1/teams")).json() as { data: TeamOpt[] }).data ?? [],
+  });
+  const { data: customFields = [] } = useQuery<CustomFieldOpt[]>({
+    queryKey: ["custom-fields"],
+    queryFn: async () => (await (await authed("/v1/contacts/custom-fields")).json() as { data: CustomFieldOpt[] }).data ?? [],
   });
   const { data: fallbackEnabled = false } = useQuery<boolean>({
     queryKey: ["assignment-fallback"],
@@ -121,7 +137,7 @@ export default function AssignmentRulesTab(): JSX.Element {
               const firstField = conds.find((c) => c.kind === "field");
               const firstTag  = conds.find((c) => c.kind === "tags");
               const fieldLabel = firstField
-                ? (FIELD_OPTIONS.find((f) => f.value === firstField.field)?.label ?? firstField.field ?? "—")
+                ? (STATIC_FIELDS.find((f) => f.value === firstField.field)?.label ?? firstField.field ?? "—")
                 : firstTag ? "Tags" : "—";
               const fieldValue = firstField?.value ?? firstTag?.value ?? "—";
               return (
@@ -164,6 +180,7 @@ export default function AssignmentRulesTab(): JSX.Element {
           initial={editing}
           users={users}
           teams={teams}
+          customFields={customFields}
           saving={save.isPending}
           onSave={(d) => save.mutate(d)}
           onClose={() => setEditing(undefined)}
@@ -174,16 +191,33 @@ export default function AssignmentRulesTab(): JSX.Element {
 }
 
 function RuleSlideOver({
-  initial, users, teams, saving, onSave, onClose,
+  initial, users, teams, customFields, saving, onSave, onClose,
 }: {
-  initial: Draft; users: UserOpt[]; teams: TeamOpt[]; saving: boolean;
+  initial: Draft; users: UserOpt[]; teams: TeamOpt[]; customFields: CustomFieldOpt[]; saving: boolean;
   onSave: (d: Draft) => void; onClose: () => void;
 }): JSX.Element {
   const [draft, setDraft] = useState<Draft>(initial);
   useEffect(() => setDraft(initial), [initial]);
 
+  // All fields: static + custom
+  const allFields = [
+    ...STATIC_FIELDS,
+    ...customFields.map((cf) => ({
+      value: `custom:${cf.fieldKey}`,
+      label: cf.inputName,
+      type: (["number", "date", "boolean", "select"].includes(cf.inputType) ? cf.inputType : "text") as FieldType,
+    })),
+  ];
+
+  function fieldType(fieldValue: string | undefined): FieldType {
+    return allFields.find((f) => f.value === fieldValue)?.type ?? "text";
+  }
+  function defaultOperator(type: FieldType): string {
+    return OPERATORS_BY_TYPE[type][0]?.value ?? "equals";
+  }
+
   function patch(p: Partial<Draft>) { setDraft((d) => ({ ...d, ...p })); }
-  function addCondition() { patch({ conditions: [...draft.conditions, { kind: "field", field: "email", operator: "equals", value: "" }] }); }
+  function addCondition() { patch({ conditions: [...draft.conditions, { kind: "field", field: allFields[0]?.value ?? "firstName", operator: defaultOperator(fieldType(allFields[0]?.value)), value: "" }] }); }
   function setCondition(i: number, c: Condition) { patch({ conditions: draft.conditions.map((x, j) => (j === i ? c : x)) }); }
   function removeCondition(i: number) { patch({ conditions: draft.conditions.filter((_, j) => j !== i) }); }
 
@@ -212,38 +246,78 @@ function RuleSlideOver({
           </div>
 
           <div className="space-y-2">
-            {draft.conditions.map((c, i) => (
-              <div key={i} className="rounded-lg border border-gray-200 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-sm">
-                    <label className="flex items-center gap-1"><input type="radio" checked={c.kind === "field"} onChange={() => setCondition(i, { kind: "field", field: "email", operator: "equals", value: "" })} /> Field</label>
-                    <label className="flex items-center gap-1"><input type="radio" checked={c.kind === "tags"} onChange={() => setCondition(i, { kind: "tags", operator: "has", value: "" })} /> Tags</label>
+            {draft.conditions.map((c, i) => {
+              const type = c.kind === "field" ? fieldType(c.field) : "text";
+              const operators = c.kind === "field" ? (OPERATORS_BY_TYPE[type] ?? OPERATORS_BY_TYPE.text) : [];
+              return (
+                <div key={i} className="rounded-lg border border-gray-200 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 text-sm">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" checked={c.kind === "field"} onChange={() => setCondition(i, { kind: "field", field: allFields[0]?.value ?? "firstName", operator: defaultOperator(fieldType(allFields[0]?.value)), value: "" })} />
+                        Field
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" checked={c.kind === "tags"} onChange={() => setCondition(i, { kind: "tags", operator: "is", value: "" })} />
+                        Tags
+                      </label>
+                    </div>
+                    <button onClick={() => removeCondition(i)} className="text-gray-400 hover:text-red-500 text-lg leading-none">&times;</button>
                   </div>
-                  <button onClick={() => removeCondition(i)} className="text-gray-400 hover:text-red-500 text-lg leading-none">&times;</button>
+
+                  {c.kind === "field" ? (
+                    <div className="space-y-2">
+                      {/* Field selector */}
+                      <select
+                        className={inputCls}
+                        value={c.field ?? ""}
+                        onChange={(e) => {
+                          const newType = fieldType(e.target.value);
+                          setCondition(i, { ...c, field: e.target.value, operator: defaultOperator(newType), value: "" });
+                        }}
+                      >
+                        <optgroup label="Contact Fields">
+                          {STATIC_FIELDS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                        </optgroup>
+                        {customFields.length > 0 && (
+                          <optgroup label="Custom Fields">
+                            {customFields.map((cf) => <option key={cf.fieldKey} value={`custom:${cf.fieldKey}`}>{cf.inputName}</option>)}
+                          </optgroup>
+                        )}
+                      </select>
+                      {/* Operator — hidden for boolean (value implied by operator itself) */}
+                      {type !== "boolean" && (
+                        <select className={inputCls} value={c.operator} onChange={(e) => setCondition(i, { ...c, operator: e.target.value })}>
+                          {operators.map((op) => <option key={op.value} value={op.value}>{op.label}</option>)}
+                        </select>
+                      )}
+                      {/* Value input — hidden for boolean */}
+                      {type !== "boolean" && (
+                        <input
+                          className={inputCls}
+                          type={type === "number" ? "number" : type === "date" ? "date" : "text"}
+                          value={c.value}
+                          onChange={(e) => setCondition(i, { ...c, value: e.target.value })}
+                          placeholder="Value"
+                        />
+                      )}
+                      {/* Boolean: operator IS the value selection */}
+                      {type === "boolean" && (
+                        <select className={inputCls} value={c.operator} onChange={(e) => setCondition(i, { ...c, operator: e.target.value })}>
+                          {operators.map((op) => <option key={op.value} value={op.value}>{op.label}</option>)}
+                        </select>
+                      )}
+                    </div>
+                  ) : (
+                    /* Tags: fixed "is" label + tag value input */
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 shrink-0">is</span>
+                      <input className={inputCls} value={c.value} onChange={(e) => setCondition(i, { ...c, operator: "is", value: e.target.value })} placeholder="Tag value" />
+                    </div>
+                  )}
                 </div>
-                {c.kind === "field" ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    <select className={inputCls} value={c.field ?? ""} onChange={(e) => setCondition(i, { ...c, field: e.target.value })}>
-                      {FIELD_OPTIONS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-                    </select>
-                    <select className={inputCls} value={c.operator} onChange={(e) => setCondition(i, { ...c, operator: e.target.value })}>
-                      <option value="equals">is</option>
-                      <option value="isNot">is not</option>
-                      <option value="contains">contains</option>
-                    </select>
-                    <input className={`${inputCls} col-span-2`} value={c.value} onChange={(e) => setCondition(i, { ...c, value: e.target.value })} placeholder="Value" />
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    <select className={inputCls} value={c.operator} onChange={(e) => setCondition(i, { ...c, operator: e.target.value })}>
-                      <option value="has">has</option>
-                      <option value="notHas">doesn&apos;t have</option>
-                    </select>
-                    <input className={inputCls} value={c.value} onChange={(e) => setCondition(i, { ...c, value: e.target.value })} placeholder="Tag" />
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
             {draft.conditions.length === 0 && (
               <button onClick={addCondition} className="text-sm text-emerald-600 hover:text-emerald-800 font-medium">+ Add Condition</button>
             )}
