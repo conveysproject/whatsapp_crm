@@ -79,10 +79,10 @@ describe("POST /v1/segments/:id/evaluate", () => {
   it("returns count and contacts array", async () => {
     mockPrisma.segment.findFirst.mockResolvedValue({
       id: "seg-1", organizationId: "org-1", match: "all",
-      filters: [{ field: "lifecycleStage", operator: "equals", value: "lead" }],
+      filters: [{ field: "leadStatusId", operator: "equals", value: "ls-1" }],
     });
     mockPrisma.contact.findMany.mockResolvedValue([
-      { id: "c-1", firstName: "Ravi", lastName: "Kumar", phoneNumber: "+919000000001", lifecycleStage: "lead" },
+      { id: "c-1", firstName: "Ravi", lastName: "Kumar", phoneNumber: "+919000000001", leadStatus: { name: "New Lead", color: "#F97316" } },
     ]);
     const res = await app.inject({ method: "POST", url: "/v1/segments/seg-1/evaluate" });
     expect(res.statusCode).toBe(200);
@@ -95,7 +95,7 @@ describe("POST /v1/segments/:id/evaluate", () => {
     mockPrisma.segment.findFirst.mockResolvedValue({
       id: "seg-1", organizationId: "org-1", match: "any",
       filters: [
-        { field: "lifecycleStage", operator: "equals", value: "lead" },
+        { field: "leadStatusId", operator: "equals", value: "ls-1" },
         { field: "tags", operator: "contains", value: "VIP" },
       ],
     });
