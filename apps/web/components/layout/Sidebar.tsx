@@ -31,7 +31,6 @@ const NAV: NavItem[] = [
       { href: "/contacts/groups",           label: "Groups" },
       { href: "/contacts/segments",         label: "Segments" },
       { href: "/contacts/import",           label: "Import" },
-      { href: "/settings/custom-fields",    label: "Custom Fields" },
     ],
   },
   { href: "/campaigns",           label: "Campaigns",   icon: "📢" },
