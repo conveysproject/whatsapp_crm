@@ -107,7 +107,7 @@ describe("GET /v1/contacts/:id/trust-score", () => {
     mockPrisma.contact.findFirst.mockResolvedValue({
       id: "c-1",
       organizationId: "org-1",
-      lifecycleStage: "customer",
+      leadStatus: { name: "Closed Won" },
       tags: ["vip"],
     });
     mockPrisma.message.findMany.mockResolvedValue([

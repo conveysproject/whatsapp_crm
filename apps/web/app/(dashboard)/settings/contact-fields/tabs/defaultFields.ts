@@ -11,7 +11,7 @@ export const DEFAULT_FIELDS: DefaultField[] = [
   { label: "Last Name", key: "last_name", type: "Text" },
   { label: "Phone Number", key: "phone_number", type: "Number" },
   { label: "Email", key: "email", type: "Email" },
-  { label: "Status", key: "lifecycle_stage", type: "Selection List" },
+  { label: "Lead Status", key: "lead_status_id", type: "Selection List" },
   { label: "Language", key: "language_code", type: "Text" },
   { label: "Country Code", key: "country_code", type: "Text" },
   { label: "Username", key: "username", type: "Text" },

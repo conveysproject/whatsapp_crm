@@ -4,7 +4,7 @@ export interface ContactCsvRow {
   phoneNumber: string;
   name: string;
   email: string;
-  lifecycleStage: string;
+  leadStatus: string;
   tags: string;
 }
 
@@ -13,7 +13,7 @@ export function generateContactsCsv(
     phoneNumber: string;
     name: string | null;
     email: string | null;
-    lifecycleStage: string;
+    leadStatus: string;
     tags: string[];
   }>
 ): string {
@@ -21,7 +21,7 @@ export function generateContactsCsv(
     phoneNumber: `="${c.phoneNumber}"`,
     name: c.name ?? "",
     email: c.email ?? "",
-    lifecycleStage: c.lifecycleStage,
+    leadStatus: c.leadStatus,
     tags: c.tags.join(";"),
   }));
   return Papa.unparse(rows);

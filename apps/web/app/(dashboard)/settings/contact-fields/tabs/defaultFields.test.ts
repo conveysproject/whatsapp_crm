@@ -9,7 +9,7 @@ describe("DEFAULT_FIELDS", () => {
   it("includes core fields with correct keys and types", () => {
     const byKey = Object.fromEntries(DEFAULT_FIELDS.map((f) => [f.key, f]));
     expect(byKey["phone_number"]).toEqual({ label: "Phone Number", key: "phone_number", type: "Number" });
-    expect(byKey["lifecycle_stage"]).toEqual({ label: "Status", key: "lifecycle_stage", type: "Selection List" });
+    expect(byKey["lead_status_id"]).toEqual({ label: "Lead Status", key: "lead_status_id", type: "Selection List" });
     expect(byKey["email"]).toEqual({ label: "Email", key: "email", type: "Email" });
   });
 

@@ -16,7 +16,7 @@ type ContactFilterFields = {
   phoneNumber?: string;
   email?: string;
   languageCode?: string;
-  lifecycleStage?: string;
+  leadStatusId?: string;
   labelIds?: string[];
   groupIds?: string[];
 };
@@ -213,7 +213,7 @@ export const contactGroupsRouter: FastifyPluginAsync = async (fastify) => {
       if (filter?.phoneNumber) where["phoneNumber"] = { contains: filter.phoneNumber };
       if (filter?.email) where["email"] = { contains: filter.email, mode: "insensitive" };
       if (filter?.languageCode) where["languageCode"] = filter.languageCode;
-      if (filter?.lifecycleStage) where["lifecycleStage"] = filter.lifecycleStage;
+      if (filter?.leadStatusId) where["leadStatusId"] = filter.leadStatusId;
       if (filter?.labelIds?.length) {
         where["labels"] = { some: { labelId: { in: filter.labelIds } } };
       }

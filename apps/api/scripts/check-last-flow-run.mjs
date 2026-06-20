@@ -34,7 +34,7 @@ for (const m of msgs) {
 
 // Contact labels (tags)
 const contact = await prisma.contact.findFirst({
-  select: { name: true, phoneNumber: true, tags: true, lifecycleStage: true },
+  select: { name: true, phoneNumber: true, tags: true, leadStatusId: true },
 });
 console.log('\n=== CONTACT STATE ===');
 console.log(JSON.stringify(contact, null, 2));

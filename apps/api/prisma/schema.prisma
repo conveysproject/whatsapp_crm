@@ -327,14 +327,6 @@ model Invitation {
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
-enum LifecycleStage {
-  lead
-  prospect
-  customer
-  loyal
-  churned
-}
-
 enum TemplateStatus {
   pending
   approved
@@ -480,7 +472,6 @@ model Contact {
   lastName       String?        @map("last_name")
   email          String?
   languageCode   String?        @map("language_code") // drives template language selection
-  lifecycleStage LifecycleStage @default(lead) @map("lifecycle_stage")
   leadStatusId   String?        @map("lead_status_id")
   leadStatus     LeadStatus?    @relation(fields: [leadStatusId], references: [id])
   tags           String[]
@@ -514,7 +505,6 @@ model Contact {
 
   @@unique([organizationId, phoneNumber])
   @@index([organizationId])
-  @@index([organizationId, lifecycleStage])
   @@index([organizationId, whatsappOptOut])
   @@index([organizationId, deletedAt])
   @@index([countryId])

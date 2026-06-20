@@ -268,7 +268,6 @@ for (const c of CONTACTS_DATA) {
       firstName: contactData.firstName,
       lastName: contactData.lastName,
       email: contactData.email,
-      lifecycleStage: contactData.lifecycleStage,
       tags: contactData.tags,
       notes: contactData.notes,
       countryCode: 'IN',
