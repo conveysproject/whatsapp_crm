@@ -19,10 +19,11 @@ export default function BasicConfigTab(): JSX.Element {
   const { data: leadStatuses } = useLeadStatuses();
 
   const { data: config } = useQuery<ContactConfig>({
-    queryKey: ["org-me"],
+    queryKey: ["org-contact-config"],
     queryFn: async () => {
       const token = await getToken();
       const res = await fetch(`${API_URL}/v1/organizations/me`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+      if (!res.ok) throw new Error("Failed to load config");
       const json = (await res.json()) as { data?: { settings?: { contactConfig?: Partial<ContactConfig> } } };
       const cc = json.data?.settings?.contactConfig ?? {};
       return { defaultLeadStatusId: cc.defaultLeadStatusId ?? null, closureLeadStatusIds: cc.closureLeadStatusIds ?? [], closureDeadlineDays: cc.closureDeadlineDays ?? null };
@@ -62,7 +63,7 @@ export default function BasicConfigTab(): JSX.Element {
       });
       if (!res.ok) throw new Error("Failed to save");
     },
-    onSuccess: () => { setSaved(true); setTimeout(() => setSaved(false), 2000); void qc.invalidateQueries({ queryKey: ["org-me"] }); },
+    onSuccess: () => { setSaved(true); setTimeout(() => setSaved(false), 2000); void qc.invalidateQueries({ queryKey: ["org-contact-config"] }); },
   });
 
   function toggleClosure(id: string) {
