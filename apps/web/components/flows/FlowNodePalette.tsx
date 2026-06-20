@@ -13,7 +13,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   keyword_match:    "Keyword Match",
   contact_created:  "Contact Created",
   tag_added:        "Tag Added",
-  lifecycle_change: "Stage Changed",
+  lifecycle_change: "Status Changed",
   inbound_message:  "Incoming Message",
 };
 

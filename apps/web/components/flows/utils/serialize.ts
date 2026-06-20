@@ -37,7 +37,7 @@ export function getLabelFromConfig(nodeType: string, config: Record<string, unkn
     case "wait":             return `Wait ${config["duration"] ?? 1} ${config["unit"] ?? "hours"}`;
     case "add_tag":
     case "add_label":        return str("tag") ? `Add label: ${str("tag")}` : "Add Label";
-    case "update_stage":     return str("lifecycleStage") ? `Set stage: ${str("lifecycleStage")}` : "Update Stage";
+    case "update_stage":     return str("leadStatusId") ? "Set status" : "Update Status";
     case "assign_agent":
     case "assign_conversation": return str("assignTo") ? `Assign to: ${str("assignTo")}` : "Assign Agent";
     case "close_conversation":  return "Close Conversation";
@@ -63,7 +63,7 @@ export function getDefaultConfig(nodeType: string): Record<string, unknown> {
     case "wait":                return { duration: 1, unit: "hours" };
     case "add_label":
     case "add_tag":             return { tag: "" };
-    case "update_stage":        return { lifecycleStage: "lead" };
+    case "update_stage":        return { leadStatusId: "" };
     case "assign_agent":
     case "assign_conversation": return { assignTo: "" };
     case "close_conversation":  return {};

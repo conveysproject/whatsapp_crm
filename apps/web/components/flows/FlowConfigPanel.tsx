@@ -3,6 +3,7 @@
 import { JSX, useEffect, useState } from "react";
 import type { Node } from "reactflow";
 import { MediaAssetPicker } from "@/components/media-asset-picker";
+import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 
 interface FlowConfigPanelProps {
   node: Node | null;
@@ -47,7 +48,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   button_reply:          "Button Reply",
   contact_created:       "Contact Created",
   tag_added:             "Tag Added",
-  lifecycle_change:      "Stage Changed",
+  lifecycle_change:      "Status Changed",
   conversation_resolved: "Conversation Resolved",
   conversation_assigned: "Conversation Assigned",
   no_reply:              "No Reply (X hours)",
@@ -103,6 +104,7 @@ function Select({ value, onChange, options }: { value: string; onChange: (v: str
 export function FlowConfigPanel({ node, onUpdate, onDelete, onClose }: FlowConfigPanelProps): JSX.Element | null {
   const [config, setConfig] = useState<Record<string, unknown>>({});
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const { data: leadStatuses } = useLeadStatuses();
 
   useEffect(() => {
     if (node) setConfig((node.data.config as Record<string, unknown>) ?? {});
@@ -501,16 +503,13 @@ export function FlowConfigPanel({ node, onUpdate, onDelete, onClose }: FlowConfi
 
         {nodeType === "update_stage" && (
           <Field>
-            <Label>Lifecycle Stage</Label>
+            <Label>Lead Status</Label>
             <Select
-              value={str("lifecycleStage") || "lead"}
-              onChange={(v) => set("lifecycleStage", v)}
+              value={str("leadStatusId")}
+              onChange={(v) => set("leadStatusId", v)}
               options={[
-                { value: "lead",      label: "Lead" },
-                { value: "prospect",  label: "Prospect" },
-                { value: "customer",  label: "Customer" },
-                { value: "loyal",     label: "Loyal" },
-                { value: "churned",   label: "Churned" },
+                { value: "", label: "— Select status —" },
+                ...leadStatuses.map((s) => ({ value: s.id, label: s.name })),
               ]}
             />
           </Field>
