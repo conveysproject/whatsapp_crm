@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX, useState, useEffect } from "react";
+import { JSX, useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
@@ -33,6 +33,16 @@ export default function BasicConfigTab(): JSX.Element {
   const [closureIds, setClosureIds] = useState<string[]>([]);
   const [deadlineDays, setDeadlineDays] = useState<string>("");
   const [saved, setSaved] = useState(false);
+  const [closureOpen, setClosureOpen] = useState(false);
+  const closureRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (closureRef.current && !closureRef.current.contains(e.target as Node)) setClosureOpen(false);
+    }
+    if (closureOpen) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [closureOpen]);
 
   useEffect(() => {
     if (config) {
@@ -82,25 +92,57 @@ export default function BasicConfigTab(): JSX.Element {
       {/* Closure Statuses */}
       <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
         <h3 className="text-sm font-semibold text-gray-900">Select Closure Statuses</h3>
-        <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 overflow-hidden">
-          {leadStatuses.length === 0 && (
-            <p className="px-4 py-3 text-sm text-gray-400">No statuses defined yet.</p>
+        <div className="relative" ref={closureRef}>
+          <button
+            type="button"
+            onClick={() => setClosureOpen((v) => !v)}
+            className="w-full flex items-center justify-between rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <span className="flex items-center gap-1.5 flex-wrap min-h-[1.25rem]">
+              {closureIds.length === 0 ? (
+                <span className="text-gray-400">Select statuses…</span>
+              ) : (
+                closureIds.map((id) => {
+                  const s = leadStatuses.find((x) => x.id === id);
+                  return s ? (
+                    <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                      {s.name}
+                    </span>
+                  ) : null;
+                })
+              )}
+            </span>
+            <svg className={`w-4 h-4 text-gray-400 shrink-0 ml-2 transition-transform ${closureOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {closureOpen && (
+            <div className="absolute z-20 mt-1 w-full bg-white rounded-lg border border-gray-200 shadow-lg overflow-hidden">
+              {leadStatuses.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-gray-400">No statuses defined yet.</p>
+              ) : (
+                <div className="max-h-52 overflow-y-auto divide-y divide-gray-50">
+                  {leadStatuses.map((s) => {
+                    const checked = closureIds.includes(s.id);
+                    return (
+                      <label key={s.id} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleClosure(s.id)}
+                          className="h-4 w-4 rounded border-gray-300 accent-emerald-600"
+                        />
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                        <span className="text-sm text-gray-800">{s.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
-          {leadStatuses.map((s) => {
-            const checked = closureIds.includes(s.id);
-            return (
-              <label key={s.id} className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggleClosure(s.id)}
-                  className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 accent-emerald-600"
-                />
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                <span className="text-sm text-gray-800">{s.name}</span>
-              </label>
-            );
-          })}
         </div>
         <p className="text-xs text-gray-500">
           Statuses that mark a contact as closed/terminal in your sales cycle.
