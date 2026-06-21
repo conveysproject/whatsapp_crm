@@ -53,7 +53,7 @@ export function SettingsMenu(): JSX.Element {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 w-72 bg-white rounded-xl shadow-xl border border-gray-100 z-50 p-3">
+        <div className="absolute right-0 top-11 w-[400px] bg-white rounded-xl shadow-xl border border-gray-100 z-50 p-3">
           <div className="grid grid-cols-2 gap-3">
             {TILES.map((t) => (
               <button
