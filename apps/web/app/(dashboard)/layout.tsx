@@ -63,7 +63,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <TopBar orgName={orgSlug ?? undefined} userId={userId ?? undefined} />
           <SetupBanner />
           <main className="flex flex-col flex-1 px-4 py-4 overflow-auto min-h-0">
-            <BreadcrumbNav />
+            {/* <BreadcrumbNav /> */}
             {children}
           </main>
         </div>

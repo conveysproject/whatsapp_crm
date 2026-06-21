@@ -1,7 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 
 export const tagsRouter: FastifyPluginAsync = async (fastify) => {
-  // Return all unique tags in use across contacts for this org, with usage counts
   fastify.get("/tags", async (request, reply) => {
     const { organizationId } = request.auth;
     const contacts = await fastify.prisma.contact.findMany({
@@ -21,5 +20,27 @@ export const tagsRouter: FastifyPluginAsync = async (fastify) => {
       .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 
     return reply.send({ data });
+  });
+
+  // Bulk-delete a tag — removes it from every contact in the org
+  fastify.delete<{ Params: { tag: string } }>("/tags/:tag", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const tag = decodeURIComponent(request.params.tag);
+
+    const contacts = await fastify.prisma.contact.findMany({
+      where: { organizationId, deletedAt: null, tags: { has: tag } },
+      select: { id: true, tags: true },
+    });
+
+    await Promise.all(
+      contacts.map((c) =>
+        fastify.prisma.contact.update({
+          where: { id: c.id },
+          data: { tags: c.tags.filter((t) => t !== tag) },
+        }),
+      ),
+    );
+
+    return reply.status(204).send();
   });
 };
