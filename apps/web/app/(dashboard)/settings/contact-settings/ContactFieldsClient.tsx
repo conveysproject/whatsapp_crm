@@ -36,13 +36,13 @@ export function ContactFieldsClient(): JSX.Element {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-6 border-b border-gray-200">
+      <div className="flex border-b border-gray-200">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => selectTab(t.key)}
             className={[
-              "pb-3 text-sm font-medium border-b-2 transition-colors -mb-px",
+              "flex-1 pb-3 text-sm font-medium border-b-2 transition-colors -mb-px text-center whitespace-nowrap px-2",
               active === t.key
                 ? "border-emerald-600 text-emerald-700"
                 : "border-transparent text-gray-500 hover:text-gray-700",

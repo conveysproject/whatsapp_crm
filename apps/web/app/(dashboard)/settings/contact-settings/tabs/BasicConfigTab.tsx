@@ -71,7 +71,7 @@ export default function BasicConfigTab(): JSX.Element {
   }
 
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className="space-y-8">
       {/* Default Status */}
       <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
         <h3 className="text-sm font-semibold text-gray-900">Default Status for New Contacts</h3>
