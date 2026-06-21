@@ -71,10 +71,14 @@ export default function BasicConfigTab(): JSX.Element {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
+
       {/* Default Status */}
       <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-900">Default Status for New Contacts</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Default Status for New Contacts</h3>
+          <p className="text-xs text-gray-500 mt-0.5">New contacts created without an explicit status are assigned this status by default.</p>
+        </div>
         <select
           value={defaultId}
           onChange={(e) => setDefaultId(e.target.value)}
@@ -85,14 +89,14 @@ export default function BasicConfigTab(): JSX.Element {
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
-        <p className="text-xs text-gray-500">
-          New contacts created without an explicit status are assigned this status by default.
-        </p>
       </section>
 
       {/* Closure Statuses */}
       <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-900">Select Closure Statuses</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Closure Statuses</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Statuses that mark a contact as closed/terminal in your sales cycle.</p>
+        </div>
         <div className="relative" ref={closureRef}>
           <button
             type="button"
@@ -118,7 +122,6 @@ export default function BasicConfigTab(): JSX.Element {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
-
           {closureOpen && (
             <div className="absolute z-20 mt-1 w-full bg-white rounded-lg border border-gray-200 shadow-lg overflow-hidden">
               {leadStatuses.length === 0 ? (
@@ -129,12 +132,7 @@ export default function BasicConfigTab(): JSX.Element {
                     const checked = closureIds.includes(s.id);
                     return (
                       <label key={s.id} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleClosure(s.id)}
-                          className="h-4 w-4 rounded border-gray-300 accent-emerald-600"
-                        />
+                        <input type="checkbox" checked={checked} onChange={() => toggleClosure(s.id)} className="h-4 w-4 rounded border-gray-300 accent-emerald-600" />
                         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
                         <span className="text-sm text-gray-800">{s.name}</span>
                       </label>
@@ -145,35 +143,34 @@ export default function BasicConfigTab(): JSX.Element {
             </div>
           )}
         </div>
-        <p className="text-xs text-gray-500">
-          Statuses that mark a contact as closed/terminal in your sales cycle.
-        </p>
       </section>
 
       {/* Closure Deadline */}
       <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-900">Default Closure Deadline</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Default Closure Deadline</h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            A contact&apos;s closure deadline is its creation date plus this many days. If the contact
+            isn&apos;t in a closure status by then, the account owner is alerted. Leave blank to disable.
+          </p>
+        </div>
         <input
           type="number"
           min={0}
           value={deadlineDays}
           onChange={(e) => setDeadlineDays(e.target.value)}
-          placeholder="Enter No. of Days from Creation Date"
+          placeholder="Days from creation date"
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
-        <p className="text-xs text-gray-500">
-          A contact&apos;s closure deadline is its creation date plus this many days. If the contact
-          isn&apos;t in a closure status by then, the account owner is alerted. Leave blank to disable.
-        </p>
       </section>
 
       <div className="flex items-center gap-3">
         <button
           onClick={() => save.mutate()}
           disabled={save.isPending}
-          className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50"
         >
-          {save.isPending ? "Saving…" : "Save"}
+          {save.isPending ? "Saving…" : "Save Changes"}
         </button>
         {saved && <span className="text-sm text-emerald-600">Saved ✓</span>}
       </div>

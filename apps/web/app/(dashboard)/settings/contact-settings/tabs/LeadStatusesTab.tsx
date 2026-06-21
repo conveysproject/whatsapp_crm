@@ -81,7 +81,7 @@ export default function LeadStatusesTab(): JSX.Element {
       <div className="flex justify-end">
         <button
           onClick={() => { setError(null); setEditing(null); }}
-          className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700"
+          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700"
         >
           Add Status
         </button>
