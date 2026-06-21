@@ -47,7 +47,7 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
         },
         select: { id: true, email: true, role: true, token: true, expiresAt: true },
       });
-      const webUrl = process.env["WEB_URL"] ?? "https://app.wbmsg.com";
+      const webUrl = process.env["WEB_URL"] ?? "https://wbmsg.com";
       const acceptUrl = `${webUrl}/invitations/${invitation.token}/accept`;
       void sendMail({
         to: invitation.email,
