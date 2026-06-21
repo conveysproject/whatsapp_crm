@@ -81,9 +81,9 @@ export default async function AccountDetailsPage(): Promise<JSX.Element> {
           <Row label="Organization ID" value={org.id} />
           <Row label="Facebook Business Manager ID" value={org.metaBusinessId ?? "—"} />
           <Row label="WhatsApp Business ID" value={org.whatsappBusinessAccountId ?? "—"} />
-          <Row label="Subscription Type" value={planLabel(org.planTier)} />
-          <Row label="Trial Ends" value={formatDate(org.trialEndsAt)} />
-          <Row label="Status" value={org.status.charAt(0).toUpperCase() + org.status.slice(1)} />
+          <Row label="Subscription Type" value={org.planTier ? planLabel(org.planTier) : "—"} />
+          <Row label="Subscription Start Date" value="—" />
+          <Row label="Subscription End Date" value={formatDate(org.trialEndsAt)} />
         </div>
       </div>
     </div>
