@@ -30,6 +30,18 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    // Stamp lastSignInAt at most once per hour per user — works in local dev
+    // without relying on Clerk webhooks reaching localhost.
+    const stampKey = `last_sign_in:${userId}`;
+    const alreadyStamped = await redis.exists(stampKey);
+    if (!alreadyStamped) {
+      await redis.setex(stampKey, 3600, "1");
+      void fastify.prisma.user.updateMany({
+        where: { id: userId },
+        data: { lastSignInAt: new Date() },
+      }).catch((err: unknown) => fastify.log.warn({ err }, "Failed to stamp lastSignInAt"));
+    }
+
     // Cache auth data to avoid 2 DB round-trips on every request.
     // Invalidated immediately by users routes on role/permission/deactivation changes.
     const AUTH_CACHE_TTL = 60; // seconds — safety net if invalidation is missed
