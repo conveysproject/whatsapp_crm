@@ -180,23 +180,30 @@ export const clerkWebhookRouter: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // GAP-S03: write login audit log on session creation
+      // Stamp lastSignInAt and write login audit log on session creation
       if (event.type === "session.created") {
         const session = event.data as ClerkSession;
+        const now = new Date();
         const user = await fastify.prisma.user.findUnique({
           where: { id: session.user_id },
           select: { organizationId: true },
         });
         if (user) {
-          await fastify.prisma.loginLog.create({
-            data: {
-              userId: session.user_id,
-              orgId: user.organizationId,
-              ipAddress: request.ip ?? null,
-              userAgent: (request.headers["user-agent"] as string | undefined) ?? null,
-              success: true,
-            },
-          });
+          await Promise.all([
+            fastify.prisma.user.update({
+              where: { id: session.user_id },
+              data: { lastSignInAt: now },
+            }),
+            fastify.prisma.loginLog.create({
+              data: {
+                userId: session.user_id,
+                orgId: user.organizationId,
+                ipAddress: request.ip ?? null,
+                userAgent: (request.headers["user-agent"] as string | undefined) ?? null,
+                success: true,
+              },
+            }),
+          ]);
         }
       }
 

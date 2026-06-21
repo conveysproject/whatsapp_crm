@@ -11,7 +11,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     const users = await fastify.prisma.user.findMany({
       where: { organizationId: request.auth.organizationId, isActive: true },
       select: {
-        id: true, email: true, fullName: true, role: true, createdAt: true,
+        id: true, email: true, fullName: true, role: true, mobileNumber: true, lastSignInAt: true, createdAt: true,
         memberships: {
           where: { organizationId: request.auth.organizationId },
           select: { permissions: true },
@@ -19,6 +19,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       },
       orderBy: { createdAt: "asc" },
     });
+
     return {
       data: users.map(({ memberships, ...u }) => ({
         ...u,

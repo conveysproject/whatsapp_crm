@@ -296,6 +296,7 @@ model User {
   availability   String    @default("online") @map("availability")
   username       String?   @unique
   mobileNumber   String?   @map("mobile_number")
+  lastSignInAt   DateTime? @map("last_sign_in_at")
   settings       Json      @default("{}") // notification prefs, language, timezone, UI preferences
   deletedAt      DateTime? @map("deleted_at")
   createdAt      DateTime  @default(now()) @map("created_at")
