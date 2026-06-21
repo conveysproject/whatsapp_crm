@@ -215,6 +215,25 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
     enabled: open,
   });
 
+  const { data: hiddenFields = [] } = useQuery<string[]>({
+    queryKey: ["org-contact-field-visibility"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/organizations/me`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (!res.ok) return [];
+      const json = (await res.json()) as { data?: { settings?: { contactConfig?: { hiddenFields?: string[] } } } };
+      return json.data?.settings?.contactConfig?.hiddenFields ?? [];
+    },
+    enabled: open,
+    staleTime: 30_000,
+  });
+
+  function isVisible(key: string): boolean {
+    return !hiddenFields.includes(key);
+  }
+
   useEffect(() => {
     if (!open) {
       setForm({ firstName: "", lastName: "", phoneNumber: "", email: "", countryId: "", languageCode: "", leadStatusId: "", groupIds: [], whatsappOptOut: false, disableBot: false });
@@ -350,19 +369,21 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
               </div>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-gray-700">Country</label>
-              <select
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                value={form.countryId}
-                onChange={(e) => setForm((f) => ({ ...f, countryId: e.target.value }))}
-              >
-                <option value="">Select country</option>
-                {countries.map((c) => (
-                  <option key={c.id} value={String(c.id)}>{c.name}</option>
-                ))}
-              </select>
-            </div>
+            {isVisible("country_code") && (
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-gray-700">Country</label>
+                <select
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  value={form.countryId}
+                  onChange={(e) => setForm((f) => ({ ...f, countryId: e.target.value }))}
+                >
+                  <option value="">Select country</option>
+                  {countries.map((c) => (
+                    <option key={c.id} value={String(c.id)}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium text-gray-700">
@@ -377,30 +398,34 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
               <p className="text-xs text-gray-400">Number should be with country code without 0 or +</p>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-gray-700">Language</label>
-              <select
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                value={form.languageCode}
-                onChange={(e) => setForm((f) => ({ ...f, languageCode: e.target.value }))}
-              >
-                <option value="">Select language</option>
-                {LANGUAGES.map((l) => (
-                  <option key={l.code} value={l.code}>{l.label}</option>
-                ))}
-              </select>
-            </div>
+            {isVisible("language_code") && (
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-gray-700">Language</label>
+                <select
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  value={form.languageCode}
+                  onChange={(e) => setForm((f) => ({ ...f, languageCode: e.target.value }))}
+                >
+                  <option value="">Select language</option>
+                  {LANGUAGES.map((l) => (
+                    <option key={l.code} value={l.code}>{l.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-gray-700">Email</label>
-              <input
-                type="email"
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="email@example.com"
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              />
-            </div>
+            {isVisible("email") && (
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-gray-700">Email</label>
+                <input
+                  type="email"
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  placeholder="email@example.com"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                />
+              </div>
+            )}
 
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium text-gray-700">Status</label>
@@ -476,18 +501,24 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
               </div>
             )}
 
-            <div className="space-y-3 pt-1">
-              <Toggle
-                checked={form.whatsappOptOut}
-                onChange={(v) => setForm((f) => ({ ...f, whatsappOptOut: v }))}
-                label="Opt out Marketing Messages"
-              />
-              <Toggle
-                checked={!form.disableBot}
-                onChange={(v) => setForm((f) => ({ ...f, disableBot: !v }))}
-                label="Enable Reply Bot"
-              />
-            </div>
+            {(isVisible("whatsapp_opt_out") || isVisible("disable_bot")) && (
+              <div className="space-y-3 pt-1">
+                {isVisible("whatsapp_opt_out") && (
+                  <Toggle
+                    checked={form.whatsappOptOut}
+                    onChange={(v) => setForm((f) => ({ ...f, whatsappOptOut: v }))}
+                    label="Opt out Marketing Messages"
+                  />
+                )}
+                {isVisible("disable_bot") && (
+                  <Toggle
+                    checked={!form.disableBot}
+                    onChange={(v) => setForm((f) => ({ ...f, disableBot: !v }))}
+                    label="Enable Reply Bot"
+                  />
+                )}
+              </div>
+            )}
 
             {customFields.length > 0 && (
               <div className="flex flex-col gap-3">

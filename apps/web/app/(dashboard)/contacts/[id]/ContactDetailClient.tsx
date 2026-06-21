@@ -55,6 +55,10 @@ export function ContactDetailClient({ contact: initial }: { contact: Contact }):
     }
   }
 
+  function handleAssigned(userId: string | null): void {
+    setContact((prev) => ({ ...prev, assignedUserId: userId }));
+  }
+
   const editableContact = useMemo<EditableContact>(() => ({
     id: contact.id,
     name: contact.name,
@@ -69,6 +73,7 @@ export function ContactDetailClient({ contact: initial }: { contact: Contact }):
     disableBot: contact.disableBot,
     groupIds: contact.groupIds,
     customFields: contact.customFields,
+    assignedUserId: contact.assignedUserId,
   }), [contact]);
 
   return (
@@ -81,7 +86,7 @@ export function ContactDetailClient({ contact: initial }: { contact: Contact }):
       <div className="flex flex-1 min-h-0">
         <aside className="w-80 shrink-0 border-r border-gray-200 bg-white overflow-y-auto">
           <div className="p-4">
-            <ContactDetailSidebar contact={contact} />
+            <ContactDetailSidebar contact={contact} onAssigned={handleAssigned} />
           </div>
         </aside>
         <main className="flex-1 overflow-y-auto bg-gray-50 p-6">

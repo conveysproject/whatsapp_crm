@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX } from "react";
+import { JSX, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -29,10 +29,13 @@ interface CustomField {
 
 interface Props {
   contact: Contact;
+  onAssigned?: (userId: string | null) => void;
 }
 
-export function ContactDetailSidebar({ contact }: Props): JSX.Element {
+export function ContactDetailSidebar({ contact, onAssigned }: Props): JSX.Element {
   const { getToken } = useAuth();
+  const [assignedId, setAssignedId] = useState<string | null>(contact.assignedUserId);
+  const [assigning, setAssigning] = useState(false);
 
   const { data: countries = [], isLoading: loadingCountries } = useQuery<Country[]>({
     queryKey: ["countries"],
@@ -90,8 +93,24 @@ export function ContactDetailSidebar({ contact }: Props): JSX.Element {
 
   const countryName = countries.find((c) => c.id === contact.countryId)?.name ?? null;
   const languageLabel = LANGUAGES.find((l) => l.code === contact.languageCode)?.label ?? null;
-  const assignee = users.find((u) => u.id === contact.assignedUserId);
+  const assignee = users.find((u) => u.id === assignedId);
   const assigneeName = assignee ? (assignee.fullName ?? assignee.email) : null;
+
+  async function handleAssign(userId: string | null): Promise<void> {
+    setAssigning(true);
+    try {
+      const token = await getToken();
+      await fetch(`${API_URL}/v1/contacts/${contact.id}/assign`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      setAssignedId(userId);
+      onAssigned?.(userId);
+    } finally {
+      setAssigning(false);
+    }
+  }
   const contactGroupNames = contact.groupIds
     .map((id) => groups.find((g) => g.id === id)?.title)
     .filter((t): t is string => t !== undefined);
@@ -200,10 +219,18 @@ export function ContactDetailSidebar({ contact }: Props): JSX.Element {
       <div className="pb-3">
         {loadingUsers ? (
           <FieldSkeleton />
-        ) : assigneeName ? (
-          <span className={valueCls}>{assigneeName}</span>
         ) : (
-          <span className="text-sm text-gray-400">Unassigned</span>
+          <select
+            value={assignedId ?? ""}
+            onChange={(e) => { void handleAssign(e.target.value || null); }}
+            disabled={assigning}
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50"
+          >
+            <option value="">— Unassigned —</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>{u.fullName ?? u.email}</option>
+            ))}
+          </select>
         )}
       </div>
 
