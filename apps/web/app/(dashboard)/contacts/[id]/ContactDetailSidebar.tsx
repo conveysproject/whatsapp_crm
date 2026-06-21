@@ -211,32 +211,36 @@ export function ContactDetailSidebar({ contact, onAssigned }: Props): JSX.Elemen
           </div>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <span className={labelCls}>Tags</span>
-          {contact.tags.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {contact.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center bg-gray-200 text-gray-700 rounded-full text-xs px-2 py-0.5"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          ) : emptyDash}
-        </div>
+        {isVisible("tags") && (
+          <div className="flex flex-col gap-1">
+            <span className={labelCls}>Tags</span>
+            {contact.tags.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {contact.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center bg-gray-200 text-gray-700 rounded-full text-xs px-2 py-0.5"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : emptyDash}
+          </div>
+        )}
       </div>
 
       {/* ── Notes ────────────────────────────────────────────── */}
-      <SectionHeader title="Notes" />
-      <div className="pb-3">
-        {contact.notes ? (
-          <p className="text-sm text-gray-900 whitespace-pre-wrap">{contact.notes}</p>
-        ) : (
-          <p className="text-sm text-gray-400">No notes</p>
-        )}
-      </div>
+      {isVisible("notes") && <SectionHeader title="Notes" />}
+      {isVisible("notes") && (
+        <div className="pb-3">
+          {contact.notes ? (
+            <p className="text-sm text-gray-900 whitespace-pre-wrap">{contact.notes}</p>
+          ) : (
+            <p className="text-sm text-gray-400">No notes</p>
+          )}
+        </div>
+      )}
 
       {/* ── Assignee ─────────────────────────────────────────── */}
       {isVisible("assigned_user_id") && <SectionHeader title="Assignee" />}
@@ -261,21 +265,27 @@ export function ContactDetailSidebar({ contact, onAssigned }: Props): JSX.Elemen
       )}
 
       {/* ── Settings ─────────────────────────────────────────── */}
-      <SectionHeader title="Settings" />
-      <div className="space-y-2 pb-3">
-        <div className="flex items-center justify-between">
-          <span className={labelCls}>Reply Bot</span>
-          <span className={`text-sm font-medium ${!contact.disableBot ? "text-green-600" : "text-gray-400"}`}>
-            {!contact.disableBot ? "Enabled" : "Disabled"}
-          </span>
+      {(isVisible("disable_bot") || isVisible("whatsapp_opt_out")) && <SectionHeader title="Settings" />}
+      {(isVisible("disable_bot") || isVisible("whatsapp_opt_out")) && (
+        <div className="space-y-2 pb-3">
+          {isVisible("disable_bot") && (
+            <div className="flex items-center justify-between">
+              <span className={labelCls}>Reply Bot</span>
+              <span className={`text-sm font-medium ${!contact.disableBot ? "text-green-600" : "text-gray-400"}`}>
+                {!contact.disableBot ? "Enabled" : "Disabled"}
+              </span>
+            </div>
+          )}
+          {isVisible("whatsapp_opt_out") && (
+            <div className="flex items-center justify-between">
+              <span className={labelCls}>Marketing Messages</span>
+              <span className={`text-sm font-medium ${contact.whatsappOptOut ? "text-red-500" : "text-green-600"}`}>
+                {contact.whatsappOptOut ? "Opted out" : "Active"}
+              </span>
+            </div>
+          )}
         </div>
-        <div className="flex items-center justify-between">
-          <span className={labelCls}>Marketing Messages</span>
-          <span className={`text-sm font-medium ${contact.whatsappOptOut ? "text-red-500" : "text-green-600"}`}>
-            {contact.whatsappOptOut ? "Opted out" : "Active"}
-          </span>
-        </div>
-      </div>
+      )}
 
       {/* ── Groups ───────────────────────────────────────────── */}
       <SectionHeader title="Groups" />

@@ -114,6 +114,11 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
 
   function isVisible(key: string): boolean { return !hiddenFields.includes(key); }
 
+  const tableColSpan = 11
+    + (isVisible("country_code") ? 1 : 0)
+    + (isVisible("tags") ? 1 : 0)
+    + (isVisible("assigned_user_id") ? 1 : 0);
+
   const search = useCallback(async (q: string) => {
     const token = await getToken();
     if (!token) return;
@@ -380,19 +385,19 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                     <Th field="phoneNumber" label="Mobile" />
                     <Th field="languageCode" label="Language" />
                     <Th field="createdAt" label="Created On" />
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Country</th>
+                    {isVisible("country_code") && <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Country</th>}
                     <Th field="email" label="Email" />
                     <Th field="whatsappOptOut" label="Marketing" />
                     <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Status</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Trust</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Tags</th>
+                    {isVisible("tags") && <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Tags</th>}
                     {isVisible("assigned_user_id") && <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Owner</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {visible.length === 0 ? (
                     <tr>
-                      <td colSpan={isVisible("assigned_user_id") ? 14 : 13} className="px-5 py-16 text-center">
+                      <td colSpan={tableColSpan} className="px-5 py-16 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
                             <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -448,7 +453,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                               : <span className="text-gray-300">—</span>}
                           </td>
                           <td className="px-4 py-3.5 text-gray-500 text-xs whitespace-nowrap">{c.createdAt ? formatDate(c.createdAt) : "—"}</td>
-                          <td className="px-4 py-3.5 text-gray-600">{c.country?.name ?? <span className="text-gray-300">—</span>}</td>
+                          {isVisible("country_code") && <td className="px-4 py-3.5 text-gray-600">{c.country?.name ?? <span className="text-gray-300">—</span>}</td>}
                           <td className="px-4 py-3.5 text-gray-600">{c.email ?? <span className="text-gray-300">—</span>}</td>
                           <td className="px-4 py-3.5">
                             <span className={`inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-semibold ${c.whatsappOptOut ? "bg-red-50 text-red-600 ring-1 ring-red-200" : "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200"}`}>
@@ -470,18 +475,20 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                           <td className="px-4 py-3.5">
                             <ContactTrustBadge contactId={c.id} lazy />
                           </td>
-                          <td className="px-4 py-3.5">
-                            {c.tags && c.tags.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {c.tags.slice(0, 3).map((tag) => (
-                                  <span key={tag} className="inline-flex items-center h-5 px-2 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600">{tag}</span>
-                                ))}
-                                {c.tags.length > 3 && (
-                                  <span className="inline-flex items-center h-5 px-2 rounded-full text-[11px] font-medium bg-gray-100 text-gray-400">+{c.tags.length - 3}</span>
-                                )}
-                              </div>
-                            ) : <span className="text-gray-300">—</span>}
-                          </td>
+                          {isVisible("tags") && (
+                            <td className="px-4 py-3.5">
+                              {c.tags && c.tags.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {c.tags.slice(0, 3).map((tag) => (
+                                    <span key={tag} className="inline-flex items-center h-5 px-2 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600">{tag}</span>
+                                  ))}
+                                  {c.tags.length > 3 && (
+                                    <span className="inline-flex items-center h-5 px-2 rounded-full text-[11px] font-medium bg-gray-100 text-gray-400">+{c.tags.length - 3}</span>
+                                  )}
+                                </div>
+                              ) : <span className="text-gray-300">—</span>}
+                            </td>
+                          )}
                           {isVisible("assigned_user_id") && (
                             <td className="px-4 py-3.5">
                               {c.assignedUser ? (
@@ -493,7 +500,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
 
                         isExpanded && (
                           <tr key={`${c.id}-exp`} className="border-b border-gray-100 bg-gray-50/40">
-                            <td colSpan={isVisible("assigned_user_id") ? 14 : 13} className="px-6 py-4">
+                            <td colSpan={tableColSpan} className="px-6 py-4">
                               <div className="flex items-start gap-8">
                                 {/* Contact identity */}
                                 <div className="flex items-center gap-3 shrink-0">
