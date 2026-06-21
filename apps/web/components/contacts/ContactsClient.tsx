@@ -100,6 +100,20 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
     staleTime: 60_000,
   });
 
+  const { data: hiddenFields = [] } = useQuery<string[]>({
+    queryKey: ["org-contact-field-visibility"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/organizations/me`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+      if (!res.ok) return [];
+      const json = (await res.json()) as { data?: { settings?: { contactConfig?: { hiddenFields?: string[] } } } };
+      return json.data?.settings?.contactConfig?.hiddenFields ?? [];
+    },
+    staleTime: 30_000,
+  });
+
+  function isVisible(key: string): boolean { return !hiddenFields.includes(key); }
+
   const search = useCallback(async (q: string) => {
     const token = await getToken();
     if (!token) return;
@@ -372,13 +386,13 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                     <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Status</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Trust</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Tags</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Owner</th>
+                    {isVisible("assigned_user_id") && <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Owner</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {visible.length === 0 ? (
                     <tr>
-                      <td colSpan={14} className="px-5 py-16 text-center">
+                      <td colSpan={isVisible("assigned_user_id") ? 14 : 13} className="px-5 py-16 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
                             <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -468,16 +482,18 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                               </div>
                             ) : <span className="text-gray-300">—</span>}
                           </td>
-                          <td className="px-4 py-3.5">
-                            {c.assignedUser ? (
-                              <span className="text-sm text-gray-700">{c.assignedUser.fullName}</span>
-                            ) : <span className="text-gray-300">—</span>}
-                          </td>
+                          {isVisible("assigned_user_id") && (
+                            <td className="px-4 py-3.5">
+                              {c.assignedUser ? (
+                                <span className="text-sm text-gray-700">{c.assignedUser.fullName}</span>
+                              ) : <span className="text-gray-300">—</span>}
+                            </td>
+                          )}
                         </tr>,
 
                         isExpanded && (
                           <tr key={`${c.id}-exp`} className="border-b border-gray-100 bg-gray-50/40">
-                            <td colSpan={14} className="px-6 py-4">
+                            <td colSpan={isVisible("assigned_user_id") ? 14 : 13} className="px-6 py-4">
                               <div className="flex items-start gap-8">
                                 {/* Contact identity */}
                                 <div className="flex items-center gap-3 shrink-0">
@@ -542,34 +558,36 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                     Delete
                                   </button>
-                                  <div className="relative" ref={assignPopoverId === c.id ? assignPopoverRef : undefined}>
-                                    <button
-                                      onClick={() => setAssignPopoverId((prev) => prev === c.id ? null : c.id)}
-                                      className="flex items-center gap-1.5 h-8 px-3 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all shadow-sm"
-                                    >
-                                      <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                                      Assign
-                                    </button>
-                                    {assignPopoverId === c.id && (
-                                      <div className="absolute bottom-full mb-1 left-0 z-30 w-48 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-                                        <button
-                                          onClick={() => void handleQuickAssign(c.id, null)}
-                                          className="w-full text-left px-3 py-2 text-xs text-gray-500 hover:bg-gray-50"
-                                        >
-                                          — Unassign
-                                        </button>
-                                        {orgUsers.map((u) => (
+                                  {isVisible("assigned_user_id") && (
+                                    <div className="relative" ref={assignPopoverId === c.id ? assignPopoverRef : undefined}>
+                                      <button
+                                        onClick={() => setAssignPopoverId((prev) => prev === c.id ? null : c.id)}
+                                        className="flex items-center gap-1.5 h-8 px-3 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all shadow-sm"
+                                      >
+                                        <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                        Assign
+                                      </button>
+                                      {assignPopoverId === c.id && (
+                                        <div className="absolute bottom-full mb-1 left-0 z-30 w-48 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
                                           <button
-                                            key={u.id}
-                                            onClick={() => void handleQuickAssign(c.id, u.id)}
-                                            className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${c.assignedUser?.id === u.id ? "font-semibold text-brand-700 bg-brand-50" : "text-gray-800"}`}
+                                            onClick={() => void handleQuickAssign(c.id, null)}
+                                            className="w-full text-left px-3 py-2 text-xs text-gray-500 hover:bg-gray-50"
                                           >
-                                            {u.fullName}
+                                            — Unassign
                                           </button>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
+                                          {orgUsers.map((u) => (
+                                            <button
+                                              key={u.id}
+                                              onClick={() => void handleQuickAssign(c.id, u.id)}
+                                              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${c.assignedUser?.id === u.id ? "font-semibold text-brand-700 bg-brand-50" : "text-gray-800"}`}
+                                            >
+                                              {u.fullName}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </td>

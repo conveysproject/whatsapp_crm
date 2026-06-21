@@ -91,6 +91,22 @@ export function ContactDetailSidebar({ contact, onAssigned }: Props): JSX.Elemen
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: hiddenFields = [] } = useQuery<string[]>({
+    queryKey: ["org-contact-field-visibility"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/organizations/me`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (!res.ok) return [];
+      const json = (await res.json()) as { data?: { settings?: { contactConfig?: { hiddenFields?: string[] } } } };
+      return json.data?.settings?.contactConfig?.hiddenFields ?? [];
+    },
+    staleTime: 30_000,
+  });
+
+  function isVisible(key: string): boolean { return !hiddenFields.includes(key); }
+
   const countryName = countries.find((c) => c.id === contact.countryId)?.name ?? null;
   const languageLabel = LANGUAGES.find((l) => l.code === contact.languageCode)?.label ?? null;
   const assignee = users.find((u) => u.id === assignedId);
@@ -144,29 +160,37 @@ export function ContactDetailSidebar({ contact, onAssigned }: Props): JSX.Elemen
           <span className="text-sm font-mono text-gray-900">+{contact.phoneNumber}</span>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <span className={labelCls}>Email</span>
-          {contact.email ? (
-            <span className={valueCls}>{contact.email}</span>
-          ) : emptyDash}
-        </div>
+        {isVisible("email") && (
+          <div className="flex flex-col gap-1">
+            <span className={labelCls}>Email</span>
+            {contact.email ? (
+              <span className={valueCls}>{contact.email}</span>
+            ) : emptyDash}
+          </div>
+        )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1">
-            <span className={labelCls}>Country</span>
-            {loadingCountries ? (
-              <FieldSkeleton />
-            ) : countryName ? (
-              <span className={valueCls}>{countryName}</span>
-            ) : emptyDash}
+        {(isVisible("country_code") || isVisible("language_code")) && (
+          <div className="grid grid-cols-2 gap-3">
+            {isVisible("country_code") && (
+              <div className="flex flex-col gap-1">
+                <span className={labelCls}>Country</span>
+                {loadingCountries ? (
+                  <FieldSkeleton />
+                ) : countryName ? (
+                  <span className={valueCls}>{countryName}</span>
+                ) : emptyDash}
+              </div>
+            )}
+            {isVisible("language_code") && (
+              <div className="flex flex-col gap-1">
+                <span className={labelCls}>Language</span>
+                {languageLabel ? (
+                  <span className={valueCls}>{languageLabel}</span>
+                ) : emptyDash}
+              </div>
+            )}
           </div>
-          <div className="flex flex-col gap-1">
-            <span className={labelCls}>Language</span>
-            {languageLabel ? (
-              <span className={valueCls}>{languageLabel}</span>
-            ) : emptyDash}
-          </div>
-        </div>
+        )}
       </div>
 
       {/* ── Status & Tags ────────────────────────────────────── */}
@@ -215,24 +239,26 @@ export function ContactDetailSidebar({ contact, onAssigned }: Props): JSX.Elemen
       </div>
 
       {/* ── Assignee ─────────────────────────────────────────── */}
-      <SectionHeader title="Assignee" />
-      <div className="pb-3">
-        {loadingUsers ? (
-          <FieldSkeleton />
-        ) : (
-          <select
-            value={assignedId ?? ""}
-            onChange={(e) => { void handleAssign(e.target.value || null); }}
-            disabled={assigning}
-            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50"
-          >
-            <option value="">— Unassigned —</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.fullName ?? u.email}</option>
-            ))}
-          </select>
-        )}
-      </div>
+      {isVisible("assigned_user_id") && <SectionHeader title="Assignee" />}
+      {isVisible("assigned_user_id") && (
+        <div className="pb-3">
+          {loadingUsers ? (
+            <FieldSkeleton />
+          ) : (
+            <select
+              value={assignedId ?? ""}
+              onChange={(e) => { void handleAssign(e.target.value || null); }}
+              disabled={assigning}
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50"
+            >
+              <option value="">— Unassigned —</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.fullName ?? u.email}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
 
       {/* ── Settings ─────────────────────────────────────────── */}
       <SectionHeader title="Settings" />
