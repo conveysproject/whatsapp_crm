@@ -436,6 +436,8 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       contactPhone: contact.phoneNumber,
       contactId: contact.id,
     });
+    void applyAssignmentRules(fastify.prisma, organizationId, contact.id, "contact_created")
+      .catch((err: unknown) => request.log.error({ err }, "assignment contact_created failed"));
     return reply.status(201).send({ data: contact });
   });
 
