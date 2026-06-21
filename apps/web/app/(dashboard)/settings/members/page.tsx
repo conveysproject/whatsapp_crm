@@ -33,6 +33,8 @@ export default function MembersPage(): JSX.Element {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "manager" | "agent" | "viewer">("agent");
   const [inviting, setInviting] = useState(false);
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data } = useQuery<{ data: Member[] }>({
@@ -59,16 +61,24 @@ export default function MembersPage(): JSX.Element {
   async function sendInvite(e: React.FormEvent) {
     e.preventDefault();
     setInviting(true);
+    setInviteError(null);
     try {
       const token = await getToken();
-      await fetch(`${API_URL}/v1/invitations`, {
+      const res = await fetch(`${API_URL}/v1/invitations`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
       });
+      if (!res.ok) {
+        const json = await res.json() as { error?: { message?: string } };
+        setInviteError(json.error?.message ?? "Failed to send invitation.");
+        return;
+      }
       setInviteOpen(false);
       setInviteEmail("");
       setInviteRole("agent");
+      setInviteSuccess(`Invitation sent to ${inviteEmail}`);
+      setTimeout(() => setInviteSuccess(null), 4000);
     } finally {
       setInviting(false);
     }
@@ -81,6 +91,16 @@ export default function MembersPage(): JSX.Element {
 
   return (
     <div className="space-y-6">
+      {/* Success toast */}
+      {inviteSuccess && (
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-3 bg-emerald-600 text-white text-sm font-medium px-4 py-3 rounded-xl shadow-lg">
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          {inviteSuccess}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
@@ -198,6 +218,14 @@ export default function MembersPage(): JSX.Element {
               </button>
             </div>
             <form onSubmit={(e) => void sendInvite(e)} className="space-y-4">
+              {inviteError && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-sm px-3 py-2 rounded-lg">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {inviteError}
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <input
