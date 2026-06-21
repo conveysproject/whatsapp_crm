@@ -68,7 +68,9 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
             </p>
           </div>
         `,
-      }).catch((err: unknown) => fastify.log.warn({ err }, "Failed to send invitation email"));
+      }).then(() => {
+        fastify.log.info({ to: invitation.email }, "Invitation email sent");
+      }).catch((err: unknown) => fastify.log.error({ err, to: invitation.email }, "Failed to send invitation email"));
 
       return reply.status(201).send({ data: invitation });
     }
