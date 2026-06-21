@@ -12,6 +12,7 @@ const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 interface Country { id: number; name: string; isoCode: string | null; phoneCode: number | null }
 interface ContactGroup { id: string; title: string }
+interface OrgUser { id: string; fullName: string }
 interface CustomField {
   id: string;
   inputName: string;
@@ -58,6 +59,7 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
     groupIds: contact?.groupIds ?? ([] as string[]),
     whatsappOptOut: contact?.whatsappOptOut ?? false,
     disableBot: contact?.disableBot ?? false,
+    assignedUserId: contact?.assignedUserId ?? "",
   });
   const [tags, setTags] = useState<string[]>(contact?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
@@ -107,6 +109,39 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
     },
     enabled: open,
   });
+
+  const { data: orgUsers = [] } = useQuery<OrgUser[]>({
+    queryKey: ["org-users"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/users`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (!res.ok) return [];
+      return (await res.json() as { data: OrgUser[] }).data;
+    },
+    enabled: open,
+    staleTime: 60_000,
+  });
+
+  const { data: hiddenFields = [] } = useQuery<string[]>({
+    queryKey: ["org-contact-field-visibility"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/organizations/me`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (!res.ok) return [];
+      const json = (await res.json()) as { data?: { settings?: { contactConfig?: { hiddenFields?: string[] } } } };
+      return json.data?.settings?.contactConfig?.hiddenFields ?? [];
+    },
+    enabled: open,
+    staleTime: 30_000,
+  });
+
+  function isVisible(key: string): boolean {
+    return !hiddenFields.includes(key);
+  }
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -172,6 +207,7 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
         groupIds: form.groupIds,
         whatsappOptOut: form.whatsappOptOut,
         disableBot: form.disableBot,
+        assignedUserId: form.assignedUserId || null,
       };
       const hasCustom = Object.values(customFieldValues).some((v) => v.trim());
       if (hasCustom) {
@@ -265,49 +301,57 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-500">Email</label>
-                <input
-                  type="email"
-                  className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-colors"
-                  placeholder="email@example.com"
-                  value={form.email}
-                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+              {isVisible("email") && (
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-gray-500">Country</label>
-                  {loadingCountries ? (
-                    <FieldSkeleton />
-                  ) : (
-                    <select
-                      className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-colors"
-                      value={form.countryId}
-                      onChange={(e) => setForm((f) => ({ ...f, countryId: e.target.value }))}
-                    >
-                      <option value="">Select country</option>
-                      {(countries ?? []).map((c) => (
-                        <option key={c.id} value={String(c.id)}>{c.name}</option>
-                      ))}
-                    </select>
+                  <label className="text-xs font-medium text-gray-500">Email</label>
+                  <input
+                    type="email"
+                    className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-colors"
+                    placeholder="email@example.com"
+                    value={form.email}
+                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  />
+                </div>
+              )}
+
+              {(isVisible("country_code") || isVisible("language_code")) && (
+                <div className="grid grid-cols-2 gap-3">
+                  {isVisible("country_code") && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-gray-500">Country</label>
+                      {loadingCountries ? (
+                        <FieldSkeleton />
+                      ) : (
+                        <select
+                          className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-colors"
+                          value={form.countryId}
+                          onChange={(e) => setForm((f) => ({ ...f, countryId: e.target.value }))}
+                        >
+                          <option value="">Select country</option>
+                          {(countries ?? []).map((c) => (
+                            <option key={c.id} value={String(c.id)}>{c.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+                  {isVisible("language_code") && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-gray-500">Language</label>
+                      <select
+                        className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-colors"
+                        value={form.languageCode}
+                        onChange={(e) => setForm((f) => ({ ...f, languageCode: e.target.value }))}
+                      >
+                        <option value="">Select language</option>
+                        {LANGUAGES.map((l) => (
+                          <option key={l.code} value={l.code}>{l.label}</option>
+                        ))}
+                      </select>
+                    </div>
                   )}
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-gray-500">Language</label>
-                  <select
-                    className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-colors"
-                    value={form.languageCode}
-                    onChange={(e) => setForm((f) => ({ ...f, languageCode: e.target.value }))}
-                  >
-                    <option value="">Select language</option>
-                    {LANGUAGES.map((l) => (
-                      <option key={l.code} value={l.code}>{l.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* ── Status ────────────────────────────────────── */}
@@ -327,29 +371,47 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
                 </select>
               </div>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-500">Tags</label>
-                <div className="min-h-[38px] rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 flex flex-wrap gap-1.5 items-center focus-within:ring-2 focus-within:ring-brand-500 focus-within:bg-white transition-colors cursor-text">
-                  {tags.map((tag) => (
-                    <span key={tag} className="inline-flex items-center gap-1 bg-gray-200 text-gray-700 rounded-full text-xs px-2 py-0.5 shrink-0">
-                      {tag}
-                      <button type="button" onClick={() => removeTag(tag)} className="hover:text-red-500 leading-none ml-0.5">&times;</button>
-                    </span>
-                  ))}
-                  <input
-                    className="flex-1 min-w-[80px] text-sm bg-transparent outline-none placeholder-gray-400"
-                    placeholder={tags.length === 0 ? "Add tag…" : ""}
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(tagInput); }
-                      if (e.key === "Backspace" && !tagInput && tags.length > 0) removeTag(tags[tags.length - 1]!);
-                    }}
-                    onBlur={() => { if (tagInput.trim()) addTag(tagInput); }}
-                  />
+              {isVisible("assigned_user_id") && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-gray-500">Account Owner</label>
+                  <select
+                    className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-colors"
+                    value={form.assignedUserId}
+                    onChange={(e) => setForm((f) => ({ ...f, assignedUserId: e.target.value }))}
+                  >
+                    <option value="">— Unassigned —</option>
+                    {orgUsers.map((u) => (
+                      <option key={u.id} value={u.id}>{u.fullName}</option>
+                    ))}
+                  </select>
                 </div>
-                <p className="text-xs text-gray-400">Press Enter or comma to add a tag</p>
-              </div>
+              )}
+
+              {isVisible("tags") && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-gray-500">Tags</label>
+                  <div className="min-h-[38px] rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 flex flex-wrap gap-1.5 items-center focus-within:ring-2 focus-within:ring-brand-500 focus-within:bg-white transition-colors cursor-text">
+                    {tags.map((tag) => (
+                      <span key={tag} className="inline-flex items-center gap-1 bg-gray-200 text-gray-700 rounded-full text-xs px-2 py-0.5 shrink-0">
+                        {tag}
+                        <button type="button" onClick={() => removeTag(tag)} className="hover:text-red-500 leading-none ml-0.5">&times;</button>
+                      </span>
+                    ))}
+                    <input
+                      className="flex-1 min-w-[80px] text-sm bg-transparent outline-none placeholder-gray-400"
+                      placeholder={tags.length === 0 ? "Add tag…" : ""}
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(tagInput); }
+                        if (e.key === "Backspace" && !tagInput && tags.length > 0) removeTag(tags[tags.length - 1]!);
+                      }}
+                      onBlur={() => { if (tagInput.trim()) addTag(tagInput); }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400">Press Enter or comma to add a tag</p>
+                </div>
+              )}
             </div>
 
             {/* ── Groups & Settings ────────────────────────────── */}
@@ -417,16 +479,20 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
                 </div>
               ) : null}
 
-              <Toggle
-                checked={form.whatsappOptOut}
-                onChange={(v) => setForm((f) => ({ ...f, whatsappOptOut: v }))}
-                label="Opt out Marketing Messages"
-              />
-              <Toggle
-                checked={!form.disableBot}
-                onChange={(v) => setForm((f) => ({ ...f, disableBot: !v }))}
-                label="Enable Reply Bot"
-              />
+              {isVisible("whatsapp_opt_out") && (
+                <Toggle
+                  checked={form.whatsappOptOut}
+                  onChange={(v) => setForm((f) => ({ ...f, whatsappOptOut: v }))}
+                  label="Opt out Marketing Messages"
+                />
+              )}
+              {isVisible("disable_bot") && (
+                <Toggle
+                  checked={!form.disableBot}
+                  onChange={(v) => setForm((f) => ({ ...f, disableBot: !v }))}
+                  label="Enable Reply Bot"
+                />
+              )}
             </div>
 
             {/* ── Custom Fields ────────────────────────────────── */}

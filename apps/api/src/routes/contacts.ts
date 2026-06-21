@@ -104,6 +104,7 @@ interface ContactPatchBody {
   disableBot?: boolean;
   groupIds?: string[];
   notes?: string;
+  assignedUserId?: string | null;
 }
 
 export const contactsRouter: FastifyPluginAsync = async (fastify) => {
@@ -305,15 +306,31 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       orderBy: { id: "asc" },
     });
 
+    // Attach assignedUser name via manual join (no FK relation in schema)
+    const assignedIds = [...new Set(contacts.map((c) => c.assignedUserId).filter(Boolean))] as string[];
+    const userMap = new Map<string, { id: string; fullName: string }>();
+    if (assignedIds.length > 0) {
+      const users = await fastify.prisma.user.findMany({
+        where: { id: { in: assignedIds } },
+        select: { id: true, fullName: true },
+      });
+      for (const u of users) userMap.set(u.id, u);
+    }
+
+    const withOwner = contacts.map((c) => ({
+      ...c,
+      assignedUser: c.assignedUserId ? (userMap.get(c.assignedUserId) ?? null) : null,
+    }));
+
     const hidePhone = permissions["hide_contact_phone_numbers"] === "allow";
     const hideEmail = permissions["hide_contact_emails"] === "allow";
     const masked = (hidePhone || hideEmail)
-      ? contacts.map((c) => ({
+      ? withOwner.map((c) => ({
           ...c,
           phoneNumber: hidePhone ? maskPhone(c.phoneNumber) : c.phoneNumber,
           email: hideEmail && c.email ? maskEmail(c.email) : c.email,
         }))
-      : contacts;
+      : withOwner;
 
     return reply.send(paginate(masked, limit));
   });
@@ -331,6 +348,9 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     if (!contact) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
     }
+    const assignedUser = contact.assignedUserId
+      ? await fastify.prisma.user.findFirst({ where: { id: contact.assignedUserId }, select: { id: true, fullName: true, email: true } })
+      : null;
     const hidePhone = permissions["hide_contact_phone_numbers"] === "allow";
     const hideEmail = permissions["hide_contact_emails"] === "allow";
     const data = {
@@ -338,6 +358,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       phoneNumber: hidePhone ? maskPhone(contact.phoneNumber) : contact.phoneNumber,
       email: hideEmail && contact.email ? maskEmail(contact.email) : contact.email,
       groupIds: contact.groupContacts.map((g) => g.contactGroupId),
+      assignedUser,
     };
     return reply.send({ data });
   });
@@ -458,6 +479,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           ...(request.body.whatsappOptOut !== undefined ? { whatsappOptOut: request.body.whatsappOptOut } : {}),
           ...(request.body.disableBot !== undefined ? { disableBot: request.body.disableBot } : {}),
           ...(request.body.notes !== undefined ? { notes: request.body.notes } : {}),
+          ...("assignedUserId" in request.body ? { assignedUserId: request.body.assignedUserId ?? null } : {}),
         },
       });
 

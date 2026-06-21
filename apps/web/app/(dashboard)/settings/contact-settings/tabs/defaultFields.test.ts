@@ -6,11 +6,12 @@ describe("DEFAULT_FIELDS", () => {
     expect(DEFAULT_FIELDS).toHaveLength(19);
   });
 
-  it("includes core fields with correct keys and types", () => {
+  it("includes core fields with correct keys, types and toggleable flags", () => {
     const byKey = Object.fromEntries(DEFAULT_FIELDS.map((f) => [f.key, f]));
-    expect(byKey["phone_number"]).toEqual({ label: "Phone Number", key: "phone_number", type: "Number" });
-    expect(byKey["lead_status_id"]).toEqual({ label: "Lead Status", key: "lead_status_id", type: "Selection List" });
-    expect(byKey["email"]).toEqual({ label: "Email", key: "email", type: "Email" });
+    expect(byKey["phone_number"]).toEqual({ label: "Phone Number", key: "phone_number", type: "Number", toggleable: false });
+    expect(byKey["lead_status_id"]).toEqual({ label: "Lead Status", key: "lead_status_id", type: "Selection List", toggleable: false });
+    expect(byKey["email"]).toEqual({ label: "Email", key: "email", type: "Email", toggleable: true });
+    expect(byKey["assigned_user_id"]).toEqual({ label: "Account Owner", key: "assigned_user_id", type: "Selection List", toggleable: true });
   });
 
   it("excludes confidential / internal database fields", () => {

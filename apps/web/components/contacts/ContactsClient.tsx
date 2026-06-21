@@ -16,6 +16,7 @@ const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 interface ContactWithLabels extends Contact {
   tags?: string[];
   leadStatus?: { id: string; name: string; color: string } | null;
+  assignedUser?: { id: string; fullName: string } | null;
 }
 
 interface Props {
@@ -334,12 +335,13 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                     <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Status</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Trust</th>
                     <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest">Tags</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Owner</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visible.length === 0 ? (
                     <tr>
-                      <td colSpan={13} className="px-5 py-16 text-center">
+                      <td colSpan={14} className="px-5 py-16 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
                             <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -429,11 +431,16 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                               </div>
                             ) : <span className="text-gray-300">—</span>}
                           </td>
+                          <td className="px-4 py-3.5">
+                            {c.assignedUser ? (
+                              <span className="text-sm text-gray-700">{c.assignedUser.fullName}</span>
+                            ) : <span className="text-gray-300">—</span>}
+                          </td>
                         </tr>,
 
                         isExpanded && (
                           <tr key={`${c.id}-exp`} className="border-b border-gray-100 bg-gray-50/40">
-                            <td colSpan={13} className="px-6 py-4">
+                            <td colSpan={14} className="px-6 py-4">
                               <div className="flex items-start gap-8">
                                 {/* Contact identity */}
                                 <div className="flex items-center gap-3 shrink-0">

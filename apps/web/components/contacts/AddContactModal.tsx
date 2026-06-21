@@ -36,6 +36,7 @@ export interface EditableContact {
   disableBot: boolean;
   groupIds: string[];
   customFields?: Record<string, string> | null;
+  assignedUserId?: string | null;
 }
 
 interface Props {
