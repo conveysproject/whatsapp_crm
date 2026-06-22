@@ -8,7 +8,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } 
 import { CSS } from "@dnd-kit/utilities";
 import StatusSlideOver, { type StatusDraft } from "./StatusSlideOver";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { canAccess } from "@/lib/can";
+import { canAccessSub } from "@/lib/can";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -23,7 +23,7 @@ interface LeadStatus {
 export default function LeadStatusesTab(): JSX.Element {
   const { getToken } = useAuth();
   const { user } = useCurrentUser();
-  const canManage = canAccess(user, "manage_contacts");
+  const canManage = canAccessSub(user, "contacts_access", "contacts_manage_custom_fields");
   const qc = useQueryClient();
   const [editing, setEditing] = useState<StatusDraft | null | undefined>(undefined); // undefined=closed, null=add, draft=edit
   const [error, setError] = useState<string | null>(null);

@@ -10,7 +10,7 @@ import { TeamTab } from "./TeamTab";
 import { CampaignsTab } from "./CampaignsTab";
 import { PredictiveTab } from "./PredictiveTab";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { isManagerOrAbove } from "@/lib/can";
+import { canAccessSub } from "@/lib/can";
 
 type Tab = "overview" | "conversations" | "team" | "campaigns" | "predictive";
 
@@ -28,7 +28,7 @@ export function AnalyticsShell(): JSX.Element {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user } = useCurrentUser();
-  const canViewTeam = isManagerOrAbove(user);
+  const canViewTeam = canAccessSub(user, "analytics_access", "analytics_agent_performance");
 
   const rawTab = searchParams.get("tab") ?? "overview";
   const tab: Tab = (["overview", "conversations", "team", "campaigns", "predictive"].includes(rawTab)

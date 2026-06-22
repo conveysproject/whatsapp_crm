@@ -4,7 +4,7 @@ import { JSX, useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { canAccess } from "@/lib/can";
+import { canAccessSub } from "@/lib/can";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -103,7 +103,7 @@ function Toggle({
 export default function CustomFieldsManager(): JSX.Element {
   const { getToken } = useAuth();
   const { user } = useCurrentUser();
-  const canManage = canAccess(user, "manage_contacts");
+  const canManage = canAccessSub(user, "contacts_access", "contacts_manage_custom_fields");
   const queryClient = useQueryClient();
 
   // undefined = modal closed, null = add mode, CustomField = edit mode

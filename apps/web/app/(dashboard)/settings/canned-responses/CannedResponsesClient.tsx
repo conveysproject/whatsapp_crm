@@ -4,7 +4,7 @@ import { JSX, useState, useTransition } from "react";
 import type { CannedResponse } from "./page";
 import { MediaAssetPicker, type MediaAsset } from "@/components/media-asset-picker";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { canAccess } from "@/lib/can";
+import { canAccessSub } from "@/lib/can";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -27,7 +27,7 @@ async function apiFetch(path: string, method: string, body?: unknown) {
 
 export function CannedResponsesClient({ initialItems }: Props): JSX.Element {
   const { user } = useCurrentUser();
-  const canManage = canAccess(user, "manage_bot_replies");
+  const canManage = canAccessSub(user, "automation_access", "automation_bot_replies");
   const [items, setItems] = useState<CannedResponse[]>(initialItems);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);

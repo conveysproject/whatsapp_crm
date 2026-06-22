@@ -27,7 +27,7 @@ type ModalState =
 export default function ContactGroupsPage(): JSX.Element {
   const { getToken } = useAuth();
   const { user } = useCurrentUser();
-  const canManage = canAccess(user, "manage_contacts");
+  const canManage = canAccess(user, "contacts_access");
   const qc = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");

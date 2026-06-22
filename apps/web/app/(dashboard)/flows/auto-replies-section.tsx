@@ -3,7 +3,7 @@
 import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { canAccess } from "@/lib/can";
+import { canAccessSub } from "@/lib/can";
 
 interface AutoReply {
   id: string;
@@ -45,7 +45,7 @@ const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 export function AutoRepliesSection(): JSX.Element {
   const { getToken } = useAuth();
   const { user } = useCurrentUser();
-  const canManage = canAccess(user, "manage_bot_replies");
+  const canManage = canAccessSub(user, "automation_access", "automation_bot_replies");
   const [replies, setReplies] = useState<AutoReply[]>([]);
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState<{ open: boolean; editing: AutoReply | null }>({ open: false, editing: null });

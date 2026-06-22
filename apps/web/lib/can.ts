@@ -28,3 +28,20 @@ export function isAdmin(user: CurrentUser | null | undefined): boolean {
 export function isManagerOrAbove(user: CurrentUser | null | undefined): boolean {
   return ["admin", "superAdmin", "manager"].includes(user?.role ?? "");
 }
+
+/**
+ * Checks parent permission AND explicit sub-permission.
+ * Both must be "allow". Admin/superAdmin bypass. Empty permissions = open (backwards compat).
+ */
+export function canAccessSub(
+  user: CurrentUser | null | undefined,
+  parentKey: string,
+  subKey: string
+): boolean {
+  if (!user) return false;
+  if (user.role === "admin" || user.role === "superAdmin") return true;
+  const keys = Object.keys(user.permissions);
+  if (keys.length === 0) return true;
+  if (user.permissions[parentKey] !== "allow") return false;
+  return user.permissions[`${parentKey}@${subKey}`] === "allow";
+}

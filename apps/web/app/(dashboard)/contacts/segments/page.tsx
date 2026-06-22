@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { canAccess } from "@/lib/can";
+import { canAccessSub } from "@/lib/can";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -21,7 +21,7 @@ interface Segment {
 export default function SegmentsPage(): JSX.Element {
   const { getToken } = useAuth();
   const { user } = useCurrentUser();
-  const canManage = canAccess(user, "manage_contacts");
+  const canManage = canAccessSub(user, "campaigns_access", "campaigns_manage_segments");
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
