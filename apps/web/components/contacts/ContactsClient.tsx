@@ -69,6 +69,7 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
   const canDelete = canAccessSub(user, "contacts_access", "contacts_delete");
   const canExport = canAccessSub(user, "contacts_access", "contacts_export");
   const canImport = canAccessSub(user, "contacts_access", "contacts_import");
+  const canBulkTag = canAccessSub(user, "contacts_access", "contacts_bulk_tag");
   const { getToken } = useAuth();
   const [contacts, setContacts] = useState<ContactWithLabels[]>(initialContacts);
   const [query, setQuery] = useState("");
@@ -339,13 +340,13 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
               </button>
               )}
               {canAdd && (
-                <button
-                  onClick={() => setShowAddDrawer(true)}
-                  className="flex items-center gap-1.5 h-9 px-4 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-all shadow-sm"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                  New Contact
-                </button>
+              <button
+                onClick={() => setShowAddDrawer(true)}
+                className="flex items-center gap-1.5 h-9 px-4 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-all shadow-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                New Contact
+              </button>
               )}
             </div>
           </div>
@@ -668,6 +669,14 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-gray-700">
           <span className="text-sm font-semibold">{selectedIds.size} selected</span>
           <div className="w-px h-4 bg-gray-600" />
+          {canBulkTag && (
+            <button
+              className="flex items-center gap-1.5 text-sm font-medium text-brand-300 hover:text-brand-200 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+              Tag selected
+            </button>
+          )}
           {canDelete && (
             <button
               onClick={() => void handleBulkDelete()}

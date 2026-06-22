@@ -8,15 +8,20 @@ import { FlowListActions } from "./flow-list-actions";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
-async function getUserRole(token: string): Promise<string> {
+interface UserData {
+  role: string;
+  permissions?: Record<string, string>;
+}
+
+async function getUserData(token: string): Promise<UserData> {
   try {
     const res = await fetch(`${API_URL}/v1/users/me`, {
       headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
     });
-    if (!res.ok) return "agent";
-    const json = await res.json() as { data?: { role?: string } };
-    return json.data?.role ?? "agent";
-  } catch { return "agent"; }
+    if (!res.ok) return { role: "agent" };
+    const json = await res.json() as { data?: { role?: string; permissions?: Record<string, string> } };
+    return { role: json.data?.role ?? "agent", permissions: json.data?.permissions };
+  } catch { return { role: "agent" }; }
 }
 
 interface Flow {
@@ -56,8 +61,11 @@ const TRIGGER_LABELS: Record<string, string> = {
 export default async function FlowsPage(): Promise<JSX.Element> {
   const { getToken } = await auth.protect();
   const token = await getToken() ?? "";
-  const [flows, userRole] = await Promise.all([getFlows(token), getUserRole(token)]);
-  const canManage = ["admin", "superAdmin", "manager"].includes(userRole);
+  const [flows, { role, permissions }] = await Promise.all([getFlows(token), getUserData(token)]);
+  const canManage =
+    role === "admin" || role === "superAdmin" || role === "manager" ||
+    (permissions?.["automation_access"] === "allow" &&
+     permissions?.["automation_access@automation_bot_flows"] === "allow");
 
   return (
     <div className="space-y-8">

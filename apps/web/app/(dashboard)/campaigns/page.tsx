@@ -53,7 +53,7 @@ export default function CampaignsPage(): JSX.Element {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const { user } = useCurrentUser();
-  const canManage = canAccess(user, "manage_campaigns");
+  const canManage = canAccess(user, "campaigns_access");
 
   const { data: campaigns = [], isLoading } = useQuery<Campaign[]>({
     queryKey: ["campaigns"],
