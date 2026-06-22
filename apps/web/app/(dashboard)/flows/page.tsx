@@ -6,6 +6,24 @@ import { Button } from "@/components/ui/Button";
 import { AutoRepliesSection } from "./auto-replies-section";
 import { FlowListActions } from "./flow-list-actions";
 
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+
+interface UserData {
+  role: string;
+  permissions?: Record<string, string>;
+}
+
+async function getUserData(token: string): Promise<UserData> {
+  try {
+    const res = await fetch(`${API_URL}/v1/users/me`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+    });
+    if (!res.ok) return { role: "agent" };
+    const json = await res.json() as { data?: { role?: string; permissions?: Record<string, string> } };
+    return { role: json.data?.role ?? "agent", permissions: json.data?.permissions };
+  } catch { return { role: "agent" }; }
+}
+
 interface Flow {
   id: string;
   name: string;
@@ -42,7 +60,12 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 export default async function FlowsPage(): Promise<JSX.Element> {
   const { getToken } = await auth.protect();
-  const flows = await getFlows(await getToken() ?? "");
+  const token = await getToken() ?? "";
+  const [flows, { role, permissions }] = await Promise.all([getFlows(token), getUserData(token)]);
+  const canManage =
+    role === "admin" || role === "superAdmin" || role === "manager" ||
+    (permissions?.["automation_access"] === "allow" &&
+     permissions?.["automation_access@automation_bot_flows"] === "allow");
 
   return (
     <div className="space-y-8">
@@ -53,9 +76,11 @@ export default async function FlowsPage(): Promise<JSX.Element> {
             {flows.length} flow{flows.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Link href="/flows/new">
-          <Button>+ New Flow</Button>
-        </Link>
+        {canManage && (
+          <Link href="/flows/new">
+            <Button>+ New Flow</Button>
+          </Link>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-card overflow-hidden">
@@ -63,9 +88,11 @@ export default async function FlowsPage(): Promise<JSX.Element> {
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <span className="text-5xl">🔁</span>
             <p className="text-gray-500 text-sm">No flows yet. Create your first automation.</p>
-            <Link href="/flows/new">
-              <Button size="sm">+ New Flow</Button>
-            </Link>
+            {canManage && (
+              <Link href="/flows/new">
+                <Button size="sm">+ New Flow</Button>
+              </Link>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -93,7 +120,7 @@ export default async function FlowsPage(): Promise<JSX.Element> {
                   <Badge variant={f.isActive ? "green" : "gray"}>
                     {f.isActive ? "Active" : "Inactive"}
                   </Badge>
-                  <FlowListActions flowId={f.id} flowName={f.name} />
+                  {canManage && <FlowListActions flowId={f.id} flowName={f.name} />}
                 </div>
               </div>
             ))}
