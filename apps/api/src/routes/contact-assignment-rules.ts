@@ -12,7 +12,7 @@ interface RuleBody {
 }
 
 function forbidden(): { error: { code: string; message: string } } {
-  return { error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } };
+  return { error: { code: "FORBIDDEN", message: "Permission required: contacts_access" } };
 }
 
 async function assigneeValid(
@@ -39,7 +39,7 @@ export const contactAssignmentRulesRouter: FastifyPluginAsync = async (fastify) 
 
   fastify.post<{ Body: RuleBody }>("/contact-assignment-rules", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "manage_contacts")) return reply.status(403).send(forbidden());
+    if (!canAccess(role, permissions, "contacts_access")) return reply.status(403).send(forbidden());
     const { name, trigger, conditions, assignType = "user", assignTo, replacePrevious, isActive } = request.body;
     if (!name?.trim() || !trigger?.trim() || !assignTo?.trim()) {
       return reply.status(400).send({ error: { code: "MISSING_FIELDS", message: "name, trigger and assignTo are required" } });
@@ -66,7 +66,7 @@ export const contactAssignmentRulesRouter: FastifyPluginAsync = async (fastify) 
 
   fastify.patch<{ Params: { id: string }; Body: Partial<RuleBody> }>("/contact-assignment-rules/:id", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "manage_contacts")) return reply.status(403).send(forbidden());
+    if (!canAccess(role, permissions, "contacts_access")) return reply.status(403).send(forbidden());
     const existing = await fastify.prisma.contactAssignmentRule.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Rule not found" } });
     const { name, trigger, conditions, assignType, assignTo, replacePrevious, isActive } = request.body;
@@ -92,7 +92,7 @@ export const contactAssignmentRulesRouter: FastifyPluginAsync = async (fastify) 
 
   fastify.delete<{ Params: { id: string } }>("/contact-assignment-rules/:id", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "manage_contacts")) return reply.status(403).send(forbidden());
+    if (!canAccess(role, permissions, "contacts_access")) return reply.status(403).send(forbidden());
     const existing = await fastify.prisma.contactAssignmentRule.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Rule not found" } });
     await fastify.prisma.contactAssignmentRule.delete({ where: { id: request.params.id } });
