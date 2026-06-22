@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { canAccess } from "../lib/permissions.js";
+import { canAccessSub } from "../lib/permissions.js";
 
 interface StatusBody {
   name: string;
@@ -27,7 +27,7 @@ export const leadStatusesRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: StatusBody }>("/lead-statuses", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "manage_contacts")) return reply.status(403).send(forbidden());
+    if (!canAccessSub(role, permissions, "contacts_access", "contacts_manage_custom_fields")) return reply.status(403).send(forbidden());
     const { name, color, isClosure } = request.body;
     if (!name?.trim() || !color?.trim()) {
       return reply.status(400).send({ error: { code: "MISSING_FIELDS", message: "name and color are required" } });
@@ -52,7 +52,7 @@ export const leadStatusesRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.patch<{ Body: { orderedIds: string[] } }>("/lead-statuses/reorder", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "manage_contacts")) return reply.status(403).send(forbidden());
+    if (!canAccessSub(role, permissions, "contacts_access", "contacts_manage_custom_fields")) return reply.status(403).send(forbidden());
     const orderedIds = request.body.orderedIds ?? [];
     const all = await fastify.prisma.leadStatus.findMany({ where: { organizationId }, select: { id: true } });
     const orgIds = new Set(all.map((s) => s.id));
@@ -69,7 +69,7 @@ export const leadStatusesRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.patch<{ Params: { id: string }; Body: Partial<StatusBody> }>("/lead-statuses/:id", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "manage_contacts")) return reply.status(403).send(forbidden());
+    if (!canAccessSub(role, permissions, "contacts_access", "contacts_manage_custom_fields")) return reply.status(403).send(forbidden());
     const existing = await fastify.prisma.leadStatus.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Lead status not found" } });
     const { name, color, isClosure } = request.body;
@@ -93,7 +93,7 @@ export const leadStatusesRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete<{ Params: { id: string } }>("/lead-statuses/:id", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "manage_contacts")) return reply.status(403).send(forbidden());
+    if (!canAccessSub(role, permissions, "contacts_access", "contacts_manage_custom_fields")) return reply.status(403).send(forbidden());
     const existing = await fastify.prisma.leadStatus.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Lead status not found" } });
     const id = request.params.id;
