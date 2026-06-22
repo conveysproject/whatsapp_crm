@@ -2,6 +2,8 @@
 
 import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { canAccess } from "@/lib/can";
 
 interface AutoReply {
   id: string;
@@ -42,6 +44,8 @@ const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 export function AutoRepliesSection(): JSX.Element {
   const { getToken } = useAuth();
+  const { user } = useCurrentUser();
+  const canManage = canAccess(user, "manage_bot_replies");
   const [replies, setReplies] = useState<AutoReply[]>([]);
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState<{ open: boolean; editing: AutoReply | null }>({ open: false, editing: null });
@@ -133,12 +137,14 @@ export function AutoRepliesSection(): JSX.Element {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-gray-900">Auto-Replies</h2>
-        <button
-          onClick={openCreate}
-          className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
-        >
-          + New Auto-Reply
-        </button>
+        {canManage && (
+          <button
+            onClick={openCreate}
+            className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
+          >
+            + New Auto-Reply
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-card overflow-hidden">
@@ -166,26 +172,32 @@ export function AutoRepliesSection(): JSX.Element {
               >
                 {ar.isActive ? "Active" : "Inactive"}
               </span>
-              <button
-                onClick={() => openEdit(ar)}
-                className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 border border-gray-200 rounded"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => void handleDuplicate(ar.id)}
-                disabled={busy === ar.id}
-                className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 border border-gray-200 rounded disabled:opacity-50"
-              >
-                {busy === ar.id ? "…" : "Duplicate"}
-              </button>
-              <button
-                onClick={() => void handleDelete(ar.id, ar.name)}
-                disabled={busy === ar.id}
-                className="text-xs text-red-500 hover:text-red-700 px-2 py-1 border border-red-100 rounded disabled:opacity-50"
-              >
-                Delete
-              </button>
+              {canManage && (
+                <button
+                  onClick={() => openEdit(ar)}
+                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 border border-gray-200 rounded"
+                >
+                  Edit
+                </button>
+              )}
+              {canManage && (
+                <button
+                  onClick={() => void handleDuplicate(ar.id)}
+                  disabled={busy === ar.id}
+                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 border border-gray-200 rounded disabled:opacity-50"
+                >
+                  {busy === ar.id ? "…" : "Duplicate"}
+                </button>
+              )}
+              {canManage && (
+                <button
+                  onClick={() => void handleDelete(ar.id, ar.name)}
+                  disabled={busy === ar.id}
+                  className="text-xs text-red-500 hover:text-red-700 px-2 py-1 border border-red-100 rounded disabled:opacity-50"
+                >
+                  Delete
+                </button>
+              )}
             </div>
           </div>
         ))}
