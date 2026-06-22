@@ -168,9 +168,9 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
     "/conversations/:id/messages",
     async (request, reply) => {
       const { organizationId, role, permissions } = request.auth;
-      // GAP-S04: messaging permission required to send messages
-      if (!canAccess(role, permissions, "messaging")) {
-        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "messaging permission required" } });
+      // GAP-S04: inbox_access permission required to send messages
+      if (!canAccess(role, permissions, "inbox_access")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "inbox_access permission required" } });
       }
       const body = request.body;
 
