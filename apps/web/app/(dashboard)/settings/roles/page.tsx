@@ -66,7 +66,11 @@ export default function RolesPage(): JSX.Element {
     },
   });
 
-  if (!userLoading && !isAdmin(user)) {
+  if (userLoading || !user) {
+    return <div className="py-12 text-center text-sm text-gray-400">Loading…</div>;
+  }
+
+  if (!isAdmin(user)) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
         <p className="text-lg font-semibold text-gray-900">Access Denied</p>

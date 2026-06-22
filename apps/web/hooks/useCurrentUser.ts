@@ -6,7 +6,7 @@ export function useCurrentUser(): { user: CurrentUser | null; isLoading: boolean
     queryKey: ["user-me"],
     queryFn: async () => {
       const res = await fetch("/api/v1/users/me");
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`users/me ${res.status}`);
       const json = await res.json() as { data?: CurrentUser };
       return json.data ?? null;
     },
