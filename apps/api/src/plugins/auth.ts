@@ -22,8 +22,9 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     }
 
     let userId: string;
+    let orgRole: string | null;
     try {
-      ({ userId } = await verifyClerkToken(request.headers.authorization));
+      ({ userId, orgRole } = await verifyClerkToken(request.headers.authorization));
     } catch {
       return reply.status(401).send({
         error: { code: "UNAUTHORIZED", message: "Invalid or missing token" },
@@ -85,13 +86,22 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     const memberPermissions = (member?.permissions ?? {}) as Record<string, string>;
     const permissions = { ...roleDefaults, ...memberPermissions };
 
+    // Auto-sync: if Clerk JWT says org:admin but DB has a non-admin role, promote now.
+    // Fixes users whose DB record existed before the webhook ran (default role = "agent").
+    let effectiveRole = user.role;
+    if (orgRole === "org:admin" && !["admin", "superAdmin"].includes(user.role)) {
+      effectiveRole = "admin";
+      void fastify.prisma.user.updateMany({ where: { id: userId }, data: { role: "admin" } })
+        .catch((err: unknown) => fastify.log.warn({ err }, "Failed to auto-sync admin role from Clerk JWT"));
+    }
+
     await redis.setex(
       cacheKey,
       AUTH_CACHE_TTL,
-      JSON.stringify({ role: user.role, organizationId: user.organizationId, permissions })
+      JSON.stringify({ role: effectiveRole, organizationId: user.organizationId, permissions })
     );
 
-    request.auth = { userId, organizationId: user.organizationId, role: user.role, permissions };
+    request.auth = { userId, organizationId: user.organizationId, role: effectiveRole, permissions };
   });
 };
 

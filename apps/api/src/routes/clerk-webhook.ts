@@ -137,7 +137,7 @@ export const clerkWebhookRouter: FastifyPluginAsync = async (fastify) => {
             role: invitation ? invitation.role : dbRole,
             isActive: true,
           },
-          update: { isActive: true, email, fullName },
+          update: { isActive: true, email, fullName, role: invitation ? invitation.role : dbRole },
         });
 
         if (invitation) {

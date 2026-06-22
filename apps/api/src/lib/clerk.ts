@@ -1,6 +1,6 @@
 import { verifyToken } from "@clerk/backend";
 
-export async function verifyClerkToken(authHeader: string | undefined): Promise<{ userId: string }> {
+export async function verifyClerkToken(authHeader: string | undefined): Promise<{ userId: string; orgRole: string | null }> {
   if (!authHeader) throw new Error("Missing Authorization header");
   if (!authHeader.startsWith("Bearer ")) throw new Error("Invalid Authorization header format");
 
@@ -11,5 +11,5 @@ export async function verifyClerkToken(authHeader: string | undefined): Promise<
     secretKey: process.env["CLERK_SECRET_KEY"] ?? "",
   });
 
-  return { userId: payload.sub };
+  return { userId: payload.sub, orgRole: (payload["org_role"] as string | undefined) ?? null };
 }
