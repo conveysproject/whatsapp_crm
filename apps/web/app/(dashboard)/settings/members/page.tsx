@@ -63,57 +63,45 @@ export default function MembersPage(): JSX.Element {
     setInviting(true);
     setInviteError(null);
     try {
-      console.log("[invite] step 0: getting Clerk token");
       const clerkToken = await getToken();
-      console.log("[invite] step 0: clerkToken present:", !!clerkToken, "starts with:", clerkToken?.slice(0, 6) ?? "null");
 
       // Step 1: Create invitation on Railway
-      console.log("[invite] step 1: calling Railway POST /v1/invitations", { email: inviteEmail, role: inviteRole });
       const res = await fetch(`${API_URL}/v1/invitations`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${clerkToken ?? ""}` },
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
       });
-      console.log("[invite] step 1: status", res.status, res.ok ? "OK" : "FAIL");
       if (!res.ok) {
         const json = await res.json() as { error?: { message?: string } };
-        console.log("[invite] step 1: error response", json);
         setInviteError(json.error?.message ?? "Failed to create invitation.");
         return;
       }
       const { data: invitation } = await res.json() as { data: { token: string; email: string; role: string } };
-      console.log("[invite] step 1: invitation created, token prefix:", invitation.token.slice(0, 8), "email:", invitation.email);
 
-      // Step 2: Send email via Vercel route (GoDaddy SMTP works here, not on Railway)
+      // Step 2: Send email via Vercel (GoDaddy SMTP works here, not on Railway)
       const acceptUrl = `/invitations/${invitation.token}/accept`;
-      const emailPayload = {
-        to: invitation.email,
-        subject: "You've been invited to join WBMSG",
-        html: buildInvitationEmail({ role: invitation.role, acceptUrl: `https://wbmsg.com${acceptUrl}` }),
-      };
-      console.log("[invite] step 2: calling /api/internal/send-email for", invitation.email);
       const emailRes = await fetch("/api/internal/send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${clerkToken ?? ""}` },
-        body: JSON.stringify(emailPayload),
+        body: JSON.stringify({
+          to: invitation.email,
+          subject: "You've been invited to join WBMSG",
+          html: buildInvitationEmail({ role: invitation.role, acceptUrl: `https://wbmsg.com${acceptUrl}` }),
+        }),
       });
-      const emailBody = await emailRes.json() as Record<string, unknown>;
-      console.log("[invite] step 2: status", emailRes.status, emailRes.ok ? "OK" : "FAIL", "body:", JSON.stringify(emailBody));
-
       if (!emailRes.ok) {
-        setInviteError(`Invitation created but email failed (${emailRes.status}): ${String(emailBody["error"] ?? emailBody["detail"] ?? "unknown")}`);
+        const emailBody = await emailRes.json() as Record<string, unknown>;
+        setInviteError(`Invitation created but email failed: ${String(emailBody["error"] ?? "unknown")}`);
         return;
       }
 
-      console.log("[invite] done — success");
       setInviteOpen(false);
       setInviteEmail("");
       setInviteRole("agent");
       setInviteSuccess(`Invitation sent to ${inviteEmail}`);
       setTimeout(() => setInviteSuccess(null), 4000);
-    } catch (err: unknown) {
-      console.error("[invite] unexpected error:", err);
-      setInviteError("Unexpected error. Check browser console.");
+    } catch {
+      setInviteError("Unexpected error. Please try again.");
     } finally {
       setInviting(false);
     }

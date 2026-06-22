@@ -7,23 +7,14 @@ import { sendMail, type MailOptions } from "../../../../lib/mail";
 // Two callers, one header (Authorization: Bearer <token>):
 //   1. Browser (signed-in user)   — Clerk JWT from getToken()  → verified via verifyToken()
 //   2. Railway background workers — INTERNAL_EMAIL_SECRET hex  → verified via timingSafeEqual()
-//
-// Route is public in middleware so Railway can reach it without a Clerk session.
-// verifyToken() verifies Clerk JWTs directly without needing middleware context.
 
 const MAX_HTML_BYTES = 64 * 1024;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  console.log("[send-email] POST hit");
-
   const authHeader = request.headers.get("authorization") ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 
-  const authorized = await isAuthorized(token);
-  console.log("[send-email] authorized:", authorized, "token prefix:", token.slice(0, 6) || "(empty)");
-
-  if (!authorized) {
-    console.log("[send-email] 401");
+  if (!await isAuthorized(token)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -35,7 +26,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const { to, subject, html, replyTo } = body as Partial<MailOptions>;
-  console.log("[send-email] to:", to, "subject:", subject);
 
   if (!to || !subject || !html) {
     return NextResponse.json({ error: "Missing required fields: to, subject, html" }, { status: 400 });
@@ -47,15 +37,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "html too large" }, { status: 400 });
   }
 
-  console.log("[send-email] calling sendMail...");
   try {
     await sendMail({ to, subject, html, ...(replyTo ? { replyTo } : {}) });
-    console.log("[send-email] sendMail OK");
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[send-email] SMTP error:", message);
-    return NextResponse.json({ error: "Failed to send email", detail: message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
   }
 }
 
@@ -68,23 +56,14 @@ async function isAuthorized(token: string): Promise<boolean> {
     if (secretKey) {
       try {
         const payload = await verifyToken(token, { secretKey });
-        if (payload?.sub) {
-          console.log("[send-email] Clerk JWT ok, sub:", payload.sub);
-          return true;
-        }
-      } catch (e) {
-        console.log("[send-email] Clerk JWT invalid:", (e as Error).message);
-      }
+        if (payload?.sub) return true;
+      } catch { /* invalid JWT — fall through */ }
     }
   }
 
   // Method 2: internal secret for Railway background workers
   const secret = process.env["INTERNAL_EMAIL_SECRET"];
-  if (secret && secret.length >= 32) {
-    const ok = timingSafeEqual(token, secret);
-    if (ok) console.log("[send-email] internal secret ok");
-    return ok;
-  }
+  if (secret && secret.length >= 32) return timingSafeEqual(token, secret);
 
   return false;
 }
