@@ -1,38 +1,22 @@
+import { auth } from "@clerk/nextjs/server";
 import { type NextRequest, NextResponse } from "next/server";
 import { sendMail, type MailOptions } from "../../../../lib/mail";
 
-// Internal route: Railway API → Vercel SMTP bridge.
-// Railway blocks outbound SMTP on all ports; this Vercel route forwards to GoDaddy.
-// Security layers:
-//   1. Bearer token (INTERNAL_EMAIL_SECRET) — shared secret, 32+ chars
-//   2. Method guard — POST only (Next.js handles other methods with 405)
-//   3. Payload size cap — rejects bodies over 64 KB
-//   4. Strict field validation — no extra fields forwarded
+// Generic transactional email bridge — Vercel can reach GoDaddy SMTP, Railway cannot.
+//
+// Two callers, two auth methods:
+//   1. Browser (signed-in user) — Clerk session cookie, no extra header needed
+//   2. Railway background workers — Authorization: Bearer INTERNAL_EMAIL_SECRET
+//
+// Both are checked here; if neither passes → 401.
 
-const MAX_BODY_BYTES = 64 * 1024;
+const MAX_HTML_BYTES = 64 * 1024;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // 1. Require secret to be configured — fail closed
-  const secret = process.env["INTERNAL_EMAIL_SECRET"];
-  if (!secret || secret.length < 32) {
-    console.error("[internal/send-email] INTERNAL_EMAIL_SECRET not set or too short");
-    return NextResponse.json({ error: "Email service not configured" }, { status: 503 });
-  }
-
-  // 2. Constant-time bearer token check
-  const authHeader = request.headers.get("authorization") ?? "";
-  const provided = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-  if (!timingSafeEqual(provided, secret)) {
+  if (!await isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 3. Payload size cap
-  const contentLength = parseInt(request.headers.get("content-length") ?? "0", 10);
-  if (contentLength > MAX_BODY_BYTES) {
-    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
-  }
-
-  // 4. Parse and validate body
   let body: unknown;
   try {
     body = await request.json();
@@ -48,25 +32,38 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (typeof subject !== "string" || subject.length > 998) {
     return NextResponse.json({ error: "Invalid subject" }, { status: 400 });
   }
-  if (typeof html !== "string" || html.length > MAX_BODY_BYTES) {
+  if (typeof html !== "string" || Buffer.byteLength(html, "utf8") > MAX_HTML_BYTES) {
     return NextResponse.json({ error: "html too large" }, { status: 400 });
   }
 
-  // 5. Send — only pass known fields (no pass-through of arbitrary options)
   try {
     await sendMail({ to, subject, html, ...(replyTo ? { replyTo } : {}) });
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("[internal/send-email] SMTP error:", message);
+    console.error("[send-email] SMTP error:", message);
     return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
   }
 }
 
-// Timing-safe string comparison (prevents timing attacks on the secret)
+async function isAuthorized(request: NextRequest): Promise<boolean> {
+  // Method 1: signed-in Clerk session (browser calls from the web app)
+  try {
+    const { userId } = await auth();
+    if (userId) return true;
+  } catch { /* not a Clerk request — fall through */ }
+
+  // Method 2: internal secret (Railway background workers)
+  const secret = process.env["INTERNAL_EMAIL_SECRET"];
+  if (!secret || secret.length < 32) return false;
+
+  const authHeader = request.headers.get("authorization") ?? "";
+  const provided = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  return timingSafeEqual(provided, secret);
+}
+
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) {
-    // Still iterate to avoid length-based timing leak
     let diff = 0;
     for (let i = 0; i < b.length; i++) diff |= (a.charCodeAt(i % a.length) ^ b.charCodeAt(i));
     return false;

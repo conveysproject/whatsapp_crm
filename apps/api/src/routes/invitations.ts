@@ -2,7 +2,6 @@ import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import type { Role } from "@prisma/client";
 import { checkPlanLimit } from "../lib/plan-limits.js";
-import { sendMail } from "../lib/mail.js";
 
 export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { email: string; role: Role } }>(
@@ -47,35 +46,9 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
         },
         select: { id: true, email: true, role: true, token: true, expiresAt: true },
       });
-      const webUrl = process.env["WEB_URL"] ?? "https://wbmsg.com";
-      const acceptUrl = `${webUrl}/invitations/${invitation.token}/accept`;
-      try {
-        await sendMail({
-          to: invitation.email,
-          subject: "You've been invited to join WBMSG",
-          html: `
-            <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px">
-              <h2 style="margin:0 0 8px;color:#111827;font-size:20px">You've been invited</h2>
-              <p style="margin:0 0 24px;color:#6b7280;font-size:14px">
-                You've been invited to join as <strong>${invitation.role}</strong>.
-                Click the button below to create your account and join the team.
-              </p>
-              <a href="${acceptUrl}"
-                 style="display:inline-block;background:#059669;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600">
-                Accept Invitation
-              </a>
-              <p style="margin:24px 0 0;color:#9ca3af;font-size:12px">
-                This invitation expires in 7 days. If you didn't expect this, you can ignore this email.
-              </p>
-            </div>
-          `,
-        });
-        fastify.log.info({ to: invitation.email }, "Invitation email sent");
-      } catch (err: unknown) {
-        fastify.log.error({ err, to: invitation.email }, "Failed to send invitation email");
-        return reply.status(500).send({ error: { code: "EMAIL_FAILED", message: "Invitation created but email could not be sent. Check SMTP configuration." } });
-      }
 
+      // Email is sent by the web app (Vercel) after this response —
+      // Railway cannot reach GoDaddy SMTP directly.
       return reply.status(201).send({ data: invitation });
     }
   );
