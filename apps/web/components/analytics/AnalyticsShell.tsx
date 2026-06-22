@@ -9,6 +9,8 @@ import { ConversationsTab } from "./ConversationsTab";
 import { TeamTab } from "./TeamTab";
 import { CampaignsTab } from "./CampaignsTab";
 import { PredictiveTab } from "./PredictiveTab";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { isManagerOrAbove } from "@/lib/can";
 
 type Tab = "overview" | "conversations" | "team" | "campaigns" | "predictive";
 
@@ -25,6 +27,8 @@ const VALID_DAYS = [7, 14, 30, 90];
 export function AnalyticsShell(): JSX.Element {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user } = useCurrentUser();
+  const canViewTeam = isManagerOrAbove(user);
 
   const rawTab = searchParams.get("tab") ?? "overview";
   const tab: Tab = (["overview", "conversations", "team", "campaigns", "predictive"].includes(rawTab)
@@ -57,7 +61,7 @@ export function AnalyticsShell(): JSX.Element {
       {/* Tab navigation */}
       <div className="border-b border-gray-200">
         <nav className="flex gap-0 -mb-px overflow-x-auto">
-          {TABS.map((t) => (
+          {TABS.filter((t) => t.id !== "team" || canViewTeam).map((t) => (
             <button
               key={t.id}
               onClick={() => { setTab(t.id); }}
@@ -82,7 +86,7 @@ export function AnalyticsShell(): JSX.Element {
       {/* Active tab content */}
       {tab === "overview"      && <OverviewTab days={days} />}
       {tab === "conversations" && <ConversationsTab days={days} />}
-      {tab === "team"          && <TeamTab days={days} />}
+      {tab === "team"          && canViewTeam && <TeamTab days={days} />}
       {tab === "campaigns"     && <CampaignsTab days={days} />}
       {tab === "predictive"    && <PredictiveTab />}
     </div>

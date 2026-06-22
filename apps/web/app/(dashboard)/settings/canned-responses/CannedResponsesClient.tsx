@@ -3,6 +3,8 @@
 import { JSX, useState, useTransition } from "react";
 import type { CannedResponse } from "./page";
 import { MediaAssetPicker, type MediaAsset } from "@/components/media-asset-picker";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { canAccess } from "@/lib/can";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -24,6 +26,8 @@ async function apiFetch(path: string, method: string, body?: unknown) {
 }
 
 export function CannedResponsesClient({ initialItems }: Props): JSX.Element {
+  const { user } = useCurrentUser();
+  const canManage = canAccess(user, "manage_bot_replies");
   const [items, setItems] = useState<CannedResponse[]>(initialItems);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -130,12 +134,14 @@ export function CannedResponsesClient({ initialItems }: Props): JSX.Element {
           placeholder="Search by name, shortcut or content…"
           className="flex-1 h-9 px-3 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors placeholder-gray-400"
         />
-        <button
-          onClick={openAdd}
-          className="h-9 px-4 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors whitespace-nowrap"
-        >
-          + Add Response
-        </button>
+        {canManage && (
+          <button
+            onClick={openAdd}
+            className="h-9 px-4 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors whitespace-nowrap"
+          >
+            + Add Response
+          </button>
+        )}
       </div>
 
       {/* List */}
@@ -165,20 +171,22 @@ export function CannedResponsesClient({ initialItems }: Props): JSX.Element {
                 </div>
                 <p className="mt-1 text-sm text-gray-500 line-clamp-2 whitespace-pre-wrap">{item.content}</p>
               </div>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                <button
-                  onClick={() => openEdit(item)}
-                  className="h-8 px-3 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  className="h-8 px-3 text-xs text-red-600 border border-red-100 rounded-lg hover:bg-red-50 transition-colors"
-                >
-                  Delete
-                </button>
-              </div>
+              {canManage && (
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <button
+                    onClick={() => openEdit(item)}
+                    className="h-8 px-3 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className="h-8 px-3 text-xs text-red-600 border border-red-100 rounded-lg hover:bg-red-50 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
           ))
         )}

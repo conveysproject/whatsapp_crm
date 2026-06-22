@@ -2,6 +2,8 @@
 import { JSX, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { isAdmin } from "@/lib/can";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -27,6 +29,8 @@ const ROLES = ["admin", "manager", "agent", "viewer"] as const;
 
 export default function MembersPage(): JSX.Element {
   const { getToken } = useAuth();
+  const { user } = useCurrentUser();
+  const canAdmin = isAdmin(user);
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -137,15 +141,17 @@ export default function MembersPage(): JSX.Element {
             <p className="text-sm text-gray-500">Invite team members and manage their roles from here.</p>
           </div>
         </div>
-        <button
-          onClick={() => setInviteOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Invite Agent
-        </button>
+        {canAdmin && (
+          <button
+            onClick={() => setInviteOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Invite Agent
+          </button>
+        )}
       </div>
 
       {/* Search */}
@@ -210,15 +216,17 @@ export default function MembersPage(): JSX.Element {
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => setDeleteId(m.id)}
-                        className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                        title="Remove agent"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                      {canAdmin && (
+                        <button
+                          onClick={() => setDeleteId(m.id)}
+                          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                          title="Remove agent"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

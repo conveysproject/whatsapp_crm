@@ -2,6 +2,8 @@
 import { JSX, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PermissionsGrid } from "@/components/permissions-grid";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { isAdmin } from "@/lib/can";
 
 type RoleKey = "superAdmin" | "admin" | "manager" | "agent" | "viewer";
 
@@ -36,6 +38,7 @@ async function saveRolePermissions(
 }
 
 export default function RolesPage(): JSX.Element {
+  const { user, isLoading: userLoading } = useCurrentUser();
   const [activeRole, setActiveRole] = useState<RoleKey>("admin");
   const [localPermissions, setLocalPermissions] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
@@ -62,6 +65,15 @@ export default function RolesPage(): JSX.Element {
       setTimeout(() => setSaved(false), 2000);
     },
   });
+
+  if (!userLoading && !isAdmin(user)) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
+        <p className="text-lg font-semibold text-gray-900">Access Denied</p>
+        <p className="text-sm text-gray-500">Only admins can manage role permissions.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
