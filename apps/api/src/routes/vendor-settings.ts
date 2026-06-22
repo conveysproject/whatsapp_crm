@@ -76,9 +76,9 @@ export const vendorSettingsRouter: FastifyPluginAsync = async (fastify) => {
     "/vendor-settings",
     async (request, reply) => {
       const { organizationId, role, permissions } = request.auth;
-      // GAP-S04: administrative permission required to modify org-level settings
-      if (!canAccess(role, permissions, "administrative")) {
-        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "administrative permission required" } });
+      // GAP-S04: settings_access permission required to modify org-level settings
+      if (!canAccess(role, permissions, "settings_access")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_access permission required" } });
       }
       const { settings } = request.body;
       await Promise.all(
