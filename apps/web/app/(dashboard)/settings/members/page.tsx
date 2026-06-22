@@ -79,10 +79,12 @@ export default function MembersPage(): JSX.Element {
       const { data: invitation } = await res.json() as { data: { token: string; email: string; role: string } };
 
       // Step 2: Send email from Vercel (GoDaddy SMTP works here, not on Railway)
+      // Pass clerkToken as Bearer so auth() in the route handler can read it
+      // (the route is public in middleware — Clerk doesn't auto-forward auth state)
       const acceptUrl = `/invitations/${invitation.token}/accept`;
       const emailRes = await fetch("/api/internal/send-email", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${clerkToken ?? ""}` },
         body: JSON.stringify({
           to: invitation.email,
           subject: "You've been invited to join WBMSG",
