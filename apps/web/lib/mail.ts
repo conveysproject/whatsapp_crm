@@ -21,6 +21,7 @@ export interface MailOptions {
 }
 
 export async function sendMail(options: MailOptions): Promise<void> {
+  console.log("[mail] sendMail called. transporter:", transporter ? "ready" : "null", "SMTP_USER:", SMTP_USER ?? "unset");
   if (!transporter) {
     throw new Error("SMTP not configured (SMTP_USER/SMTP_PASS missing)");
   }
