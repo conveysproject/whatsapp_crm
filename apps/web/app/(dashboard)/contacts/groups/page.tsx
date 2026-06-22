@@ -6,6 +6,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { canAccess } from "@/lib/can";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -24,6 +26,8 @@ type ModalState =
 
 export default function ContactGroupsPage(): JSX.Element {
   const { getToken } = useAuth();
+  const { user } = useCurrentUser();
+  const canManage = canAccess(user, "manage_contacts");
   const qc = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");
@@ -120,7 +124,7 @@ export default function ContactGroupsPage(): JSX.Element {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Contact Groups</h1>
-        <Button onClick={openCreate}>Add New Group</Button>
+        {canManage && <Button onClick={openCreate}>Add New Group</Button>}
       </div>
 
       <div className="flex gap-1 border-b border-gray-200">
@@ -187,28 +191,34 @@ export default function ContactGroupsPage(): JSX.Element {
                       >
                         Group Contacts
                       </Link>
-                      <button
-                        onClick={() => openEdit(group)}
-                        className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm("Delete this group? This cannot be undone.")) {
-                            deleteGroup.mutate(group.id);
-                          }
-                        }}
-                        className="text-xs px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
-                      >
-                        Delete
-                      </button>
-                      <button
-                        onClick={() => archiveGroup.mutate({ id: group.id, archive: !group.isArchived })}
-                        className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
-                      >
-                        {group.isArchived ? "Unarchive" : "Archive"}
-                      </button>
+                      {canManage && (
+                        <button
+                          onClick={() => openEdit(group)}
+                          className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {canManage && (
+                        <button
+                          onClick={() => {
+                            if (confirm("Delete this group? This cannot be undone.")) {
+                              deleteGroup.mutate(group.id);
+                            }
+                          }}
+                          className="text-xs px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      )}
+                      {canManage && (
+                        <button
+                          onClick={() => archiveGroup.mutate({ id: group.id, archive: !group.isArchived })}
+                          className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
+                        >
+                          {group.isArchived ? "Unarchive" : "Archive"}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

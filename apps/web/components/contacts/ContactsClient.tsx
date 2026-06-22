@@ -331,13 +331,15 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
                 Delete All
               </button>
               )}
-              <button
-                onClick={() => setShowAddDrawer(true)}
-                className="flex items-center gap-1.5 h-9 px-4 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-all shadow-sm"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                New Contact
-              </button>
+              {canManage && (
+                <button
+                  onClick={() => setShowAddDrawer(true)}
+                  className="flex items-center gap-1.5 h-9 px-4 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-all shadow-sm"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                  New Contact
+                </button>
+              )}
             </div>
           </div>
 
@@ -411,7 +413,7 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
                             <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                           </div>
                           <p className="text-gray-500 font-medium">{query ? "No contacts match your search" : "No contacts yet"}</p>
-                          {!query && <button onClick={() => setShowAddDrawer(true)} className="text-sm text-brand-600 hover:text-brand-700 font-medium">Add your first contact →</button>}
+                          {!query && canManage && <button onClick={() => setShowAddDrawer(true)} className="text-sm text-brand-600 hover:text-brand-700 font-medium">Add your first contact →</button>}
                         </div>
                       </td>
                     </tr>
@@ -566,13 +568,15 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                                     Chat
                                   </button>
-                                  <button
-                                    onClick={() => { if (confirm(`Delete ${displayName}?`)) void handleDelete(c.id); }}
-                                    className="flex items-center gap-1.5 h-8 px-3 text-xs font-semibold text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all shadow-sm"
-                                  >
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                    Delete
-                                  </button>
+                                  {canManage && (
+                                    <button
+                                      onClick={() => { if (confirm(`Delete ${displayName}?`)) void handleDelete(c.id); }}
+                                      className="flex items-center gap-1.5 h-8 px-3 text-xs font-semibold text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 hover:border-red-300 transition-all shadow-sm"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                      Delete
+                                    </button>
+                                  )}
                                   {isVisible("assigned_user_id") && (
                                     <div className="relative" ref={assignPopoverId === c.id ? assignPopoverRef : undefined}>
                                       <button
@@ -657,13 +661,15 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-gray-700">
           <span className="text-sm font-semibold">{selectedIds.size} selected</span>
           <div className="w-px h-4 bg-gray-600" />
-          <button
-            onClick={() => void handleBulkDelete()}
-            className="flex items-center gap-1.5 text-sm font-medium text-red-400 hover:text-red-300 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            Delete selected
-          </button>
+          {canManage && (
+            <button
+              onClick={() => void handleBulkDelete()}
+              className="flex items-center gap-1.5 text-sm font-medium text-red-400 hover:text-red-300 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              Delete selected
+            </button>
+          )}
           <div className="w-px h-4 bg-gray-600" />
           <button
             onClick={() => setSelectedIds(new Set())}
