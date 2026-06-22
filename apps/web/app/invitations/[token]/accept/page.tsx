@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type JSX } from "react";
+import { useState, useEffect, type FormEvent, type JSX } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { useSignUp } from "@clerk/nextjs/legacy";
@@ -8,20 +8,41 @@ import Link from "next/link";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
+interface InvitationMeta {
+  email: string;
+  role: string;
+}
+
 export default function AcceptInvitationPage(): JSX.Element {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
   const { isSignedIn, getToken, userId } = useAuth();
   const { signUp, isLoaded } = useSignUp();
 
+  const [meta, setMeta] = useState<InvitationMeta | null>(null);
+  const [metaError, setMetaError] = useState<string | null>(null);
+
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<"signup" | "existing">(
-    isSignedIn ? "existing" : "signup"
-  );
+
+  // Fetch invitation details so we can pre-fill and lock the email
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch(`${API_URL}/v1/invitations/${token}`);
+        if (!res.ok) {
+          setMetaError("This invitation link is invalid or has expired.");
+          return;
+        }
+        const json = await res.json() as { data: InvitationMeta };
+        setMeta(json.data);
+      } catch {
+        setMetaError("Could not load invitation details.");
+      }
+    })();
+  }, [token]);
 
   async function acceptWithCurrentUser() {
     setLoading(true);
@@ -51,15 +72,19 @@ export default function AcceptInvitationPage(): JSX.Element {
 
   async function handleSignUpAndAccept(e: FormEvent) {
     e.preventDefault();
-    if (!isLoaded || !signUp) return;
+    if (!isLoaded || !signUp || !meta) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await signUp.create({ emailAddress: email, password, firstName: fullName.split(" ")[0], lastName: fullName.split(" ").slice(1).join(" ") });
+      const result = await signUp.create({
+        emailAddress: meta.email,
+        password,
+        firstName: fullName.split(" ")[0],
+        lastName: fullName.split(" ").slice(1).join(" "),
+      });
       const clerkUserId = result.createdUserId;
       if (!clerkUserId) { setError("Sign-up failed. Please try again."); return; }
 
-      // Accept invitation using the new Clerk user ID (no token yet — use public endpoint)
       const res = await fetch(`${API_URL}/v1/invitations/${token}/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -79,6 +104,19 @@ export default function AcceptInvitationPage(): JSX.Element {
     }
   }
 
+  // Invalid / expired invitation
+  if (metaError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-xl border border-gray-200 shadow p-8 w-full max-w-md text-center space-y-3">
+          <p className="text-sm text-red-600 font-medium">{metaError}</p>
+          <Link href="/sign-in" className="text-sm text-green-600 hover:underline">Go to sign in</Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Already signed in — just accept
   if (isSignedIn) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -87,6 +125,11 @@ export default function AcceptInvitationPage(): JSX.Element {
           <p className="text-sm text-gray-500">
             You&apos;re signed in. Click below to join the organization.
           </p>
+          {meta && (
+            <p className="text-sm text-gray-700">
+              Invited as <span className="font-medium">{meta.email}</span> · <span className="capitalize">{meta.role}</span>
+            </p>
+          )}
           <input
             type="text"
             placeholder="Your full name"
@@ -122,13 +165,14 @@ export default function AcceptInvitationPage(): JSX.Element {
             onChange={(e) => setFullName(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
+          {/* Email is pre-filled from the invitation and locked — user cannot change it */}
           <input
             type="email"
-            placeholder="Email address"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            value={meta?.email ?? ""}
+            readOnly
+            disabled={!meta}
+            placeholder={meta ? undefined : "Loading…"}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
           />
           <input
             type="password"
@@ -142,7 +186,7 @@ export default function AcceptInvitationPage(): JSX.Element {
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !meta}
             className="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
           >
             {loading ? "Creating account…" : "Create Account & Join"}

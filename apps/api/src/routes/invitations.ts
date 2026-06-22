@@ -53,6 +53,26 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  fastify.get<{ Params: { token: string } }>(
+    "/invitations/:token",
+    {
+      config: { public: true },
+      schema: {
+        params: { type: "object", properties: { token: { type: "string" } }, required: ["token"] },
+      },
+    },
+    async (request, reply) => {
+      const invitation = await prisma.invitation.findUnique({
+        where: { token: request.params.token, status: "pending" },
+        select: { email: true, role: true, expiresAt: true },
+      });
+      if (!invitation || invitation.expiresAt < new Date()) {
+        return reply.status(404).send({ error: { code: "INVALID_TOKEN", message: "Invitation not found or expired" } });
+      }
+      return reply.send({ data: invitation });
+    }
+  );
+
   fastify.post<{ Params: { token: string }; Body: { clerkUserId: string; fullName: string } }>(
     "/invitations/:token/accept",
     {
