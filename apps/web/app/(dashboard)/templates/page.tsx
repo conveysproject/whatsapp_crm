@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/Button";
 import { TemplateSyncButton } from "./TemplateSyncButton";
 import { TemplateRow, type TemplateData } from "./TemplateRow";
 
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+
 async function getTemplates(token: string): Promise<TemplateData[]> {
   try {
-    const apiUrl = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
-    const res = await fetch(`${apiUrl}/v1/templates`, {
+    const res = await fetch(`${API_URL}/v1/templates`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
@@ -17,9 +18,27 @@ async function getTemplates(token: string): Promise<TemplateData[]> {
   } catch { return []; }
 }
 
+async function getUserRole(token: string): Promise<string> {
+  try {
+    const res = await fetch(`${API_URL}/v1/users/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return "agent";
+    const json = await res.json() as { data?: { role?: string } };
+    return json.data?.role ?? "agent";
+  } catch { return "agent"; }
+}
+
 export default async function TemplatesPage(): Promise<JSX.Element> {
   const { getToken } = await auth.protect();
-  const templates = await getTemplates(await getToken() ?? "");
+  const token = await getToken() ?? "";
+  const [templates, userRole] = await Promise.all([
+    getTemplates(token),
+    getUserRole(token),
+  ]);
+
+  const canManage = ["admin", "superAdmin", "manager"].includes(userRole);
 
   return (
     <div className="space-y-4">
@@ -27,9 +46,11 @@ export default async function TemplatesPage(): Promise<JSX.Element> {
         <h1 className="text-2xl font-semibold text-gray-900">Templates</h1>
         <div className="flex items-center gap-3">
           <TemplateSyncButton />
-          <Link href="/templates/new">
-            <Button>New Template</Button>
-          </Link>
+          {canManage && (
+            <Link href="/templates/new">
+              <Button>New Template</Button>
+            </Link>
+          )}
         </div>
       </div>
       <div className="bg-white rounded-xl border border-gray-200 shadow-card divide-y divide-gray-100">

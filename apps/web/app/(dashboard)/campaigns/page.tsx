@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
 import { getSocket } from "@/lib/socket";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { canAccess } from "@/lib/can";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -50,6 +52,8 @@ export default function CampaignsPage(): JSX.Element {
   const [tab, setTab] = useState<Tab>("all");
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
+  const { user } = useCurrentUser();
+  const canManage = canAccess(user, "manage_campaigns");
 
   const { data: campaigns = [], isLoading } = useQuery<Campaign[]>({
     queryKey: ["campaigns"],
@@ -119,7 +123,9 @@ export default function CampaignsPage(): JSX.Element {
               <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Campaigns</h1>
               <p className="text-sm text-gray-500 mt-0.5">{campaigns.filter(c => !c.isArchived).length} active</p>
             </div>
-            <Link href="/campaigns/new"><Button>New Campaign</Button></Link>
+            {canManage && (
+              <Link href="/campaigns/new"><Button>New Campaign</Button></Link>
+            )}
           </div>
 
           {/* Status tabs */}
@@ -162,7 +168,7 @@ export default function CampaignsPage(): JSX.Element {
                   </svg>
                 </div>
                 <p className="text-gray-500 font-medium">No {tab === "all" ? "" : tab} campaigns</p>
-                {tab === "all" && (
+                {tab === "all" && canManage && (
                   <Link href="/campaigns/new" className="mt-2 inline-block text-sm text-brand-600 hover:text-brand-700 font-medium">
                     Create your first campaign →
                   </Link>
@@ -187,7 +193,7 @@ export default function CampaignsPage(): JSX.Element {
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge variant={STATUS_BADGE[c.displayStatus] ?? "gray"}>{c.displayStatus}</Badge>
 
-                    {c.status === "running" && (
+                    {canManage && c.status === "running" && (
                       <button
                         onClick={() => { void doAction(c.id, "abort"); }}
                         className="text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded-md hover:bg-red-50 transition-colors"
@@ -195,7 +201,7 @@ export default function CampaignsPage(): JSX.Element {
                         Abort
                       </button>
                     )}
-                    {c.status === "running" && (
+                    {canManage && c.status === "running" && (
                       <button
                         onClick={() => { void doAction(c.id, "pause"); }}
                         className="text-xs text-gray-600 hover:text-gray-700 font-medium px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
@@ -203,7 +209,7 @@ export default function CampaignsPage(): JSX.Element {
                         Pause
                       </button>
                     )}
-                    {c.status === "paused" && (
+                    {canManage && c.status === "paused" && (
                       <button
                         onClick={() => { void doAction(c.id, "resume"); }}
                         className="text-xs text-brand-600 hover:text-brand-700 font-medium px-2 py-1 rounded-md hover:bg-brand-50 transition-colors"
@@ -211,7 +217,7 @@ export default function CampaignsPage(): JSX.Element {
                         Resume
                       </button>
                     )}
-                    {(c.status === "completed" || c.status === "aborted") && !c.isArchived && (
+                    {canManage && (c.status === "completed" || c.status === "aborted") && !c.isArchived && (
                       <button
                         onClick={() => { void doAction(c.id, "archive"); }}
                         className="text-xs text-gray-500 hover:text-gray-700 font-medium px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
@@ -219,7 +225,7 @@ export default function CampaignsPage(): JSX.Element {
                         Archive
                       </button>
                     )}
-                    {c.isArchived && (
+                    {canManage && c.isArchived && (
                       <button
                         onClick={() => { void doAction(c.id, "unarchive"); }}
                         className="text-xs text-brand-600 hover:text-brand-700 font-medium px-2 py-1 rounded-md hover:bg-brand-50 transition-colors"
@@ -227,7 +233,7 @@ export default function CampaignsPage(): JSX.Element {
                         Unarchive
                       </button>
                     )}
-                    {c.deleteAllowed && (
+                    {canManage && c.deleteAllowed && (
                       <button
                         onClick={() => { void handleDelete(c.id, c.name); }}
                         className="text-xs text-red-500 hover:text-red-600 font-medium px-2 py-1 rounded-md hover:bg-red-50 transition-colors"
