@@ -5,7 +5,7 @@ import { submitTemplateToMeta } from "../lib/meta-templates.js";
 import { sendTemplateMessage } from "../lib/whatsapp.js";
 import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
 import type { TemplateId, ContactId } from "@WBMSG/shared";
-import { canAccess, hasSubPermission } from "../lib/permissions.js";
+import { canAccess, canAccessSub } from "../lib/permissions.js";
 
 interface TemplateBody {
   name: string;
@@ -61,12 +61,9 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: TemplateBody }>("/templates", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    // GAP-S04: manage_templates + add_edit_templates sub-permission required to create templates
-    if (!canAccess(role, permissions, "manage_templates")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_templates permission required" } });
-    }
-    if (!hasSubPermission(permissions, "manage_templates", "add_edit_templates")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "add_edit_templates permission required" } });
+    // GAP-S04: templates_access + templates_create sub-permission required to create templates
+    if (!canAccessSub(role, permissions, "templates_access", "templates_create")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "templates_create permission required" } });
     }
     const template = await fastify.prisma.template.create({
       data: {
@@ -172,12 +169,9 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete<{ Params: { id: TemplateId } }>("/templates/:id", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    // GAP-S04: manage_templates + delete_templates sub-permission required
-    if (!canAccess(role, permissions, "manage_templates")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_templates permission required" } });
-    }
-    if (!hasSubPermission(permissions, "manage_templates", "delete_templates")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "delete_templates permission required" } });
+    // GAP-S04: templates_access + templates_delete sub-permission required
+    if (!canAccessSub(role, permissions, "templates_access", "templates_delete")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "templates_delete permission required" } });
     }
     const template = await fastify.prisma.template.findFirst({
       where: { id: request.params.id, organizationId },
