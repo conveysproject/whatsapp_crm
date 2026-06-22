@@ -34,7 +34,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       select: { id: true, fullName: true, email: true, role: true, organizationId: true, availability: true },
     });
     if (!user) return reply.status(404).send({ error: { code: "USER_NOT_FOUND", message: "User not found" } });
-    return { data: user };
+    return { data: { ...user, permissions: request.auth.permissions } };
   });
 
   fastify.patch<{ Params: { id: string }; Body: { role: Role } }>(
