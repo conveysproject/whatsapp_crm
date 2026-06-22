@@ -22,6 +22,7 @@ interface ContactWithLabels extends Contact {
 
 interface Props {
   initialContacts: ContactWithLabels[];
+  userRole: string;
 }
 
 type SortField = "firstName" | "lastName" | "phoneNumber" | "languageCode" | "createdAt" | "email" | "whatsappOptOut";
@@ -59,7 +60,8 @@ function formatDate(iso: string): string {
   } catch { return iso; }
 }
 
-export function ContactsClient({ initialContacts }: Props): JSX.Element {
+export function ContactsClient({ initialContacts, userRole }: Props): JSX.Element {
+  const canManage = userRole === "admin" || userRole === "manager" || userRole === "superAdmin";
   const { getToken } = useAuth();
   const [contacts, setContacts] = useState<ContactWithLabels[]>(initialContacts);
   const [query, setQuery] = useState("");
@@ -301,20 +303,25 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => setShowExportModal(true)}
-                className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
-              >
-                <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                Export
-              </button>
-              <Link
-                href="/contacts/import"
-                className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
-              >
-                <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                Import
-              </Link>
+              {canManage && (
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+                >
+                  <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Export
+                </button>
+              )}
+              {canManage && (
+                <Link
+                  href="/contacts/import"
+                  className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+                >
+                  <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                  Import
+                </Link>
+              )}
+              {canManage && (
               <button
                 onClick={() => void handleDeleteAll()}
                 disabled={deletingAll || contacts.length === 0}
@@ -323,6 +330,7 @@ export function ContactsClient({ initialContacts }: Props): JSX.Element {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 Delete All
               </button>
+              )}
               <button
                 onClick={() => setShowAddDrawer(true)}
                 className="flex items-center gap-1.5 h-9 px-4 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-all shadow-sm"
