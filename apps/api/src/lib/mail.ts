@@ -1,19 +1,6 @@
-import nodemailer from "nodemailer";
-
-// Transactional email via authenticated SMTP (mirrors apps/conveys/lib/mail.ts).
-// Configure SMTP_USER / SMTP_PASS in the API environment. When unset, sendMail
-// is a safe no-op (logs a warning) so nothing is sent in dev/CI by accident.
-const SMTP_USER = process.env["SMTP_USER"];
-const SMTP_PASS = process.env["SMTP_PASS"];
-
-const transporter = SMTP_USER && SMTP_PASS
-  ? nodemailer.createTransport({
-      host: process.env["SMTP_HOST"] ?? "smtpout.secureserver.net",
-      port: parseInt(process.env["SMTP_PORT"] ?? "465", 10),
-      secure: true,
-      auth: { user: SMTP_USER, pass: SMTP_PASS },
-    })
-  : null;
+// Sends transactional email by calling the Vercel-hosted web app's internal
+// email route. Railway blocks outbound SMTP; Vercel does not.
+// Requires WEB_URL and INTERNAL_EMAIL_SECRET in the API environment.
 
 export interface MailOptions {
   to: string | string[];
@@ -23,19 +10,32 @@ export interface MailOptions {
 }
 
 export function isEmailConfigured(): boolean {
-  return transporter !== null;
+  return !!(process.env["WEB_URL"] && process.env["INTERNAL_EMAIL_SECRET"]);
 }
 
 export async function sendMail(options: MailOptions): Promise<void> {
-  if (!transporter) {
-    console.warn("[mail] SMTP not configured (SMTP_USER/SMTP_PASS) — skipping email send");
+  const webUrl = process.env["WEB_URL"];
+  const secret = process.env["INTERNAL_EMAIL_SECRET"];
+
+  if (!webUrl || !secret) {
+    console.warn("[mail] WEB_URL or INTERNAL_EMAIL_SECRET not set — skipping email send");
     return;
   }
-  await transporter.sendMail({
-    from: `WBMSG <${SMTP_USER}>`,
-    to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
-    subject: options.subject,
-    html: options.html,
-    ...(options.replyTo ? { replyTo: options.replyTo } : {}),
+
+  const endpoint = `${webUrl.replace(/\/$/, "")}/api/internal/send-email`;
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify(options),
+    signal: AbortSignal.timeout(15000),
   });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.status.toString());
+    throw new Error(`Email service returned ${res.status}: ${text}`);
+  }
 }
