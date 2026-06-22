@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { checkPlanLimit } from "../lib/plan-limits.js";
-import { canAccess } from "../lib/permissions.js";
+import { canAccessSub } from "../lib/permissions.js";
 
 interface CustomFieldBody {
   inputName: string;
@@ -46,7 +46,7 @@ export const customFieldsRouter: FastifyPluginAsync = async (fastify) => {
     "/contacts/custom-fields",
     async (request, reply) => {
       const { organizationId, role, permissions } = request.auth;
-      if (!canAccess(role, permissions, "manage_contacts")) {
+      if (!canAccessSub(role, permissions, "contacts_access", "contacts_manage_custom_fields")) {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
       }
       const {
@@ -103,7 +103,7 @@ export const customFieldsRouter: FastifyPluginAsync = async (fastify) => {
     "/contacts/custom-fields/:id",
     async (request, reply) => {
       const { organizationId, role, permissions } = request.auth;
-      if (!canAccess(role, permissions, "manage_contacts")) {
+      if (!canAccessSub(role, permissions, "contacts_access", "contacts_manage_custom_fields")) {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
       }
       const existing = await fastify.prisma.contactCustomField.findFirst({
@@ -153,7 +153,7 @@ export const customFieldsRouter: FastifyPluginAsync = async (fastify) => {
     "/contacts/custom-fields/:id",
     async (request, reply) => {
       const { organizationId, role, permissions } = request.auth;
-      if (!canAccess(role, permissions, "manage_contacts")) {
+      if (!canAccessSub(role, permissions, "contacts_access", "contacts_manage_custom_fields")) {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
       }
       const field = await fastify.prisma.contactCustomField.findFirst({
