@@ -3,6 +3,8 @@
 import { JSX, useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { canAccess } from "@/lib/can";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -100,6 +102,8 @@ function Toggle({
 
 export default function CustomFieldsManager(): JSX.Element {
   const { getToken } = useAuth();
+  const { user } = useCurrentUser();
+  const canManage = canAccess(user, "manage_contacts");
   const queryClient = useQueryClient();
 
   // undefined = modal closed, null = add mode, CustomField = edit mode
@@ -233,12 +237,14 @@ export default function CustomFieldsManager(): JSX.Element {
         <div>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Custom Fields</p>
         </div>
-        <button
-          onClick={openAdd}
-          className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
-        >
-          Add Field
-        </button>
+        {canManage && (
+          <button
+            onClick={openAdd}
+            className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+          >
+            Add Field
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
@@ -276,17 +282,21 @@ export default function CustomFieldsManager(): JSX.Element {
                 </p>
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                <Toggle
-                  checked={f.isActive}
-                  onChange={() => { if (!togglingId) void handleToggleActive(f); }}
-                  label=""
-                />
-                <button
-                  onClick={() => openEdit(f)}
-                  className="text-xs text-brand-600 hover:text-brand-800 font-medium"
-                >
-                  Edit
-                </button>
+                {canManage && (
+                  <Toggle
+                    checked={f.isActive}
+                    onChange={() => { if (!togglingId) void handleToggleActive(f); }}
+                    label=""
+                  />
+                )}
+                {canManage && (
+                  <button
+                    onClick={() => openEdit(f)}
+                    className="text-xs text-brand-600 hover:text-brand-800 font-medium"
+                  >
+                    Edit
+                  </button>
+                )}
               </div>
             </div>
           ))

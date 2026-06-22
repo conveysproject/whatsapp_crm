@@ -7,6 +7,8 @@ import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import StatusSlideOver, { type StatusDraft } from "./StatusSlideOver";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { canAccess } from "@/lib/can";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -20,6 +22,8 @@ interface LeadStatus {
 
 export default function LeadStatusesTab(): JSX.Element {
   const { getToken } = useAuth();
+  const { user } = useCurrentUser();
+  const canManage = canAccess(user, "manage_contacts");
   const qc = useQueryClient();
   const [editing, setEditing] = useState<StatusDraft | null | undefined>(undefined); // undefined=closed, null=add, draft=edit
   const [error, setError] = useState<string | null>(null);
@@ -78,14 +82,16 @@ export default function LeadStatusesTab(): JSX.Element {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <button
-          onClick={() => { setError(null); setEditing(null); }}
-          className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700"
-        >
-          Add Status
-        </button>
-      </div>
+      {canManage && (
+        <div className="flex justify-end">
+          <button
+            onClick={() => { setError(null); setEditing(null); }}
+            className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700"
+          >
+            Add Status
+          </button>
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -119,6 +125,7 @@ export default function LeadStatusesTab(): JSX.Element {
                   <SortableStatusRow
                     key={s.id}
                     status={s}
+                    canManage={canManage}
                     onEdit={() => { setError(null); setEditing({ id: s.id, name: s.name, color: s.color }); }}
                     onDelete={() => remove.mutate(s.id)}
                   />
@@ -143,10 +150,12 @@ export default function LeadStatusesTab(): JSX.Element {
 
 function SortableStatusRow({
   status,
+  canManage,
   onEdit,
   onDelete,
 }: {
   status: LeadStatus;
+  canManage: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }): JSX.Element {
@@ -154,12 +163,14 @@ function SortableStatusRow({
   const style = { transform: CSS.Transform.toString(transform), transition };
   return (
     <div ref={setNodeRef} style={style} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 px-4 py-3 bg-white">
-      <button {...attributes} {...listeners} aria-label="Drag to reorder" className="cursor-grab text-gray-300 hover:text-gray-500">⋮⋮</button>
+      {canManage
+        ? <button {...attributes} {...listeners} aria-label="Drag to reorder" className="cursor-grab text-gray-300 hover:text-gray-500">⋮⋮</button>
+        : <span className="w-5" />}
       <span className="text-sm font-medium text-gray-900">{status.name}</span>
       <span className="w-5 h-5 rounded-full" style={{ backgroundColor: status.color }} />
       <div className="flex items-center gap-3">
-        <button onClick={onEdit} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium">Edit</button>
-        <button onClick={onDelete} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
+        {canManage && <button onClick={onEdit} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium">Edit</button>}
+        {canManage && <button onClick={onDelete} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>}
       </div>
     </div>
   );
