@@ -37,3 +37,18 @@ export function hasSubPermission(permissions: Record<string, string>, parentKey:
 export function shouldHideField(permissions: Record<string, string>, key: "hide_contact_phone_numbers" | "hide_contact_emails"): boolean {
   return permissions[key] === "allow";
 }
+
+// Checks parent permission AND explicit sub-permission (both must be "allow")
+// Backwards-compat: empty permissions object = open access
+export function canAccessSub(
+  role: string,
+  permissions: Record<string, string>,
+  parentKey: string,
+  subKey: string
+): boolean {
+  if (role === "admin" || role === "superAdmin") return true;
+  const keys = Object.keys(permissions);
+  if (keys.length === 0) return true;
+  if (permissions[parentKey] !== "allow") return false;
+  return permissions[`${parentKey}@${subKey}`] === "allow";
+}
