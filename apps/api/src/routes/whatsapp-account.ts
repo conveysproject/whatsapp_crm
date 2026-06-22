@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { createHash } from "node:crypto";
-import { canAccess } from "../lib/permissions.js";
+import { canAccessSub } from "../lib/permissions.js";
 import { uploadToR2 } from "../lib/r2.js";
 import {
   getBusinessProfile,
@@ -104,8 +104,8 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post("/whatsapp-account/connect-webhook", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "administrative")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "administrative permission required" } });
+    if (!canAccessSub(role, permissions, "settings_access", "settings_whatsapp")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_access permission required" } });
     }
     // GAP-S65: subscribe to all 7 WABA webhook event types
     const org = await fastify.prisma.organization.findUnique({
@@ -135,8 +135,8 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post("/whatsapp-account/disconnect-webhook", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "administrative")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "administrative permission required" } });
+    if (!canAccessSub(role, permissions, "settings_access", "settings_whatsapp")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_access permission required" } });
     }
     await fastify.prisma.vendorSetting.upsert({
       where: { organizationId_key: { organizationId, key: "webhook_verified_at" } },
@@ -549,8 +549,8 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     Body: { wabaId: string; phoneNumberId?: string; accessToken: string };
   }>("/whatsapp-account/connect-manual", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "administrative")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "administrative permission required" } });
+    if (!canAccessSub(role, permissions, "settings_access", "settings_whatsapp")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_access permission required" } });
     }
     const { wabaId, phoneNumberId: bodyPhoneNumberId, accessToken } = request.body;
     if (!wabaId || !accessToken) {
@@ -623,8 +623,8 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post("/whatsapp-account/disconnect-account", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "administrative")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "administrative permission required" } });
+    if (!canAccessSub(role, permissions, "settings_access", "settings_whatsapp")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_access permission required" } });
     }
 
     // Capture what's being cleared before wiping
