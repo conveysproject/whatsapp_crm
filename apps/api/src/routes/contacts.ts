@@ -4,7 +4,7 @@ import { evaluateSegment, type FilterRule, type MatchMode } from "../lib/segment
 import { paginate, parsePaginationParams } from "../lib/pagination.js";
 
 import type { ContactId } from "@WBMSG/shared";
-import { maskPhone, maskEmail, canAccess, hasSubPermission } from "../lib/permissions.js";
+import { maskPhone, maskEmail, canAccess, canAccessSub } from "../lib/permissions.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 import { normalizeFullPhone } from "../lib/phone-normalize.js";
 import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
@@ -110,11 +110,8 @@ interface ContactPatchBody {
 export const contactsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/contacts/export/count", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "manage_contacts")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
-    }
-    if (!hasSubPermission(permissions, "manage_contacts", "export_contacts")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "export_contacts permission required" } });
+    if (!canAccessSub(role, permissions, "contacts_access", "contacts_export")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access permission required" } });
     }
     const where = await buildExportWhere(fastify.prisma, organizationId, request.raw.url ?? "");
     const count = await fastify.prisma.contact.count({ where });
@@ -123,12 +120,8 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.get<{ Querystring: { format?: string } }>("/contacts/export", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    // GAP-S04: manage_contacts + export_contacts sub-permission required
-    if (!canAccess(role, permissions, "manage_contacts")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
-    }
-    if (!hasSubPermission(permissions, "manage_contacts", "export_contacts")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "export_contacts permission required" } });
+    if (!canAccessSub(role, permissions, "contacts_access", "contacts_export")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access permission required" } });
     }
     const format = request.query.format;
 
@@ -365,9 +358,8 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: ContactBody }>("/contacts", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    // GAP-S04: manage_contacts permission required to create contacts
-    if (!canAccess(role, permissions, "manage_contacts")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
+    if (!canAccessSub(role, permissions, "contacts_access", "contacts_add")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access permission required" } });
     }
     const limitCheck = await checkPlanLimit(fastify.prisma, organizationId, "contacts");
     if (!limitCheck.allowed) {
@@ -445,8 +437,8 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     "/contacts/:id",
     async (request, reply) => {
       const { organizationId, role, permissions } = request.auth;
-      if (!canAccess(role, permissions, "manage_contacts")) {
-        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
+      if (!canAccess(role, permissions, "contacts_access")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access permission required" } });
       }
       const existing = await fastify.prisma.contact.findFirst({
         where: { id: request.params.id, organizationId, deletedAt: null },
@@ -563,8 +555,8 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
   // ── Bulk delete ──────────────────────────────────────────────────────────
   fastify.delete<{ Body: { contactIds: string[] } }>("/contacts/bulk", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "manage_contacts")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
+    if (!canAccessSub(role, permissions, "contacts_access", "contacts_delete")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access permission required" } });
     }
     const { contactIds } = request.body;
     if (!contactIds?.length) return reply.send({ deleted: 0 });
@@ -586,12 +578,8 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete<{ Params: { id: ContactId } }>("/contacts/:id", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "manage_contacts")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
-    }
-    // GAP-S04: delete_contacts sub-permission (default-allow; explicit deny blocks)
-    if (!hasSubPermission(permissions, "manage_contacts", "delete_contacts")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "delete_contacts permission required" } });
+    if (!canAccessSub(role, permissions, "contacts_access", "contacts_delete")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access permission required" } });
     }
     const existing = await fastify.prisma.contact.findFirst({
       where: { id: request.params.id, organizationId, deletedAt: null },
