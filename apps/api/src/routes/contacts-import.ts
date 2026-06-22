@@ -6,7 +6,7 @@ import { redis } from "../lib/redis.js";
 import { contactImportQueue } from "../lib/queue.js";
 import { normalizeFullPhone, normalizeSplitPhone } from "../lib/phone-normalize.js";
 import type { FieldMapping, ContactImportId } from "@WBMSG/shared";
-import { canAccess, hasSubPermission } from "../lib/permissions.js";
+import { canAccessSub } from "../lib/permissions.js";
 
 const CSV_SESSION_TTL_SECONDS = 1800; // 30 minutes
 
@@ -90,12 +90,8 @@ function streamParseCSV(csvText: string): Promise<Array<Record<string, string>>>
 export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post("/contacts/import/upload", async (request, reply) => {
     const { role, permissions } = request.auth;
-    // GAP-S04: manage_contacts parent required; import_contacts sub-permission (default-allow)
-    if (!canAccess(role, permissions, "manage_contacts")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_contacts permission required" } });
-    }
-    if (!hasSubPermission(permissions, "manage_contacts", "import_contacts")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "import_contacts permission required" } });
+    if (!canAccessSub(role, permissions, "contacts_access", "contacts_import")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access permission required" } });
     }
     const file = await (request as unknown as {
       file: () => Promise<{ toBuffer: () => Promise<Buffer> } | null>;
