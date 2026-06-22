@@ -64,7 +64,7 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const invitation = await prisma.invitation.findUnique({
         where: { token: request.params.token, status: "pending" },
-        select: { email: true, role: true, expiresAt: true },
+        select: { email: true, role: true, expiresAt: true, organizationId: true },
       });
       if (!invitation || invitation.expiresAt < new Date()) {
         return reply.status(404).send({ error: { code: "INVALID_TOKEN", message: "Invitation not found or expired" } });

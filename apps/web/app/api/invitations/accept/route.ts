@@ -7,8 +7,6 @@ const API_URL = (process.env["API_URL"] ?? process.env["NEXT_PUBLIC_API_URL"] ??
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // ── In-memory rate limiter (per serverless instance) ─────────────────────────
-// Not a hard guarantee across all instances, but adds meaningful friction for
-// automated tools hitting this endpoint. 5 attempts per IP per 15 minutes.
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 
@@ -26,7 +24,6 @@ function isRateLimited(ip: string): boolean {
   return false;
 }
 
-// Purge stale entries so the Map doesn't grow unbounded across long-lived instances
 function purgeStaleEntries() {
   const now = Date.now();
   for (const [ip, entry] of ipAttempts) {
@@ -34,7 +31,6 @@ function purgeStaleEntries() {
   }
 }
 
-// ── Minimum response time for failed attempts (slows down automated tools) ───
 async function slowFail(res: NextResponse, ms = 1500): Promise<NextResponse> {
   await new Promise((r) => setTimeout(r, ms));
   return res;
@@ -43,7 +39,7 @@ async function slowFail(res: NextResponse, ms = 1500): Promise<NextResponse> {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // ── Rate limiting ──────────────────────────────────────────────────────────
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  if (Math.random() < 0.05) purgeStaleEntries(); // 5% chance to GC on each request
+  if (Math.random() < 0.05) purgeStaleEntries();
   if (isRateLimited(ip)) {
     return slowFail(
       NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 })
@@ -68,7 +64,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!token || !fullName || !password) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
-  // Reject non-UUID tokens immediately — no DB round-trip needed
   if (!UUID_RE.test(token)) {
     return slowFail(NextResponse.json({ error: "Invalid invitation" }, { status: 400 }));
   }
@@ -79,16 +74,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Password must be 8–128 characters" }, { status: 400 });
   }
 
-  // ── Step 1: Validate token against DB — email comes from DB, not client ────
+  // ── Step 1: Validate token — email and org come from DB, never from client ─
   let invitationEmail: string;
+  let organizationId: string;
+  let invitationRole: string;
   try {
     const inviteRes = await fetch(`${API_URL}/v1/invitations/${encodeURIComponent(token)}`);
     if (!inviteRes.ok) {
-      // Use slowFail so scanners can't use response time to distinguish valid vs. invalid tokens
       return slowFail(NextResponse.json({ error: "Invalid invitation" }, { status: 404 }));
     }
-    const inviteJson = await inviteRes.json() as { data: { email: string; role: string } };
+    const inviteJson = await inviteRes.json() as {
+      data: { email: string; role: string; organizationId: string };
+    };
     invitationEmail = inviteJson.data.email;
+    organizationId = inviteJson.data.organizationId;
+    invitationRole = inviteJson.data.role;
   } catch {
     return NextResponse.json({ error: "Could not verify invitation" }, { status: 502 });
   }
@@ -99,8 +99,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const lastName = nameParts.slice(1).join(" ") || "-";
 
   let clerkUserId: string;
+  const clerk = await clerkClient();
+
   try {
-    const clerk = await clerkClient();
     const user = await clerk.users.createUser({
       emailAddress: [invitationEmail],
       password,
@@ -115,25 +116,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: msg }, { status: 422 });
   }
 
-  // ── Step 3: Accept invitation in Railway DB ────────────────────────────────
-  async function cleanupClerkUser() {
-    try { const clerk = await clerkClient(); await clerk.users.deleteUser(clerkUserId); } catch { /* best-effort */ }
-  }
+  // ── Step 3: Add user to Clerk organization ────────────────────────────────
+  // This triggers the organizationMembership.created webhook on Railway,
+  // which upserts the DB user with the correct role and marks the invitation accepted.
+  const clerkRole = invitationRole === "admin" ? "org:admin" : "org:member";
 
   try {
-    const res = await fetch(`${API_URL}/v1/invitations/${encodeURIComponent(token)}/accept`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clerkUserId, fullName: fullName.trim() }),
+    await clerk.organizations.createOrganizationMembership({
+      organizationId,
+      userId: clerkUserId,
+      role: clerkRole,
     });
-    if (!res.ok) {
-      await cleanupClerkUser();
-      const json = await res.json() as { error?: { message?: string } };
-      return NextResponse.json({ error: json.error?.message ?? "Failed to accept invitation" }, { status: res.status });
-    }
-  } catch {
-    await cleanupClerkUser();
-    return NextResponse.json({ error: "Network error contacting API" }, { status: 502 });
+  } catch (err: unknown) {
+    // Cleanup: delete the Clerk user so they can retry
+    try { await clerk.users.deleteUser(clerkUserId); } catch { /* best-effort */ }
+    const msg = err instanceof Error ? err.message : "Failed to join organization";
+    console.error("[invitations/accept] Clerk org membership error:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });
