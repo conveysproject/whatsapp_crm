@@ -1,5 +1,6 @@
 import type { JSX } from "react";
 import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import { BillingClient } from "./BillingClient";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -41,9 +42,25 @@ async function fetchJson<T>(url: string, token: string): Promise<T | null> {
   } catch { return null; }
 }
 
+async function getUserRole(token: string): Promise<string> {
+  try {
+    const res = await fetch(`${API_URL}/v1/users/me`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+    });
+    if (!res.ok) return "agent";
+    const json = await res.json() as { data?: { role?: string } };
+    return json.data?.role ?? "agent";
+  } catch { return "agent"; }
+}
+
 export default async function BillingPage(): Promise<JSX.Element> {
   const { getToken } = await auth.protect();
   const token = (await getToken()) ?? "";
+
+  const userRole = await getUserRole(token);
+  if (userRole !== "admin" && userRole !== "superAdmin") {
+    redirect("/settings");
+  }
 
   const [usage, subscription, plans, transactions] = await Promise.all([
     fetchJson<UsageData>(`${API_URL}/v1/billing/usage`, token),
