@@ -71,7 +71,7 @@ export default function AcceptInvitationPage(): JSX.Element {
       const res = await fetch("/api/invitations/accept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, email: meta.email, fullName, password }),
+        body: JSON.stringify({ token, fullName, password }),
       });
       const json = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) { setError(json.error ?? "Failed to create account."); return; }
