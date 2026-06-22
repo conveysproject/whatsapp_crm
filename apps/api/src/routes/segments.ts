@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { evaluateSegment, type FilterRule, type MatchMode } from "../lib/segment-evaluator.js";
 import type { SegmentId } from "@WBMSG/shared";
-import { canAccess } from "../lib/permissions.js";
+import { canAccessSub } from "../lib/permissions.js";
 
 interface SegmentBody {
   name: string;
@@ -32,7 +32,7 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: SegmentBody }>("/segments", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "manage_contacts")) {
+    if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_manage_segments")) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
     }
     const segment = await fastify.prisma.segment.create({
@@ -50,7 +50,7 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
     "/segments/:id",
     async (request, reply) => {
       const { organizationId, role, permissions } = request.auth;
-      if (!canAccess(role, permissions, "manage_contacts")) {
+      if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_manage_segments")) {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
       }
       const existing = await fastify.prisma.segment.findFirst({
@@ -73,7 +73,7 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete<{ Params: { id: SegmentId } }>("/segments/:id", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "manage_contacts")) {
+    if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_manage_segments")) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
     }
     const existing = await fastify.prisma.segment.findFirst({
