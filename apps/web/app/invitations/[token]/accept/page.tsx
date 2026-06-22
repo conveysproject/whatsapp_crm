@@ -13,6 +13,8 @@ interface InvitationMeta {
   role: string;
 }
 
+type Step = "form" | "verify" | "done";
+
 export default function AcceptInvitationPage(): JSX.Element {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
@@ -24,18 +26,16 @@ export default function AcceptInvitationPage(): JSX.Element {
 
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<Step>("form");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Fetch invitation details so we can pre-fill and lock the email
   useEffect(() => {
     void (async () => {
       try {
         const res = await fetch(`${API_URL}/v1/invitations/${token}`);
-        if (!res.ok) {
-          setMetaError("This invitation link is invalid or has expired.");
-          return;
-        }
+        if (!res.ok) { setMetaError("This invitation link is invalid or has expired."); return; }
         const json = await res.json() as { data: InvitationMeta };
         setMeta(json.data);
       } catch {
@@ -44,6 +44,7 @@ export default function AcceptInvitationPage(): JSX.Element {
     })();
   }, [token]);
 
+  // ── Already signed in ────────────────────────────────────────────────────
   async function acceptWithCurrentUser() {
     setLoading(true);
     setError(null);
@@ -51,10 +52,7 @@ export default function AcceptInvitationPage(): JSX.Element {
       const clerkToken = await getToken();
       const res = await fetch(`${API_URL}/v1/invitations/${token}/accept`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${clerkToken ?? ""}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${clerkToken ?? ""}` },
         body: JSON.stringify({ clerkUserId: userId, fullName }),
       });
       if (!res.ok) {
@@ -70,20 +68,39 @@ export default function AcceptInvitationPage(): JSX.Element {
     }
   }
 
-  async function handleSignUpAndAccept(e: FormEvent) {
+  // ── Step 1: Create Clerk account (triggers OTP email) ───────────────────
+  async function handleSignUp(e: FormEvent) {
     e.preventDefault();
     if (!isLoaded || !signUp || !meta) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await signUp.create({
+      await signUp.create({
         emailAddress: meta.email,
         password,
         firstName: fullName.split(" ")[0],
-        lastName: fullName.split(" ").slice(1).join(" "),
+        lastName: fullName.split(" ").slice(1).join(" ") || "-",
       });
+      // Ask Clerk to send the verification email
+      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+      setStep("verify");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign-up failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── Step 2: Verify OTP → get createdUserId → accept invitation ──────────
+  async function handleVerify(e: FormEvent) {
+    e.preventDefault();
+    if (!isLoaded || !signUp) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await signUp.attemptEmailAddressVerification({ code: otp });
       const clerkUserId = result.createdUserId;
-      if (!clerkUserId) { setError("Sign-up failed. Please try again."); return; }
+      if (!clerkUserId) { setError("Verification failed. Please try again."); return; }
 
       const res = await fetch(`${API_URL}/v1/invitations/${token}/accept`, {
         method: "POST",
@@ -97,14 +114,13 @@ export default function AcceptInvitationPage(): JSX.Element {
       }
       router.replace("/sign-in");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Sign-up failed.";
-      setError(msg);
+      setError(err instanceof Error ? err.message : "Verification failed.");
     } finally {
       setLoading(false);
     }
   }
 
-  // Invalid / expired invitation
+  // ── Error state ──────────────────────────────────────────────────────────
   if (metaError) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -116,15 +132,13 @@ export default function AcceptInvitationPage(): JSX.Element {
     );
   }
 
-  // Already signed in — just accept
+  // ── Already signed in ────────────────────────────────────────────────────
   if (isSignedIn) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="bg-white rounded-xl border border-gray-200 shadow p-8 w-full max-w-md space-y-4">
           <h1 className="text-xl font-semibold text-gray-900">Accept Invitation</h1>
-          <p className="text-sm text-gray-500">
-            You&apos;re signed in. Click below to join the organization.
-          </p>
+          <p className="text-sm text-gray-500">You&apos;re already signed in. Click below to join the organization.</p>
           {meta && (
             <p className="text-sm text-gray-700">
               Invited as <span className="font-medium">{meta.email}</span> · <span className="capitalize">{meta.role}</span>
@@ -150,13 +164,54 @@ export default function AcceptInvitationPage(): JSX.Element {
     );
   }
 
+  // ── OTP verification step ────────────────────────────────────────────────
+  if (step === "verify") {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-xl border border-gray-200 shadow p-8 w-full max-w-md space-y-4">
+          <h1 className="text-xl font-semibold text-gray-900">Check your email</h1>
+          <p className="text-sm text-gray-500">
+            We sent a verification code to <span className="font-medium text-gray-700">{meta?.email}</span>. Enter it below to complete sign-up.
+          </p>
+          <form onSubmit={(e) => { void handleVerify(e); }} className="space-y-3">
+            <input
+              type="text"
+              placeholder="6-digit code"
+              required
+              maxLength={6}
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <button
+              type="submit"
+              disabled={loading || otp.length < 6}
+              className="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+            >
+              {loading ? "Verifying…" : "Verify & Join"}
+            </button>
+          </form>
+          <button
+            type="button"
+            onClick={() => setStep("form")}
+            className="w-full text-xs text-gray-400 hover:text-gray-600"
+          >
+            ← Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Sign-up form ─────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="bg-white rounded-xl border border-gray-200 shadow p-8 w-full max-w-md space-y-4">
         <h1 className="text-xl font-semibold text-gray-900">You&apos;ve been invited</h1>
         <p className="text-sm text-gray-500">Create an account to join your team on WBMSG.</p>
 
-        <form onSubmit={(e) => { void handleSignUpAndAccept(e); }} className="space-y-3">
+        <form onSubmit={(e) => { void handleSignUp(e); }} className="space-y-3">
           <input
             type="text"
             placeholder="Full name"
@@ -165,7 +220,7 @@ export default function AcceptInvitationPage(): JSX.Element {
             onChange={(e) => setFullName(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
-          {/* Email is pre-filled from the invitation and locked — user cannot change it */}
+          {/* Email pre-filled and locked from invitation */}
           <input
             type="email"
             value={meta?.email ?? ""}
@@ -176,7 +231,7 @@ export default function AcceptInvitationPage(): JSX.Element {
           />
           <input
             type="password"
-            placeholder="Password"
+            placeholder="Password (min 8 characters)"
             required
             minLength={8}
             value={password}
