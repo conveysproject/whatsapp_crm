@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { flowQueue } from "../lib/queue.js";
 import type { FlowDefinition, FlowTriggerPayload } from "../lib/flow-runner.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
-import { canAccess } from "../lib/permissions.js";
+import { canAccessSub } from "../lib/permissions.js";
 
 interface FlowBody {
   name: string;
@@ -30,9 +30,9 @@ export const flowsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: FlowBody }>("/flows", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    // GAP-S04: bot flow builder requires manage_bot_replies + manage_bot_flow_builder sub-permission
-    if (!canAccess(role, permissions, "manage_bot_replies")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "manage_bot_replies permission required" } });
+    // GAP-S04: automation_access + automation_bot_flows sub-permission required
+    if (!canAccessSub(role, permissions, "automation_access", "automation_bot_flows")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "automation_bot_flows permission required" } });
     }
     const limitCheck = await checkPlanLimit(fastify.prisma, organizationId, "flows");
     if (!limitCheck.allowed) {
