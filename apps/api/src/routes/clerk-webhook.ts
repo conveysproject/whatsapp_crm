@@ -111,8 +111,10 @@ export const clerkWebhookRouter: FastifyPluginAsync = async (fastify) => {
         ]
           .filter(Boolean)
           .join(" ") || "";
-        const dbRole =
-          role === "org:admin" ? "admin" : "agent";
+        // Role comes from our invitation flow, never from Clerk's org role.
+        // `agent` is only a safety-net default for a membership with no invitation.
+        void role; // Clerk org role intentionally ignored
+        const dbRole = "agent";
 
         // Ensure org exists (may arrive before organization.created)
         await fastify.prisma.organization.upsert({
@@ -137,7 +139,10 @@ export const clerkWebhookRouter: FastifyPluginAsync = async (fastify) => {
             role: invitation ? invitation.role : dbRole,
             isActive: true,
           },
-          update: { isActive: true, email, fullName, role: invitation ? invitation.role : dbRole },
+          // Only set role from a pending invitation on update. Never apply the
+          // `agent` default to an existing user — that would demote an admin who
+          // registered via /register when this membership event later fires.
+          update: { isActive: true, email, fullName, ...(invitation ? { role: invitation.role } : {}) },
         });
 
         if (invitation) {

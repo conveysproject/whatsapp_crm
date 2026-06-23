@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { checkPlanLimit } from "../lib/plan-limits.js";
-import { canAccessSub, hasSubPermission } from "../lib/permissions.js";
+import { canAccessSub } from "../lib/permissions.js";
 
 interface ChatbotBody {
   name: string;
@@ -38,9 +38,6 @@ export const chatbotsRouter: FastifyPluginAsync = async (fastify) => {
       if (!canAccessSub(role, permissions, "automation_access", "automation_bot_flows")) {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "automation_access permission required" } });
       }
-      if (!hasSubPermission(permissions, "manage_bot_replies", "add_edit_bot_replies")) {
-        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "add_edit_bot_replies permission required" } });
-      }
       const existing = await fastify.prisma.chatbot.findFirst({ where: { id: request.params.id, organizationId } });
       if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Chatbot not found" } });
       const { name, flowId, isActive, sessionTimeoutMinutes, isStrictFlow, startTrigger } = request.body;
@@ -61,12 +58,9 @@ export const chatbotsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete<{ Params: { id: string } }>("/chatbots/:id", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    // GAP-S04: automation_access + automation_bot_flows + delete_bot_replies sub-permission required
+    // GAP-S04: automation_access + automation_bot_flows sub-permission required
     if (!canAccessSub(role, permissions, "automation_access", "automation_bot_flows")) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "automation_access permission required" } });
-    }
-    if (!hasSubPermission(permissions, "manage_bot_replies", "delete_bot_replies")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "delete_bot_replies permission required" } });
     }
     const existing = await fastify.prisma.chatbot.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Chatbot not found" } });

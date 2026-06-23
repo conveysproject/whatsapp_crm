@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { Role } from "@prisma/client";
 import { redis } from "../lib/redis.js";
+import { defaultsForRole } from "../lib/default-role-permissions.js";
 
 const VALID_ROLES = ["superAdmin", "admin", "manager", "agent", "viewer"] as const;
 type RoleKey = (typeof VALID_ROLES)[number];
@@ -27,9 +28,15 @@ export const rolesRouter: FastifyPluginAsync = async (fastify) => {
     const data = Object.fromEntries(
       VALID_ROLES.map((r) => {
         const row = settings.find((s) => s.key === settingKey(r));
-        let permissions: Record<string, string> = {};
-        if (row?.value) {
-          try { permissions = JSON.parse(row.value) as Record<string, string>; } catch { /* corrupted value — treat as empty */ }
+        let permissions: Record<string, string>;
+        if (!row) {
+          permissions = defaultsForRole(r); // no row → show built-in defaults
+        } else {
+          try {
+            permissions = JSON.parse(row.value ?? "{}") as Record<string, string>;
+          } catch {
+            permissions = {}; // corrupted stored row
+          }
         }
         return [r, permissions];
       })

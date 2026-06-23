@@ -1,6 +1,7 @@
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync } from "fastify";
 import { verifyClerkToken } from "../lib/clerk.js";
+import { defaultsForRole } from "../lib/default-role-permissions.js";
 import { redis } from "../lib/redis.js";
 import type { AuthContext } from "../types/fastify.js";
 
@@ -22,9 +23,8 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     }
 
     let userId: string;
-    let orgRole: string | null;
     try {
-      ({ userId, orgRole } = await verifyClerkToken(request.headers.authorization));
+      ({ userId } = await verifyClerkToken(request.headers.authorization));
     } catch {
       return reply.status(401).send({
         error: { code: "UNAUTHORIZED", message: "Invalid or missing token" },
@@ -79,29 +79,28 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       },
       select: { value: true },
     });
-    let roleDefaults: Record<string, string> = {};
-    if (roleSettingRow?.value) {
-      try { roleDefaults = JSON.parse(roleSettingRow.value) as Record<string, string>; } catch { /* corrupted row — treat as empty */ }
+    // Row PRESENT → use exactly what's stored (even {} = deny all).
+    // Row ABSENT → fall back to built-in role defaults.
+    let roleBaseline: Record<string, string>;
+    if (roleSettingRow === null) {
+      roleBaseline = defaultsForRole(user.role);
+    } else {
+      try {
+        roleBaseline = JSON.parse(roleSettingRow.value ?? "{}") as Record<string, string>;
+      } catch {
+        roleBaseline = {}; // row exists but corrupted — intentional write, treat as deny-all
+      }
     }
     const memberPermissions = (member?.permissions ?? {}) as Record<string, string>;
-    const permissions = { ...roleDefaults, ...memberPermissions };
-
-    // Auto-sync: if Clerk JWT says org:admin but DB has a non-admin role, promote now.
-    // Fixes users whose DB record existed before the webhook ran (default role = "agent").
-    let effectiveRole = user.role;
-    if (orgRole === "org:admin" && !["admin", "superAdmin"].includes(user.role)) {
-      effectiveRole = "admin";
-      void fastify.prisma.user.updateMany({ where: { id: userId }, data: { role: "admin" } })
-        .catch((err: unknown) => fastify.log.warn({ err }, "Failed to auto-sync admin role from Clerk JWT"));
-    }
+    const permissions = { ...roleBaseline, ...memberPermissions };
 
     await redis.setex(
       cacheKey,
       AUTH_CACHE_TTL,
-      JSON.stringify({ role: effectiveRole, organizationId: user.organizationId, permissions })
+      JSON.stringify({ role: user.role, organizationId: user.organizationId, permissions })
     );
 
-    request.auth = { userId, organizationId: user.organizationId, role: effectiveRole, permissions };
+    request.auth = { userId, organizationId: user.organizationId, role: user.role, permissions };
   });
 };
 

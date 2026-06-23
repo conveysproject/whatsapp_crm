@@ -163,17 +163,30 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     "/users/:id/permissions",
     async (request, reply) => {
       const { organizationId, role } = request.auth;
-      if (role !== "admin") {
+      if (role !== "admin" && role !== "superAdmin") {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can update permissions" } });
       }
-      const member = await fastify.prisma.organizationMember.findFirst({
-        where: { userId: request.params.id, organizationId },
+
+      // The target user must belong to this org.
+      const target = await fastify.prisma.user.findFirst({
+        where: { id: request.params.id, organizationId },
+        select: { id: true, role: true },
       });
-      if (!member) return reply.status(404).send({ error: "Team member not found" });
-      const data = await fastify.prisma.organizationMember.update({
-        where: { id: member.id },
-        data: { permissions: request.body.permissions },
+      if (!target) {
+        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Team member not found" } });
+      }
+
+      const data = await fastify.prisma.organizationMember.upsert({
+        where: { organizationId_userId: { organizationId, userId: request.params.id } },
+        create: {
+          organizationId,
+          userId: request.params.id,
+          role: target.role,
+          permissions: request.body.permissions,
+        },
+        update: { permissions: request.body.permissions },
       });
+
       await invalidateAuthCache(request.params.id);
       return reply.send({ data });
     }
