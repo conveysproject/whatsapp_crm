@@ -30,6 +30,9 @@ vi.mock("../lib/redis.js", () => ({
   redis: {
     get: vi.fn().mockResolvedValue(null),
     setex: vi.fn().mockResolvedValue("OK"),
+    // exists returns truthy so the lastSignInAt stamping block is skipped
+    // (avoids needing a user.updateMany mock for the fire-and-forget stamp).
+    exists: vi.fn().mockResolvedValue(1),
   },
 }));
 
@@ -85,11 +88,12 @@ describe("auth plugin — permission merge", () => {
     return app;
   }
 
-  it("uses empty permissions when no role defaults and no member permissions", async () => {
+  it("falls back to DEFAULT_ROLE_PERMISSIONS when no role_permissions row exists", async () => {
     const { prisma } = await import("../lib/prisma.js");
+    const { defaultsForRole } = await import("../lib/default-role-permissions.js");
     vi.mocked(prisma.user.findFirst).mockResolvedValueOnce({ role: "agent", organizationId: "org-1" } as never);
     vi.mocked(prisma.organizationMember.findFirst).mockResolvedValueOnce(null);
-    vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValueOnce(null); // row ABSENT
 
     const app = await buildMergeApp();
     const res = await app.inject({
@@ -99,6 +103,26 @@ describe("auth plugin — permission merge", () => {
     });
 
     expect(res.statusCode).toBe(200);
+    // Absent row → built-in agent defaults, NOT an empty (open-everything) object.
+    expect(res.json<{ permissions: Record<string, string> }>().permissions).toEqual(defaultsForRole("agent"));
+    await app.close();
+  });
+
+  it("uses the stored config exactly when the row exists, even if empty (deny all)", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    vi.mocked(prisma.user.findFirst).mockResolvedValueOnce({ role: "agent", organizationId: "org-1" } as never);
+    vi.mocked(prisma.organizationMember.findFirst).mockResolvedValueOnce(null);
+    vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValueOnce({ value: "{}" } as never); // row PRESENT, empty
+
+    const app = await buildMergeApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/probe",
+      headers: { authorization: "Bearer tok" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Present empty row → deny all (no fallback to defaults).
     expect(res.json<{ permissions: Record<string, string> }>().permissions).toEqual({});
     await app.close();
   });
