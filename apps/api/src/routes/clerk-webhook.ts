@@ -139,7 +139,10 @@ export const clerkWebhookRouter: FastifyPluginAsync = async (fastify) => {
             role: invitation ? invitation.role : dbRole,
             isActive: true,
           },
-          update: { isActive: true, email, fullName, role: invitation ? invitation.role : dbRole },
+          // Only set role from a pending invitation on update. Never apply the
+          // `agent` default to an existing user — that would demote an admin who
+          // registered via /register when this membership event later fires.
+          update: { isActive: true, email, fullName, ...(invitation ? { role: invitation.role } : {}) },
         });
 
         if (invitation) {
