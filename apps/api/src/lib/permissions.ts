@@ -8,17 +8,16 @@ export function maskEmail(email: string): string {
   return email.slice(0, 2) + "***" + email.slice(atIdx);
 }
 
-// GAP-S04: admin role bypasses all permission checks.
-// For non-admin users: empty permissions object = allow (backwards compat for pre-permission orgs);
-// once any key is set, the full tree is enforced.
+// admin/superAdmin bypass all checks. Everyone else is deny-by-default: the
+// parent key must be explicitly "allow". The auth layer guarantees every
+// non-admin role resolves to its DEFAULT_ROLE_PERMISSIONS baseline (or an
+// explicit stored config), so an unconfigured org no longer grants blanket access.
 export function canAccess(
   role: string,
   permissions: Record<string, string>,
   key: string
 ): boolean {
   if (role === "admin" || role === "superAdmin") return true;
-  const keys = Object.keys(permissions);
-  if (keys.length === 0) return true; // no permissions configured: open access
   return permissions[key] === "allow";
 }
 
@@ -38,8 +37,8 @@ export function shouldHideField(permissions: Record<string, string>, key: "hide_
   return permissions[key] === "allow";
 }
 
-// Checks parent permission AND explicit sub-permission (both must be "allow")
-// Backwards-compat: empty permissions object = open access
+// Parent must be "allow" AND the explicit sub-permission must be "allow".
+// admin/superAdmin bypass. Deny-by-default for everyone else.
 export function canAccessSub(
   role: string,
   permissions: Record<string, string>,
@@ -47,8 +46,6 @@ export function canAccessSub(
   subKey: string
 ): boolean {
   if (role === "admin" || role === "superAdmin") return true;
-  const keys = Object.keys(permissions);
-  if (keys.length === 0) return true;
   if (permissions[parentKey] !== "allow") return false;
   return permissions[`${parentKey}@${subKey}`] === "allow";
 }
