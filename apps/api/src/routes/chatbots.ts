@@ -58,7 +58,7 @@ export const chatbotsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete<{ Params: { id: string } }>("/chatbots/:id", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    // GAP-S04: automation_access + automation_bot_flows + delete_bot_replies sub-permission required
+    // GAP-S04: automation_access + automation_bot_flows sub-permission required
     if (!canAccessSub(role, permissions, "automation_access", "automation_bot_flows")) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "automation_access permission required" } });
     }
