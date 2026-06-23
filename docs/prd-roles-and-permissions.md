@@ -1,9 +1,11 @@
 # PRD — Roles & Permissions System (RBAC)
 
-**Status:** Draft for review
+**Status:** Implemented & deployed (2026-06-23, merged to `main` @ `ef29c3a`)
 **Owner:** Platform / Auth
-**Last updated:** 2026-06-22
+**Last updated:** 2026-06-23
 **Module:** M1 (Auth & Multi-Tenancy)
+
+> **Implementation outcome (2026-06-23):** All blocking defects (D1–D7, D11, D12) fixed and deployed via the plan at `docs/superpowers/plans/2026-06-23-roles-permissions-auth-engine.md`. Final Opus review surfaced **D12** (webhook demoting `/register` admins) — the true root cause of the "admin sees Access Denied" report — now fixed. The one-time data-fix script was dry-run against production: **0 orgs needed repair** (the now-removed JWT auto-sync had already written `role=admin` for the affected org), so no `--apply` was required. Deferred (non-blocking): D8 masking, D10 `authorizedParties`, and the inbox `assigned_chats_only` enforcement (see §14 / follow-ups).
 
 ---
 
@@ -67,8 +69,9 @@ This PRD defines the **target** behaviour of the role & permission engine. It ex
 | **D8** | `shouldHideField` checks keys (`hide_contact_phone_numbers`, `hide_contact_emails`) that **don't exist** in the grid (grid uses `hide_phone_number@hide_contact_fields`); also currently unused | Low | Masking feature non-functional |
 | **D10** | `verifyToken` doesn't validate `authorizedParties` | Low | Token-audience hardening missing |
 | **D11** | `auth.ts` reads Clerk JWT `org_role` and mirrors it into the DB role on every request | **High** | Violates "Clerk = identity only" (§1.1); makes Clerk's role authoritative instead of our DB |
+| **D12** | Clerk webhook `organizationMembership.created` sets `role` on its **update** path too, so an admin created via `/register` is demoted to `agent` (the default) when the membership event later fires with no invitation | **High** | **The true root cause of the "admin sees Access Denied" report.** Found in final review; fixed by only setting role from a pending invitation on update, never the default |
 
-> **Note:** the earlier "D9" (auto-sync only promotes, never demotes) is superseded by **D11** — under §1.1 we don't sync from Clerk at all, so the promote/demote question disappears.
+> **Status:** D1–D7, D11, D12 are **fixed & deployed** (2026-06-23). D8 (masking) and D10 (`authorizedParties`) are deferred. The earlier "D9" (auto-sync promote/demote) is moot under §1.1 — we no longer sync from Clerk.
 
 ---
 
@@ -260,7 +263,7 @@ Frontend `/register` → create org + creating user with role `admin` (explicit)
 
 ### 10.3 Existing data
 - **Orgs with no permission rows:** no migration needed — the read-time fallback (§6) makes them correct immediately.
-- **One-time role correction:** any org whose creator is currently not `admin` (e.g. provisioned before this PRD, like an org with `registeredAt: null`) gets its creator promoted to `admin` via a one-off data fix. After that, the JWT auto-sync (D11) is removed entirely.
+- **One-time role correction:** script `apps/api/scripts/fix-missing-org-admins.mjs` promotes each admin-less org's oldest active user to `admin` (dry-run by default; `--apply` to write). **Outcome (2026-06-23):** dry-run against production reported **0 orgs to fix** — every org already had an admin (the now-removed D11 JWT auto-sync had already promoted the affected user), so no `--apply` was needed. The JWT auto-sync (D11) is now removed entirely.
 
 ---
 
