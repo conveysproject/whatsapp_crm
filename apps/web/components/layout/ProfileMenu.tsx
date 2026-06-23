@@ -40,9 +40,17 @@ export function ProfileMenu(): JSX.Element {
   const { orgRole } = useAuth();
   const qc = useQueryClient();
 
-  const { data: userData } = useQuery<{ data: UserMe }>({
+  // NOTE: queryKey ["user-me"] is shared with useCurrentUser — both MUST return
+  // the same (unwrapped) shape, or whichever fetches first poisons the cache for
+  // the other (caused the Roles page to misread role and show Access Denied).
+  const { data: userData } = useQuery<UserMe | null>({
     queryKey: ["user-me"],
-    queryFn: () => fetch("/api/v1/users/me").then((r) => r.json() as Promise<{ data: UserMe }>),
+    queryFn: async () => {
+      const res = await fetch("/api/v1/users/me");
+      if (!res.ok) return null;
+      const json = await res.json() as { data?: UserMe };
+      return json.data ?? null;
+    },
   });
 
   const { data: orgData } = useQuery<{ data: OrgMe }>({
@@ -75,7 +83,7 @@ export function ProfileMenu(): JSX.Element {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  const user = userData?.data;
+  const user = userData ?? undefined;
   const org = orgData?.data;
   const isOnline = user?.availability !== "away";
   const userInitials = initials(user?.fullName, user?.email ?? "");
