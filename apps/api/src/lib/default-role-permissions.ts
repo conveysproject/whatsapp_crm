@@ -88,3 +88,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, Record<string, string>> =
     automation_access: "allow",
   },
 };
+
+/**
+ * Built-in baseline permissions for a role. Used only when an org has NO
+ * `role_permissions_<role>` VendorSetting row. Returns {} for roles with no
+ * baseline (e.g. superAdmin — which bypasses all checks anyway).
+ */
+export function defaultsForRole(role: string): Record<string, string> {
+  return DEFAULT_ROLE_PERMISSIONS[role as RoleKey] ?? {};
+}

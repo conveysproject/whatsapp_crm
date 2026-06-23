@@ -1,6 +1,7 @@
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync } from "fastify";
 import { verifyClerkToken } from "../lib/clerk.js";
+import { defaultsForRole } from "../lib/default-role-permissions.js";
 import { redis } from "../lib/redis.js";
 import type { AuthContext } from "../types/fastify.js";
 
@@ -78,12 +79,20 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       },
       select: { value: true },
     });
-    let roleDefaults: Record<string, string> = {};
-    if (roleSettingRow?.value) {
-      try { roleDefaults = JSON.parse(roleSettingRow.value) as Record<string, string>; } catch { /* corrupted row — treat as empty */ }
+    // Row PRESENT → use exactly what's stored (even {} = deny all).
+    // Row ABSENT → fall back to built-in role defaults.
+    let roleBaseline: Record<string, string>;
+    if (roleSettingRow === null) {
+      roleBaseline = defaultsForRole(user.role);
+    } else {
+      try {
+        roleBaseline = JSON.parse(roleSettingRow.value ?? "{}") as Record<string, string>;
+      } catch {
+        roleBaseline = {}; // row exists but corrupted — intentional write, treat as deny-all
+      }
     }
     const memberPermissions = (member?.permissions ?? {}) as Record<string, string>;
-    const permissions = { ...roleDefaults, ...memberPermissions };
+    const permissions = { ...roleBaseline, ...memberPermissions };
 
     await redis.setex(
       cacheKey,
