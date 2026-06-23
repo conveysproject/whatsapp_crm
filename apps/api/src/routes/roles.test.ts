@@ -49,7 +49,7 @@ describe("GET /roles/permissions", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("returns empty objects for roles with no stored settings", async () => {
+  it("returns built-in defaults for roles with no stored settings (D4)", async () => {
     const app = await buildApp();
     mockPrisma.vendorSetting.findMany.mockResolvedValue([]);
 
@@ -57,11 +57,13 @@ describe("GET /roles/permissions", () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json<{ data: Record<string, Record<string, string>> }>();
-    expect(body.data.admin).toEqual({});
-    expect(body.data.agent).toEqual({});
-    expect(body.data.viewer).toEqual({});
-    expect(body.data.manager).toEqual({});
+    // superAdmin has no default baseline (bypasses all checks anyway)
     expect(body.data.superAdmin).toEqual({});
+    // non-superAdmin roles return their built-in defaults
+    expect(body.data.admin).toMatchObject({ contacts_access: "allow", inbox_access: "allow" });
+    expect(body.data.agent).toMatchObject({ contacts_access: "allow", inbox_access: "allow" });
+    expect(body.data.viewer).toMatchObject({ contacts_access: "allow" });
+    expect(body.data.manager).toMatchObject({ contacts_access: "allow", inbox_access: "allow" });
   });
 
   it("returns stored permissions for each role", async () => {
@@ -75,9 +77,11 @@ describe("GET /roles/permissions", () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json<{ data: Record<string, Record<string, string>> }>();
+    // rows present → stored value used exactly (even if minimal)
     expect(body.data.admin).toEqual({ contacts_access: "allow" });
     expect(body.data.agent).toEqual({ inbox_access: "allow" });
-    expect(body.data.viewer).toEqual({});
+    // viewer has no stored row → built-in defaults returned
+    expect(body.data.viewer).toMatchObject({ contacts_access: "allow" });
   });
 });
 
