@@ -2,11 +2,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
+const { mockRedisDel } = vi.hoisted(() => ({ mockRedisDel: vi.fn().mockResolvedValue(1) }));
+vi.mock("../lib/redis.js", () => ({ redis: { del: mockRedisDel } }));
+
 const mockPrisma = {
   user: { findMany: vi.fn(), update: vi.fn(), findFirst: vi.fn() },
   organizationMember: {
     findFirst: vi.fn(),
     update: vi.fn(),
+    upsert: vi.fn(),
   },
 };
 
@@ -26,18 +30,32 @@ describe("PUT /v1/users/:id/permissions", () => {
   beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
   afterEach(async () => { await app.close(); });
 
-  it("updates permissions on OrganizationMember record", async () => {
-    mockPrisma.organizationMember.findFirst.mockResolvedValue({ id: "om-1", organizationId: "org-1", userId: "u-2" });
-    mockPrisma.organizationMember.update.mockResolvedValue({ id: "om-1", permissions: { manage_contacts: "allow" } });
+  it("upserts permissions on OrganizationMember record (D5)", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u-2", role: "agent" });
+    mockPrisma.organizationMember.upsert.mockResolvedValue({ id: "om-1", organizationId: "org-1", userId: "u-2", permissions: { manage_contacts: "allow" } });
     const res = await app.inject({
       method: "PUT",
       url: "/v1/users/u-2/permissions",
       payload: { permissions: { manage_contacts: "allow", messaging: "deny" } },
     });
     expect(res.statusCode).toBe(200);
-    expect(mockPrisma.organizationMember.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { permissions: { manage_contacts: "allow", messaging: "deny" } } })
+    expect(mockPrisma.organizationMember.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { organizationId_userId: { organizationId: "org-1", userId: "u-2" } },
+        create: expect.objectContaining({ permissions: { manage_contacts: "allow", messaging: "deny" } }),
+        update: { permissions: { manage_contacts: "allow", messaging: "deny" } },
+      })
     );
+  });
+
+  it("returns 404 when target user not in org", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/users/u-999/permissions",
+      payload: { permissions: {} },
+    });
+    expect(res.statusCode).toBe(404);
   });
 });
 
