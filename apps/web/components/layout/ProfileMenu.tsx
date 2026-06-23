@@ -1,7 +1,7 @@
 "use client";
 import { JSX, useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useClerk, useUser } from "@clerk/nextjs";
+import { useClerk, useUser, useAuth } from "@clerk/nextjs";
 import { AvailabilityConfirmModal } from "./AvailabilityConfirmModal";
 
 interface UserMe {
@@ -37,6 +37,7 @@ export function ProfileMenu(): JSX.Element {
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { signOut, openUserProfile } = useClerk();
   const { user: clerkUser } = useUser();
+  const { orgRole } = useAuth();
   const qc = useQueryClient();
 
   const { data: userData } = useQuery<{ data: UserMe }>({
@@ -110,6 +111,20 @@ export function ProfileMenu(): JSX.Element {
     enterprise: "Enterprise",
   };
 
+  // Platform role drives all access control (DB User.role). Clerk role is identity-only.
+  const platformRoleLabel: Record<string, string> = {
+    superAdmin: "Super Admin",
+    admin: "Admin",
+    manager: "Manager",
+    agent: "Agent",
+    viewer: "Viewer",
+  };
+  function clerkRoleLabel(r: string | null | undefined): string {
+    if (!r) return "—";
+    const base = r.replace(/^org:/, "");
+    return base.charAt(0).toUpperCase() + base.slice(1);
+  }
+
   return (
     <>
       {showOfflineModal && (
@@ -170,6 +185,16 @@ export function ProfileMenu(): JSX.Element {
                     {isOnline ? "Online" : "Away"}
                   </p>
                 </div>
+              </div>
+
+              {/* Roles: platform (access control) + Clerk (identity) */}
+              <div className="flex items-center gap-2 mb-4">
+                <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium px-2 py-0.5">
+                  Platform: {platformRoleLabel[user?.role ?? ""] ?? user?.role ?? "—"}
+                </span>
+                <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5">
+                  Clerk: {clerkRoleLabel(orgRole)}
+                </span>
               </div>
 
               {/* Availability toggle */}
