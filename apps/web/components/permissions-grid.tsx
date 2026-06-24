@@ -20,7 +20,8 @@ export const PERMISSION_GROUPS = [
     label: "Contact Data Privacy",
     description: "Phone numbers and field data visibility",
     subPermissions: [
-      { key: "hide_contact_fields", label: "Hide all contact field data" },
+      { key: "hide_phone_only",     label: "Hide phone number only" },
+      { key: "hide_contact_fields", label: "Hide all contact field data (phone + email)" },
     ],
   },
   {
