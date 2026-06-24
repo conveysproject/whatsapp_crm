@@ -228,18 +228,23 @@ A permission checkbox in the Roles grid is binding in **both directions**, acros
 
 **Authority:** the **backend read + action guards** are the real security boundary. Nav + page-view guards are UX so a restricted user never reaches a dead end — they do **not** replace the backend checks. A direct API call without the parent permission must always 403, independent of the UI.
 
-**Section → parent key map** (illustrative — the rule covers every section/key, not only those listed):
+**Full nav → parent key map** (all 11 sidebar sections; see `Sidebar.tsx` NAV array):
 
-| Section | Parent key | Notes |
-|---|---|---|
-| Inbox, Message Log | `inbox_access` | |
-| Contacts (All, Groups, Import, Segments) | `contacts_access` | Segments moved under Contacts (gated by `contacts_access`) — it lives in the Contacts nav |
-| Campaigns | `campaigns_access` | |
-| Templates | `templates_access` | |
-| Flows / Automation | `automation_access` | |
-| Analytics | `analytics_access` | |
-| Settings | `settings_access` | sub-pages further gated by `settings_*` subs |
-| Deals, Trust Score | *(no key yet)* | Open to all until a key is added — tracked as an open question (§14) |
+| # | Nav label | Route(s) | Parent key | Gated? |
+|---|---|---|---|---|
+| 1 | Dashboard | `/dashboard` | *(none)* | No — visible to all roles |
+| 2 | Inbox | `/inbox` | `inbox_access` | Yes |
+| 3 | Message Log | `/messages` | `inbox_access` | Yes — shares Inbox's key |
+| 4 | Contacts (+ All / Groups / Segments / Import) | `/contacts*` | `contacts_access` | Yes |
+| 5 | Campaigns | `/campaigns*` | `campaigns_access` | Yes |
+| 6 | Templates | `/templates*` | `templates_access` | Yes |
+| 7 | Flows | `/flows*` | `automation_access` | Yes |
+| 8 | Deals | `/deals` | *(none)* | No — visible to all roles |
+| 9 | Analytics | `/analytics*` | `analytics_access` | Yes |
+| 10 | Trust Score | `/trust-score` | *(none)* | No — visible to all roles |
+| 11 | Settings | `/settings*` | `settings_access` | Yes — sub-pages further gated by `settings_*` subs |
+
+**Sections with no key (Dashboard, Deals, Trust Score)** are open to all roles by design for now. Adding a permission key to them is tracked as an open question (§14).
 
 ---
 
@@ -305,19 +310,25 @@ Every guarded surface checks the canonical key. Frontend hides UI; backend enfor
 
 Gaps marked *(add guard)* are tracked but not all blocking for this PRD's core fix.
 
-**Section-view enforcement (Phase 2, D13–D15)** — applies to **every** keyed section; each gated by its parent key at all three layers:
+**Section-view enforcement (Phase 2, D13–D15)** — all 11 nav sections:
 
-| Section (parent key) | Nav (D13) | Page view (D14) | Backend read (D15) | Action subs |
-|---|---|---|---|---|
-| Campaigns (`campaigns_access`) | ✅ | ✅ | ✅ | ✅ all 6 subs |
-| Inbox / Message Log (`inbox_access`) | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
-| Contacts (`contacts_access`) | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
-| Templates (`templates_access`) | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
-| Flows / Automation (`automation_access`) | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
-| Analytics (`analytics_access`) | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
-| Settings (`settings_access`) | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
+| # | Section | Parent key | Nav (D13) | Page (D14) | Backend (D15) | Action subs |
+|---|---|---|---|---|---|---|
+| 1 | Dashboard | *(none)* | N/A — no key | N/A | N/A | N/A |
+| 2 | Inbox | `inbox_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
+| 3 | Message Log | `inbox_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
+| 4 | Contacts | `contacts_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
+| 5 | Campaigns | `campaigns_access` | ✅ | ✅ | ✅ | ✅ all 6 subs |
+| 6 | Templates | `templates_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
+| 7 | Flows | `automation_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
+| 8 | Deals | *(none)* | N/A — no key | N/A | N/A | N/A |
+| 9 | Analytics | `analytics_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
+| 10 | Trust Score | *(none)* | N/A — no key | N/A | N/A | N/A |
+| 11 | Settings | `settings_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
 
-See §13.2 for the per-section 8-point checklist and order of implementation.
+**Dashboard / Deals / Trust Score:** no permission key; always visible to all roles. Phase 2 does not apply until a key is added (§14).
+
+See §13.2 for the per-section 8-point checklist and implementation order.
 
 ---
 
@@ -411,6 +422,12 @@ Every section follows the same 8-point pattern piloted on Campaigns. Each item m
 
 ---
 
+#### Dashboard — ⛔ No permission key (always visible)
+
+No `perm` field in the nav. Dashboard is open to all roles by design. Phase 2 does not apply until a `dashboard_access` key is added to the catalog and grid. Tracked in §14.
+
+---
+
 #### Campaigns — ✅ Complete (confirmed 2026-06-24)
 
 | # | Item | Status | Notes |
@@ -486,16 +503,18 @@ Every section follows the same 8-point pattern piloted on Campaigns. Each item m
 
 ---
 
-#### Inbox — ❌ Pending
+#### Inbox + Message Log — ❌ Pending
+
+Both `/inbox` and `/messages` share `inbox_access` as their parent key (`Sidebar.tsx` lines 31–32).
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 1 | Sidebar nav | ✅ | `perm: "inbox_access"` on Inbox and Message Log nav items |
-| 2 | Page view guard | ❌ | Wrap `/inbox` and `/messages` pages with `PermissionGate permission="inbox_access"` |
-| 3 | Backend read gate | ❌ | Add `canAccess(inbox_access)` check to conversation/message list endpoints |
-| 4 | Granular action subs | ✅ | Phase 1: inbox_all_conversations, inbox_unassigned, assigned_chats_only — these are view-scope subs (not write actions); verify tab visibility respects each sub |
+| 1 | Sidebar nav | ✅ | `perm: "inbox_access"` on both Inbox and Message Log nav items |
+| 2 | Page view guard | ❌ | Wrap `/inbox` **and** `/messages` pages with `PermissionGate permission="inbox_access"` |
+| 3 | Backend read gate | ❌ | Add `canAccess(inbox_access)` check to conversation list + message list endpoints |
+| 4 | Granular action subs | ✅ | Phase 1: inbox_all_conversations, inbox_unassigned, assigned_chats_only — view-scope subs; verify tab/filter visibility respects each sub |
 | 5 | Cleanup | ✅ | No stale keys |
-| 6 | Tests | ❌ | Add: section gate blocks/allows; each sub hides correct tab; admin bypass |
+| 6 | Tests | ❌ | Add: section gate blocks/allows on both routes; each sub hides correct tab; admin bypass |
 | 7 | Defaults updated | ✅ | Agent: unassigned + assigned_chats_only; manager: all + unassigned; viewer: all_conversations |
 | 8 | Docs updated | ✅ | Reflected in PRD + auth doc |
 
@@ -516,11 +535,23 @@ Every section follows the same 8-point pattern piloted on Campaigns. Each item m
 
 ---
 
+#### Deals — ⛔ No permission key (always visible)
+
+No `perm` field in the nav. Deals (`/deals`) is open to all roles by design for now. Phase 2 does not apply until a `deals_access` key is added to the catalog, grid, and defaults. Tracked in §14.
+
+---
+
+#### Trust Score — ⛔ No permission key (always visible)
+
+No `perm` field in the nav. Trust Score (`/trust-score`) is open to all roles by design for now. Phase 2 does not apply until a `trust_score_access` key is added to the catalog, grid, and defaults. Tracked in §14.
+
+---
+
 **Resolved by product owner:**
 - **Entry paths:** register → `admin`; invitation → admin-selected role. Clerk role (creator/member) never maps to a platform role. *(§4, §10)*
 - **Initial admin:** only via `/register`; no Clerk-creator backstop needed.
 - **Fallback rule:** absent `role_permissions_<role>` row → built-in defaults; present row (even `{}`) → used exactly as stored (`{}` = deny all). *(§6)*
 
 **Still open:**
-1. **Keyless sections (Deals, Trust Score):** they have no permission key in the catalog. Options: (a) leave visible to all for now, (b) admin-only, or (c) add `deals_access` / `trust_score_access` keys to the catalog + grid + defaults and gate them like the rest. Message Log is treated as `inbox_access`. *(Blocks only Deals/Trust Score gating, not the keyed sections.)*
+1. **Keyless sections — Dashboard, Deals, Trust Score:** all three have no `perm` field in the sidebar and no catalog key. Currently visible to all roles. Options: (a) leave as-is indefinitely, (b) admin-only, or (c) add keys (`dashboard_access`, `deals_access`, `trust_score_access`) to the catalog + grid + defaults and apply the §13.2 checklist. Decision required before any Phase 2 work can target these sections. *(Non-blocking for the 7 keyed sections.)*
 2. **Masking scope:** which endpoints honour `hide_phone_number@hide_contact_fields`? Needs a concrete list before implementing D8. *(Non-blocking; can defer.)*
