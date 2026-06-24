@@ -37,7 +37,7 @@ const NAV: NavItem[] = [
     children: [
       { href: "/contacts",          label: "All Contacts", exact: true, perm: "contacts_access" },
       { href: "/contacts/groups",   label: "Groups",       perm: "contacts_access" },
-      { href: "/contacts/segments", label: "Segments",     perm: "campaigns_access" },
+      { href: "/contacts/segments", label: "Segments",     perm: "contacts_access" },
       { href: "/contacts/import",   label: "Import",       perm: "contacts_access" },
     ],
   },

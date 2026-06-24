@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { evaluateSegment, type FilterRule, type MatchMode } from "../lib/segment-evaluator.js";
 import type { SegmentId } from "@WBMSG/shared";
-import { canAccessSub } from "../lib/permissions.js";
+import { canAccess } from "../lib/permissions.js";
 
 interface SegmentBody {
   name: string;
@@ -32,8 +32,8 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: SegmentBody }>("/segments", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_manage_segments")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+    if (!canAccess(role, permissions, "contacts_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: contacts_access" } });
     }
     const segment = await fastify.prisma.segment.create({
       data: {
@@ -50,8 +50,8 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
     "/segments/:id",
     async (request, reply) => {
       const { organizationId, role, permissions } = request.auth;
-      if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_manage_segments")) {
-        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+      if (!canAccess(role, permissions, "contacts_access")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: contacts_access" } });
       }
       const existing = await fastify.prisma.segment.findFirst({
         where: { id: request.params.id, organizationId },
@@ -73,8 +73,8 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete<{ Params: { id: SegmentId } }>("/segments/:id", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_manage_segments")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: manage_contacts" } });
+    if (!canAccess(role, permissions, "contacts_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: contacts_access" } });
     }
     const existing = await fastify.prisma.segment.findFirst({
       where: { id: request.params.id, organizationId },

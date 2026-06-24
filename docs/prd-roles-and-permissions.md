@@ -143,7 +143,7 @@ Value is `"allow"` or `"deny"`. Absence of a key = not granted (deny), except wh
 | `contacts_access` | `contacts_add`, `contacts_delete`, `contacts_export`, `contacts_import`, `contacts_bulk_tag`, `contacts_manage_custom_fields` | Contact Hub + actions |
 | `hide_phone_number` | `hide_contact_fields` | Masking of phone/email in contact views |
 | `inbox_access` | `inbox_all_conversations`, `inbox_unassigned`, `assigned_chats_only` | Inbox scope |
-| `campaigns_access` | `campaigns_create`, `campaigns_export_report`, `campaigns_custom_reports`, `campaigns_manage_segments` | Campaign Manager |
+| `campaigns_access` | `campaigns_create`, `campaigns_pause_resume`, `campaigns_abort`, `campaigns_archive`, `campaigns_delete`, `campaigns_export_report`, `campaigns_custom_reports` | Campaign Manager (each action has its own sub; `campaigns_custom_reports` is reserved — no feature yet) |
 | `templates_access` | `templates_create`, `templates_edit`, `templates_delete`, `templates_ai_buttons` | Template Manager |
 | `settings_access` | `settings_agents`, `settings_api_key`, `settings_whatsapp`, `settings_billing`, `settings_tags` | Settings sub-pages |
 | `analytics_access` | `analytics_export`, `analytics_agent_performance` | Analytics |
@@ -235,7 +235,7 @@ A permission checkbox in the Roles grid is binding in **both directions**, acros
 | Section | Parent key | Notes |
 |---|---|---|
 | Inbox, Message Log | `inbox_access` | |
-| Contacts (All, Groups, Import) | `contacts_access` | Segments is gated by `campaigns_access` (segments live under campaigns) |
+| Contacts (All, Groups, Import, Segments) | `contacts_access` | Segments moved under Contacts (gated by `contacts_access`) — it lives in the Contacts nav |
 | Campaigns | `campaigns_access` | |
 | Templates | `templates_access` | |
 | Flows / Automation | `automation_access` | |
@@ -289,7 +289,7 @@ Every guarded surface checks the canonical key. Frontend hides UI; backend enfor
 | Bulk tag | `canAccessSub(contacts_access, contacts_bulk_tag)` | *(add guard)* |
 | Custom fields / lead statuses | `canAccessSub(contacts_access, contacts_manage_custom_fields)` | `/custom-fields`, `/lead-statuses` writes |
 | Contact groups | `canAccess(contacts_access)` | `/contact-groups` writes |
-| Segments | `canAccessSub(campaigns_access, campaigns_manage_segments)` | `/segments` writes |
+| Segments | `canAccess(contacts_access)` | `/segments` writes |
 | Create campaign | `canAccess(campaigns_access)` (page) | `POST /campaigns` → `campaigns_create` |
 | Templates create/edit/delete | per sub-key | `POST`/`DELETE /templates` |
 | Bot flows | `canAccessSub(automation_access, automation_bot_flows)` | `POST /flows`, `/chatbots` writes |

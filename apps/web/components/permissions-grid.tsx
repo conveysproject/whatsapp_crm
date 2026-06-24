@@ -45,7 +45,6 @@ export const PERMISSION_GROUPS = [
       { key: "campaigns_delete", label: "Delete campaigns" },
       { key: "campaigns_export_report", label: "Export Campaign Reports" },
       { key: "campaigns_custom_reports", label: "View Custom Campaign Reports" },
-      { key: "campaigns_manage_segments", label: "Create / update Segments" },
     ],
   },
   {
