@@ -228,6 +228,59 @@ describe("GET /v1/contacts/export", () => {
   });
 });
 
+describe("contacts section gate (D15)", () => {
+  async function buildAppAs(permissions: Record<string, string>, role = "agent"): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+    });
+    const { contactsRouter } = await import("./contacts.js");
+    await app.register(contactsRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("returns 403 when the role lacks contacts_access", async () => {
+    const app = await buildAppAs({ campaigns_access: "allow" }); // no contacts_access
+    const res = await app.inject({ method: "GET", url: "/v1/contacts" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.contact.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("allows the read when the role has contacts_access", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({ contacts_access: "allow" });
+    const res = await app.inject({ method: "GET", url: "/v1/contacts" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("admin bypasses the section gate even with empty permissions", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({}, "admin");
+    const res = await app.inject({ method: "GET", url: "/v1/contacts" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("blocks export when contacts_export sub is off (parent on)", async () => {
+    const app = await buildAppAs({ contacts_access: "allow" }); // export sub off
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/export" });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("blocks delete when contacts_delete sub is off (parent on)", async () => {
+    const app = await buildAppAs({ contacts_access: "allow" }); // delete sub off
+    const res = await app.inject({ method: "DELETE", url: "/v1/contacts/c-1" });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+});
+
 describe("POST /v1/contacts/:id/block", () => {
   let app: FastifyInstance;
   beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });

@@ -108,6 +108,15 @@ interface ContactPatchBody {
 }
 
 export const contactsRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate (Phase 2 / D15): every contacts route requires contacts_access.
+  // admin/superAdmin bypass via canAccess; writes still check their sub-permissions.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "contacts_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access permission required" } });
+    }
+  });
+
   fastify.get("/contacts/export/count", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
     if (!canAccessSub(role, permissions, "contacts_access", "contacts_export")) {

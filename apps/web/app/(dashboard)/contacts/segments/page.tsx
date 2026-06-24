@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { canAccess } from "@/lib/can";
+import { PermissionGate } from "@/components/PermissionGate";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -57,6 +58,7 @@ export default function SegmentsPage(): JSX.Element {
   });
 
   return (
+    <PermissionGate permission="contacts_access">
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Segments</h1>
@@ -113,5 +115,6 @@ export default function SegmentsPage(): JSX.Element {
         )}
       </div>
     </div>
+    </PermissionGate>
   );
 }

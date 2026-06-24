@@ -2,6 +2,7 @@ import { JSX } from "react";
 import { auth } from "@clerk/nextjs/server";
 import { ContactsClient } from "@/components/contacts/ContactsClient";
 import type { Contact } from "@/components/contacts/AddContactModal";
+import { PermissionGate } from "@/components/PermissionGate";
 
 const API = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -30,5 +31,9 @@ export default async function ContactsPage(): Promise<JSX.Element> {
   const { getToken } = await auth.protect();
   const token = await getToken() ?? "";
   const [contacts, userRole] = await Promise.all([getContacts(token), getUserRole(token)]);
-  return <ContactsClient initialContacts={contacts} userRole={userRole} />;
+  return (
+    <PermissionGate permission="contacts_access">
+      <ContactsClient initialContacts={contacts} userRole={userRole} />
+    </PermissionGate>
+  );
 }
