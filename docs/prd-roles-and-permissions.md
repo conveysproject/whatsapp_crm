@@ -9,7 +9,7 @@
 >
 > **Phase 2 — section-view enforcement (§6.1 + D13–D15):** Phase 1 gated only *actions* (the "do" layer). Phase 2 makes an **unchecked parent permission strictly hide and block** the entire section across all three layers (nav, page, backend read). All 9 keyed sections complete (2026-06-24): Campaigns, Contacts, Templates, Flows, Analytics, Inbox + Message Log, Settings, Deals, Trust Score.
 >
-> Deferred (non-blocking): D8 masking, D10 `authorizedParties`.
+> Deferred (non-blocking): D10 `authorizedParties`. D8 masking **fixed 2026-06-24**.
 
 ---
 
@@ -70,7 +70,7 @@ This PRD defines the **target** behaviour of the role & permission engine. It ex
 | **D5** | `OrganizationMember` is **never created** anywhere → `PUT /users/:id/permissions` always 404s | High | Per-user overrides are a dead feature |
 | **D6** | Inconsistent helper semantics: `hasSubPermission` defaults **allow** (`!== "deny"`), `canAccessSub` defaults **deny** | Medium | Contradictory behaviour where both are used |
 | **D7** | `chatbots.ts` still calls `hasSubPermission` with **non-existent keys** (`manage_bot_replies`, `add_edit_bot_replies`, `delete_bot_replies`) | Medium | Dead checks that always pass |
-| **D8** | `shouldHideField` checks keys (`hide_contact_phone_numbers`, `hide_contact_emails`) that **don't exist** in the grid (grid uses `hide_phone_number@hide_contact_fields`); also currently unused | Low | Masking feature non-functional |
+| **D8** | `shouldHideField` checks keys (`hide_contact_phone_numbers`, `hide_contact_emails`) that **don't exist** in the grid (grid uses `hide_phone_number@hide_contact_fields`); also currently unused | Low | ~~Masking feature non-functional~~ **Fixed 2026-06-24** — all routes now check `hide_phone_number@hide_contact_fields`; stale keys removed from admin defaults |
 | **D10** | `verifyToken` doesn't validate `authorizedParties` | Low | Token-audience hardening missing |
 | **D11** | `auth.ts` reads Clerk JWT `org_role` and mirrors it into the DB role on every request | **High** | Violates "Clerk = identity only" (§1.1); makes Clerk's role authoritative instead of our DB |
 | **D12** | Clerk webhook `organizationMembership.created` sets `role` on its **update** path too, so an admin created via `/register` is demoted to `agent` (the default) when the membership event later fires with no invitation | **High** | **The true root cause of the "admin sees Access Denied" report.** Found in final review; fixed by only setting role from a pending invitation on update, never the default |
@@ -78,7 +78,7 @@ This PRD defines the **target** behaviour of the role & permission engine. It ex
 | **D14** | **No page-view guard** — opening a section URL (e.g. `/campaigns`) renders the page for anyone with a session; only write *buttons* are hidden | **High** | ~~Restricted roles can open restricted pages by URL~~ **Fixed Phase 2 (2026-06-24)** |
 | **D15** | **No backend read guard** — list/read endpoints (`GET /campaigns`, `/templates`, `/flows`, `/analytics/*`, …) have no permission check; only writes are gated | **Critical** | ~~Restricted roles can fetch restricted data directly from the API — actual data exposure~~ **Fixed Phase 2 (2026-06-24)** |
 
-> **Status:** D1–D7, D11, D12 are **fixed & deployed** (2026-06-23). **D13, D14, D15 all ✅ done for all 9 keyed sections (2026-06-24).** D8 (masking) and D10 (`authorizedParties`) are deferred. The earlier "D9" (auto-sync promote/demote) is moot under §1.1.
+> **Status:** D1–D8, D11, D12 are **fixed & deployed**. D13, D14, D15 ✅ done for all 9 sections. D10 (`authorizedParties`) remains deferred. D9 is moot under §1.1.
 
 ---
 
@@ -570,5 +570,8 @@ Both `/inbox` and `/messages` share `inbox_access` as their parent key (`Sidebar
 - **Fallback rule:** absent `role_permissions_<role>` row → built-in defaults; present row (even `{}`) → used exactly as stored (`{}` = deny all). *(§6)*
 
 **Still open:**
-1. **Dashboard section:** No `perm` field in the nav. Dashboard (`/dashboard`) is open to all roles by design. Adding `dashboard_access` would be possible but low value (landing page). No action planned.
-2. **Masking scope:** which endpoints honour `hide_phone_number@hide_contact_fields`? Needs a concrete list before implementing D8. *(Non-blocking; can defer.)*
+1. **Dashboard section:** No `perm` field in the nav. Dashboard (`/dashboard`) is open to all roles by design — no action planned.
+2. **D10 `authorizedParties`:** Clerk JWT `authorizedParties` validation not enforced. Low risk in current single-client setup — deferred.
+
+**Closed:**
+- ~~Masking scope (D8)~~ — fixed 2026-06-24: contacts, conversations, campaigns all use `hide_phone_number@hide_contact_fields`.
