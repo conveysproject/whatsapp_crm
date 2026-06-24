@@ -4,7 +4,7 @@ import { evaluateSegment, type FilterRule, type MatchMode } from "../lib/segment
 import { paginate, parsePaginationParams } from "../lib/pagination.js";
 
 import type { ContactId } from "@WBMSG/shared";
-import { maskPhone, maskEmail, canAccess, canAccessSub } from "../lib/permissions.js";
+import { maskPhone, maskEmail, canAccess, canAccessSub, shouldHidePhone, shouldHideContactFields } from "../lib/permissions.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 import { normalizeFullPhone } from "../lib/phone-normalize.js";
 import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
@@ -324,12 +324,13 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       assignedUser: c.assignedUserId ? (userMap.get(c.assignedUserId) ?? null) : null,
     }));
 
-    const hideFields = permissions["hide_phone_number@hide_contact_fields"] === "allow";
-    const masked = hideFields
+    const hideAllFields = shouldHideContactFields(permissions);
+    const hidePhone = shouldHidePhone(permissions);
+    const masked = (hidePhone || hideAllFields)
       ? withOwner.map((c) => ({
           ...c,
-          phoneNumber: maskPhone(c.phoneNumber),
-          email: c.email ? maskEmail(c.email) : c.email,
+          phoneNumber: hidePhone ? maskPhone(c.phoneNumber) : c.phoneNumber,
+          email: hideAllFields && c.email ? maskEmail(c.email) : c.email,
         }))
       : withOwner;
 
@@ -352,11 +353,12 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const assignedUser = contact.assignedUserId
       ? await fastify.prisma.user.findFirst({ where: { id: contact.assignedUserId }, select: { id: true, fullName: true, email: true } })
       : null;
-    const hideFields = permissions["hide_phone_number@hide_contact_fields"] === "allow";
+    const hideAllFields = shouldHideContactFields(permissions);
+    const hidePhone = shouldHidePhone(permissions);
     const data = {
       ...contact,
-      phoneNumber: hideFields ? maskPhone(contact.phoneNumber) : contact.phoneNumber,
-      email: hideFields && contact.email ? maskEmail(contact.email) : contact.email,
+      phoneNumber: hidePhone ? maskPhone(contact.phoneNumber) : contact.phoneNumber,
+      email: hideAllFields && contact.email ? maskEmail(contact.email) : contact.email,
       groupIds: contact.groupContacts.map((g) => g.contactGroupId),
       assignedUser,
     };

@@ -707,3 +707,85 @@ describe("contact field masking (D8)", () => {
     await app.close();
   });
 });
+
+describe("GET /v1/contacts — Contact Data Privacy masking", () => {
+  async function buildAppAs(permissions: Record<string, string>): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (request) => {
+      request.auth = { userId: "user-1", organizationId: "org-1", role: "agent" as const, permissions: { contacts_access: "allow", ...permissions } };
+    });
+    const { contactsRouter } = await import("./contacts.js");
+    await app.register(contactsRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  const contact = {
+    id: "c-1",
+    organizationId: "org-1",
+    phoneNumber: "919000000001",
+    email: "alice@example.com",
+    firstName: "Alice",
+    lastName: null,
+    tags: [],
+    assignedUserId: null,
+  };
+
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    mockPrisma.contact.findMany.mockResolvedValue([contact]);
+    mockPrisma.contact.count.mockResolvedValue(1);
+    mockPrisma.user.findMany.mockResolvedValue([]);
+  });
+
+  it("hides phone but NOT email when only hide_phone_only is set", async () => {
+    const app = await buildAppAs({
+      "hide_phone_number": "allow",
+      "hide_phone_number@hide_phone_only": "allow",
+    });
+    const res = await app.inject({ method: "GET", url: "/v1/contacts" });
+    expect(res.statusCode).toBe(200);
+    const items = res.json<{ data: Array<{ phoneNumber: string; email: string }> }>().data;
+    expect(items[0]?.phoneNumber).not.toBe("919000000001"); // masked
+    expect(items[0]?.email).toBe("alice@example.com"); // NOT masked
+    await app.close();
+  });
+
+  it("hides both phone AND email when hide_contact_fields is set", async () => {
+    const app = await buildAppAs({
+      "hide_phone_number": "allow",
+      "hide_phone_number@hide_contact_fields": "allow",
+    });
+    const res = await app.inject({ method: "GET", url: "/v1/contacts" });
+    expect(res.statusCode).toBe(200);
+    const items = res.json<{ data: Array<{ phoneNumber: string; email: string }> }>().data;
+    expect(items[0]?.phoneNumber).not.toBe("919000000001"); // masked
+    expect(items[0]?.email).not.toBe("alice@example.com"); // masked
+    await app.close();
+  });
+
+  it("hides both phone AND email when both toggles are set (union)", async () => {
+    const app = await buildAppAs({
+      "hide_phone_number": "allow",
+      "hide_phone_number@hide_phone_only": "allow",
+      "hide_phone_number@hide_contact_fields": "allow",
+    });
+    const res = await app.inject({ method: "GET", url: "/v1/contacts" });
+    expect(res.statusCode).toBe(200);
+    const items = res.json<{ data: Array<{ phoneNumber: string; email: string }> }>().data;
+    expect(items[0]?.phoneNumber).not.toBe("919000000001"); // masked
+    expect(items[0]?.email).not.toBe("alice@example.com"); // masked
+    await app.close();
+  });
+
+  it("shows raw phone AND email when neither toggle is set", async () => {
+    const app = await buildAppAs({});
+    const res = await app.inject({ method: "GET", url: "/v1/contacts" });
+    expect(res.statusCode).toBe(200);
+    const items = res.json<{ data: Array<{ phoneNumber: string; email: string }> }>().data;
+    expect(items[0]?.phoneNumber).toBe("919000000001");
+    expect(items[0]?.email).toBe("alice@example.com");
+    await app.close();
+  });
+});

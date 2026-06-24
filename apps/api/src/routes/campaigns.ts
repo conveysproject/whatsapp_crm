@@ -3,7 +3,7 @@ import type { CampaignStatus } from "@prisma/client";
 import { campaignQueue } from "../lib/queue.js";
 import type { CampaignId, SegmentId, TemplateId } from "@WBMSG/shared";
 import { evaluateSegment, type FilterRule } from "../lib/segment-evaluator.js";
-import { maskPhone, maskEmail, canAccess, canAccessSub } from "../lib/permissions.js";
+import { maskPhone, maskEmail, canAccess, canAccessSub, shouldHidePhone, shouldHideContactFields } from "../lib/permissions.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 
 interface CampaignBody {
@@ -511,15 +511,16 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
         : [];
       const byPhone = new Map(lookedUp.map((c) => [c.phoneNumber, c]));
 
-      const hideFields = permissions["hide_phone_number@hide_contact_fields"] === "allow";
+      const hidePhone = shouldHidePhone(permissions);
+      const hideEmail = shouldHideContactFields(permissions);
 
       const header = "Contact Name,Phone Number,Email,Status,Sent At,Error\n";
       const rows = recipients.map((r) => {
         const resolved = r.contact ?? byPhone.get(r.phoneNumber) ?? null;
         const name = (resolved ? [resolved.firstName, resolved.lastName].filter(Boolean).join(" ") : r.fullName) || "";
         const rawPhone = resolved?.phoneNumber ?? r.phoneNumber;
-        const phone = hideFields ? maskPhone(rawPhone) : rawPhone;
-        const email = hideFields ? maskEmail(resolved?.email ?? "") : (resolved?.email ?? "");
+        const phone = hidePhone ? maskPhone(rawPhone) : rawPhone;
+        const email = hideEmail ? maskEmail(resolved?.email ?? "") : (resolved?.email ?? "");
         const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
         return [escape(name), escape(`="${phone}"`), escape(email), r.status, r.sentAt?.toISOString() ?? "", escape(r.errorMessage ?? "")].join(",");
       });

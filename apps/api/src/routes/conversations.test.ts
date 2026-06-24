@@ -283,3 +283,69 @@ describe("inbox section gate (D15)", () => {
     await app.close();
   });
 });
+
+describe("GET /v1/conversations — phone masking via privacy toggles", () => {
+  async function buildAppAs(permissions: Record<string, string>): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = {
+        userId: "u-1",
+        organizationId: "org-1",
+        role: "agent" as const,
+        permissions: { inbox_access: "allow", ...permissions },
+      };
+    });
+    const { conversationsRouter } = await import("./conversations.js");
+    await app.register(conversationsRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  const convWithContact = {
+    id: "conv-1",
+    organizationId: "org-1",
+    status: "open",
+    lastMessageAt: null,
+    lastInboundAt: null,
+    messages: [],
+    contact: { id: "c-1", firstName: "Alice", lastName: null, phoneNumber: "919000000001", tags: [] },
+  };
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("masks phone when hide_phone_only is set", async () => {
+    mockPrisma.conversation.findMany.mockResolvedValue([convWithContact]);
+    const app = await buildAppAs({
+      "hide_phone_number": "allow",
+      "hide_phone_number@hide_phone_only": "allow",
+    });
+    const res = await app.inject({ method: "GET", url: "/v1/conversations" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Array<{ contact: { phoneNumber: string } }> }>();
+    expect(body.data[0]?.contact?.phoneNumber).not.toBe("919000000001");
+    await app.close();
+  });
+
+  it("masks phone when hide_contact_fields is set (email not in payload)", async () => {
+    mockPrisma.conversation.findMany.mockResolvedValue([convWithContact]);
+    const app = await buildAppAs({
+      "hide_phone_number": "allow",
+      "hide_phone_number@hide_contact_fields": "allow",
+    });
+    const res = await app.inject({ method: "GET", url: "/v1/conversations" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Array<{ contact: { phoneNumber: string } }> }>();
+    expect(body.data[0]?.contact?.phoneNumber).not.toBe("919000000001");
+    await app.close();
+  });
+
+  it("does not mask phone when no privacy toggles are set", async () => {
+    mockPrisma.conversation.findMany.mockResolvedValue([convWithContact]);
+    const app = await buildAppAs({});
+    const res = await app.inject({ method: "GET", url: "/v1/conversations" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Array<{ contact: { phoneNumber: string } }> }>();
+    expect(body.data[0]?.contact?.phoneNumber).toBe("919000000001");
+    await app.close();
+  });
+});
