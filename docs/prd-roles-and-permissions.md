@@ -211,6 +211,8 @@ canAccessSub(role, perms, parent, sub):
 
 ### 6.1 Strict section enforcement (Phase 2 — D13–D15)
 
+**This is a universal rule — it applies uniformly to EVERY section and EVERY permission key in the catalog (§5), not a hand-picked subset.** Every parent (`<feature>_access`) and every sub (`<feature>_access@<action>`) in the Roles grid behaves identically under the rules below. No section is exempt, and any section added to the grid in the future inherits the same behaviour automatically. The per-section tables in this doc are **illustrative examples**, not the scope — the scope is "all of them."
+
 A permission checkbox in the Roles grid is binding in **both directions**, across **every layer**:
 
 1. **Unchecked → the role cannot SEE or DO anything in that section.** Unchecking a parent (`<feature>_access`) strictly removes the whole section for that role: the nav item is hidden, the page returns Access Denied, the backend read/list endpoints return 403, and every action in it is blocked. Unchecking a sub (`<feature>_access@<action>`) blocks just that action while the section stays visible.
@@ -228,7 +230,7 @@ A permission checkbox in the Roles grid is binding in **both directions**, acros
 
 **Authority:** the **backend read + action guards** are the real security boundary. Nav + page-view guards are UX so a restricted user never reaches a dead end — they do **not** replace the backend checks. A direct API call without the parent permission must always 403, independent of the UI.
 
-**Section → parent key map** (the keys each section is gated by):
+**Section → parent key map** (illustrative — the rule covers every section/key, not only those listed):
 
 | Section | Parent key | Notes |
 |---|---|---|
@@ -300,7 +302,7 @@ Every guarded surface checks the canonical key. Frontend hides UI; backend enfor
 
 Gaps marked *(add guard)* are tracked but not all blocking for this PRD's core fix.
 
-**Section-view enforcement (Phase 2, D13–D15)** — each section gated by its parent key at all three layers:
+**Section-view enforcement (Phase 2, D13–D15)** — applies to **every** keyed section (table below is illustrative, not exhaustive); each is gated by its parent key at all three layers:
 
 | Section (parent key) | Nav (D13) | Page view (D14) | Backend read (D15) |
 |---|---|---|---|
