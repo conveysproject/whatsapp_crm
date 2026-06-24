@@ -7,7 +7,13 @@ import { isAdmin } from "@/lib/can";
 
 type RoleKey = "superAdmin" | "admin" | "manager" | "agent" | "viewer";
 
-const ROLES: RoleKey[] = ["superAdmin", "admin", "manager", "agent", "viewer"];
+// A user may only edit roles strictly below their own (no self-modify).
+// superAdmin → admin/manager/agent/viewer; admin → manager/agent/viewer.
+function editableRolesFor(role: string | undefined): RoleKey[] {
+  if (role === "superAdmin") return ["admin", "manager", "agent", "viewer"];
+  if (role === "admin") return ["manager", "agent", "viewer"];
+  return [];
+}
 
 const ROLE_LABELS: Record<RoleKey, string> = {
   superAdmin: "Super Admin",
@@ -39,7 +45,8 @@ async function saveRolePermissions(
 
 export default function RolesPage(): JSX.Element {
   const { user, isLoading: userLoading } = useCurrentUser();
-  const [activeRole, setActiveRole] = useState<RoleKey>("admin");
+  const editableRoles = editableRolesFor(user?.role);
+  const [activeRole, setActiveRole] = useState<RoleKey>("manager");
   const [localPermissions, setLocalPermissions] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
 
@@ -49,6 +56,12 @@ export default function RolesPage(): JSX.Element {
     queryKey: ["role-permissions"],
     queryFn: fetchRolePermissions,
   });
+
+  // Default the active tab to the highest role the user may edit, once role is known.
+  useEffect(() => {
+    const roles = editableRolesFor(user?.role);
+    if (roles.length > 0) setActiveRole(roles[0]);
+  }, [user?.role]);
 
   useEffect(() => {
     if (data) {
@@ -89,7 +102,7 @@ export default function RolesPage(): JSX.Element {
       </div>
 
       <div className="flex gap-0 border-b border-gray-200">
-        {ROLES.map((role) => (
+        {editableRoles.map((role) => (
           <button
             key={role}
             type="button"

@@ -49,27 +49,39 @@ describe("GET /roles/permissions", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("returns built-in defaults for roles with no stored settings (D4)", async () => {
-    const app = await buildApp();
+  it("returns built-in defaults for editable roles only — admin actor (D4 + hierarchy)", async () => {
+    const app = await buildApp(); // admin actor → editable: manager/agent/viewer
     mockPrisma.vendorSetting.findMany.mockResolvedValue([]);
 
     const res = await app.inject({ method: "GET", url: "/roles/permissions" });
 
     expect(res.statusCode).toBe(200);
     const body = res.json<{ data: Record<string, Record<string, string>> }>();
-    // superAdmin has no default baseline (bypasses all checks anyway)
-    expect(body.data.superAdmin).toEqual({});
-    // non-superAdmin roles return their built-in defaults
-    expect(body.data.admin).toMatchObject({ contacts_access: "allow", inbox_access: "allow" });
+    // editable roles return their built-in defaults
+    expect(body.data.manager).toMatchObject({ contacts_access: "allow", inbox_access: "allow" });
     expect(body.data.agent).toMatchObject({ contacts_access: "allow", inbox_access: "allow" });
     expect(body.data.viewer).toMatchObject({ contacts_access: "allow" });
-    expect(body.data.manager).toMatchObject({ contacts_access: "allow", inbox_access: "allow" });
+    // admin cannot edit admin (self) or superAdmin → not returned
+    expect(body.data.admin).toBeUndefined();
+    expect(body.data.superAdmin).toBeUndefined();
   });
 
-  it("returns stored permissions for each role", async () => {
-    const app = await buildApp();
+  it("returns the admin role for a superAdmin actor, but not superAdmin (no self)", async () => {
+    const app = await buildApp({ role: "superAdmin" as const satisfies typeof mockAuth.role });
+    mockPrisma.vendorSetting.findMany.mockResolvedValue([]);
+
+    const res = await app.inject({ method: "GET", url: "/roles/permissions" });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Record<string, Record<string, string>> }>();
+    expect(body.data.admin).toMatchObject({ contacts_access: "allow", inbox_access: "allow" });
+    expect(body.data.viewer).toMatchObject({ contacts_access: "allow" });
+    expect(body.data.superAdmin).toBeUndefined();
+  });
+
+  it("returns stored permissions for editable roles", async () => {
+    const app = await buildApp(); // admin actor
     mockPrisma.vendorSetting.findMany.mockResolvedValue([
-      { key: "role_permissions_admin", value: JSON.stringify({ contacts_access: "allow" }) },
       { key: "role_permissions_agent", value: JSON.stringify({ inbox_access: "allow" }) },
     ]);
 
@@ -77,11 +89,12 @@ describe("GET /roles/permissions", () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json<{ data: Record<string, Record<string, string>> }>();
-    // rows present → stored value used exactly (even if minimal)
-    expect(body.data.admin).toEqual({ contacts_access: "allow" });
+    // row present → stored value used exactly (even if minimal)
     expect(body.data.agent).toEqual({ inbox_access: "allow" });
-    // viewer has no stored row → built-in defaults returned
-    expect(body.data.viewer).toMatchObject({ contacts_access: "allow" });
+    // manager has no stored row → built-in defaults returned
+    expect(body.data.manager).toMatchObject({ contacts_access: "allow" });
+    // admin not editable by an admin actor → not returned
+    expect(body.data.admin).toBeUndefined();
   });
 });
 
@@ -151,6 +164,50 @@ describe("PUT /roles/:role/permissions", () => {
       payload: { permissions: { campaigns_access: "allow" } },
     });
 
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("forbids an admin from modifying the admin role (no self-modify)", async () => {
+    const app = await buildApp(); // admin actor
+    const res = await app.inject({
+      method: "PUT",
+      url: "/roles/admin/permissions",
+      payload: { permissions: { contacts_access: "allow" } },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.vendorSetting.upsert).not.toHaveBeenCalled();
+  });
+
+  it("forbids an admin from modifying the superAdmin role", async () => {
+    const app = await buildApp(); // admin actor
+    const res = await app.inject({
+      method: "PUT",
+      url: "/roles/superAdmin/permissions",
+      payload: { permissions: { contacts_access: "allow" } },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.vendorSetting.upsert).not.toHaveBeenCalled();
+  });
+
+  it("forbids superAdmin from modifying the superAdmin role (no self-modify)", async () => {
+    const app = await buildApp({ role: "superAdmin" as const satisfies typeof mockAuth.role });
+    const res = await app.inject({
+      method: "PUT",
+      url: "/roles/superAdmin/permissions",
+      payload: { permissions: { contacts_access: "allow" } },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.vendorSetting.upsert).not.toHaveBeenCalled();
+  });
+
+  it("allows superAdmin to modify the admin role", async () => {
+    const app = await buildApp({ role: "superAdmin" as const satisfies typeof mockAuth.role });
+    mockPrisma.vendorSetting.upsert.mockResolvedValue({} as unknown as { key: string; value: string });
+    const res = await app.inject({
+      method: "PUT",
+      url: "/roles/admin/permissions",
+      payload: { permissions: { contacts_access: "allow" } },
+    });
     expect(res.statusCode).toBe(200);
   });
 

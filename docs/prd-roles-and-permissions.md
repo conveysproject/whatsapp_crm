@@ -105,6 +105,20 @@ Five fixed roles. `User.role` is the authoritative role for permission resolutio
 - **Invitees:** the admin picks the DB role (`manager` / `agent` / `viewer`) on the invitation form. On accept, the invitee is Clerk `member` but carries exactly the selected platform role. Clerk's `member` status never maps to a platform role.
 - The webhook `agent` default exists only for the abnormal case where a user joins the Clerk org without a matching invitation; it should not occur in the normal flow.
 
+### 4.1 Who can edit which roles (role-management hierarchy)
+
+On the **Settings → Roles** page, a user may only modify roles **strictly below** their own in the hierarchy (`superAdmin > admin > manager > agent > viewer`). **Self-modification is disabled** — you can never edit your own role's permissions (or any role above you).
+
+| Actor | Can edit | Cannot edit |
+|---|---|---|
+| `superAdmin` | admin, manager, agent, viewer | superAdmin (self) |
+| `admin` | manager, agent, viewer | admin (self), superAdmin |
+| manager / agent / viewer | — | (no access to the Roles page at all) |
+
+Enforced in two places:
+- **Backend (authoritative):** `GET /roles/permissions` returns only the actor's editable roles; `PUT /roles/:role/permissions` returns 403 if the target role is not strictly below the actor (`editableRolesFor(actorRole)` in `roles.ts`).
+- **Frontend:** the Roles page renders tabs only for editable roles and defaults to the highest editable role.
+
 ---
 
 ## 5. Permission Catalog

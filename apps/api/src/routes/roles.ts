@@ -10,6 +10,15 @@ function settingKey(role: string): string {
   return `role_permissions_${role}`;
 }
 
+// A user may only view/edit roles strictly BELOW their own in the hierarchy
+// (superAdmin > admin > manager > agent > viewer). Self-modification is disabled:
+// superAdmin → admin/manager/agent/viewer; admin → manager/agent/viewer.
+function editableRolesFor(actorRole: string): RoleKey[] {
+  if (actorRole === "superAdmin") return ["admin", "manager", "agent", "viewer"];
+  if (actorRole === "admin") return ["manager", "agent", "viewer"];
+  return [];
+}
+
 export const rolesRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/roles/permissions", async (request, reply) => {
     const { organizationId, role } = request.auth;
@@ -17,16 +26,18 @@ export const rolesRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can view role permissions" } });
     }
 
+    const allowedRoles = editableRolesFor(role);
+
     const settings = await fastify.prisma.vendorSetting.findMany({
       where: {
         organizationId,
-        key: { in: VALID_ROLES.map(settingKey) },
+        key: { in: allowedRoles.map(settingKey) },
       },
       select: { key: true, value: true },
     });
 
     const data = Object.fromEntries(
-      VALID_ROLES.map((r) => {
+      allowedRoles.map((r) => {
         const row = settings.find((s) => s.key === settingKey(r));
         let permissions: Record<string, string>;
         if (!row) {
@@ -72,6 +83,11 @@ export const rolesRouter: FastifyPluginAsync = async (fastify) => {
 
       if (!(VALID_ROLES as readonly string[]).includes(request.params.role)) {
         return reply.status(400).send({ error: { code: "INVALID_ROLE", message: `Role must be one of: ${VALID_ROLES.join(", ")}` } });
+      }
+
+      // Hierarchy guard: can only modify roles strictly below your own (no self-modify).
+      if (!editableRolesFor(authRole).includes(request.params.role as RoleKey)) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: `You cannot modify the ${request.params.role} role` } });
       }
 
       const key = settingKey(request.params.role);
