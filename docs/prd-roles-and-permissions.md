@@ -1,6 +1,6 @@
 # PRD — Roles & Permissions System (RBAC)
 
-**Status:** Phase 1 (engine + action guards) deployed ✅ · **Phase 2 (section-view enforcement) — COMPLETE ✅** (all 7 keyed sections: Campaigns, Contacts, Templates, Flows, Analytics, Inbox + Message Log, Settings)
+**Status:** Phase 1 (engine + action guards) deployed ✅ · **Phase 2 (section-view enforcement) — COMPLETE ✅** (all 9 keyed sections: Campaigns, Contacts, Templates, Flows, Analytics, Inbox + Message Log, Settings, Deals, Trust Score)
 **Owner:** Platform / Auth
 **Last updated:** 2026-06-24
 **Module:** M1 (Auth & Multi-Tenancy)
@@ -534,15 +534,33 @@ Both `/inbox` and `/messages` share `inbox_access` as their parent key (`Sidebar
 
 ---
 
-#### Deals — ⛔ No permission key (always visible)
+#### Deals — ✅ Complete (2026-06-24)
 
-No `perm` field in the nav. Deals (`/deals`) is open to all roles by design for now. Phase 2 does not apply until a `deals_access` key is added to the catalog, grid, and defaults. Tracked in §14.
+| # | Item | Status | Notes |
+|---|---|---|---|
+| 1 | Sidebar nav | ✅ | `perm: "deals_access"` added to Deals nav entry |
+| 2 | Page view guard | ✅ | `PermissionGate permission="deals_access"` on `/deals` page |
+| 3 | Backend read gate | ✅ | `preHandler` on `dealsRouter` → 403 without `deals_access` |
+| 4 | Granular action subs | N/A | No sub-permissions defined for Deals |
+| 5 | Cleanup | ✅ | No stale keys |
+| 6 | Tests | ✅ | 3 tests: section gate blocks/allows/admin-bypass on `GET /deals` |
+| 7 | Defaults updated | ✅ | Admin + Manager + Agent + Viewer all get `deals_access: "allow"` |
+| 8 | Docs updated | ✅ | This entry |
 
 ---
 
-#### Trust Score — ⛔ No permission key (always visible)
+#### Trust Score — ✅ Complete (2026-06-24)
 
-No `perm` field in the nav. Trust Score (`/trust-score`) is open to all roles by design for now. Phase 2 does not apply until a `trust_score_access` key is added to the catalog, grid, and defaults. Tracked in §14.
+| # | Item | Status | Notes |
+|---|---|---|---|
+| 1 | Sidebar nav | ✅ | `perm: "trust_score_access"` added to Trust Score nav entry |
+| 2 | Page view guard | ✅ | `PermissionGate permission="trust_score_access"` on `/trust-score` page |
+| 3 | Backend read gate | ✅ | `preHandler` on `trustScoreRouter` → 403 without `trust_score_access` |
+| 4 | Granular action subs | N/A | No sub-permissions defined for Trust Score |
+| 5 | Cleanup | ✅ | No stale keys |
+| 6 | Tests | ✅ | 2 tests: section gate blocks; admin bypass (with fetch + Prisma mocked) |
+| 7 | Defaults updated | ✅ | Admin + Manager + Agent + Viewer all get `trust_score_access: "allow"` |
+| 8 | Docs updated | ✅ | This entry |
 
 ---
 
@@ -552,5 +570,5 @@ No `perm` field in the nav. Trust Score (`/trust-score`) is open to all roles by
 - **Fallback rule:** absent `role_permissions_<role>` row → built-in defaults; present row (even `{}`) → used exactly as stored (`{}` = deny all). *(§6)*
 
 **Still open:**
-1. **Keyless sections — Dashboard, Deals, Trust Score:** all three have no `perm` field in the sidebar and no catalog key. Currently visible to all roles. Options: (a) leave as-is indefinitely, (b) admin-only, or (c) add keys (`dashboard_access`, `deals_access`, `trust_score_access`) to the catalog + grid + defaults and apply the §13.2 checklist. Decision required before any Phase 2 work can target these sections. *(Non-blocking for the 7 keyed sections.)*
+1. **Dashboard section:** No `perm` field in the nav. Dashboard (`/dashboard`) is open to all roles by design. Adding `dashboard_access` would be possible but low value (landing page). No action planned.
 2. **Masking scope:** which endpoints honour `hide_phone_number@hide_contact_fields`? Needs a concrete list before implementing D8. *(Non-blocking; can defer.)*
