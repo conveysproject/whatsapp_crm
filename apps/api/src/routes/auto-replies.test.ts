@@ -104,3 +104,54 @@ describe("GET /v1/auto-replies/:id/preview/:contactId", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("automation_bot_replies sub gate", () => {
+  async function buildAppAs(permissions: Record<string, string>, role = "agent"): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+    });
+    const { autoRepliesRouter } = await import("./auto-replies.js");
+    await app.register(autoRepliesRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("blocks create when automation_bot_replies sub is off (automation_access parent on)", async () => {
+    const app = await buildAppAs({ automation_access: "allow" }); // bot_replies sub off
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/auto-replies",
+      payload: { name: "Test Reply", triggerType: "keyword", triggerKeyword: "hello", replyText: "Hi!" },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.autoReply.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("allows create when automation_bot_replies sub is on", async () => {
+    mockPrisma.autoReply.create.mockResolvedValue({ id: "ar-1", organizationId: "org-1", name: "Test Reply" });
+    const app = await buildAppAs({ automation_access: "allow", "automation_access@automation_bot_replies": "allow" });
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/auto-replies",
+      payload: { name: "Test Reply", triggerType: "keyword", triggerKeyword: "hello", replyText: "Hi!" },
+    });
+    expect(res.statusCode).toBe(201);
+    await app.close();
+  });
+
+  it("admin bypasses automation_bot_replies sub gate", async () => {
+    mockPrisma.autoReply.create.mockResolvedValue({ id: "ar-1", organizationId: "org-1", name: "Test Reply" });
+    const app = await buildAppAs({}, "admin");
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/auto-replies",
+      payload: { name: "Test Reply", triggerType: "keyword", triggerKeyword: "hello", replyText: "Hi!" },
+    });
+    expect(res.statusCode).toBe(201);
+    await app.close();
+  });
+});

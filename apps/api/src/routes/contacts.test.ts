@@ -279,6 +279,18 @@ describe("contacts section gate (D15)", () => {
     expect(res.statusCode).toBe(403);
     await app.close();
   });
+
+  it("blocks contact create when contacts_add sub is off (parent on)", async () => {
+    const app = await buildAppAs({ contacts_access: "allow" }); // contacts_add sub off
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/contacts",
+      payload: { phoneNumber: "919000000001", firstName: "Test" },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.contact.create).not.toHaveBeenCalled();
+    await app.close();
+  });
 });
 
 describe("POST /v1/contacts/:id/block", () => {
