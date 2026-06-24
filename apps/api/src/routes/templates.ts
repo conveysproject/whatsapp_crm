@@ -39,6 +39,15 @@ function extractTemplateFields(components: object[]) {
 }
 
 export const templatesRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate (Phase 2 / D15): every templates route requires templates_access.
+  // admin/superAdmin bypass via canAccess; writes still check their sub-permissions.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "templates_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "templates_access permission required" } });
+    }
+  });
+
   fastify.get("/templates", async (request, reply) => {
     const { organizationId } = request.auth;
     const templates = await fastify.prisma.template.findMany({

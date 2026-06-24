@@ -203,3 +203,57 @@ describe("POST /v1/templates/:id/send-to-contact", () => {
     expect(res.statusCode).toBe(200);
   });
 });
+
+describe("templates section gate (D15)", () => {
+  async function buildAppAs(permissions: Record<string, string>, role = "agent"): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+    });
+    const { templatesRouter } = await import("./templates.js");
+    await app.register(templatesRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("returns 403 when the role lacks templates_access", async () => {
+    const app = await buildAppAs({ contacts_access: "allow" }); // no templates_access
+    const res = await app.inject({ method: "GET", url: "/v1/templates" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.template.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("allows the read when the role has templates_access", async () => {
+    mockPrisma.template.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({ templates_access: "allow" });
+    const res = await app.inject({ method: "GET", url: "/v1/templates" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("admin bypasses the section gate even with empty permissions", async () => {
+    mockPrisma.template.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({}, "admin");
+    const res = await app.inject({ method: "GET", url: "/v1/templates" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("blocks template create when templates_create sub is off (parent on)", async () => {
+    const app = await buildAppAs({ templates_access: "allow" }); // create sub off
+    const res = await app.inject({ method: "POST", url: "/v1/templates", payload: { name: "T", category: "MARKETING", language: "en", components: [] } });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.template.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("blocks template delete when templates_delete sub is off (parent on)", async () => {
+    const app = await buildAppAs({ templates_access: "allow" }); // delete sub off
+    const res = await app.inject({ method: "DELETE", url: "/v1/templates/t-1" });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+});
