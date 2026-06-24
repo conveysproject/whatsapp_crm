@@ -25,7 +25,7 @@ interface NavItem {
 
 // `perm` = the parent permission key required to see the item. Admin/superAdmin
 // bypass (canAccess). Items without `perm` are visible to everyone (no permission
-// concept yet: Dashboard, Deals, Trust Score).
+// concept yet: Dashboard).
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "◻", exact: true },
   { href: "/inbox",    label: "Inbox",       icon: "✉", exact: true, perm: "inbox_access" },
@@ -44,9 +44,9 @@ const NAV: NavItem[] = [
   { href: "/campaigns",   label: "Campaigns",   icon: "📢", perm: "campaigns_access" },
   { href: "/templates",   label: "Templates",   icon: "📋", perm: "templates_access" },
   { href: "/flows",       label: "Flows",       icon: "⚡", perm: "automation_access" },
-  { href: "/deals",       label: "Deals",       icon: "💼" },
+  { href: "/deals",       label: "Deals",       icon: "💼", perm: "deals_access" },
   { href: "/analytics",   label: "Analytics",   icon: "📊", perm: "analytics_access" },
-  { href: "/trust-score", label: "Trust Score", icon: "🛡" },
+  { href: "/trust-score", label: "Trust Score", icon: "🛡", perm: "trust_score_access" },
   { href: "/settings",    label: "Settings",    icon: "⚙", perm: "settings_access" },
 ];
 

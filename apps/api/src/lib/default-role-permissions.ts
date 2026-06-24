@@ -41,6 +41,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, Record<string, string>> =
     "automation_access@automation_welcome_message": "allow",
     "automation_access@automation_bot_flows": "allow",
     "automation_access@automation_bot_replies": "allow",
+    deals_access: "allow",
+    trust_score_access: "allow",
   },
 
   manager: {
@@ -72,6 +74,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, Record<string, string>> =
     "automation_access@automation_export_report": "allow",
     "automation_access@automation_welcome_message": "allow",
     "automation_access@automation_bot_replies": "allow",
+    deals_access: "allow",
+    trust_score_access: "allow",
   },
 
   agent: {
@@ -81,6 +85,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, Record<string, string>> =
     "inbox_access@inbox_unassigned": "allow",
     "inbox_access@assigned_chats_only": "allow",
     templates_access: "allow",
+    deals_access: "allow",
+    trust_score_access: "allow",
   },
 
   viewer: {
@@ -91,6 +97,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, Record<string, string>> =
     templates_access: "allow",
     analytics_access: "allow",
     automation_access: "allow",
+    deals_access: "allow",
+    trust_score_access: "allow",
   },
 };
 

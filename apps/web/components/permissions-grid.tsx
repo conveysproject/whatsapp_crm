@@ -89,6 +89,18 @@ export const PERMISSION_GROUPS = [
       { key: "automation_bot_replies", label: "Create / edit bot replies" },
     ],
   },
+  {
+    key: "deals_access",
+    label: "Deals",
+    description: "Access to the deals pipeline",
+    subPermissions: [],
+  },
+  {
+    key: "trust_score_access",
+    label: "Trust Score",
+    description: "Access to the trust score dashboard",
+    subPermissions: [],
+  },
 ] as const satisfies Array<{
   key: string;
   label: string;

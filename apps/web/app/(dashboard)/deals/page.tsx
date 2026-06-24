@@ -7,6 +7,7 @@ import { DealSlideOver } from "@/components/deals/DealSlideOver";
 import { CreatePipelineModal } from "@/components/deals/CreatePipelineModal";
 import { AddDealModal } from "@/components/deals/AddDealModal";
 import type { Deal } from "@/components/deals/DealCard";
+import { PermissionGate } from "@/components/PermissionGate";
 
 interface Pipeline {
   id: string;
@@ -100,81 +101,83 @@ export default function DealsPage(): JSX.Element {
   }
 
   return (
-    <div className="p-6 space-y-4 min-h-screen">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Deals</h1>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowCreatePipeline(true)}
-            className="px-3 py-1.5 border border-gray-300 text-sm rounded-lg hover:bg-gray-50 text-gray-600"
-          >
-            + Pipeline
-          </button>
-          {pipeline && (
+    <PermissionGate permission="deals_access">
+      <div className="p-6 space-y-4 min-h-screen">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold text-gray-900">Deals</h1>
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => setShowAddDeal(true)}
-              className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
+              onClick={() => setShowCreatePipeline(true)}
+              className="px-3 py-1.5 border border-gray-300 text-sm rounded-lg hover:bg-gray-50 text-gray-600"
             >
-              Add Deal
+              + Pipeline
             </button>
-          )}
+            {pipeline && (
+              <button
+                onClick={() => setShowAddDeal(true)}
+                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
+              >
+                Add Deal
+              </button>
+            )}
+          </div>
         </div>
+
+        {pipelines.length > 1 && (
+          <div className="flex gap-1 border-b border-gray-200">
+            {pipelines.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setActivePipelineId(p.id)}
+                className={[
+                  "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                  pipeline?.id === p.id
+                    ? "border-green-600 text-green-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700",
+                ].join(" ")}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {pipeline && (
+          <KanbanBoard
+            deals={deals}
+            stages={stages}
+            pipelineId={pipeline.id}
+            onMutated={invalidate}
+            onDealClick={(deal) => setSelectedDeal(deal)}
+          />
+        )}
+
+        {showAddDeal && pipeline && (
+          <AddDealModal
+            pipelineId={pipeline.id}
+            stages={stages}
+            onClose={() => setShowAddDeal(false)}
+            onCreated={() => { setShowAddDeal(false); invalidate(); }}
+          />
+        )}
+
+        {showCreatePipeline && (
+          <CreatePipelineModal
+            onClose={() => setShowCreatePipeline(false)}
+            onCreated={() => { void qc.invalidateQueries({ queryKey: ["pipelines"] }); }}
+          />
+        )}
+
+        {selectedDeal && pipeline && (
+          <DealSlideOver
+            deal={selectedDeal}
+            stages={stages}
+            onClose={() => setSelectedDeal(null)}
+            onUpdated={() => { setSelectedDeal(null); invalidate(); }}
+            onDeleted={() => { setSelectedDeal(null); invalidate(); }}
+          />
+        )}
       </div>
-
-      {pipelines.length > 1 && (
-        <div className="flex gap-1 border-b border-gray-200">
-          {pipelines.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setActivePipelineId(p.id)}
-              className={[
-                "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
-                pipeline?.id === p.id
-                  ? "border-green-600 text-green-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700",
-              ].join(" ")}
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {pipeline && (
-        <KanbanBoard
-          deals={deals}
-          stages={stages}
-          pipelineId={pipeline.id}
-          onMutated={invalidate}
-          onDealClick={(deal) => setSelectedDeal(deal)}
-        />
-      )}
-
-      {showAddDeal && pipeline && (
-        <AddDealModal
-          pipelineId={pipeline.id}
-          stages={stages}
-          onClose={() => setShowAddDeal(false)}
-          onCreated={() => { setShowAddDeal(false); invalidate(); }}
-        />
-      )}
-
-      {showCreatePipeline && (
-        <CreatePipelineModal
-          onClose={() => setShowCreatePipeline(false)}
-          onCreated={() => { void qc.invalidateQueries({ queryKey: ["pipelines"] }); }}
-        />
-      )}
-
-      {selectedDeal && pipeline && (
-        <DealSlideOver
-          deal={selectedDeal}
-          stages={stages}
-          onClose={() => setSelectedDeal(null)}
-          onUpdated={() => { setSelectedDeal(null); invalidate(); }}
-          onDeleted={() => { setSelectedDeal(null); invalidate(); }}
-        />
-      )}
-    </div>
+    </PermissionGate>
   );
 }

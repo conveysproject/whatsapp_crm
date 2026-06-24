@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { DealId } from "@WBMSG/shared";
+import { canAccess } from "../lib/permissions.js";
 
 interface DealBody {
   title: string;
@@ -12,6 +13,13 @@ interface DealBody {
 }
 
 export const dealsRouter: FastifyPluginAsync = async (fastify) => {
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "deals_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "deals_access permission required" } });
+    }
+  });
+
   fastify.get("/deals", async (request, reply) => {
     const { organizationId } = request.auth;
     const query = request.query as Record<string, string>;

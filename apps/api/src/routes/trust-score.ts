@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ContactId } from "@WBMSG/shared";
+import { canAccess } from "../lib/permissions.js";
 
 const ML_URL = process.env["ML_SERVICE_URL"] ?? "http://localhost:8000";
 
@@ -9,6 +10,13 @@ interface Recommendation {
 }
 
 export const trustScoreRouter: FastifyPluginAsync = async (fastify) => {
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "trust_score_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "trust_score_access permission required" } });
+    }
+  });
+
   fastify.get<{ Querystring: { history?: string } }>("/trust-score", async (request, reply) => {
     const { organizationId } = request.auth;
 

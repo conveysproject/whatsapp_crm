@@ -88,3 +88,42 @@ describe("PATCH /v1/deals/:id with notes", () => {
     expect(res.json<{ data: { notes: string } }>().data.notes).toBe("Called on Monday, follow up Thursday");
   });
 });
+
+describe("deals section gate (D15)", () => {
+  async function buildAppAs(permissions: Record<string, string>, role = "agent"): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+    });
+    const { dealsRouter } = await import("./deals.js");
+    await app.register(dealsRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("returns 403 when role lacks deals_access", async () => {
+    const app = await buildAppAs({}); // no deals_access
+    const res = await app.inject({ method: "GET", url: "/v1/deals" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.deal.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("allows GET /deals when role has deals_access", async () => {
+    mockPrisma.deal.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({ deals_access: "allow" });
+    const res = await app.inject({ method: "GET", url: "/v1/deals" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("admin bypasses deals section gate", async () => {
+    mockPrisma.deal.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({}, "admin");
+    const res = await app.inject({ method: "GET", url: "/v1/deals" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});

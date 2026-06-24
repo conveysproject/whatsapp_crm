@@ -4,6 +4,7 @@ import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { TrustTrendChart } from "@/components/trust-score/TrustTrendChart";
+import { PermissionGate } from "@/components/PermissionGate";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -134,6 +135,7 @@ export default function TrustScorePage(): JSX.Element {
   }
 
   return (
+    <PermissionGate permission="trust_score_access">
     <div className="max-w-2xl mx-auto p-6 space-y-8">
       <h1 className="text-2xl font-semibold">Trust Score</h1>
 
@@ -198,5 +200,6 @@ export default function TrustScorePage(): JSX.Element {
         </>
       )}
     </div>
+    </PermissionGate>
   );
 }

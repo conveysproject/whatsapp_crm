@@ -129,3 +129,44 @@ describe("GET /v1/contacts/:id/trust-score", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("trust-score section gate (D15)", () => {
+  async function buildAppAs(permissions: Record<string, string>, role = "agent"): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+    });
+    const { trustScoreRouter } = await import("./trust-score.js");
+    await app.register(trustScoreRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("returns 403 when role lacks trust_score_access", async () => {
+    const app = await buildAppAs({}); // no trust_score_access
+    const res = await app.inject({ method: "GET", url: "/v1/trust-score" });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("admin bypasses trust-score section gate", async () => {
+    // Stub all prisma and fetch calls needed for admin bypass
+    mockPrisma.message.count.mockResolvedValue(0);
+    mockPrisma.contact.count.mockResolvedValue(0);
+    mockPrisma.campaign.findMany.mockResolvedValue([]);
+    mockPrisma.orgTrustScoreSnapshot.findMany.mockResolvedValue([]);
+    mockPrisma.deal.findMany.mockResolvedValue([]);
+    mockPrisma.contact.findFirst.mockResolvedValue(null);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ recommendations: [] }),
+    }));
+    const app = await buildAppAs({}, "admin");
+    const res = await app.inject({ method: "GET", url: "/v1/trust-score" });
+    expect(res.statusCode).toBe(200);
+    vi.unstubAllGlobals();
+    await app.close();
+  });
+});
