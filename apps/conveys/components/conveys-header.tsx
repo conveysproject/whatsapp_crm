@@ -41,11 +41,19 @@ export function ConveysHeader(): JSX.Element {
         </nav>
 
         <div className="flex items-center gap-3">
+          <a
+            href="https://wbmsg.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden rounded-full border border-blue-700 px-5 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50 sm:inline-flex"
+          >
+            Start Free
+          </a>
           <Link
             href="/#contact"
             className="hidden rounded-full bg-blue-700 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800 sm:inline-flex"
           >
-            Get a Quote
+            Need Website?
           </Link>
           <button
             type="button"
@@ -79,12 +87,20 @@ export function ConveysHeader(): JSX.Element {
                 {item.label}
               </Link>
             ))}
+            <a
+              href="https://wbmsg.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex justify-center rounded-full border border-blue-700 px-4 py-2 text-center font-semibold text-blue-700"
+            >
+              Start Free
+            </a>
             <Link
               href="/#contact"
               onClick={() => setOpen(false)}
-              className="mt-2 inline-flex justify-center rounded-full bg-blue-700 px-4 py-2 text-center font-semibold text-white"
+              className="mt-1 inline-flex justify-center rounded-full bg-blue-700 px-4 py-2 text-center font-semibold text-white"
             >
-              Get a Quote
+              Need Website?
             </Link>
           </nav>
         </div>
