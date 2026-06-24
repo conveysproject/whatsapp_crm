@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canAccess, canAccessSub } from "./permissions.js";
+import { canAccess, canAccessSub, shouldHidePhone, shouldHideContactFields } from "./permissions.js";
 
 describe("canAccess", () => {
   it("admin and superAdmin bypass all checks", () => {
@@ -38,5 +38,55 @@ describe("canAccessSub", () => {
 
   it("non-admin with empty permissions is denied", () => {
     expect(canAccessSub("agent", {}, "contacts_access", "contacts_export")).toBe(false);
+  });
+});
+
+describe("shouldHidePhone", () => {
+  it("returns false when no privacy keys are set", () => {
+    expect(shouldHidePhone({})).toBe(false);
+  });
+
+  it("returns true when hide_phone_only is allow", () => {
+    expect(shouldHidePhone({ "hide_phone_number@hide_phone_only": "allow" })).toBe(true);
+  });
+
+  it("returns true when hide_contact_fields is allow", () => {
+    expect(shouldHidePhone({ "hide_phone_number@hide_contact_fields": "allow" })).toBe(true);
+  });
+
+  it("returns true when both are allow (union)", () => {
+    expect(
+      shouldHidePhone({
+        "hide_phone_number@hide_phone_only": "allow",
+        "hide_phone_number@hide_contact_fields": "allow",
+      })
+    ).toBe(true);
+  });
+
+  it("returns false when keys are present but set to deny", () => {
+    expect(
+      shouldHidePhone({
+        "hide_phone_number@hide_phone_only": "deny",
+        "hide_phone_number@hide_contact_fields": "deny",
+      })
+    ).toBe(false);
+  });
+});
+
+describe("shouldHideContactFields", () => {
+  it("returns false when no privacy keys are set", () => {
+    expect(shouldHideContactFields({})).toBe(false);
+  });
+
+  it("returns true when hide_contact_fields is allow", () => {
+    expect(shouldHideContactFields({ "hide_phone_number@hide_contact_fields": "allow" })).toBe(true);
+  });
+
+  it("returns false when only hide_phone_only is allow", () => {
+    expect(shouldHideContactFields({ "hide_phone_number@hide_phone_only": "allow" })).toBe(false);
+  });
+
+  it("returns false when hide_contact_fields is deny", () => {
+    expect(shouldHideContactFields({ "hide_phone_number@hide_contact_fields": "deny" })).toBe(false);
   });
 });

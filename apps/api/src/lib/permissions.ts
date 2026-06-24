@@ -21,7 +21,17 @@ export function canAccess(
   return permissions[key] === "allow";
 }
 
-// Inverted semantics: "allow" means HIDE. Single key covers phone + email.
+// Returns true when phone should be masked — either toggle being set triggers masking.
+export function shouldHidePhone(permissions: Record<string, string>): boolean {
+  return (
+    permissions["hide_phone_number@hide_phone_only"] === "allow" ||
+    permissions["hide_phone_number@hide_contact_fields"] === "allow"
+  );
+}
+
+// Inverted semantics: "allow" means HIDE. Covers phone + email.
+// Phone masking: use shouldHidePhone() which is a union of both keys.
+// Email masking: only this key triggers email masking.
 export function shouldHideContactFields(permissions: Record<string, string>): boolean {
   return permissions["hide_phone_number@hide_contact_fields"] === "allow";
 }
