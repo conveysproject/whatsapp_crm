@@ -290,7 +290,12 @@ Every guarded surface checks the canonical key. Frontend hides UI; backend enfor
 | Custom fields / lead statuses | `canAccessSub(contacts_access, contacts_manage_custom_fields)` | `/custom-fields`, `/lead-statuses` writes |
 | Contact groups | `canAccess(contacts_access)` | `/contact-groups` writes |
 | Segments | `canAccess(contacts_access)` | `/segments` writes |
-| Create campaign | `canAccess(campaigns_access)` (page) | `POST /campaigns` → `campaigns_create` |
+| Create / edit campaign | `canAccessSub(campaigns_access, campaigns_create)` | `POST /campaigns`, `PATCH /campaigns/:id`, `POST /campaigns/:id/schedule` |
+| Pause / Resume / Requeue | `canAccessSub(campaigns_access, campaigns_pause_resume)` | `POST /campaigns/:id/pause`, `/resume`, `/requeue-failed` |
+| Abort campaign | `canAccessSub(campaigns_access, campaigns_abort)` | `POST /campaigns/:id/abort` |
+| Archive / Unarchive | `canAccessSub(campaigns_access, campaigns_archive)` | `POST /campaigns/:id/archive`, `/unarchive` |
+| Delete campaign | `canAccessSub(campaigns_access, campaigns_delete)` | `DELETE /campaigns/:id` |
+| Export campaign report | `canAccessSub(campaigns_access, campaigns_export_report)` | `GET /campaigns/:id/export`, `/queue-log-export`, `/expired-log-export` |
 | Templates create/edit/delete | per sub-key | `POST`/`DELETE /templates` |
 | Bot flows | `canAccessSub(automation_access, automation_bot_flows)` | `POST /flows`, `/chatbots` writes |
 | Auto-replies / canned | `canAccessSub(automation_access, automation_bot_replies)` | `/auto-replies`, `/canned-responses` writes |

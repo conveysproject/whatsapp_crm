@@ -120,9 +120,12 @@ Sub-keys are stored as `parentKey@subKey`.
 | `inbox_access@inbox_unassigned` | See Unassigned tab | sub |
 | `inbox_access@assigned_chats_only` | See only own assigned chats | sub |
 | `campaigns_access` | Campaign Manager | parent |
-| `campaigns_access@campaigns_create` | Create campaigns | sub |
+| `campaigns_access@campaigns_create` | Create / edit campaigns | sub |
+| `campaigns_access@campaigns_pause_resume` | Pause / Resume campaigns | sub |
+| `campaigns_access@campaigns_abort` | Abort campaigns | sub |
+| `campaigns_access@campaigns_archive` | Archive / Unarchive campaigns | sub |
+| `campaigns_access@campaigns_delete` | Delete campaigns | sub |
 | `campaigns_access@campaigns_export_report` | Export campaign reports | sub |
-| `campaigns_access@campaigns_manage_segments` | Create / update segments | sub |
 | `templates_access` | Template Manager | parent |
 | `templates_access@templates_create` | Create templates | sub |
 | `templates_access@templates_edit` | Edit templates | sub |
