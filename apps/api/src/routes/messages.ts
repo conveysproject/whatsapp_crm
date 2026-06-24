@@ -15,6 +15,14 @@ type SendMessageBody =
   | { contentType: "template"; templateId: string; mediaUrl?: string; cardMediaUrls?: string[] };
 
 export const messagesRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate (Phase 2 / D15): messages routes require inbox_access.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "inbox_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "inbox_access permission required" } });
+    }
+  });
+
   // ── Message log (all messages with date filter) ──────────────────────────
   fastify.get<{
     Querystring: {

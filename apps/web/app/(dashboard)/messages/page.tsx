@@ -1,6 +1,7 @@
 "use client";
 
 import { JSX, useState } from "react";
+import { PermissionGate } from "@/components/PermissionGate";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -416,6 +417,7 @@ export default function MessageLogPage(): JSX.Element {
   const [tab, setTab] = useState<"log" | "gaps">("log");
 
   return (
+    <PermissionGate permission="inbox_access">
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Message Log</h1>
@@ -438,5 +440,6 @@ export default function MessageLogPage(): JSX.Element {
 
       {tab === "log" ? <MessageLogTab /> : <GapsTab />}
     </div>
+    </PermissionGate>
   );
 }

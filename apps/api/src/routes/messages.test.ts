@@ -19,7 +19,7 @@ const mockAuth = {
   userId: "user-1",
   organizationId: "org-1",
   role: "agent" as const,
-  permissions: {},
+  permissions: { inbox_access: "allow" },
 };
 
 vi.mock("../lib/whatsapp.js", () => ({

@@ -22,7 +22,7 @@ const mockAuth = {
   userId: "user-1",
   organizationId: "org-1",
   role: "agent" as const,
-  permissions: {},
+  permissions: { inbox_access: "allow" },
 };
 
 async function buildApp(): Promise<FastifyInstance> {
@@ -242,5 +242,44 @@ describe("GET /v1/conversations/search", () => {
     const res = await app.inject({ method: "GET", url: "/v1/conversations/search?q=dev" });
     const body = res.json<{ data: Array<{ lastMessage: { id: string } }> }>();
     expect(body.data[0]?.lastMessage?.id).toBe("msg-1");
+  });
+});
+
+describe("inbox section gate (D15)", () => {
+  async function buildAppAs(permissions: Record<string, string>, role = "agent"): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+    });
+    const { conversationsRouter } = await import("./conversations.js");
+    await app.register(conversationsRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("returns 403 when the role lacks inbox_access", async () => {
+    const app = await buildAppAs({ contacts_access: "allow" }); // no inbox_access
+    const res = await app.inject({ method: "GET", url: "/v1/conversations" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.conversation.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("allows the read when the role has inbox_access", async () => {
+    mockPrisma.conversation.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({ inbox_access: "allow" });
+    const res = await app.inject({ method: "GET", url: "/v1/conversations" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("admin bypasses the section gate even with empty permissions", async () => {
+    mockPrisma.conversation.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({}, "admin");
+    const res = await app.inject({ method: "GET", url: "/v1/conversations" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
   });
 });

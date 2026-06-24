@@ -3,10 +3,18 @@ import type { ConversationStatus } from "@prisma/client";
 import type { ConversationId } from "@WBMSG/shared";
 import { getIo } from "../lib/io-ref.js";
 import { summarizeConversation } from "../lib/claude.js";
-import { maskPhone } from "../lib/permissions.js";
+import { canAccess, maskPhone } from "../lib/permissions.js";
 import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
 
 export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate (Phase 2 / D15): every inbox/conversation route requires inbox_access.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "inbox_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "inbox_access permission required" } });
+    }
+  });
+
   // ── List with status / assignee filters ────────────────────────────────
   fastify.get<{
     Querystring: { status?: string; assignedTo?: string; teamId?: string; page?: string; contactId?: string };

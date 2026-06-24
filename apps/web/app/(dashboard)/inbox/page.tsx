@@ -3,6 +3,7 @@
 import { JSX, useState, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQueryClient } from "@tanstack/react-query";
+import { PermissionGate } from "@/components/PermissionGate";
 import { ConversationList } from "@/components/inbox/ConversationList";
 import { MessageThread } from "@/components/inbox/MessageThread";
 import { SendMessageForm } from "@/components/inbox/SendMessageForm";
@@ -47,6 +48,7 @@ export default function InboxPage(): JSX.Element {
   }, [selectedConversationId, getToken, queryClient]);
 
   return (
+    <PermissionGate permission="inbox_access">
     <WhatsAppGate feature="Inbox">
       {/* Conversation sidebar */}
       <div className="w-72 border-r border-gray-200 bg-white flex flex-col overflow-hidden shrink-0">
@@ -120,5 +122,6 @@ export default function InboxPage(): JSX.Element {
         />
       )}
     </WhatsAppGate>
+    </PermissionGate>
   );
 }
