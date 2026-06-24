@@ -171,3 +171,72 @@ describe("analytics section gate (D15)", () => {
     await app.close();
   });
 });
+
+describe("analytics sub gates", () => {
+  async function buildAppAs(permissions: Record<string, string>, role = "agent"): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+    });
+    const { analyticsRouter } = await import("./analytics.js");
+    await app.register(analyticsRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("blocks GET /analytics/team when analytics_agent_performance sub is off", async () => {
+    const app = await buildAppAs({ analytics_access: "allow" }); // no analytics_agent_performance sub
+    const res = await app.inject({ method: "GET", url: "/v1/analytics/team" });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("allows GET /analytics/team when analytics_agent_performance sub is on", async () => {
+    mockPrisma.conversation.count.mockResolvedValue(0);
+    mockPrisma.message.count.mockResolvedValue(0);
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({
+      analytics_access: "allow",
+      "analytics_access@analytics_agent_performance": "allow",
+    });
+    const res = await app.inject({ method: "GET", url: "/v1/analytics/team" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("blocks GET /analytics/export when analytics_export sub is off", async () => {
+    const app = await buildAppAs({ analytics_access: "allow" }); // no analytics_export sub
+    const res = await app.inject({ method: "GET", url: "/v1/analytics/export?tab=overview" });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("allows GET /analytics/export when analytics_export sub is on", async () => {
+    mockPrisma.conversation.count.mockResolvedValue(0);
+    mockPrisma.contact.count.mockResolvedValue(0);
+    mockPrisma.message.count.mockResolvedValue(0);
+    mockPrisma.invitation.count.mockResolvedValue(0);
+    mockPrisma.campaign.count.mockResolvedValue(0);
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    mockPrisma.conversation.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({
+      analytics_access: "allow",
+      "analytics_access@analytics_export": "allow",
+    });
+    const res = await app.inject({ method: "GET", url: "/v1/analytics/export?tab=overview" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("admin bypasses all analytics sub gates", async () => {
+    mockPrisma.conversation.count.mockResolvedValue(0);
+    mockPrisma.message.count.mockResolvedValue(0);
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({}, "admin");
+    const teamRes = await app.inject({ method: "GET", url: "/v1/analytics/team" });
+    expect(teamRes.statusCode).toBe(200);
+    await app.close();
+  });
+});

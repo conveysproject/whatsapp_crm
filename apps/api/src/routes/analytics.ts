@@ -11,7 +11,7 @@ import {
   getConversationStatusBreakdown,
 } from "../lib/analytics-queries.js";
 import { cacheGet, cacheSet, orgKey } from "../lib/cache.js";
-import { canAccess } from "../lib/permissions.js";
+import { canAccess, canAccessSub } from "../lib/permissions.js";
 
 export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
   // Section gate (Phase 2 / D15): every analytics route requires analytics_access.
@@ -47,9 +47,9 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get("/analytics/team", async (request, reply) => {
-    const { organizationId, role } = request.auth;
-    if (role === "agent" || role === "viewer") {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Team analytics requires manager or admin role" } });
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "analytics_access", "analytics_agent_performance")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "analytics_agent_performance permission required" } });
     }
     const query = request.query as Record<string, string>;
     const days = parseInt(query["days"] ?? "30", 10);
@@ -133,11 +133,11 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get("/analytics/export", async (request, reply) => {
-    const { organizationId, role } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
     const query = request.query as Record<string, string>;
     const tab = query["tab"] ?? "overview";
-    if (tab === "team" && (role === "agent" || role === "viewer")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Team analytics export requires manager or admin role" } });
+    if (!canAccessSub(role, permissions, "analytics_access", "analytics_export")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "analytics_export permission required" } });
     }
     const days = parseInt(query["days"] ?? "30", 10);
     const filename = `analytics-${tab}-${days}d.csv`;
