@@ -4,11 +4,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { JSX, useState } from "react";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { canAccess } from "@/lib/can";
 
 interface NavChild {
   href: string;
   label: string;
   exact?: boolean;
+  perm?: string;
 }
 
 interface NavItem {
@@ -16,30 +19,35 @@ interface NavItem {
   label: string;
   icon: string;
   exact?: boolean;
+  perm?: string;
   children?: NavChild[];
 }
 
+// `perm` = the parent permission key required to see the item. Admin/superAdmin
+// bypass (canAccess). Items without `perm` are visible to everyone (no permission
+// concept yet: Dashboard, Deals, Trust Score).
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "◻", exact: true },
-  { href: "/inbox",    label: "Inbox",       icon: "✉", exact: true },
-  { href: "/messages", label: "Message Log", icon: "📋" },
+  { href: "/inbox",    label: "Inbox",       icon: "✉", exact: true, perm: "inbox_access" },
+  { href: "/messages", label: "Message Log", icon: "📋", perm: "inbox_access" },
   {
     label: "Contacts",
     icon: "👤",
+    perm: "contacts_access",
     children: [
-      { href: "/contacts",                  label: "All Contacts", exact: true },
-      { href: "/contacts/groups",           label: "Groups" },
-      { href: "/contacts/segments",         label: "Segments" },
-      { href: "/contacts/import",           label: "Import" },
+      { href: "/contacts",          label: "All Contacts", exact: true, perm: "contacts_access" },
+      { href: "/contacts/groups",   label: "Groups",       perm: "contacts_access" },
+      { href: "/contacts/segments", label: "Segments",     perm: "campaigns_access" },
+      { href: "/contacts/import",   label: "Import",       perm: "contacts_access" },
     ],
   },
-  { href: "/campaigns",           label: "Campaigns",   icon: "📢" },
-  { href: "/templates",           label: "Templates",   icon: "📋" },
-  { href: "/flows",               label: "Flows",       icon: "⚡" },
-  { href: "/deals",               label: "Deals",       icon: "💼" },
-  { href: "/analytics",            label: "Analytics",   icon: "📊" },
-  { href: "/trust-score",         label: "Trust Score", icon: "🛡" },
-  { href: "/settings",            label: "Settings",    icon: "⚙" },
+  { href: "/campaigns",   label: "Campaigns",   icon: "📢", perm: "campaigns_access" },
+  { href: "/templates",   label: "Templates",   icon: "📋", perm: "templates_access" },
+  { href: "/flows",       label: "Flows",       icon: "⚡", perm: "automation_access" },
+  { href: "/deals",       label: "Deals",       icon: "💼" },
+  { href: "/analytics",   label: "Analytics",   icon: "📊", perm: "analytics_access" },
+  { href: "/trust-score", label: "Trust Score", icon: "🛡" },
+  { href: "/settings",    label: "Settings",    icon: "⚙", perm: "settings_access" },
 ];
 
 function isChildActive(children: NavChild[], pathname: string): boolean {
@@ -50,8 +58,23 @@ function isChildActive(children: NavChild[], pathname: string): boolean {
 
 export function Sidebar(): JSX.Element {
   const pathname = usePathname();
+  const { user, isLoading } = useCurrentUser();
 
   const [manualExpanded, setManualExpanded] = useState<Record<string, boolean>>({});
+
+  // While loading, show everything to avoid an empty-nav flash; once the user is
+  // known, hide items the role can't access. canAccess() bypasses for admin/superAdmin.
+  const allowed = (perm?: string): boolean => !perm || isLoading || canAccess(user, perm);
+
+  // Build the nav the current user may see.
+  const visibleNav: NavItem[] = NAV.flatMap((item) => {
+    if (item.children) {
+      const kids = item.children.filter((c) => allowed(c.perm));
+      if (!allowed(item.perm) || kids.length === 0) return [];
+      return [{ ...item, children: kids }];
+    }
+    return allowed(item.perm) ? [item] : [];
+  });
 
   function isOpen(item: NavItem): boolean {
     if (!item.children) return false;
@@ -70,7 +93,7 @@ export function Sidebar(): JSX.Element {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV.map((item) => {
+        {visibleNav.map((item) => {
           if (item.children) {
             const open = isOpen(item);
             const parentActive = isChildActive(item.children, pathname);
