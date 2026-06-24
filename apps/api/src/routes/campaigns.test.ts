@@ -451,4 +451,21 @@ describe("campaigns section gate (D15)", () => {
     expect(res.statusCode).toBe(200);
     await app.close();
   });
+
+  it("blocks report export when campaigns_export_report sub is off (parent on)", async () => {
+    const app = await buildAppAs({ campaigns_access: "allow" }); // section visible, export sub off
+    const res = await app.inject({ method: "GET", url: "/v1/campaigns/c-1/export" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.campaign.findFirst).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("allows report export when campaigns_export_report sub is on", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({ id: "c-1", name: "X", organizationId: "org-1" });
+    mockPrisma.campaignRecipient.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({ campaigns_access: "allow", "campaigns_access@campaigns_export_report": "allow" });
+    const res = await app.inject({ method: "GET", url: "/v1/campaigns/c-1/export" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
 });

@@ -460,7 +460,10 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { id: CampaignId } }>(
     "/campaigns/:id/export",
     async (request, reply) => {
-      const { organizationId, permissions } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_export_report")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "campaigns_export_report permission required" } });
+      }
       const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
       if (!campaign) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
 
@@ -506,7 +509,10 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { id: CampaignId } }>(
     "/campaigns/:id/queue-log-export",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_export_report")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "campaigns_export_report permission required" } });
+      }
       const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
       if (!campaign) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
       const recipients = await fastify.prisma.campaignRecipient.findMany({
@@ -531,7 +537,10 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { id: CampaignId } }>(
     "/campaigns/:id/expired-log-export",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_export_report")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "campaigns_export_report permission required" } });
+      }
       const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
       if (!campaign) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
       const recipients = await fastify.prisma.campaignRecipient.findMany({

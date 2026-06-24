@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
 import { getSocket } from "@/lib/socket";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { canAccess } from "@/lib/can";
+import { canAccess, canAccessSub } from "@/lib/can";
 import { PermissionGate } from "@/components/PermissionGate";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -54,7 +54,8 @@ export default function CampaignsPage(): JSX.Element {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const { user } = useCurrentUser();
-  const canManage = canAccess(user, "campaigns_access");
+  const canManage = canAccess(user, "campaigns_access"); // parent: lifecycle actions (no sub for abort/pause/delete)
+  const canCreate = canAccessSub(user, "campaigns_access", "campaigns_create"); // sub: create new campaigns
 
   const { data: campaigns = [], isLoading } = useQuery<Campaign[]>({
     queryKey: ["campaigns"],
@@ -125,7 +126,7 @@ export default function CampaignsPage(): JSX.Element {
               <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Campaigns</h1>
               <p className="text-sm text-gray-500 mt-0.5">{campaigns.filter(c => !c.isArchived).length} active</p>
             </div>
-            {canManage && (
+            {canCreate && (
               <Link href="/campaigns/new"><Button>New Campaign</Button></Link>
             )}
           </div>
@@ -170,7 +171,7 @@ export default function CampaignsPage(): JSX.Element {
                   </svg>
                 </div>
                 <p className="text-gray-500 font-medium">No {tab === "all" ? "" : tab} campaigns</p>
-                {tab === "all" && canManage && (
+                {tab === "all" && canCreate && (
                   <Link href="/campaigns/new" className="mt-2 inline-block text-sm text-brand-600 hover:text-brand-700 font-medium">
                     Create your first campaign →
                   </Link>

@@ -6,6 +6,8 @@ import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { canAccessSub } from "@/lib/can";
 
 type LogTab = "queue" | "executed" | "expired";
 
@@ -65,6 +67,8 @@ function SkeletonRows(): JSX.Element {
 export default function CampaignLogsPage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const { getToken } = useAuth();
+  const { user } = useCurrentUser();
+  const canExport = canAccessSub(user, "campaigns_access", "campaigns_export_report");
   const [tab, setTab] = useState<LogTab>("queue");
   const [pages, setPages] = useState<Record<LogTab, number>>({ queue: 1, executed: 1, expired: 1 });
   const [downloading, setDownloading] = useState(false);
@@ -124,6 +128,7 @@ export default function CampaignLogsPage(): JSX.Element {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Campaign Logs</h1>
+          {canExport && (
           <button
             onClick={() => { void handleDownload(); }}
             disabled={downloading}
@@ -132,6 +137,7 @@ export default function CampaignLogsPage(): JSX.Element {
             <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
             {downloading ? "Downloading…" : `Download ${TAB_LABELS[tab]} CSV`}
           </button>
+          )}
         </div>
 
         {/* Tabs */}
