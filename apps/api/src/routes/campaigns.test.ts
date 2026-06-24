@@ -485,4 +485,42 @@ describe("campaigns section gate (D15)", () => {
     expect(res.statusCode).toBe(200);
     await app.close();
   });
+
+  it("blocks abort when campaigns_abort sub is off (parent on)", async () => {
+    const app = await buildAppAs({ campaigns_access: "allow" });
+    const res = await app.inject({ method: "POST", url: "/v1/campaigns/c-1/abort" });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("allows abort when campaigns_abort sub is on", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({ id: "c-1", status: "running", organizationId: "org-1" });
+    mockPrisma.campaign.update.mockResolvedValue({ id: "c-1", status: "aborted", organizationId: "org-1" });
+    const app = await buildAppAs({ campaigns_access: "allow", "campaigns_access@campaigns_abort": "allow" });
+    const res = await app.inject({ method: "POST", url: "/v1/campaigns/c-1/abort" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("blocks pause when campaigns_pause_resume sub is off (parent on)", async () => {
+    const app = await buildAppAs({ campaigns_access: "allow" });
+    const res = await app.inject({ method: "POST", url: "/v1/campaigns/c-1/pause" });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("blocks delete when campaigns_delete sub is off (parent on)", async () => {
+    const app = await buildAppAs({ campaigns_access: "allow" });
+    const res = await app.inject({ method: "DELETE", url: "/v1/campaigns/c-1" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.campaign.findFirst).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("blocks archive when campaigns_archive sub is off (parent on)", async () => {
+    const app = await buildAppAs({ campaigns_access: "allow" });
+    const res = await app.inject({ method: "POST", url: "/v1/campaigns/c-1/archive" });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
 });

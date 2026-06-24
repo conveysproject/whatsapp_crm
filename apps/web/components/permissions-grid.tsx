@@ -38,7 +38,11 @@ export const PERMISSION_GROUPS = [
     label: "Campaigns",
     description: "Create, schedule, and run campaigns",
     subPermissions: [
-      { key: "campaigns_create", label: "Create new campaigns" },
+      { key: "campaigns_create", label: "Create / edit campaigns" },
+      { key: "campaigns_pause_resume", label: "Pause / Resume campaigns" },
+      { key: "campaigns_abort", label: "Abort campaigns" },
+      { key: "campaigns_archive", label: "Archive / Unarchive campaigns" },
+      { key: "campaigns_delete", label: "Delete campaigns" },
       { key: "campaigns_export_report", label: "Export Campaign Reports" },
       { key: "campaigns_custom_reports", label: "View Custom Campaign Reports" },
       { key: "campaigns_manage_segments", label: "Create / update Segments" },

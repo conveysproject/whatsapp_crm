@@ -161,7 +161,10 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: CampaignId }; Body: { scheduledAt?: string; segmentId?: SegmentId; groupIds?: string[] } }>(
     "/campaigns/:id/schedule",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_create")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "campaigns_create permission required" } });
+      }
       const campaign = await fastify.prisma.campaign.findFirst({
         where: { id: request.params.id, organizationId },
       });
@@ -198,7 +201,10 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Delete ────────────────────────────────────────────────────────────────
   fastify.delete<{ Params: { id: CampaignId } }>("/campaigns/:id", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_delete")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "campaigns_delete permission required" } });
+    }
     const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
     if (!campaign) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
@@ -263,7 +269,10 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Abort ─────────────────────────────────────────────────────────────────
   fastify.post<{ Params: { id: string } }>("/campaigns/:id/abort", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_abort")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "campaigns_abort permission required" } });
+    }
     const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
     if (!campaign) return reply.status(404).send({ error: "Not found" });
     const data = await fastify.prisma.campaign.update({ where: { id: request.params.id }, data: { status: "aborted" } });
@@ -272,7 +281,10 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Archive / unarchive ──────────────────────────────────────────────────
   fastify.post<{ Params: { id: string } }>("/campaigns/:id/archive", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_archive")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "campaigns_archive permission required" } });
+    }
     const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
     if (!campaign) return reply.status(404).send({ error: "Not found" });
     const data = await fastify.prisma.campaign.update({ where: { id: request.params.id }, data: { isArchived: true } });
@@ -280,7 +292,10 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.post<{ Params: { id: string } }>("/campaigns/:id/unarchive", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_archive")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "campaigns_archive permission required" } });
+    }
     const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
     if (!campaign) return reply.status(404).send({ error: "Not found" });
     const data = await fastify.prisma.campaign.update({ where: { id: request.params.id }, data: { isArchived: false } });
@@ -289,7 +304,10 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Requeue failed ───────────────────────────────────────────────────────
   fastify.post<{ Params: { id: string } }>("/campaigns/:id/requeue-failed", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_pause_resume")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "campaigns_pause_resume permission required" } });
+    }
     const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
     if (!campaign) return reply.status(404).send({ error: "Not found" });
     const result = await fastify.prisma.campaignRecipient.updateMany({
@@ -365,7 +383,10 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Pause ────────────────────────────────────────────────────────────────
   fastify.post<{ Params: { id: string } }>("/campaigns/:id/pause", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_pause_resume")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "campaigns_pause_resume permission required" } });
+    }
     const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
     if (!campaign) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
     if (campaign.status !== "running" && campaign.status !== "scheduled") {
@@ -382,7 +403,10 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string }; Body: { segmentId?: SegmentId } }>(
     "/campaigns/:id/resume",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_pause_resume")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "campaigns_pause_resume permission required" } });
+      }
       const campaign = await fastify.prisma.campaign.findFirst({ where: { id: request.params.id, organizationId } });
       if (!campaign) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Campaign not found" } });
       if (campaign.status !== "paused") {

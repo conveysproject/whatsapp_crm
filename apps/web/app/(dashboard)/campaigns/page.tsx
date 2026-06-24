@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
 import { getSocket } from "@/lib/socket";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { canAccess, canAccessSub } from "@/lib/can";
+import { canAccessSub } from "@/lib/can";
 import { PermissionGate } from "@/components/PermissionGate";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -54,8 +54,11 @@ export default function CampaignsPage(): JSX.Element {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const { user } = useCurrentUser();
-  const canManage = canAccess(user, "campaigns_access"); // parent: lifecycle actions (no sub for abort/pause/delete)
-  const canCreate = canAccessSub(user, "campaigns_access", "campaigns_create"); // sub: create new campaigns
+  const canCreate = canAccessSub(user, "campaigns_access", "campaigns_create");
+  const canPauseResume = canAccessSub(user, "campaigns_access", "campaigns_pause_resume");
+  const canAbort = canAccessSub(user, "campaigns_access", "campaigns_abort");
+  const canArchive = canAccessSub(user, "campaigns_access", "campaigns_archive");
+  const canDelete = canAccessSub(user, "campaigns_access", "campaigns_delete");
 
   const { data: campaigns = [], isLoading } = useQuery<Campaign[]>({
     queryKey: ["campaigns"],
@@ -196,7 +199,7 @@ export default function CampaignsPage(): JSX.Element {
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge variant={STATUS_BADGE[c.displayStatus] ?? "gray"}>{c.displayStatus}</Badge>
 
-                    {canManage && c.status === "running" && (
+                    {canAbort && c.status === "running" && (
                       <button
                         onClick={() => { void doAction(c.id, "abort"); }}
                         className="text-xs text-red-600 hover:text-red-700 font-medium px-2 py-1 rounded-md hover:bg-red-50 transition-colors"
@@ -204,7 +207,7 @@ export default function CampaignsPage(): JSX.Element {
                         Abort
                       </button>
                     )}
-                    {canManage && c.status === "running" && (
+                    {canPauseResume && c.status === "running" && (
                       <button
                         onClick={() => { void doAction(c.id, "pause"); }}
                         className="text-xs text-gray-600 hover:text-gray-700 font-medium px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
@@ -212,7 +215,7 @@ export default function CampaignsPage(): JSX.Element {
                         Pause
                       </button>
                     )}
-                    {canManage && c.status === "paused" && (
+                    {canPauseResume && c.status === "paused" && (
                       <button
                         onClick={() => { void doAction(c.id, "resume"); }}
                         className="text-xs text-brand-600 hover:text-brand-700 font-medium px-2 py-1 rounded-md hover:bg-brand-50 transition-colors"
@@ -220,7 +223,7 @@ export default function CampaignsPage(): JSX.Element {
                         Resume
                       </button>
                     )}
-                    {canManage && (c.status === "completed" || c.status === "aborted") && !c.isArchived && (
+                    {canArchive && (c.status === "completed" || c.status === "aborted") && !c.isArchived && (
                       <button
                         onClick={() => { void doAction(c.id, "archive"); }}
                         className="text-xs text-gray-500 hover:text-gray-700 font-medium px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
@@ -228,7 +231,7 @@ export default function CampaignsPage(): JSX.Element {
                         Archive
                       </button>
                     )}
-                    {canManage && c.isArchived && (
+                    {canArchive && c.isArchived && (
                       <button
                         onClick={() => { void doAction(c.id, "unarchive"); }}
                         className="text-xs text-brand-600 hover:text-brand-700 font-medium px-2 py-1 rounded-md hover:bg-brand-50 transition-colors"
@@ -236,7 +239,7 @@ export default function CampaignsPage(): JSX.Element {
                         Unarchive
                       </button>
                     )}
-                    {canManage && c.deleteAllowed && (
+                    {canDelete && c.deleteAllowed && (
                       <button
                         onClick={() => { void handleDelete(c.id, c.name); }}
                         className="text-xs text-red-500 hover:text-red-600 font-medium px-2 py-1 rounded-md hover:bg-red-50 transition-colors"
