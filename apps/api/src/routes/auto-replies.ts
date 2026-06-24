@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { Prisma, AutoReplyTriggerType } from "@prisma/client";
-import { canAccessSub } from "../lib/permissions.js";
+import { canAccess, canAccessSub } from "../lib/permissions.js";
 
 interface AutoReply {
   id: string;
@@ -51,6 +51,14 @@ interface AutoReplyBody {
 }
 
 export const autoRepliesRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate (Phase 2 / D15): every automation route requires automation_access.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "automation_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "automation_access permission required" } });
+    }
+  });
+
   fastify.get("/auto-replies", async (request, reply) => {
     const { organizationId } = request.auth;
     const autoReplies = await fastify.prisma.autoReply.findMany({

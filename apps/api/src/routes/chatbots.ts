@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { checkPlanLimit } from "../lib/plan-limits.js";
-import { canAccessSub } from "../lib/permissions.js";
+import { canAccess, canAccessSub } from "../lib/permissions.js";
 
 interface ChatbotBody {
   name: string;
@@ -8,6 +8,14 @@ interface ChatbotBody {
 }
 
 export const chatbotsRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate (Phase 2 / D15): every automation route requires automation_access.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "automation_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "automation_access permission required" } });
+    }
+  });
+
   fastify.get("/chatbots", async (request, reply) => {
     const { organizationId } = request.auth;
     const bots = await fastify.prisma.chatbot.findMany({ where: { organizationId } });

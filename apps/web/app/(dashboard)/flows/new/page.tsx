@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { PermissionGate } from "@/components/PermissionGate";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 const TRIGGER_TYPES = [
@@ -59,6 +60,7 @@ export default function NewFlowPage(): JSX.Element {
   }
 
   return (
+    <PermissionGate permission="automation_access" sub="automation_bot_flows">
     <div className="max-w-lg space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/flows" className="text-sm text-gray-500 hover:text-gray-700">← Flows</Link>
@@ -97,5 +99,6 @@ export default function NewFlowPage(): JSX.Element {
         </div>
       </div>
     </div>
+    </PermissionGate>
   );
 }

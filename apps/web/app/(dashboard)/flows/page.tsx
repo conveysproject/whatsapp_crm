@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { AutoRepliesSection } from "./auto-replies-section";
 import { FlowListActions } from "./flow-list-actions";
+import { PermissionGate } from "@/components/PermissionGate";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -68,6 +69,7 @@ export default async function FlowsPage(): Promise<JSX.Element> {
      permissions?.["automation_access@automation_bot_flows"] === "allow");
 
   return (
+    <PermissionGate permission="automation_access">
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
@@ -130,5 +132,6 @@ export default async function FlowsPage(): Promise<JSX.Element> {
 
       <AutoRepliesSection />
     </div>
+    </PermissionGate>
   );
 }

@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { Prisma } from "@prisma/client";
-import { canAccessSub } from "../lib/permissions.js";
+import { canAccess, canAccessSub } from "../lib/permissions.js";
 
 interface CannedResponseBody {
   name: string;
@@ -10,6 +10,14 @@ interface CannedResponseBody {
 }
 
 export const cannedResponsesRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate (Phase 2 / D15): every automation route requires automation_access.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "automation_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "automation_access permission required" } });
+    }
+  });
+
   fastify.get("/canned-responses", async (request, reply) => {
     const { organizationId } = request.auth;
     // GAP-S17: exclude NT campaign presets from regular canned response list

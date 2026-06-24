@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import { FlowEditor } from "@/components/flows/FlowEditor";
 import type { FlowData } from "@/components/flows/utils/serialize";
+import { PermissionGate } from "@/components/PermissionGate";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -25,8 +26,10 @@ export default async function FlowEditorPage({
   const flow = (await res.json() as { data: FlowData }).data;
 
   return (
-    <div className="-m-6 h-[calc(100vh-3.5rem)] flex flex-col overflow-hidden">
-      <FlowEditor initialFlow={flow} />
-    </div>
+    <PermissionGate permission="automation_access">
+      <div className="-m-6 h-[calc(100vh-3.5rem)] flex flex-col overflow-hidden">
+        <FlowEditor initialFlow={flow} />
+      </div>
+    </PermissionGate>
   );
 }

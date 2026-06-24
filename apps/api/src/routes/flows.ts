@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { flowQueue } from "../lib/queue.js";
 import type { FlowDefinition, FlowTriggerPayload } from "../lib/flow-runner.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
-import { canAccessSub } from "../lib/permissions.js";
+import { canAccess, canAccessSub } from "../lib/permissions.js";
 
 interface FlowBody {
   name: string;
@@ -11,6 +11,14 @@ interface FlowBody {
 }
 
 export const flowsRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate (Phase 2 / D15): every automation route requires automation_access.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "automation_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "automation_access permission required" } });
+    }
+  });
+
   fastify.get("/flows", async (request, reply) => {
     const { organizationId } = request.auth;
     const flows = await fastify.prisma.flow.findMany({

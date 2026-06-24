@@ -124,3 +124,50 @@ describe("GET /v1/flows/:id/runs", () => {
     expect(res.json<{ data: unknown[] }>().data).toHaveLength(1);
   });
 });
+
+describe("automation section gate (D15)", () => {
+  async function buildAppAs(permissions: Record<string, string>, role = "agent"): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+    });
+    const { flowsRouter } = await import("./flows.js");
+    await app.register(flowsRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("returns 403 when the role lacks automation_access", async () => {
+    const app = await buildAppAs({ contacts_access: "allow" }); // no automation_access
+    const res = await app.inject({ method: "GET", url: "/v1/flows" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.flow.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("allows the read when the role has automation_access", async () => {
+    mockPrisma.flow.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({ automation_access: "allow" });
+    const res = await app.inject({ method: "GET", url: "/v1/flows" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("admin bypasses the section gate even with empty permissions", async () => {
+    mockPrisma.flow.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({}, "admin");
+    const res = await app.inject({ method: "GET", url: "/v1/flows" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("blocks flow create when automation_bot_flows sub is off (parent on)", async () => {
+    const app = await buildAppAs({ automation_access: "allow" }); // bot_flows sub off
+    const res = await app.inject({ method: "POST", url: "/v1/flows", payload: { name: "F", triggerType: "keyword", flowDefinition: { steps: [] } } });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.flow.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
