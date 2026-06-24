@@ -10,6 +10,7 @@ import { WhatsAppGate } from "@/components/WhatsAppGate";
 import { getSocket } from "@/lib/socket";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { canAccess } from "@/lib/can";
+import { PermissionGate } from "@/components/PermissionGate";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -113,6 +114,7 @@ export default function CampaignsPage(): JSX.Element {
   }
 
   return (
+    <PermissionGate permission="campaigns_access">
     <WhatsAppGate feature="Campaigns">
       <div className="min-h-screen bg-gray-50/60">
         <div className="max-w-5xl mx-auto px-6 py-6 space-y-5">
@@ -256,5 +258,6 @@ export default function CampaignsPage(): JSX.Element {
         </div>
       </div>
     </WhatsAppGate>
+    </PermissionGate>
   );
 }

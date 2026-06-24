@@ -43,6 +43,16 @@ function normalizeGroupIds(value: string | string[] | undefined): string[] {
 }
 
 export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate (Phase 2 / D15): EVERY campaigns route requires the parent
+  // `campaigns_access` permission. admin/superAdmin bypass via canAccess; writes
+  // still additionally check their sub-permissions (e.g. campaigns_create).
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "campaigns_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "campaigns_access permission required" } });
+    }
+  });
+
   fastify.get("/campaigns", async (request, reply) => {
     const { organizationId } = request.auth;
     const campaigns = await fastify.prisma.campaign.findMany({

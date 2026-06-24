@@ -413,3 +413,42 @@ describe("GET /v1/campaigns/:id/report (with expired)", () => {
     expect(body.data.stats.accepted).toBe(4);
   });
 });
+
+describe("campaigns section gate (D15)", () => {
+  async function buildAppAs(permissions: Record<string, string>, role = "agent"): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+    });
+    const { campaignsRouter } = await import("./campaigns.js");
+    await app.register(campaignsRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("returns 403 when the role lacks campaigns_access", async () => {
+    const app = await buildAppAs({ contacts_access: "allow" }); // no campaigns_access
+    const res = await app.inject({ method: "GET", url: "/v1/campaigns" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.campaign.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("allows the read when the role has campaigns_access", async () => {
+    mockPrisma.campaign.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({ campaigns_access: "allow" });
+    const res = await app.inject({ method: "GET", url: "/v1/campaigns" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("admin bypasses the section gate even with empty permissions", async () => {
+    mockPrisma.campaign.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({}, "admin");
+    const res = await app.inject({ method: "GET", url: "/v1/campaigns" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
