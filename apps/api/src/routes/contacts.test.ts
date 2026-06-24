@@ -44,6 +44,9 @@ const mockPrisma = {
   flow: {
     findMany: vi.fn().mockResolvedValue([]),
   },
+  user: {
+    findMany: vi.fn().mockResolvedValue([]),
+  },
   $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
 };
 
@@ -654,5 +657,53 @@ describe("GET /v1/contacts/export (new rich CSV)", () => {
     const dateStr = new Date().toISOString().split("T")[0]!;
     expect(res.headers["content-disposition"]).toContain(`contacts-${dateStr}.csv`);
     mockAuth.permissions = {};
+  });
+});
+
+describe("contact field masking (D8)", () => {
+  async function buildAppAs(permissions: Record<string, string>): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: "agent" as const, permissions };
+    });
+    const { contactsRouter } = await import("./contacts.js");
+    await app.register(contactsRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("masks phone + email when hide_phone_number@hide_contact_fields is allow", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([
+      { id: "c-1", phoneNumber: "919876543210", email: "user@example.com", tags: [], assignedUserId: null, firstName: "A", lastName: "B", createdAt: new Date() },
+    ]);
+    mockPrisma.contact.count.mockResolvedValue(1);
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({
+      contacts_access: "allow",
+      "hide_phone_number@hide_contact_fields": "allow",
+    });
+    const res = await app.inject({ method: "GET", url: "/v1/contacts" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Array<{ phoneNumber: string; email: string }> }>();
+    expect(body.data[0].phoneNumber).not.toBe("919876543210");
+    expect(body.data[0].phoneNumber).toMatch(/X/);
+    expect(body.data[0].email).not.toBe("user@example.com");
+    await app.close();
+  });
+
+  it("does NOT mask when hide_phone_number@hide_contact_fields is absent", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([
+      { id: "c-1", phoneNumber: "919876543210", email: "user@example.com", tags: [], assignedUserId: null, firstName: "A", lastName: "B", createdAt: new Date() },
+    ]);
+    mockPrisma.contact.count.mockResolvedValue(1);
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({ contacts_access: "allow" }); // no masking key
+    const res = await app.inject({ method: "GET", url: "/v1/contacts" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Array<{ phoneNumber: string }> }>();
+    expect(body.data[0].phoneNumber).toBe("919876543210");
+    await app.close();
   });
 });

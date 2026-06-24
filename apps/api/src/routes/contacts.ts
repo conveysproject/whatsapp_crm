@@ -324,13 +324,12 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       assignedUser: c.assignedUserId ? (userMap.get(c.assignedUserId) ?? null) : null,
     }));
 
-    const hidePhone = permissions["hide_contact_phone_numbers"] === "allow";
-    const hideEmail = permissions["hide_contact_emails"] === "allow";
-    const masked = (hidePhone || hideEmail)
+    const hideFields = permissions["hide_phone_number@hide_contact_fields"] === "allow";
+    const masked = hideFields
       ? withOwner.map((c) => ({
           ...c,
-          phoneNumber: hidePhone ? maskPhone(c.phoneNumber) : c.phoneNumber,
-          email: hideEmail && c.email ? maskEmail(c.email) : c.email,
+          phoneNumber: maskPhone(c.phoneNumber),
+          email: c.email ? maskEmail(c.email) : c.email,
         }))
       : withOwner;
 
@@ -353,12 +352,11 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const assignedUser = contact.assignedUserId
       ? await fastify.prisma.user.findFirst({ where: { id: contact.assignedUserId }, select: { id: true, fullName: true, email: true } })
       : null;
-    const hidePhone = permissions["hide_contact_phone_numbers"] === "allow";
-    const hideEmail = permissions["hide_contact_emails"] === "allow";
+    const hideFields = permissions["hide_phone_number@hide_contact_fields"] === "allow";
     const data = {
       ...contact,
-      phoneNumber: hidePhone ? maskPhone(contact.phoneNumber) : contact.phoneNumber,
-      email: hideEmail && contact.email ? maskEmail(contact.email) : contact.email,
+      phoneNumber: hideFields ? maskPhone(contact.phoneNumber) : contact.phoneNumber,
+      email: hideFields && contact.email ? maskEmail(contact.email) : contact.email,
       groupIds: contact.groupContacts.map((g) => g.contactGroupId),
       assignedUser,
     };

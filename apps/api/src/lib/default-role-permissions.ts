@@ -9,8 +9,6 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, Record<string, string>> =
     "contacts_access@contacts_bulk_tag": "allow",
     "contacts_access@contacts_import": "allow",
     "contacts_access@contacts_manage_custom_fields": "allow",
-    hide_phone_number: "allow",
-    "hide_phone_number@hide_contact_fields": "allow",
     inbox_access: "allow",
     "inbox_access@inbox_all_conversations": "allow",
     "inbox_access@inbox_unassigned": "allow",

@@ -511,16 +511,15 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
         : [];
       const byPhone = new Map(lookedUp.map((c) => [c.phoneNumber, c]));
 
-      const maskPhones = permissions["hide_contact_phone_numbers"] === "allow";
-      const maskEmails = permissions["hide_contact_emails"] === "allow";
+      const hideFields = permissions["hide_phone_number@hide_contact_fields"] === "allow";
 
       const header = "Contact Name,Phone Number,Email,Status,Sent At,Error\n";
       const rows = recipients.map((r) => {
         const resolved = r.contact ?? byPhone.get(r.phoneNumber) ?? null;
         const name = (resolved ? [resolved.firstName, resolved.lastName].filter(Boolean).join(" ") : r.fullName) || "";
         const rawPhone = resolved?.phoneNumber ?? r.phoneNumber;
-        const phone = maskPhones ? maskPhone(rawPhone) : rawPhone;
-        const email = maskEmails ? maskEmail(resolved?.email ?? "") : (resolved?.email ?? "");
+        const phone = hideFields ? maskPhone(rawPhone) : rawPhone;
+        const email = hideFields ? maskEmail(resolved?.email ?? "") : (resolved?.email ?? "");
         const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
         return [escape(name), escape(`="${phone}"`), escape(email), r.status, r.sentAt?.toISOString() ?? "", escape(r.errorMessage ?? "")].join(",");
       });

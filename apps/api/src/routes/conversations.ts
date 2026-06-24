@@ -42,12 +42,12 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       take: 50,
     });
 
-    const hidePhone = permissions["hide_contact_phone_numbers"] === "allow";
+    const hideFields = permissions["hide_phone_number@hide_contact_fields"] === "allow";
     const now = Date.now();
     // GAP-S07: serviceWindowActive = lastInboundAt within 24h (non-template messages allowed)
     const data = conversations.map((c) => ({
       ...c,
-      contact: hidePhone && c.contact ? { ...c.contact, phoneNumber: maskPhone(c.contact.phoneNumber) } : c.contact,
+      contact: hideFields && c.contact ? { ...c.contact, phoneNumber: maskPhone(c.contact.phoneNumber) } : c.contact,
       serviceWindowActive: c.lastInboundAt != null && now - c.lastInboundAt.getTime() < 86_400_000,
       lastMessage: c.messages?.[0] ?? null,
       messages: undefined,  // remove the array from response
@@ -84,11 +84,11 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       take: 20,
     });
 
-    const hidePhone = permissions["hide_contact_phone_numbers"] === "allow";
+    const hideFields = permissions["hide_phone_number@hide_contact_fields"] === "allow";
     const now = Date.now();
     const data = conversations.map((c) => ({
       ...c,
-      contact: hidePhone && c.contact ? { ...c.contact, phoneNumber: maskPhone(c.contact.phoneNumber) } : c.contact,
+      contact: hideFields && c.contact ? { ...c.contact, phoneNumber: maskPhone(c.contact.phoneNumber) } : c.contact,
       serviceWindowActive: c.lastInboundAt != null && now - c.lastInboundAt.getTime() < 86_400_000,
       lastMessage: c.messages?.[0] ?? null,
       messages: undefined,

@@ -21,9 +21,9 @@ export function canAccess(
   return permissions[key] === "allow";
 }
 
-// GAP-S59: hide_contact_* permissions use inverted semantics — "allow" means HIDE
-export function shouldHideField(permissions: Record<string, string>, key: "hide_contact_phone_numbers" | "hide_contact_emails"): boolean {
-  return permissions[key] === "allow";
+// Inverted semantics: "allow" means HIDE. Single key covers phone + email.
+export function shouldHideContactFields(permissions: Record<string, string>): boolean {
+  return permissions["hide_phone_number@hide_contact_fields"] === "allow";
 }
 
 // Parent must be "allow" AND the explicit sub-permission must be "allow".
