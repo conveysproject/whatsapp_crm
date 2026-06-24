@@ -117,3 +117,42 @@ describe("PATCH /v1/users/me/availability", () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe("settings_agents sub gate", () => {
+  async function buildAppAs(permissions: Record<string, string>, role = "manager"): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+    });
+    const { userRoutes } = await import("./users.js");
+    await app.register(userRoutes, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("blocks PATCH /users/:id/role when settings_agents sub is off", async () => {
+    const app = await buildAppAs({ settings_access: "allow" }); // settings_agents sub off
+    const res = await app.inject({ method: "PATCH", url: "/v1/users/u-2/role", payload: { role: "agent" } });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("allows PATCH when settings_agents sub is on", async () => {
+    mockPrisma.user.update.mockResolvedValue({ id: "u-2", email: "a@b.com", role: "agent" });
+    const app = await buildAppAs({ settings_access: "allow", "settings_access@settings_agents": "allow" });
+    const res = await app.inject({ method: "PATCH", url: "/v1/users/u-2/role", payload: { role: "agent" } });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("admin bypasses settings_agents sub gate", async () => {
+    mockPrisma.user.update.mockResolvedValue({ id: "u-2", email: "a@b.com", role: "agent" });
+    const app = await buildAppAs({}, "admin");
+    const res = await app.inject({ method: "PATCH", url: "/v1/users/u-2/role", payload: { role: "agent" } });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});

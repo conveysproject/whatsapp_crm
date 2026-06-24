@@ -110,3 +110,42 @@ describe("GET /v1/billing/upi-qr", () => {
     expect(res.headers["content-type"]).toContain("image/png");
   });
 });
+
+describe("settings_billing sub gate", () => {
+  async function buildAppAs(permissions: Record<string, string>, role = "manager"): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+    });
+    const { billingRouter } = await import("./billing.js");
+    await app.register(billingRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("blocks POST /billing/cancel when settings_billing sub is off", async () => {
+    const app = await buildAppAs({ settings_access: "allow" }); // settings_billing sub off
+    const res = await app.inject({ method: "POST", url: "/v1/billing/cancel" });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("blocks POST /billing/switch-plan when settings_billing sub is off", async () => {
+    const app = await buildAppAs({ settings_access: "allow" }); // settings_billing sub off
+    const res = await app.inject({ method: "POST", url: "/v1/billing/switch-plan", payload: { planTier: "pro" } });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("admin bypasses settings_billing sub gate", async () => {
+    mockPrisma.manualSubscription.findFirst.mockResolvedValue(null);
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "[]" });
+    const app = await buildAppAs({}, "admin");
+    const res = await app.inject({ method: "POST", url: "/v1/billing/cancel" });
+    // admin bypasses — response may be 200 or depends on stripe mock; just not 403
+    expect(res.statusCode).not.toBe(403);
+    await app.close();
+  });
+});

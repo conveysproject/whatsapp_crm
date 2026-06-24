@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { canAccessSub } from "../lib/permissions.js";
 
 export const tagsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/tags", async (request, reply) => {
@@ -24,7 +25,10 @@ export const tagsRouter: FastifyPluginAsync = async (fastify) => {
 
   // Bulk-delete a tag — removes it from every contact in the org
   fastify.delete<{ Params: { tag: string } }>("/tags/:tag", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "settings_access", "settings_tags")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_tags permission required" } });
+    }
     const tag = decodeURIComponent(request.params.tag);
 
     const contacts = await fastify.prisma.contact.findMany({

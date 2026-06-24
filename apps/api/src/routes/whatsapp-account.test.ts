@@ -332,3 +332,38 @@ describe("POST /v1/whatsapp-account/connect", () => {
     expect(body.data.instagramAccountIds).toEqual(["ig-1"]);
   });
 });
+
+describe("settings_whatsapp sub gate", () => {
+  const subMockPrisma = {
+    vendorSetting: { upsert: vi.fn(), findFirst: vi.fn() },
+    organization: { update: vi.fn(), findUnique: vi.fn() },
+  };
+
+  async function buildAppAs(permissions: Record<string, string>, role = "agent"): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", subMockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+    });
+    const { whatsappAccountRouter } = await import("./whatsapp-account.js");
+    await app.register(whatsappAccountRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("blocks connect-webhook when settings_whatsapp sub is off (settings_access parent on)", async () => {
+    const app = await buildAppAs({ settings_access: "allow" }); // settings_whatsapp sub off
+    const res = await app.inject({ method: "POST", url: "/v1/whatsapp-account/connect-webhook" });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("admin bypasses settings_whatsapp sub gate", async () => {
+    subMockPrisma.organization.findUnique.mockResolvedValue(null);
+    const app = await buildAppAs({}, "admin");
+    const res = await app.inject({ method: "POST", url: "/v1/whatsapp-account/connect-webhook" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});

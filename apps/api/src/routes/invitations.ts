@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import type { Role } from "@prisma/client";
 import { checkPlanLimit } from "../lib/plan-limits.js";
+import { canAccessSub } from "../lib/permissions.js";
 
 export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { email: string; role: Role } }>(
@@ -19,8 +20,9 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      if (request.auth.role !== "admin") {
-        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can invite members" } });
+      const { role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "settings_access", "settings_agents")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_agents permission required" } });
       }
       // GAP-S50: reject disposable/temporary email addresses
       try {

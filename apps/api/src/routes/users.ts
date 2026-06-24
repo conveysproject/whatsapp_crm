@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { Role } from "@prisma/client";
 import { redis } from "../lib/redis.js";
+import { canAccessSub } from "../lib/permissions.js";
 
 function invalidateAuthCache(userId: string): Promise<number> {
   return redis.del(`auth:user:${userId}`);
@@ -50,8 +51,9 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      if (request.auth.role !== "admin") {
-        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can change roles" } });
+      const { role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "settings_access", "settings_agents")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_agents permission required" } });
       }
       if (request.params.id === request.auth.userId) {
         return reply.status(400).send({ error: { code: "SELF_MODIFY", message: "Admins cannot change their own role" } });
@@ -74,8 +76,9 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      if (request.auth.role !== "admin") {
-        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can remove users" } });
+      const { role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "settings_access", "settings_agents")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_agents permission required" } });
       }
       if (request.params.id === request.auth.userId) {
         return reply.status(400).send({ error: { code: "SELF_MODIFY", message: "Admins cannot remove themselves" } });

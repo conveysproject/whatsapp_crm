@@ -3,6 +3,7 @@ import type { PlanTier } from "@WBMSG/shared";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS, ZERO_DECIMAL_CURRENCIES } from "../lib/stripe.js";
 import { checkPlanLimit, isFeatureEnabled } from "../lib/plan-limits.js";
+import { canAccessSub } from "../lib/permissions.js";
 import Razorpay from "razorpay";
 
 // GAP-S60: load gateway credentials from VendorSettings, fallback to env vars
@@ -102,7 +103,10 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Cancel at period end (grace period) ─────────────────────────────────
   fastify.post("/billing/cancel", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
     const org = await fastify.prisma.organization.findUnique({
       where: { id: organizationId },
       select: { settings: true },
@@ -120,7 +124,10 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Cancel immediately ────────────────────────────────────────────────────
   fastify.post("/billing/cancel-now", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
     const org = await fastify.prisma.organization.findUnique({
       where: { id: organizationId },
       select: { settings: true },
@@ -138,7 +145,10 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Switch plan via Stripe ────────────────────────────────────────────────
   fastify.post<{ Body: { planTier: PlanTier | string } }>("/billing/switch-plan", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
     // GAP-S56: support planSelectorId "___" format
     const { planTier } = parsePlanSelector(request.body.planTier as string);
     const priceId = PLAN_PRICE_IDS[planTier];
@@ -250,7 +260,10 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   );
 
   fastify.post("/billing/portal", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
     const org = await fastify.prisma.organization.findUnique({
       where: { id: organizationId },
       select: { settings: true },
