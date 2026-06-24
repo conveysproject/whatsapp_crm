@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
+vi.mock("../lib/cache.js", () => ({
+  cacheGet: vi.fn().mockResolvedValue(null),
+  cacheSet: vi.fn().mockResolvedValue(undefined),
+  orgKey: (_org: string, key: string) => key,
+}));
+
 const mockPrisma = {
   conversation: { count: vi.fn(), findMany: vi.fn(), groupBy: vi.fn() },
   contact: { count: vi.fn(), findMany: vi.fn() },
