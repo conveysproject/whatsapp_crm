@@ -7,7 +7,7 @@
 
 > **Phase 1 outcome (2026-06-23):** the permission **engine** and **action** guards shipped (D1–D7, D11, D12 fixed @ `ef29c3a`). Role resolution, deny-by-default, default fallback, per-user overrides, and write-action guards (create/edit/delete/export) are live.
 >
-> **Phase 2 — section-view enforcement (§6.1 + D13–D15):** Phase 1 gated only *actions* (the "do" layer). Phase 2 makes an **unchecked parent permission strictly hide and block** the entire section across all three layers (nav, page, backend read). All 7 keyed sections complete (2026-06-24).
+> **Phase 2 — section-view enforcement (§6.1 + D13–D15):** Phase 1 gated only *actions* (the "do" layer). Phase 2 makes an **unchecked parent permission strictly hide and block** the entire section across all three layers (nav, page, backend read). All 9 keyed sections complete (2026-06-24): Campaigns, Contacts, Templates, Flows, Analytics, Inbox + Message Log, Settings, Deals, Trust Score.
 >
 > Deferred (non-blocking): D8 masking, D10 `authorizedParties`.
 
@@ -74,11 +74,11 @@ This PRD defines the **target** behaviour of the role & permission engine. It ex
 | **D10** | `verifyToken` doesn't validate `authorizedParties` | Low | Token-audience hardening missing |
 | **D11** | `auth.ts` reads Clerk JWT `org_role` and mirrors it into the DB role on every request | **High** | Violates "Clerk = identity only" (§1.1); makes Clerk's role authoritative instead of our DB |
 | **D12** | Clerk webhook `organizationMembership.created` sets `role` on its **update** path too, so an admin created via `/register` is demoted to `agent` (the default) when the membership event later fires with no invitation | **High** | **The true root cause of the "admin sees Access Denied" report.** Found in final review; fixed by only setting role from a pending invitation on update, never the default |
-| **D13** | **Sidebar navigation is not permission-aware** — every role sees every nav item (Campaigns, Flows, Analytics, Settings, …) regardless of permissions | **High** | Restricted roles see links to sections they have no access to |
+| **D13** | **Sidebar navigation is not permission-aware** — every role sees every nav item (Campaigns, Flows, Analytics, Settings, …) regardless of permissions | **High** | ~~Restricted roles see links to sections they have no access to~~ **Fixed Phase 2 (2026-06-24)** |
 | **D14** | **No page-view guard** — opening a section URL (e.g. `/campaigns`) renders the page for anyone with a session; only write *buttons* are hidden | **High** | ~~Restricted roles can open restricted pages by URL~~ **Fixed Phase 2 (2026-06-24)** |
 | **D15** | **No backend read guard** — list/read endpoints (`GET /campaigns`, `/templates`, `/flows`, `/analytics/*`, …) have no permission check; only writes are gated | **Critical** | ~~Restricted roles can fetch restricted data directly from the API — actual data exposure~~ **Fixed Phase 2 (2026-06-24)** |
 
-> **Status:** D1–D7, D11, D12 are **fixed & deployed** (2026-06-23). **D13, D14, D15 all ✅ done for all 7 keyed sections (2026-06-24).** D8 (masking) and D10 (`authorizedParties`) are deferred. The earlier "D9" (auto-sync promote/demote) is moot under §1.1.
+> **Status:** D1–D7, D11, D12 are **fixed & deployed** (2026-06-23). **D13, D14, D15 all ✅ done for all 9 keyed sections (2026-06-24).** D8 (masking) and D10 (`authorizedParties`) are deferred. The earlier "D9" (auto-sync promote/demote) is moot under §1.1.
 
 ---
 
