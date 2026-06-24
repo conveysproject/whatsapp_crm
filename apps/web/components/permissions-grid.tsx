@@ -108,7 +108,7 @@ export function PermissionsGrid({ permissions, onChange }: Props): JSX.Element {
   return (
     <div className="space-y-4">
       {PERMISSION_GROUPS.map((group) => (
-        <div key={group.key} className="border rounded-lg p-4">
+        <div key={group.key} className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
           <div className="flex items-start justify-between">
             <div>
               <p className="font-medium text-sm">{group.label}</p>
