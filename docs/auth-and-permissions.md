@@ -122,7 +122,6 @@ Sub-keys are stored as `parentKey@subKey`.
 | `campaigns_access` | Campaign Manager | parent |
 | `campaigns_access@campaigns_create` | Create campaigns | sub |
 | `campaigns_access@campaigns_export_report` | Export campaign reports | sub |
-| `campaigns_access@campaigns_custom_reports` | View custom campaign reports | sub |
 | `campaigns_access@campaigns_manage_segments` | Create / update segments | sub |
 | `templates_access` | Template Manager | parent |
 | `templates_access@templates_create` | Create templates | sub |

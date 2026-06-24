@@ -143,7 +143,7 @@ Value is `"allow"` or `"deny"`. Absence of a key = not granted (deny), except wh
 | `contacts_access` | `contacts_add`, `contacts_delete`, `contacts_export`, `contacts_import`, `contacts_bulk_tag`, `contacts_manage_custom_fields` | Contact Hub + actions |
 | `hide_phone_number` | `hide_contact_fields` | Masking of phone/email in contact views |
 | `inbox_access` | `inbox_all_conversations`, `inbox_unassigned`, `assigned_chats_only` | Inbox scope |
-| `campaigns_access` | `campaigns_create`, `campaigns_pause_resume`, `campaigns_abort`, `campaigns_archive`, `campaigns_delete`, `campaigns_export_report`, `campaigns_custom_reports` | Campaign Manager (each action has its own sub; `campaigns_custom_reports` is reserved — no feature yet) |
+| `campaigns_access` | `campaigns_create`, `campaigns_pause_resume`, `campaigns_abort`, `campaigns_archive`, `campaigns_delete`, `campaigns_export_report` | Campaign Manager (each action has its own sub) |
 | `templates_access` | `templates_create`, `templates_edit`, `templates_delete`, `templates_ai_buttons` | Template Manager |
 | `settings_access` | `settings_agents`, `settings_api_key`, `settings_whatsapp`, `settings_billing`, `settings_tags` | Settings sub-pages |
 | `analytics_access` | `analytics_export`, `analytics_agent_performance` | Analytics |

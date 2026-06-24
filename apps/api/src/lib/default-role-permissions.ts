@@ -22,7 +22,6 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, Record<string, string>> =
     "campaigns_access@campaigns_archive": "allow",
     "campaigns_access@campaigns_delete": "allow",
     "campaigns_access@campaigns_export_report": "allow",
-    "campaigns_access@campaigns_custom_reports": "allow",
     templates_access: "allow",
     "templates_access@templates_ai_buttons": "allow",
     "templates_access@templates_create": "allow",

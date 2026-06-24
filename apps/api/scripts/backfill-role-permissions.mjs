@@ -23,7 +23,6 @@ const DEFAULT_ROLE_PERMISSIONS = {
     campaigns_access: 'allow',
     'campaigns_access@campaigns_create': 'allow',
     'campaigns_access@campaigns_export_report': 'allow',
-    'campaigns_access@campaigns_custom_reports': 'allow',
     'campaigns_access@campaigns_manage_segments': 'allow',
     templates_access: 'allow',
     'templates_access@templates_ai_buttons': 'allow',
