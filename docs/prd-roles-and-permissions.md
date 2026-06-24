@@ -494,9 +494,9 @@ No `perm` field in the nav. Dashboard is open to all roles by design. Phase 2 do
 | 1 | Sidebar nav | ✅ | `perm: "analytics_access"` on nav item |
 | 2 | Page view guard | ✅ | `PermissionGate permission="analytics_access"` on `/analytics` and `/analytics/predictive` |
 | 3 | Backend read gate | ✅ | `preHandler` on analytics router — `GET /analytics/*` → 403 without `analytics_access` |
-| 4 | Granular action subs | ✅ | Phase 1: analytics_export, analytics_agent_performance — each route/tab has its sub check |
+| 4 | Granular action subs | ✅ | Phase 2: `/analytics/team` uses `canAccessSub(analytics_agent_performance)`; `/analytics/export` uses `canAccessSub(analytics_export)` — replaced old hardcoded role checks |
 | 5 | Cleanup | ✅ | No stale keys |
-| 6 | Tests | ✅ | 3 tests: section gate blocks/allows; admin bypass (+ Redis cache mocked so 200-path tests pass) |
+| 6 | Tests | ✅ | 8 tests: section gate blocks/allows/admin-bypass; sub gate blocks/allows for analytics_agent_performance + analytics_export; admin bypass sub gate (+ Redis cache mocked) |
 | 7 | Defaults updated | ✅ | Admin + manager defaults correct; viewer has parent only (read dashboards, no export) |
 | 8 | Docs updated | ✅ | PRD + auth doc updated |
 
@@ -526,9 +526,9 @@ Both `/inbox` and `/messages` share `inbox_access` as their parent key (`Sidebar
 | 1 | Sidebar nav | ✅ | `perm: "settings_access"` on nav item |
 | 2 | Page view guard | ✅ | `PermissionGate permission="settings_access"` on `/settings`, `/settings/vendor-settings`, `/settings/whatsapp-account` |
 | 3 | Backend read gate | ✅ | `preHandler` on `vendorSettingsRouter` and `whatsappAccountRouter` → 403 without `settings_access` |
-| 4 | Granular action subs | ✅ | Phase 1: settings_agents, settings_api_key, settings_whatsapp, settings_billing, settings_tags — each sub-page and write route checks the correct sub |
+| 4 | Granular action subs | ✅ | Phase 2: `canAccessSub` on `DELETE /tags/:tag` (settings_tags), `PATCH/DELETE /users/:id` (settings_agents), `POST /invitations` (settings_agents), `POST /billing/cancel,cancel-now,switch-plan,portal` (settings_billing); `settings_whatsapp` on `connect-webhook` (pre-existing); `settings_api_key` — no routes yet (planned) |
 | 5 | Cleanup | ✅ | No stale keys |
-| 6 | Tests | ✅ | 4 tests: section gate blocks GET and PUT; allows with settings_access; admin bypass |
+| 6 | Tests | ✅ | 13 tests: vendor-settings section gate (4); settings_whatsapp sub (2); settings_tags sub in labels.test.ts (3 + 1 GET happy-path); settings_agents sub in users.test.ts (3); settings_billing sub in billing.test.ts (3) |
 | 7 | Defaults updated | ✅ | Admin: all subs; manager: agents + tags only; agent/viewer: no settings access |
 | 8 | Docs updated | ✅ | PRD + auth doc updated |
 
