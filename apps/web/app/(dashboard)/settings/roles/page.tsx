@@ -93,7 +93,8 @@ export default function RolesPage(): JSX.Element {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gray-50/60">
+      <div className="max-w-[1400px] mx-auto px-6 py-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Roles</h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -144,6 +145,7 @@ export default function RolesPage(): JSX.Element {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }
