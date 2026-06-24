@@ -1,11 +1,15 @@
 # PRD — Roles & Permissions System (RBAC)
 
-**Status:** Implemented & deployed (2026-06-23, merged to `main` @ `ef29c3a`)
+**Status:** Phase 1 (engine + action guards) deployed; **Phase 2 (section-view enforcement) — IN PROGRESS**
 **Owner:** Platform / Auth
-**Last updated:** 2026-06-23
+**Last updated:** 2026-06-24
 **Module:** M1 (Auth & Multi-Tenancy)
 
-> **Implementation outcome (2026-06-23):** All blocking defects (D1–D7, D11, D12) fixed and deployed via the plan at `docs/superpowers/plans/2026-06-23-roles-permissions-auth-engine.md`. Final Opus review surfaced **D12** (webhook demoting `/register` admins) — the true root cause of the "admin sees Access Denied" report — now fixed. The one-time data-fix script was dry-run against production: **0 orgs needed repair** (the now-removed JWT auto-sync had already written `role=admin` for the affected org), so no `--apply` was required. Deferred (non-blocking): D8 masking, D10 `authorizedParties`, and the inbox `assigned_chats_only` enforcement (see §14 / follow-ups).
+> **Phase 1 outcome (2026-06-23):** the permission **engine** and **action** guards shipped (D1–D7, D11, D12 fixed @ `ef29c3a`). Role resolution, deny-by-default, default fallback, per-user overrides, and write-action guards (create/edit/delete/export) are live.
+>
+> **Phase 2 — section-view enforcement (this update, §6.1 + D13–D15):** Phase 1 deliberately gated only *actions* (the "do" layer). It did **not** gate *seeing* a section (nav, page view, backend reads). As a result a role without `campaigns_access` still sees the Campaigns nav item, opens the page, and the API returns the data. Phase 2 makes an **unchecked permission strictly hide and block** the whole section across all layers (see §6.1). This is the work tracked by D13–D15.
+>
+> Deferred (non-blocking): D8 masking, D10 `authorizedParties`.
 
 ---
 
@@ -70,8 +74,13 @@ This PRD defines the **target** behaviour of the role & permission engine. It ex
 | **D10** | `verifyToken` doesn't validate `authorizedParties` | Low | Token-audience hardening missing |
 | **D11** | `auth.ts` reads Clerk JWT `org_role` and mirrors it into the DB role on every request | **High** | Violates "Clerk = identity only" (§1.1); makes Clerk's role authoritative instead of our DB |
 | **D12** | Clerk webhook `organizationMembership.created` sets `role` on its **update** path too, so an admin created via `/register` is demoted to `agent` (the default) when the membership event later fires with no invitation | **High** | **The true root cause of the "admin sees Access Denied" report.** Found in final review; fixed by only setting role from a pending invitation on update, never the default |
+| **D13** | **Sidebar navigation is not permission-aware** — every role sees every nav item (Campaigns, Flows, Analytics, Settings, …) regardless of permissions | **High** | Restricted roles see links to sections they have no access to |
+| **D14** | **No page-view guard** — opening a section URL (e.g. `/campaigns`) renders the page for anyone with a session; only write *buttons* are hidden | **High** | Restricted roles can open restricted pages by URL |
+| **D15** | **No backend read guard** — list/read endpoints (`GET /campaigns`, `/templates`, `/flows`, `/analytics/*`, …) have no permission check; only writes are gated | **Critical** | Restricted roles can fetch restricted data directly from the API — actual data exposure |
 
-> **Status:** D1–D7, D11, D12 are **fixed & deployed** (2026-06-23). D8 (masking) and D10 (`authorizedParties`) are deferred. The earlier "D9" (auto-sync promote/demote) is moot under §1.1 — we no longer sync from Clerk.
+> **Status:** D1–D7, D11, D12 are **fixed & deployed** (2026-06-23). **D13–D15 are the Phase 2 work (§6.1), in progress.** D8 (masking) and D10 (`authorizedParties`) are deferred. The earlier "D9" (auto-sync promote/demote) is moot under §1.1 — we no longer sync from Clerk.
+
+> **Sidebar (D13) update (2026-06-24):** the sidebar is now permission-gated (`Sidebar.tsx`). D14 (page-view guards) and D15 (backend read guards) remain.
 
 ---
 
@@ -200,6 +209,38 @@ canAccessSub(role, perms, parent, sub):
 
 **Deprecate** `hasPermission`, `hasSubPermission` (D6). All routes use `canAccess` / `canAccessSub` only.
 
+### 6.1 Strict section enforcement (Phase 2 — D13–D15)
+
+A permission checkbox in the Roles grid is binding in **both directions**, across **every layer**:
+
+1. **Unchecked → the role cannot SEE or DO anything in that section.** Unchecking a parent (`<feature>_access`) strictly removes the whole section for that role: the nav item is hidden, the page returns Access Denied, the backend read/list endpoints return 403, and every action in it is blocked. Unchecking a sub (`<feature>_access@<action>`) blocks just that action while the section stays visible.
+2. **Checked → allowed.** A checked parent grants visibility of the section; a checked sub grants that specific action (a sub requires its parent to also be checked — `canAccessSub`).
+3. **No stored config → apply defaults.** If the org has no `role_permissions_<role>` row, fall back to `DEFAULT_ROLE_PERMISSIONS[role]` (the §6 fallback rule). New orgs created via `/register` are seeded with defaults; orgs onboarded another way have no row and are covered by the read-time fallback. A row that *exists* is used exactly as stored (even `{}` = deny all) — defaults are **not** re-merged into an existing row.
+
+**The four enforcement layers (all must agree on the parent `<feature>_access` key):**
+
+| Layer | Rule | Backend/Frontend |
+|---|---|---|
+| **Navigation** | Hide the nav item when `canAccess(parent)` is false | Frontend (`Sidebar.tsx`) — D13 ✅ |
+| **Page view** | Opening the route shows Access Denied when `canAccess(parent)` is false | Frontend page guard — D14 |
+| **Backend read** | `GET`/list endpoints return 403 when `canAccess(parent)` is false | Backend (authoritative) — D15 |
+| **Actions** | `POST`/`PATCH`/`DELETE` and write buttons gated by the relevant sub (`canAccessSub`) | Backend + Frontend — Phase 1 ✅ |
+
+**Authority:** the **backend read + action guards** are the real security boundary. Nav + page-view guards are UX so a restricted user never reaches a dead end — they do **not** replace the backend checks. A direct API call without the parent permission must always 403, independent of the UI.
+
+**Section → parent key map** (the keys each section is gated by):
+
+| Section | Parent key | Notes |
+|---|---|---|
+| Inbox, Message Log | `inbox_access` | |
+| Contacts (All, Groups, Import) | `contacts_access` | Segments is gated by `campaigns_access` (segments live under campaigns) |
+| Campaigns | `campaigns_access` | |
+| Templates | `templates_access` | |
+| Flows / Automation | `automation_access` | |
+| Analytics | `analytics_access` | |
+| Settings | `settings_access` | sub-pages further gated by `settings_*` subs |
+| Deals, Trust Score | *(no key yet)* | Open to all until a key is added — tracked as an open question (§14) |
+
 ---
 
 ## 7. Data Model
@@ -259,6 +300,20 @@ Every guarded surface checks the canonical key. Frontend hides UI; backend enfor
 
 Gaps marked *(add guard)* are tracked but not all blocking for this PRD's core fix.
 
+**Section-view enforcement (Phase 2, D13–D15)** — each section gated by its parent key at all three layers:
+
+| Section (parent key) | Nav (D13) | Page view (D14) | Backend read (D15) |
+|---|---|---|---|
+| Inbox / Message Log (`inbox_access`) | ✅ | `GET` conversations/messages → 403 | guard list endpoints |
+| Contacts (`contacts_access`) | ✅ | `/contacts*` Access Denied | `GET /contacts*` → 403 |
+| Campaigns (`campaigns_access`) | ✅ | `/campaigns` Access Denied | `GET /campaigns*` → 403 |
+| Templates (`templates_access`) | ✅ | `/templates` Access Denied | `GET /templates*` → 403 |
+| Flows (`automation_access`) | ✅ | `/flows` Access Denied | `GET /flows`, `/chatbots`, `/auto-replies` → 403 |
+| Analytics (`analytics_access`) | ✅ | `/analytics` Access Denied | `GET /analytics/*` → 403 |
+| Settings (`settings_access`) | ✅ | `/settings*` Access Denied | settings read endpoints → 403 |
+
+✅ = nav done (2026-06-24). Page-view (D14) and backend-read (D15) guards pending.
+
 ---
 
 ## 10. Onboarding & Seeding
@@ -304,6 +359,13 @@ Frontend `/register` → create org + creating user with role `admin` (explicit)
 6. No route references a permission key outside the §5 catalog. (D6/D7/D8)
 7. All existing API tests pass (they use `role: "admin"`, so bypass keeps them green).
 
+**Phase 2 — strict section enforcement (D13–D15, §6.1):**
+
+8. With `campaigns_access` **unchecked** for a role, a user in that role: (a) does **not** see Campaigns in the nav, (b) gets **Access Denied** opening `/campaigns`, and (c) `GET /campaigns` returns **403** for them. (D13/D14/D15)
+9. With `campaigns_access` **checked**, the same user sees the nav item, opens the page, and `GET /campaigns` returns 200 — while individual actions remain gated by their subs (e.g. create needs `campaigns_create`). (§6.1)
+10. The same hold for every keyed section (Inbox, Contacts, Templates, Flows, Analytics, Settings). A direct API read without the parent key is always 403, regardless of the UI. (S1)
+11. `admin`/`superAdmin` continue to see and reach every section (bypass). A role with **no stored row** sees exactly what its `DEFAULT_ROLE_PERMISSIONS` baseline grants. (§6 fallback)
+
 ---
 
 ## 13. Rollout Plan
@@ -320,6 +382,14 @@ Frontend `/register` → create org + creating user with role `admin` (explicit)
 10. Type-check + run API tests + targeted manual verification (agent in an unconfigured org; admin via DB role only).
 11. Ship behind normal deploy; no schema migration; read-time fallback covers existing data.
 
+### 13.1 Phase 2 rollout (section-view enforcement, D13–D15)
+
+1. **Sidebar gating (D13):** filter nav items by `canAccess(parent)`. ✅ done (2026-06-24).
+2. **Backend read guards (D15) — do first, it's the real boundary:** add `canAccess(role, permissions, parent)` to the list/read endpoints of each keyed section (`GET /campaigns*`, `/templates*`, `/flows`, `/chatbots`, `/auto-replies`, `/analytics/*`, `/contacts*`, conversations/messages, settings reads). Verify the agent/viewer defaults still permit their legitimate sections (e.g. agent keeps `contacts_access`, `inbox_access`, `templates_access`).
+3. **Page-view guards (D14):** a reusable `PermissionGate` (frontend) wrapping each keyed page; renders Access Denied when `canAccess(parent)` is false. Works for both client and server pages by wrapping rendered children.
+4. **Tests:** per-section — unchecked → 403/Access Denied/hidden; checked → 200/visible; admin bypass; default fallback.
+5. **Verify** as an actual agent/viewer in the browser + direct API calls; ship.
+
 ---
 
 ## 14. Open Questions
@@ -330,4 +400,5 @@ Frontend `/register` → create org + creating user with role `admin` (explicit)
 - **Fallback rule:** absent `role_permissions_<role>` row → built-in defaults; present row (even `{}`) → used exactly as stored (`{}` = deny all). *(§6)*
 
 **Still open:**
-1. **Masking scope:** which endpoints honour `hide_phone_number@hide_contact_fields`? Needs a concrete list before implementing D8. *(Non-blocking; can defer.)*
+1. **Keyless sections (Deals, Trust Score):** they have no permission key in the catalog. Options: (a) leave visible to all for now, (b) admin-only, or (c) add `deals_access` / `trust_score_access` keys to the catalog + grid + defaults and gate them like the rest. Message Log is treated as `inbox_access`. *(Blocks only Deals/Trust Score gating, not the keyed sections.)*
+2. **Masking scope:** which endpoints honour `hide_phone_number@hide_contact_fields`? Needs a concrete list before implementing D8. *(Non-blocking; can defer.)*
