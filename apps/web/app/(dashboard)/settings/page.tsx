@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
+import { PermissionGate } from "@/components/PermissionGate";
 
 interface Org {
   name: string;
@@ -22,6 +23,7 @@ export default async function SettingsPage(): Promise<JSX.Element> {
   const org = await getOrg(await getToken() ?? "");
 
   return (
+    <PermissionGate permission="settings_access">
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Organization Settings</h1>
@@ -65,5 +67,6 @@ export default async function SettingsPage(): Promise<JSX.Element> {
         ))}
       </div>
     </div>
+    </PermissionGate>
   );
 }

@@ -3,6 +3,7 @@ import { JSX, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ConnectWhatsAppModal } from "@/components/whatsapp/ConnectWhatsAppModal";
+import { PermissionGate } from "@/components/PermissionGate";
 
 async function fetchJson(url: string): Promise<unknown> {
   const res = await fetch(url);
@@ -77,6 +78,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
   const profileData = profile as { data?: { about?: string; address?: string } } | undefined;
 
   return (
+    <PermissionGate permission="settings_access" sub="settings_whatsapp">
     <div className="max-w-2xl mx-auto p-6 space-y-8">
 
       {/* Reconnect success banner */}
@@ -298,6 +300,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
         </button>
       </section>
     </div>
+    </PermissionGate>
   );
 }
 

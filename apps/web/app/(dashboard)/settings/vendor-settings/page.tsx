@@ -1,6 +1,7 @@
 "use client";
 import { JSX, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { PermissionGate } from "@/components/PermissionGate";
 
 interface VendorSettingsResponse {
   data: Record<string, string>;
@@ -54,6 +55,7 @@ export default function VendorSettingsPage(): JSX.Element {
   });
 
   return (
+    <PermissionGate permission="settings_access">
     <div className="max-w-2xl mx-auto p-6 space-y-8">
       <h1 className="text-2xl font-semibold">Advanced Settings</h1>
 
@@ -149,5 +151,6 @@ export default function VendorSettingsPage(): JSX.Element {
         {save.isPending ? "Saving..." : "Save Settings"}
       </button>
     </div>
+    </PermissionGate>
   );
 }

@@ -60,6 +60,14 @@ async function runSettingsSideEffects(organizationId: string, settings: SettingE
 }
 
 export const vendorSettingsRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate (Phase 2 / D15): all vendor-settings routes require settings_access.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "settings_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_access permission required" } });
+    }
+  });
+
   fastify.get("/vendor-settings", async (request, reply) => {
     const { organizationId } = request.auth;
     const rows = await fastify.prisma.vendorSetting.findMany({
