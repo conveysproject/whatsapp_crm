@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Toast, useToast } from "@/components/ui/Toast";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
+import { PermissionGate } from "@/components/PermissionGate";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -160,6 +161,7 @@ export default function NewCampaignPage(): JSX.Element {
   }
 
   return (
+    <PermissionGate permission="campaigns_access" sub="campaigns_create">
     <WhatsAppGate feature="Campaigns">
       <div className="min-h-screen bg-gray-50/60">
         <div className="max-w-2xl mx-auto px-6 py-6 space-y-6">
@@ -482,5 +484,6 @@ export default function NewCampaignPage(): JSX.Element {
         onSelect={(asset: MediaAsset) => { setMediaUrl(asset.fileUrl); setMediaPickerOpen(false); }}
       />
     </WhatsAppGate>
+    </PermissionGate>
   );
 }

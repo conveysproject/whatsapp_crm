@@ -2,19 +2,24 @@
 
 import { JSX, ReactNode } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { canAccess } from "@/lib/can";
+import { canAccess, canAccessSub } from "@/lib/can";
 
 /**
  * Page-view guard (Phase 2 / D14). Renders `children` only when the current user
- * holds the given parent permission; otherwise shows Access Denied. admin/superAdmin
- * bypass via canAccess. The backend read guard is the real boundary — this is UX so a
- * restricted user never lands on a dead page. Wraps both client and server children.
+ * holds the required permission; otherwise shows Access Denied. admin/superAdmin
+ * bypass. The backend guard is the real boundary — this is UX so a restricted user
+ * never lands on a dead page. Wraps both client and server children.
+ *
+ * - `permission` alone → parent section gate (`canAccess`).
+ * - `permission` + `sub` → action gate (`canAccessSub`), e.g. create/edit pages.
  */
 export function PermissionGate({
   permission,
+  sub,
   children,
 }: {
   permission: string;
+  sub?: string;
   children: ReactNode;
 }): JSX.Element {
   const { user, isLoading } = useCurrentUser();
@@ -23,7 +28,8 @@ export function PermissionGate({
     return <div className="py-12 text-center text-sm text-gray-400">Loading…</div>;
   }
 
-  if (!canAccess(user, permission)) {
+  const ok = sub ? canAccessSub(user, permission, sub) : canAccess(user, permission);
+  if (!ok) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
         <p className="text-lg font-semibold text-gray-900">Access Denied</p>

@@ -7,6 +7,8 @@ import Link from "next/link";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Toast, useToast } from "@/components/ui/Toast";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { canAccessSub } from "@/lib/can";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -23,6 +25,7 @@ export default function EditCampaignPage(): JSX.Element {
   const { getToken } = useAuth();
   const router = useRouter();
   const { toast, toastState, setToastOpen } = useToast();
+  const { user, isLoading: userLoading } = useCurrentUser();
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [name, setName] = useState("");
@@ -66,6 +69,15 @@ export default function EditCampaignPage(): JSX.Element {
     } finally {
       setSaving(false);
     }
+  }
+
+  if (!userLoading && !canAccessSub(user, "campaigns_access", "campaigns_create")) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
+        <p className="text-lg font-semibold text-gray-900">Access Denied</p>
+        <p className="text-sm text-gray-500">You don’t have permission to edit campaigns.</p>
+      </div>
+    );
   }
 
   if (loading) {

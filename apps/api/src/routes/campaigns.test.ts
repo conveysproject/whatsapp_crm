@@ -468,4 +468,21 @@ describe("campaigns section gate (D15)", () => {
     expect(res.statusCode).toBe(200);
     await app.close();
   });
+
+  it("blocks campaign edit when campaigns_create sub is off (parent on)", async () => {
+    const app = await buildAppAs({ campaigns_access: "allow" }); // section visible, create/edit off
+    const res = await app.inject({ method: "PATCH", url: "/v1/campaigns/c-1", payload: { name: "New name" } });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.campaign.findFirst).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("allows campaign edit when campaigns_create sub is on", async () => {
+    mockPrisma.campaign.findFirst.mockResolvedValue({ id: "c-1", name: "X", status: "draft", organizationId: "org-1", templateId: null, campaignType: "template" });
+    mockPrisma.campaign.update.mockResolvedValue({ id: "c-1", name: "New name", status: "draft", organizationId: "org-1" });
+    const app = await buildAppAs({ campaigns_access: "allow", "campaigns_access@campaigns_create": "allow" });
+    const res = await app.inject({ method: "PATCH", url: "/v1/campaigns/c-1", payload: { name: "New name" } });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
 });

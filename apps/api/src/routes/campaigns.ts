@@ -125,7 +125,11 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.patch<{ Params: { id: CampaignId }; Body: Partial<CampaignBody> }>(
     "/campaigns/:id",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      // Editing campaign config is governed by the same permission as creating.
+      if (!canAccessSub(role, permissions, "campaigns_access", "campaigns_create")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "campaigns_create permission required" } });
+      }
       const campaign = await fastify.prisma.campaign.findFirst({
         where: { id: request.params.id, organizationId },
       });
