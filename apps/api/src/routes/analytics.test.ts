@@ -114,3 +114,54 @@ describe("GET /v1/analytics/export", () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe("analytics section gate (D15)", () => {
+  async function buildAppAs(permissions: Record<string, string>, role = "agent"): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+    });
+    const { analyticsRouter } = await import("./analytics.js");
+    await app.register(analyticsRouter, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("returns 403 when the role lacks analytics_access", async () => {
+    const app = await buildAppAs({ contacts_access: "allow" }); // no analytics_access
+    const res = await app.inject({ method: "GET", url: "/v1/analytics/overview" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.conversation.count).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("allows the read when the role has analytics_access", async () => {
+    mockPrisma.conversation.count.mockResolvedValue(0);
+    mockPrisma.contact.count.mockResolvedValue(0);
+    mockPrisma.message.count.mockResolvedValue(0);
+    mockPrisma.invitation.count.mockResolvedValue(0);
+    mockPrisma.campaign.count.mockResolvedValue(0);
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    mockPrisma.conversation.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({ analytics_access: "allow" });
+    const res = await app.inject({ method: "GET", url: "/v1/analytics/overview" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("admin bypasses the section gate even with empty permissions", async () => {
+    mockPrisma.conversation.count.mockResolvedValue(0);
+    mockPrisma.contact.count.mockResolvedValue(0);
+    mockPrisma.message.count.mockResolvedValue(0);
+    mockPrisma.invitation.count.mockResolvedValue(0);
+    mockPrisma.campaign.count.mockResolvedValue(0);
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    mockPrisma.conversation.findMany.mockResolvedValue([]);
+    const app = await buildAppAs({}, "admin");
+    const res = await app.inject({ method: "GET", url: "/v1/analytics/overview" });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});

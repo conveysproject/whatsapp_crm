@@ -11,8 +11,17 @@ import {
   getConversationStatusBreakdown,
 } from "../lib/analytics-queries.js";
 import { cacheGet, cacheSet, orgKey } from "../lib/cache.js";
+import { canAccess } from "../lib/permissions.js";
 
 export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate (Phase 2 / D15): every analytics route requires analytics_access.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "analytics_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "analytics_access permission required" } });
+    }
+  });
+
   fastify.get("/analytics/overview", async (request, reply) => {
     const { organizationId } = request.auth;
     const query = request.query as Record<string, string>;
