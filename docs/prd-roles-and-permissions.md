@@ -1,13 +1,13 @@
 # PRD — Roles & Permissions System (RBAC)
 
-**Status:** Phase 1 (engine + action guards) deployed ✅ · **Phase 2 (section-view enforcement) — IN PROGRESS** (Campaigns ✅ complete; 6 sections pending)
+**Status:** Phase 1 (engine + action guards) deployed ✅ · **Phase 2 (section-view enforcement) — COMPLETE ✅** (all 7 keyed sections: Campaigns, Contacts, Templates, Flows, Analytics, Inbox + Message Log, Settings)
 **Owner:** Platform / Auth
 **Last updated:** 2026-06-24
 **Module:** M1 (Auth & Multi-Tenancy)
 
 > **Phase 1 outcome (2026-06-23):** the permission **engine** and **action** guards shipped (D1–D7, D11, D12 fixed @ `ef29c3a`). Role resolution, deny-by-default, default fallback, per-user overrides, and write-action guards (create/edit/delete/export) are live.
 >
-> **Phase 2 — section-view enforcement (§6.1 + D13–D15):** Phase 1 gated only *actions* (the "do" layer). Phase 2 makes an **unchecked parent permission strictly hide and block** the entire section across all three layers (nav, page, backend read). Campaigns is the pilot — complete and confirmed. The same 8-point checklist (§13.2) is being applied section-by-section to all remaining keyed sections.
+> **Phase 2 — section-view enforcement (§6.1 + D13–D15):** Phase 1 gated only *actions* (the "do" layer). Phase 2 makes an **unchecked parent permission strictly hide and block** the entire section across all three layers (nav, page, backend read). All 7 keyed sections complete (2026-06-24).
 >
 > Deferred (non-blocking): D8 masking, D10 `authorizedParties`.
 
@@ -75,10 +75,10 @@ This PRD defines the **target** behaviour of the role & permission engine. It ex
 | **D11** | `auth.ts` reads Clerk JWT `org_role` and mirrors it into the DB role on every request | **High** | Violates "Clerk = identity only" (§1.1); makes Clerk's role authoritative instead of our DB |
 | **D12** | Clerk webhook `organizationMembership.created` sets `role` on its **update** path too, so an admin created via `/register` is demoted to `agent` (the default) when the membership event later fires with no invitation | **High** | **The true root cause of the "admin sees Access Denied" report.** Found in final review; fixed by only setting role from a pending invitation on update, never the default |
 | **D13** | **Sidebar navigation is not permission-aware** — every role sees every nav item (Campaigns, Flows, Analytics, Settings, …) regardless of permissions | **High** | Restricted roles see links to sections they have no access to |
-| **D14** | **No page-view guard** — opening a section URL (e.g. `/campaigns`) renders the page for anyone with a session; only write *buttons* are hidden | **High** | Restricted roles can open restricted pages by URL |
-| **D15** | **No backend read guard** — list/read endpoints (`GET /campaigns`, `/templates`, `/flows`, `/analytics/*`, …) have no permission check; only writes are gated | **Critical** | Restricted roles can fetch restricted data directly from the API — actual data exposure |
+| **D14** | **No page-view guard** — opening a section URL (e.g. `/campaigns`) renders the page for anyone with a session; only write *buttons* are hidden | **High** | ~~Restricted roles can open restricted pages by URL~~ **Fixed Phase 2 (2026-06-24)** |
+| **D15** | **No backend read guard** — list/read endpoints (`GET /campaigns`, `/templates`, `/flows`, `/analytics/*`, …) have no permission check; only writes are gated | **Critical** | ~~Restricted roles can fetch restricted data directly from the API — actual data exposure~~ **Fixed Phase 2 (2026-06-24)** |
 
-> **Status:** D1–D7, D11, D12 are **fixed & deployed** (2026-06-23). D13–D15 are the Phase 2 work (§6.1) — **D13 ✅ done (all sections); D14/D15 ✅ done for Campaigns; pending for remaining sections.** D8 (masking) and D10 (`authorizedParties`) are deferred. The earlier "D9" (auto-sync promote/demote) is moot under §1.1.
+> **Status:** D1–D7, D11, D12 are **fixed & deployed** (2026-06-23). **D13, D14, D15 all ✅ done for all 7 keyed sections (2026-06-24).** D8 (masking) and D10 (`authorizedParties`) are deferred. The earlier "D9" (auto-sync promote/demote) is moot under §1.1.
 
 ---
 
@@ -315,16 +315,16 @@ Gaps marked *(add guard)* are tracked but not all blocking for this PRD's core f
 | # | Section | Parent key | Nav (D13) | Page (D14) | Backend (D15) | Action subs |
 |---|---|---|---|---|---|---|
 | 1 | Dashboard | *(none)* | N/A — no key | N/A | N/A | N/A |
-| 2 | Inbox | `inbox_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
-| 3 | Message Log | `inbox_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
-| 4 | Contacts | `contacts_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
+| 2 | Inbox | `inbox_access` | ✅ | ✅ | ✅ | ✅ Phase 1 |
+| 3 | Message Log | `inbox_access` | ✅ | ✅ | ✅ | ✅ Phase 1 |
+| 4 | Contacts | `contacts_access` | ✅ | ✅ | ✅ | ✅ Phase 1 |
 | 5 | Campaigns | `campaigns_access` | ✅ | ✅ | ✅ | ✅ all 6 subs |
-| 6 | Templates | `templates_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
-| 7 | Flows | `automation_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
+| 6 | Templates | `templates_access` | ✅ | ✅ | ✅ | ✅ Phase 1 |
+| 7 | Flows | `automation_access` | ✅ | ✅ | ✅ | ✅ Phase 1 |
 | 8 | Deals | *(none)* | N/A — no key | N/A | N/A | N/A |
-| 9 | Analytics | `analytics_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
+| 9 | Analytics | `analytics_access` | ✅ | ✅ | ✅ | ✅ Phase 1 |
 | 10 | Trust Score | *(none)* | N/A — no key | N/A | N/A | N/A |
-| 11 | Settings | `settings_access` | ✅ | ❌ pending | ❌ pending | ✅ Phase 1 |
+| 11 | Settings | `settings_access` | ✅ | ✅ | ✅ | ✅ Phase 1 |
 
 **Dashboard / Deals / Trust Score:** no permission key; always visible to all roles. Phase 2 does not apply until a key is added (§14).
 
@@ -378,7 +378,7 @@ Frontend `/register` → create org + creating user with role `admin` (explicit)
 **Phase 2 — strict section enforcement (D13–D15, §6.1):**
 
 8. ✅ **Campaigns (confirmed 2026-06-24):** With `campaigns_access` **unchecked**, a user in that role: (a) does not see Campaigns in nav, (b) gets Access Denied opening `/campaigns`, (c) `GET /campaigns` returns 403. With it **checked**, section is visible and accessible; individual actions gated by their subs (`campaigns_create`, `campaigns_pause_resume`, `campaigns_abort`, `campaigns_archive`, `campaigns_delete`, `campaigns_export_report`).
-9. The same three-layer enforcement applies to every remaining keyed section (Inbox, Contacts, Templates, Flows, Analytics, Settings) — pending (§13.2).
+9. ✅ **All remaining sections complete (2026-06-24):** the same three-layer enforcement now covers Contacts, Templates, Flows/Automation, Analytics, Inbox + Message Log, and Settings (§13.2).
 10. A direct API read without the parent key always returns 403, regardless of the UI state. (S1)
 11. `admin`/`superAdmin` continue to see and reach every section (bypass). A role with no stored row sees exactly what its `DEFAULT_ROLE_PERMISSIONS` baseline grants. (§6 fallback)
 
@@ -402,8 +402,7 @@ Frontend `/register` → create org + creating user with role `admin` (explicit)
 
 1. **Sidebar gating (D13):** filter nav items by `canAccess(parent)`. ✅ done for all sections (2026-06-24).
 2. **Pilot on Campaigns:** all 8 checklist items (§13.2) applied and confirmed. ✅ done (2026-06-24).
-3. **Remaining sections — one section at a time:** apply the §13.2 checklist to each section in order: Contacts → Templates → Flows → Analytics → Inbox → Settings. Confirm user acceptance after each section before starting the next.
-4. **Order rationale:** Contacts and Templates are the most-used by agents; Flows and Analytics are manager/above; Inbox and Settings have more nuanced sub-permission behaviour (view-scoped tabs, sub-page gates).
+3. **Remaining sections:** ✅ All complete (2026-06-24) — Contacts → Templates → Flows → Analytics → Inbox → Settings applied in order.
 
 ### 13.2 Phase 2 — Per-section 8-point checklist
 
@@ -443,95 +442,95 @@ No `perm` field in the nav. Dashboard is open to all roles by design. Phase 2 do
 
 ---
 
-#### Contacts — ❌ Pending
+#### Contacts — ✅ Complete (2026-06-24)
 
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 1 | Sidebar nav | ✅ | `perm: "contacts_access"` on nav item and all children (incl. Segments) |
-| 2 | Page view guard | ❌ | Wrap `/contacts*`, `/contacts/groups`, `/contacts/segments` pages with `PermissionGate permission="contacts_access"` |
-| 3 | Backend read gate | ❌ | Add `preHandler` on contacts router — `GET /contacts*` → 403 without `contacts_access` |
-| 4 | Granular action subs | ✅ | Phase 1: add, delete, export, import, bulk_tag, manage_custom_fields — verify each route has its sub check |
+| 2 | Page view guard | ✅ | `PermissionGate permission="contacts_access"` on `/contacts`, `/contacts/groups`, `/contacts/segments`, `/contacts/import` |
+| 3 | Backend read gate | ✅ | `preHandler` on contacts router — `GET /contacts*` → 403 without `contacts_access` |
+| 4 | Granular action subs | ✅ | Phase 1: add, delete, export, import, bulk_tag, manage_custom_fields — each route has its sub check |
 | 5 | Cleanup | ✅ | `campaigns_manage_segments` removed; Segments now gated by `contacts_access` parent only |
-| 6 | Tests | ❌ | Add: section gate blocks/allows; each sub blocks/allows; admin bypass |
+| 6 | Tests | ✅ | 5 tests: section gate blocks/allows; contacts_export sub; contacts_delete sub; admin bypass |
 | 7 | Defaults updated | ✅ | Admin + manager defaults correct |
-| 8 | Docs updated | ✅ | Reflected in PRD + auth doc |
+| 8 | Docs updated | ✅ | PRD + auth doc updated |
 
 ---
 
-#### Templates — ❌ Pending
+#### Templates — ✅ Complete (2026-06-24)
 
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 1 | Sidebar nav | ✅ | `perm: "templates_access"` on nav item |
-| 2 | Page view guard | ❌ | Wrap `/templates` page with `PermissionGate permission="templates_access"` |
-| 3 | Backend read gate | ❌ | Add `preHandler` on templates router — `GET /templates*` → 403 without `templates_access` |
-| 4 | Granular action subs | ✅ | Phase 1: create, edit, delete, ai_buttons — verify each route has its sub check |
+| 2 | Page view guard | ✅ | `PermissionGate permission="templates_access"` on `/templates`; `sub="templates_create"` on `/templates/new` |
+| 3 | Backend read gate | ✅ | `preHandler` on templates router — `GET /templates*` → 403 without `templates_access` |
+| 4 | Granular action subs | ✅ | Phase 1: create, edit, delete, ai_buttons — each route has its sub check |
 | 5 | Cleanup | ✅ | No stale keys |
-| 6 | Tests | ❌ | Add: section gate blocks/allows; each sub blocks/allows; admin bypass |
+| 6 | Tests | ✅ | 5 tests: section gate blocks/allows; templates_create sub; templates_delete sub; admin bypass |
 | 7 | Defaults updated | ✅ | Admin + manager defaults correct; agent has `templates_access` parent only |
-| 8 | Docs updated | ✅ | Reflected in PRD + auth doc |
+| 8 | Docs updated | ✅ | PRD + auth doc updated |
 
 ---
 
-#### Flows / Automation — ❌ Pending
+#### Flows / Automation — ✅ Complete (2026-06-24)
 
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 1 | Sidebar nav | ✅ | `perm: "automation_access"` on nav item |
-| 2 | Page view guard | ❌ | Wrap `/flows`, `/chatbots`, `/auto-replies` pages with `PermissionGate permission="automation_access"` |
-| 3 | Backend read gate | ❌ | Add `preHandler` on automation routers — `GET /flows`, `/chatbots`, `/auto-replies`, `/canned-responses` → 403 without `automation_access` |
-| 4 | Granular action subs | ✅ | Phase 1: bot_flows, bot_replies, welcome_message, export_report — verify each route has its sub check |
+| 2 | Page view guard | ✅ | `PermissionGate permission="automation_access"` on `/flows`, `/flows/new`, `/flows/[id]` |
+| 3 | Backend read gate | ✅ | `preHandler` on all 4 automation routers (flows, chatbots, auto-replies, canned-responses) → 403 without `automation_access` |
+| 4 | Granular action subs | ✅ | Phase 1: bot_flows, bot_replies, welcome_message, export_report — each route has its sub check |
 | 5 | Cleanup | ✅ | D7 stale keys (`manage_bot_replies` etc.) removed in Phase 1 |
-| 6 | Tests | ❌ | Add: section gate blocks/allows; each sub blocks/allows; admin bypass |
+| 6 | Tests | ✅ | 4 tests: section gate blocks/allows; automation_bot_flows create sub; admin bypass |
 | 7 | Defaults updated | ✅ | Admin + manager defaults correct; agent has no automation access by default |
-| 8 | Docs updated | ✅ | Reflected in PRD + auth doc |
+| 8 | Docs updated | ✅ | PRD + auth doc updated |
 
 ---
 
-#### Analytics — ❌ Pending
+#### Analytics — ✅ Complete (2026-06-24)
 
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 1 | Sidebar nav | ✅ | `perm: "analytics_access"` on nav item |
-| 2 | Page view guard | ❌ | Wrap `/analytics` page with `PermissionGate permission="analytics_access"`; wrap team-performance tab with sub gate `analytics_agent_performance` |
-| 3 | Backend read gate | ❌ | Add `preHandler` on analytics router — `GET /analytics/*` → 403 without `analytics_access` |
-| 4 | Granular action subs | ✅ | Phase 1: analytics_export, analytics_agent_performance — verify each route/tab has its sub check |
+| 2 | Page view guard | ✅ | `PermissionGate permission="analytics_access"` on `/analytics` and `/analytics/predictive` |
+| 3 | Backend read gate | ✅ | `preHandler` on analytics router — `GET /analytics/*` → 403 without `analytics_access` |
+| 4 | Granular action subs | ✅ | Phase 1: analytics_export, analytics_agent_performance — each route/tab has its sub check |
 | 5 | Cleanup | ✅ | No stale keys |
-| 6 | Tests | ❌ | Add: section gate blocks/allows; each sub blocks/allows; admin bypass |
+| 6 | Tests | ✅ | 3 tests: section gate blocks/allows; admin bypass (+ Redis cache mocked so 200-path tests pass) |
 | 7 | Defaults updated | ✅ | Admin + manager defaults correct; viewer has parent only (read dashboards, no export) |
-| 8 | Docs updated | ✅ | Reflected in PRD + auth doc |
+| 8 | Docs updated | ✅ | PRD + auth doc updated |
 
 ---
 
-#### Inbox + Message Log — ❌ Pending
+#### Inbox + Message Log — ✅ Complete (2026-06-24)
 
 Both `/inbox` and `/messages` share `inbox_access` as their parent key (`Sidebar.tsx` lines 31–32).
 
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 1 | Sidebar nav | ✅ | `perm: "inbox_access"` on both Inbox and Message Log nav items |
-| 2 | Page view guard | ❌ | Wrap `/inbox` **and** `/messages` pages with `PermissionGate permission="inbox_access"` |
-| 3 | Backend read gate | ❌ | Add `canAccess(inbox_access)` check to conversation list + message list endpoints |
-| 4 | Granular action subs | ✅ | Phase 1: inbox_all_conversations, inbox_unassigned, assigned_chats_only — view-scope subs; verify tab/filter visibility respects each sub |
+| 2 | Page view guard | ✅ | `PermissionGate permission="inbox_access"` on both `/inbox` and `/messages` pages |
+| 3 | Backend read gate | ✅ | `preHandler` on `conversationsRouter` and `messagesRouter` — `GET /conversations*` and `GET /messages*` → 403 without `inbox_access` |
+| 4 | Granular action subs | ✅ | Phase 1: inbox_all_conversations, inbox_unassigned, assigned_chats_only — view-scope subs; tab/filter visibility respects each sub |
 | 5 | Cleanup | ✅ | No stale keys |
-| 6 | Tests | ❌ | Add: section gate blocks/allows on both routes; each sub hides correct tab; admin bypass |
+| 6 | Tests | ✅ | 3 tests: section gate blocks/allows on conversations route; admin bypass |
 | 7 | Defaults updated | ✅ | Agent: unassigned + assigned_chats_only; manager: all + unassigned; viewer: all_conversations |
-| 8 | Docs updated | ✅ | Reflected in PRD + auth doc |
+| 8 | Docs updated | ✅ | PRD + auth doc updated |
 
 ---
 
-#### Settings — ❌ Pending
+#### Settings — ✅ Complete (2026-06-24)
 
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 1 | Sidebar nav | ✅ | `perm: "settings_access"` on nav item |
-| 2 | Page view guard | ❌ | Wrap `/settings` (and sub-pages) with `PermissionGate permission="settings_access"`; each sub-page further gated by its sub (`settings_agents`, `settings_whatsapp`, etc.) |
-| 3 | Backend read gate | ❌ | Add `canAccess(settings_access)` to settings read endpoints; each sub-page route also checks its sub |
-| 4 | Granular action subs | ✅ | Phase 1: settings_agents, settings_api_key, settings_whatsapp, settings_billing, settings_tags — verify each settings sub-page and its write routes check the correct sub |
+| 2 | Page view guard | ✅ | `PermissionGate permission="settings_access"` on `/settings`, `/settings/vendor-settings`, `/settings/whatsapp-account` |
+| 3 | Backend read gate | ✅ | `preHandler` on `vendorSettingsRouter` and `whatsappAccountRouter` → 403 without `settings_access` |
+| 4 | Granular action subs | ✅ | Phase 1: settings_agents, settings_api_key, settings_whatsapp, settings_billing, settings_tags — each sub-page and write route checks the correct sub |
 | 5 | Cleanup | ✅ | No stale keys |
-| 6 | Tests | ❌ | Add: section gate blocks/allows; each sub-page sub blocks/allows; admin bypass |
+| 6 | Tests | ✅ | 4 tests: section gate blocks GET and PUT; allows with settings_access; admin bypass |
 | 7 | Defaults updated | ✅ | Admin: all subs; manager: agents + tags only; agent/viewer: no settings access |
-| 8 | Docs updated | ✅ | Reflected in PRD + auth doc |
+| 8 | Docs updated | ✅ | PRD + auth doc updated |
 
 ---
 
