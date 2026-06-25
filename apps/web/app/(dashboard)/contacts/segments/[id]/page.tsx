@@ -4,8 +4,10 @@ import { JSX, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
-import { SegmentBuilder, type FilterRule, type MatchMode } from "@/components/segments/SegmentBuilder";
+import { SegmentBuilderV2 } from "@/components/segments/SegmentBuilderV2";
+import type { FilterRule, MatchMode } from "@/components/segments/types";
 import { Button } from "@/components/ui/Button";
+
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 interface ContactPreview {
@@ -21,16 +23,16 @@ interface Segment {
   name: string;
   filters: FilterRule[];
   match: MatchMode;
+  whatsappOptedOnly: boolean;
 }
 
 export default function SegmentDetailPage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const { getToken } = useAuth();
   const [segment, setSegment] = useState<Segment | null>(null);
-  const [loadedFilters, setLoadedFilters] = useState<FilterRule[]>([]);
-  const [loadedMatch, setLoadedMatch] = useState<MatchMode>("all");
   const [filters, setFilters] = useState<FilterRule[]>([]);
   const [match, setMatch] = useState<MatchMode>("all");
+  const [whatsappOptedOnly, setWhatsappOptedOnly] = useState(false);
   const [contacts, setContacts] = useState<ContactPreview[]>([]);
   const [matchCount, setMatchCount] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -47,28 +49,26 @@ export default function SegmentDetailPage(): JSX.Element {
       if (res.ok) {
         const s = (await res.json() as { data: Segment }).data;
         setSegment(s);
-        setLoadedFilters(s.filters);
-        setLoadedMatch(s.match ?? "all");
         setFilters(s.filters);
         setMatch(s.match ?? "all");
+        setWhatsappOptedOnly(s.whatsappOptedOnly ?? false);
       }
       setLoading(false);
     })();
     return () => { cancelled = true; };
   }, [id, getToken]);
 
-  async function handleSave() {
+  async function handleSave(): Promise<void> {
     setSaving(true);
     try {
       const token = await getToken();
       const patchRes = await fetch(`${API_URL}/v1/segments/${id}`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ filters, match }),
+        body: JSON.stringify({ filters, match, whatsappOptedOnly }),
       });
       if (!patchRes.ok) return;
       setSegment((await patchRes.json() as { data: Segment }).data);
-      // Evaluate to refresh matching contacts
       const evalRes = await fetch(`${API_URL}/v1/segments/${id}/evaluate`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token ?? ""}` },
@@ -94,25 +94,27 @@ export default function SegmentDetailPage(): JSX.Element {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        <h2 className="font-medium text-gray-800">Filters</h2>
-        <SegmentBuilder
-          initial={loadedFilters}
-          match={loadedMatch}
+        <SegmentBuilderV2
+          initial={filters}
+          match={match}
+          whatsappOptedOnly={whatsappOptedOnly}
           onChange={setFilters}
           onMatchChange={setMatch}
+          onWhatsappOptedOnlyChange={setWhatsappOptedOnly}
         />
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 pt-2">
           <Button onClick={() => { void handleSave(); }} disabled={saving}>
-            {saving ? "Saving…" : "Save Filters"}
+            {saving ? "Saving…" : "Save Segment"}
           </Button>
           {matchCount !== null && (
-            <span className="text-sm text-green-600 font-medium">
+            <span className="text-sm text-green-700 font-medium">
               {matchCount} contact{matchCount !== 1 ? "s" : ""} match this segment
             </span>
           )}
         </div>
       </div>
 
+      {/* Matching contacts table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100">
           <h2 className="font-medium text-gray-800">
@@ -148,9 +150,7 @@ export default function SegmentDetailPage(): JSX.Element {
                       <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.leadStatus.color }} />
                       {c.leadStatus.name}
                     </span>
-                  ) : (
-                    <span className="text-gray-400">—</span>
-                  )}
+                  ) : <span className="text-gray-400">—</span>}
                 </td>
               </tr>
             ))}
