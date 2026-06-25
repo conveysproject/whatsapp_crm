@@ -110,7 +110,6 @@ export default async function BasicAutomationPage(): Promise<JSX.Element> {
             oooMessage: settings.oooMessage,
             oooMessageData: settings.oooMessageData,
           }}
-          token={token}
         />
         <WelcomeCard
           initial={{
@@ -122,7 +121,6 @@ export default async function BasicAutomationPage(): Promise<JSX.Element> {
             welcomeFlowId: settings.welcomeFlowId,
           }}
           flows={flows.filter((f) => f.isActive)}
-          token={token}
         />
         <DelayedCard
           initial={{
@@ -132,7 +130,6 @@ export default async function BasicAutomationPage(): Promise<JSX.Element> {
             delayedMessageData: settings.delayedMessageData,
             delayedSendWithOoo: settings.delayedSendWithOoo,
           }}
-          token={token}
         />
       </div>
     </PermissionGate>

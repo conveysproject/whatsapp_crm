@@ -16,10 +16,9 @@ interface OooSettings {
 
 interface Props {
   initial: OooSettings;
-  token: string;
 }
 
-export function OooCard({ initial, token }: Props): JSX.Element {
+export function OooCard({ initial }: Props): JSX.Element {
   const { getToken } = useAuth();
   const [enabled, setEnabled] = useState(initial.oooEnabled);
   const [message, setMessage] = useState(initial.oooMessage ?? "");
@@ -53,9 +52,10 @@ export function OooCard({ initial, token }: Props): JSX.Element {
     setSaving(true);
     setError(null);
     try {
+      const t = await getToken();
       const res = await fetch(`${API_URL}/v1/automation/settings/ooo`, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${t ?? ""}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           oooEnabled: enabled,
           oooMessage: message || null,
@@ -114,7 +114,6 @@ export function OooCard({ initial, token }: Props): JSX.Element {
               <MediaAttach
                 value={media}
                 onChange={(m) => { setMedia(m); setSaved(false); }}
-                token={token}
               />
             </div>
             <div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { JSX, useRef, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -13,10 +14,10 @@ export interface AttachedMedia {
 interface MediaAttachProps {
   value: AttachedMedia | null;
   onChange: (media: AttachedMedia | null) => void;
-  token: string;
 }
 
-export function MediaAttach({ value, onChange, token }: MediaAttachProps): JSX.Element {
+export function MediaAttach({ value, onChange }: MediaAttachProps): JSX.Element {
+  const { getToken } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,11 +28,12 @@ export function MediaAttach({ value, onChange, token }: MediaAttachProps): JSX.E
     setUploading(true);
     setError(null);
     try {
+      const t = await getToken();
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(`${API_URL}/v1/media/upload`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${t ?? ""}` },
         body: form,
       });
       if (!res.ok) {

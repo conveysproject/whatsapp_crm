@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, JSX } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/Button";
 import { MessageTextArea, WaBubblePreview, MediaAttach, type AttachedMedia } from "./automation-message-card";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -17,10 +18,10 @@ interface DelayedSettings {
 
 interface Props {
   initial: DelayedSettings;
-  token: string;
 }
 
-export function DelayedCard({ initial, token }: Props): JSX.Element {
+export function DelayedCard({ initial }: Props): JSX.Element {
+  const { getToken } = useAuth();
   const initHours = Math.floor(initial.delayedMinutes / 60);
   const initMins = initial.delayedMinutes % 60;
 
@@ -43,9 +44,10 @@ export function DelayedCard({ initial, token }: Props): JSX.Element {
       if (totalMinutes < 1 || totalMinutes > 1440) {
         throw new Error("Delay must be between 1 minute and 24 hours");
       }
+      const t = await getToken();
       const res = await fetch(`${API_URL}/v1/automation/settings/delayed`, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${t ?? ""}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           delayedEnabled: enabled,
           delayedMinutes: totalMinutes,
@@ -127,7 +129,6 @@ export function DelayedCard({ initial, token }: Props): JSX.Element {
                 <MediaAttach
                   value={media}
                   onChange={(m) => { setMedia(m); setSaved(false); }}
-                  token={token}
                 />
               </div>
               <div>

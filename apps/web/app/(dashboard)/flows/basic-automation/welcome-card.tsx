@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, JSX } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/Button";
 import { MessageTextArea, WaBubblePreview } from "./automation-message-card";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -24,10 +25,10 @@ interface Flow {
 interface Props {
   initial: WelcomeSettings;
   flows: Flow[];
-  token: string;
 }
 
-export function WelcomeCard({ initial, flows, token }: Props): JSX.Element {
+export function WelcomeCard({ initial, flows }: Props): JSX.Element {
+  const { getToken } = useAuth();
   const [enabled, setEnabled] = useState(initial.welcomeEnabled);
   const [personalized, setPersonalized] = useState(initial.welcomePersonalized);
   const [message, setMessage] = useState(initial.welcomeMessage ?? "");
@@ -53,9 +54,10 @@ export function WelcomeCard({ initial, flows, token }: Props): JSX.Element {
       } else {
         body["welcomeMessage"] = message || null;
       }
+      const t = await getToken();
       const res = await fetch(`${API_URL}/v1/automation/settings/welcome`, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${t ?? ""}`, "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       if (!res.ok) {
