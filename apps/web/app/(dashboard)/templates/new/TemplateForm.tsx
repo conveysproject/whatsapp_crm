@@ -350,11 +350,12 @@ function Step3({ state, onChange, errors }: {
 
 // ─── Root ────────────────────────────────────────────────────────────────────
 
-export function TemplateForm(): JSX.Element {
+export function TemplateForm({ initialState = INITIAL_STATE }: { initialState?: TemplateFormState }): JSX.Element {
   const { getToken } = useAuth();
   const router = useRouter();
-  const [state, setState] = useState<TemplateFormState>(INITIAL_STATE);
-  const [step, setStep] = useState(1);
+  const [state, setState] = useState<TemplateFormState>(initialState);
+  // Skip step 1 (category selection) when pre-filled from the template library
+  const [step, setStep] = useState(initialState !== INITIAL_STATE ? 2 : 1);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
