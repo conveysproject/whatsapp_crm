@@ -86,6 +86,8 @@ export const PERMISSION_GROUPS = [
     subPermissions: [
       { key: "automation_export_report", label: "Export Workflow Reports" },
       { key: "automation_welcome_message", label: "Welcome Message settings" },
+      { key: "automation_ooo", label: "Out of Office settings" },
+      { key: "automation_delayed_response", label: "Delayed Response settings" },
       { key: "automation_bot_flows", label: "Create / edit bot flows" },
       { key: "automation_bot_replies", label: "Create / edit bot replies" },
     ],
