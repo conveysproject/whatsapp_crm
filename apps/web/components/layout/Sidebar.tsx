@@ -48,9 +48,10 @@ const NAV: NavItem[] = [
     icon: "⚡",
     perm: "automation_access",
     children: [
-      { href: "/flows/basic-automation", label: "Basic Automation", perm: "automation_access" },
-      { href: "/flows",                  label: "Automation Flows",  perm: "automation_access", exact: true },
-      { href: "/flows/auto-replies",     label: "Auto-Replies",      perm: "automation_access" },
+      { href: "/flows/basic-automation",    label: "Basic Automation",   perm: "automation_access" },
+      { href: "/flows/ai-intent-matching",  label: "AI Intent Matching", perm: "automation_access" },
+      { href: "/flows",                     label: "Automation Flows",   perm: "automation_access", exact: true },
+      { href: "/flows/auto-replies",        label: "Auto-Replies",       perm: "automation_access" },
     ],
   },
   { href: "/deals",       label: "Deals",       icon: "💼", perm: "deals_access" },
