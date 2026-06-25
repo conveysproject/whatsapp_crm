@@ -14,6 +14,7 @@ import { dispatchFlowTrigger, cancelNoReplyJobs } from "../lib/trigger-dispatche
 import { runFlow } from "../lib/flow-runner.js";
 import type { FlowDefinition, FlowSession } from "../lib/flow-runner.js";
 import { applyAssignmentRules } from "../lib/assignment-engine.js";
+import { runAutomationTrigger } from "../lib/automation-trigger.js";
 import Expo from "expo-server-sdk";
 
 function interpolateAutoReply(
@@ -231,6 +232,32 @@ export const inboundWorker = new Worker<InboundMessageJob>(
     });
 
     const refreshed = await prisma.conversation.findFirst({ where: { id: conversation.id } });
+
+    // --- Automation Trigger (Welcome / OOO / Delayed Response) ---
+    // Runs on every inbound message after the message is stored and
+    // conversation.lastInboundAt has been updated.
+    if (org?.phoneNumberId && org?.wabaAccessToken) {
+      const fullContact = await prisma.contact.findFirst({
+        where: { organizationId, phoneNumber: whatsappContactPhone },
+        select: { id: true, firstName: true, lastName: true, phoneNumber: true, email: true, createdAt: true },
+      });
+      if (fullContact && refreshed) {
+        void runAutomationTrigger(
+          prisma,
+          organizationId,
+          {
+            id: refreshed.id,
+            status: refreshed.status,
+            lastInboundAt: refreshed.lastInboundAt,
+          },
+          { ...fullContact, lastMessageAt: refreshed.lastMessageAt },
+          { phoneNumberId: org.phoneNumberId, wabaAccessToken: org.wabaAccessToken },
+          messageDate
+        ).catch((err: unknown) => {
+          void err; // swallow — automation failure must not break message delivery
+        });
+      }
+    }
 
     // --- Notify assigned agent of new inbound message ---
     if (refreshed?.assignedTo) {

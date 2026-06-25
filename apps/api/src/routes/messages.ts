@@ -5,6 +5,7 @@ import { buildTemplateComponents, contactBodyVars } from "../lib/template-compon
 import type { ConversationId } from "@WBMSG/shared";
 import { canAccess } from "../lib/permissions.js";
 import { cancelNoReplyJobs } from "../lib/trigger-dispatcher.js";
+import { cancelDelayedResponseJob } from "../lib/automation-trigger.js";
 import { getIo } from "../lib/io-ref.js";
 import { inboundMessageQueue } from "../lib/queue.js";
 
@@ -387,6 +388,8 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
 
       // Cancel pending no-reply checks — agent is replying
       void cancelNoReplyJobs(conversation.id);
+      // Cancel any pending delayed-response job — agent replied before it fired
+      void cancelDelayedResponseJob(conversation.id);
 
       // Store a stable wamid: reference for media so the inbox can proxy it
       // via /api/v1/media/:id — avoids storing the expiring WhatsApp CDN URL.
