@@ -76,6 +76,8 @@ model Organization {
   transactions         Transaction[]
   creditLedger         CreditLedger[]
   trustScoreSnapshots  OrgTrustScoreSnapshot[]
+  businessHours        BusinessHours[]
+  orgAutomationSettings OrgAutomationSettings?
 
   @@map("organizations")
 }
@@ -1409,4 +1411,58 @@ model OrgTrustScoreSnapshot {
 
   @@index([organizationId, recordedAt])
   @@map("org_trust_score_snapshots")
+}
+
+// ─── Business Hours ───────────────────────────────────────────────────────────
+
+model BusinessHours {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  dayOfWeek      Int      @map("day_of_week")   // 0=Sun, 1=Mon … 6=Sat
+  startTime      String   @map("start_time")    // "HH:MM" 24h
+  endTime        String   @map("end_time")      // "HH:MM" 24h
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("business_hours")
+}
+
+// ─── Org Automation Settings ──────────────────────────────────────────────────
+
+model OrgAutomationSettings {
+  id             String  @id @default(uuid())
+  organizationId String  @unique @map("organization_id")
+
+  // Out of Office
+  oooEnabled        Boolean @default(false) @map("ooo_enabled")
+  oooMessage        String? @map("ooo_message")
+  oooMessageData    Json?   @map("ooo_message_data")
+
+  // Welcome Message
+  welcomeEnabled          Boolean @default(false) @map("welcome_enabled")
+  welcomePersonalized     Boolean @default(false) @map("welcome_personalized")
+  welcomeMessage          String? @map("welcome_message")
+  welcomeMessageData      Json?   @map("welcome_message_data")
+  welcomeNewMessage       String? @map("welcome_new_message")
+  welcomeNewData          Json?   @map("welcome_new_data")
+  welcomeReturningMessage String? @map("welcome_returning_message")
+  welcomeReturningData    Json?   @map("welcome_returning_data")
+  welcomeFlowId           String? @map("welcome_flow_id")
+
+  // Delayed Response
+  delayedEnabled     Boolean @default(false) @map("delayed_enabled")
+  delayedMinutes     Int     @default(30)    @map("delayed_minutes")
+  delayedMessage     String? @map("delayed_message")
+  delayedMessageData Json?   @map("delayed_message_data")
+  delayedSendWithOoo Boolean @default(false) @map("delayed_send_with_ooo")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("org_automation_settings")
 }
