@@ -10,6 +10,20 @@ const MODEL = "gpt-4o-mini";
 export type IntentType = "question" | "complaint" | "order" | "compliment" | "other";
 export type SentimentType = "positive" | "negative" | "neutral";
 
+export interface IntentCandidate {
+  id: string;
+  type: "auto_reply" | "flow";
+  name: string;
+  keyword: string;
+  preview: string;
+}
+
+export interface IntentMatchResult {
+  matchedId: string | null;
+  matchType: "auto_reply" | "flow" | null;
+  confidence: number;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -172,4 +186,48 @@ export async function detectIntentWithConfidence(
     }
   } catch { /* fallthrough */ }
   return { intent: "general_inquiry", confidence: 0.5 };
+}
+
+export async function matchIntentToAutomation(
+  messageBody: string,
+  candidates: IntentCandidate[]
+): Promise<IntentMatchResult> {
+  const list = candidates
+    .map(
+      (c, i) =>
+        `${i + 1}. id="${c.id}" type="${c.type}" name="${c.name}" keyword="${c.keyword}" preview="${c.preview}"`
+    )
+    .join("\n");
+
+  const response = await getClient().chat.completions.create({
+    model: MODEL,
+    max_tokens: 100,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: "You match customer WhatsApp messages to automations. Return JSON only.",
+      },
+      {
+        role: "user",
+        content: `Customer message: "${messageBody}"\n\nAvailable automations:\n${list}\n\nWhich automation best matches the customer's intent? If none fits well, use null.\nReturn JSON: {"matchedId": "<id or null>", "matchType": "<auto_reply|flow|null>", "confidence": <0.0-1.0>}`,
+      },
+    ],
+  });
+
+  try {
+    const parsed = JSON.parse(text(response)) as unknown;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "matchedId" in parsed &&
+      "matchType" in parsed &&
+      "confidence" in parsed
+    ) {
+      return parsed as IntentMatchResult;
+    }
+  } catch {
+    /* fallthrough */
+  }
+  return { matchedId: null, matchType: null, confidence: 0 };
 }
