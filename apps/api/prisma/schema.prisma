@@ -424,6 +424,7 @@ enum CreditType {
   call_made
   refund
   adjustment
+  intent_match
 }
 
 enum TicketPriority {
@@ -1458,6 +1459,10 @@ model OrgAutomationSettings {
   delayedMessage     String? @map("delayed_message")
   delayedMessageData Json?   @map("delayed_message_data")
   delayedSendWithOoo Boolean @default(false) @map("delayed_send_with_ooo")
+
+  // AI Intent Matching
+  intentMatchingEnabled  Boolean @default(false) @map("intent_matching_enabled")
+  intentMatchCostPaise   Int     @default(0)      @map("intent_match_cost_paise")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
