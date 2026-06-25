@@ -126,7 +126,7 @@ function buildDateClause(col: string, operator: string, value?: string, valueTo?
     case "hasAnyValue":
       return { NOT: { [col]: null } };
     default:
-      return { [col]: { gte: new Date(value!) } };
+      return {};
   }
 }
 
@@ -166,8 +166,9 @@ function buildFieldsClause(rule: FieldsRule): Record<string, unknown> {
       return buildDateClause("createdAt", operator, value, valueTo);
 
     case "lastMessageAt": {
-      const clause = buildDateClause("lastMessageAt", operator, value, valueTo);
       if (operator === "isEmpty") return { conversations: { none: {} } };
+      if (operator === "hasAnyValue") return { conversations: { some: {} } };
+      const clause = buildDateClause("lastMessageAt", operator, value, valueTo);
       return { conversations: { some: { lastMessageAt: (clause["lastMessageAt"] as Record<string, unknown>) } } };
     }
 
