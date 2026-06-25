@@ -15,6 +15,7 @@ import { runFlow } from "../lib/flow-runner.js";
 import type { FlowDefinition, FlowSession } from "../lib/flow-runner.js";
 import { applyAssignmentRules } from "../lib/assignment-engine.js";
 import { runAutomationTrigger } from "../lib/automation-trigger.js";
+import { runIntentMatching } from "../lib/intent-matcher.js";
 import Expo from "expo-server-sdk";
 
 function interpolateAutoReply(
@@ -357,6 +358,18 @@ export const inboundWorker = new Worker<InboundMessageJob>(
             });
           }
         }
+      }
+
+      // AI intent matching — fallback when no keyword matches
+      if (!matched && org?.phoneNumberId && org?.wabaAccessToken) {
+        void runIntentMatching(
+          prisma,
+          organizationId,
+          body,
+          conversation.id,
+          whatsappContactPhone,
+          { phoneNumberId: org.phoneNumberId, wabaAccessToken: org.wabaAccessToken }
+        ).catch(() => {});
       }
     }
 
