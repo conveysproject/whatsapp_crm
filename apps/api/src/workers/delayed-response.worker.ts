@@ -2,7 +2,7 @@ import { Worker } from "bullmq";
 import { redisConnection } from "../lib/queue.js";
 import { prisma } from "../lib/prisma.js";
 import { isWithinBusinessHours } from "../lib/automation-trigger.js";
-import { sendTextMessage } from "../lib/whatsapp.js";
+import { sendTextMessage, sendMediaMessage } from "../lib/whatsapp.js";
 import { recordOutbound } from "../lib/record-outbound.js";
 
 export interface DelayedResponseJob {
@@ -64,18 +64,19 @@ export const delayedResponseWorker = new Worker<DelayedResponseJob>(
     });
     const message = interpolate(settings.delayedMessage, contact);
 
-    // 7. Send
-    const { messageId } = await sendTextMessage(
-      org.phoneNumberId,
-      recipientPhone,
-      message,
-      org.wabaAccessToken
-    );
+    // 7. Send (text or media+caption)
+    const media = parseDelayedMedia(settings.delayedMessageData);
+    let messageId: string;
+    if (media) {
+      ({ messageId } = await sendMediaMessage(org.phoneNumberId, recipientPhone, media.contentType, media.mediaId, message || undefined, org.wabaAccessToken));
+    } else {
+      ({ messageId } = await sendTextMessage(org.phoneNumberId, recipientPhone, message, org.wabaAccessToken));
+    }
 
     await recordOutbound(prisma, {
       conversationId,
       organizationId,
-      contentType: "text",
+      contentType: media?.contentType ?? "text",
       body: message,
       whatsappMessageId: messageId,
     });
@@ -86,6 +87,15 @@ export const delayedResponseWorker = new Worker<DelayedResponseJob>(
 delayedResponseWorker.on("failed", (job, err) => {
   console.error(`[delayed-response] job ${job?.id} failed:`, err);
 });
+
+function parseDelayedMedia(raw: unknown): { mediaId: string; contentType: "image" | "video" | "document" } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const d = raw as Record<string, unknown>;
+  if (typeof d["mediaId"] !== "string") return null;
+  const ct = d["contentType"];
+  if (ct !== "image" && ct !== "video" && ct !== "document") return null;
+  return { mediaId: d["mediaId"], contentType: ct };
+}
 
 function interpolate(
   template: string,

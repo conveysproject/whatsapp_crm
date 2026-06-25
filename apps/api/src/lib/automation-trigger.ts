@@ -1,7 +1,38 @@
 import type { PrismaClient } from "@prisma/client";
 import { delayedResponseQueue } from "./queue.js";
-import { sendTextMessage } from "./whatsapp.js";
+import { sendTextMessage, sendMediaMessage } from "./whatsapp.js";
 import { recordOutbound } from "./record-outbound.js";
+
+interface AutomationMessageData {
+  mediaId: string;
+  contentType: "image" | "video" | "document";
+  filename?: string;
+}
+
+function parseMessageData(raw: unknown): AutomationMessageData | null {
+  if (!raw || typeof raw !== "object") return null;
+  const d = raw as Record<string, unknown>;
+  if (typeof d["mediaId"] !== "string") return null;
+  const ct = d["contentType"];
+  if (ct !== "image" && ct !== "video" && ct !== "document") return null;
+  return { mediaId: d["mediaId"], contentType: ct, filename: typeof d["filename"] === "string" ? d["filename"] : undefined };
+}
+
+async function sendAutomationMessage(
+  phoneNumberId: string,
+  to: string,
+  text: string,
+  messageData: unknown,
+  accessToken: string
+): Promise<string> {
+  const media = parseMessageData(messageData);
+  if (media) {
+    const { messageId } = await sendMediaMessage(phoneNumberId, to, media.contentType, media.mediaId, text || undefined, accessToken);
+    return messageId;
+  }
+  const { messageId } = await sendTextMessage(phoneNumberId, to, text, accessToken);
+  return messageId;
+}
 
 // ---------------------------------------------------------------------------
 // Types used by runAutomationTrigger
@@ -97,16 +128,21 @@ export async function runAutomationTrigger(
 
     if (welcomeText && org.phoneNumberId && org.wabaAccessToken) {
       const interpolated = interpolateVars(welcomeText, contact);
-      const { messageId } = await sendTextMessage(
+      const welcomeMedia = isFirstContact
+        ? (settings.welcomePersonalized ? settings.welcomeNewData : settings.welcomeMessageData)
+        : (settings.welcomePersonalized ? settings.welcomeReturningData : settings.welcomeMessageData);
+      const messageId = await sendAutomationMessage(
         org.phoneNumberId,
         contact.phoneNumber,
         interpolated,
+        welcomeMedia,
         org.wabaAccessToken
       );
+      const welcomeMediaParsed = parseMessageData(welcomeMedia);
       await recordOutbound(prisma, {
         conversationId: conversation.id,
         organizationId,
-        contentType: "text",
+        contentType: welcomeMediaParsed?.contentType ?? "text",
         body: interpolated,
         whatsappMessageId: messageId,
       });
@@ -155,16 +191,18 @@ export async function runAutomationTrigger(
   if (!withinHours && settings.oooEnabled && settings.oooMessage) {
     if (conversation.status !== "open" && org.phoneNumberId && org.wabaAccessToken) {
       const oooText = interpolateVars(settings.oooMessage, contact);
-      const { messageId } = await sendTextMessage(
+      const messageId = await sendAutomationMessage(
         org.phoneNumberId,
         contact.phoneNumber,
         oooText,
+        settings.oooMessageData,
         org.wabaAccessToken
       );
+      const oooMedia = parseMessageData(settings.oooMessageData);
       await recordOutbound(prisma, {
         conversationId: conversation.id,
         organizationId,
-        contentType: "text",
+        contentType: oooMedia?.contentType ?? "text",
         body: oooText,
         whatsappMessageId: messageId,
       });

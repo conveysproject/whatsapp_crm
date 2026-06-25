@@ -2,7 +2,7 @@
 
 import { useState, JSX } from "react";
 import { Button } from "@/components/ui/Button";
-import { MessageTextArea, WaBubblePreview } from "./automation-message-card";
+import { MessageTextArea, WaBubblePreview, MediaAttach, type AttachedMedia } from "./automation-message-card";
 import { PermissionGate } from "@/components/PermissionGate";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -11,6 +11,7 @@ interface DelayedSettings {
   delayedEnabled: boolean;
   delayedMinutes: number;
   delayedMessage: string | null;
+  delayedMessageData: AttachedMedia | null;
   delayedSendWithOoo: boolean;
 }
 
@@ -27,6 +28,7 @@ export function DelayedCard({ initial, token }: Props): JSX.Element {
   const [hours, setHours] = useState(initHours);
   const [mins, setMins] = useState(initMins);
   const [message, setMessage] = useState(initial.delayedMessage ?? "");
+  const [media, setMedia] = useState<AttachedMedia | null>(initial.delayedMessageData);
   const [sendWithOoo, setSendWithOoo] = useState(initial.delayedSendWithOoo);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -48,6 +50,7 @@ export function DelayedCard({ initial, token }: Props): JSX.Element {
           delayedEnabled: enabled,
           delayedMinutes: totalMinutes,
           delayedMessage: message || null,
+          delayedMessageData: media ?? null,
           delayedSendWithOoo: sendWithOoo,
         }),
       });
@@ -84,7 +87,6 @@ export function DelayedCard({ initial, token }: Props): JSX.Element {
 
         {enabled && (
           <div className="space-y-5">
-            {/* Delay timer */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 If no agent replies within
@@ -115,19 +117,25 @@ export function DelayedCard({ initial, token }: Props): JSX.Element {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <MessageTextArea
-                label="Message"
-                value={message}
-                onChange={(v) => { setMessage(v); setSaved(false); }}
-                placeholder="Thanks for your patience! Our team will get back to you shortly."
-              />
+              <div>
+                <MessageTextArea
+                  label="Message"
+                  value={message}
+                  onChange={(v) => { setMessage(v); setSaved(false); }}
+                  placeholder="Thanks for your patience! Our team will get back to you shortly."
+                />
+                <MediaAttach
+                  value={media}
+                  onChange={(m) => { setMedia(m); setSaved(false); }}
+                  token={token}
+                />
+              </div>
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Preview</p>
                 <WaBubblePreview text={message} />
               </div>
             </div>
 
-            {/* Send with OOO toggle */}
             <div className="flex items-start gap-3">
               <input
                 type="checkbox"

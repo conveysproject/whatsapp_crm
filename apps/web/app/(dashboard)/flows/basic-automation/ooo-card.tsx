@@ -2,7 +2,7 @@
 
 import { useState, JSX } from "react";
 import { Button } from "@/components/ui/Button";
-import { MessageTextArea, WaBubblePreview } from "./automation-message-card";
+import { MessageTextArea, WaBubblePreview, MediaAttach, type AttachedMedia } from "./automation-message-card";
 import { PermissionGate } from "@/components/PermissionGate";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -10,6 +10,7 @@ const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 interface OooSettings {
   oooEnabled: boolean;
   oooMessage: string | null;
+  oooMessageData: AttachedMedia | null;
 }
 
 interface Props {
@@ -21,6 +22,7 @@ interface Props {
 export function OooCard({ initial, token, hasBusinessHours }: Props): JSX.Element {
   const [enabled, setEnabled] = useState(initial.oooEnabled);
   const [message, setMessage] = useState(initial.oooMessage ?? "");
+  const [media, setMedia] = useState<AttachedMedia | null>(initial.oooMessageData);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +34,11 @@ export function OooCard({ initial, token, hasBusinessHours }: Props): JSX.Elemen
       const res = await fetch(`${API_URL}/v1/automation/settings/ooo`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ oooEnabled: enabled, oooMessage: message || null }),
+        body: JSON.stringify({
+          oooEnabled: enabled,
+          oooMessage: message || null,
+          oooMessageData: media ?? null,
+        }),
       });
       if (!res.ok) {
         const body = await res.json() as { error?: { message?: string } };
@@ -76,12 +82,19 @@ export function OooCard({ initial, token, hasBusinessHours }: Props): JSX.Elemen
 
         {enabled && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <MessageTextArea
-              label="Message"
-              value={message}
-              onChange={(v) => { setMessage(v); setSaved(false); }}
-              placeholder="Sorry, we're currently out of office. We'll get back to you during business hours."
-            />
+            <div>
+              <MessageTextArea
+                label="Message"
+                value={message}
+                onChange={(v) => { setMessage(v); setSaved(false); }}
+                placeholder="Sorry, we're currently out of office. We'll get back to you during business hours."
+              />
+              <MediaAttach
+                value={media}
+                onChange={(m) => { setMedia(m); setSaved(false); }}
+                token={token}
+              />
+            </div>
             <div>
               <p className="text-sm font-medium text-gray-700 mb-2">Preview</p>
               <WaBubblePreview text={message} />

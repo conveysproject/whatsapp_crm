@@ -36,18 +36,29 @@ async function getBusinessHours(token: string): Promise<Array<{ id: string; dayO
   }
 }
 
+interface MediaData {
+  mediaId: string;
+  contentType: "image" | "video" | "document";
+  filename: string;
+}
+
 interface AutomationSettings {
   oooEnabled: boolean;
   oooMessage: string | null;
+  oooMessageData: MediaData | null;
   welcomeEnabled: boolean;
   welcomePersonalized: boolean;
   welcomeMessage: string | null;
+  welcomeMessageData: MediaData | null;
   welcomeNewMessage: string | null;
+  welcomeNewData: MediaData | null;
   welcomeReturningMessage: string | null;
+  welcomeReturningData: MediaData | null;
   welcomeFlowId: string | null;
   delayedEnabled: boolean;
   delayedMinutes: number;
   delayedMessage: string | null;
+  delayedMessageData: MediaData | null;
   delayedSendWithOoo: boolean;
 }
 
@@ -76,15 +87,20 @@ export default async function BasicAutomationPage(): Promise<JSX.Element> {
   const defaultSettings: AutomationSettings = {
     oooEnabled: false,
     oooMessage: null,
+    oooMessageData: null,
     welcomeEnabled: false,
     welcomePersonalized: false,
     welcomeMessage: null,
+    welcomeMessageData: null,
     welcomeNewMessage: null,
+    welcomeNewData: null,
     welcomeReturningMessage: null,
+    welcomeReturningData: null,
     welcomeFlowId: null,
     delayedEnabled: false,
     delayedMinutes: 30,
     delayedMessage: null,
+    delayedMessageData: null,
     delayedSendWithOoo: false,
   };
 
@@ -104,6 +120,7 @@ export default async function BasicAutomationPage(): Promise<JSX.Element> {
           initial={{
             oooEnabled: settings.oooEnabled,
             oooMessage: settings.oooMessage,
+            oooMessageData: settings.oooMessageData,
           }}
           token={token}
           hasBusinessHours={businessHours.length > 0}
@@ -125,6 +142,7 @@ export default async function BasicAutomationPage(): Promise<JSX.Element> {
             delayedEnabled: settings.delayedEnabled,
             delayedMinutes: settings.delayedMinutes,
             delayedMessage: settings.delayedMessage,
+            delayedMessageData: settings.delayedMessageData,
             delayedSendWithOoo: settings.delayedSendWithOoo,
           }}
           token={token}
