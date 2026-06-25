@@ -18,6 +18,7 @@ import "./workers/contact-import.worker.js";
 import "./workers/conversation-summary.worker.js";
 import "./workers/no-reply.worker.js";
 import "./workers/resume-flow.worker.js";
+import "./workers/delayed-response.worker.js";
 import { startMessageCleanupWorker, scheduleMessageCleanupCron } from "./workers/message-cleanup.js";
 import { startTrustScoreWorker, scheduleTrustScoreCron } from "./workers/trust-score.js";
 import { startClosureDeadlineWorker, scheduleClosureDeadlineCron } from "./workers/closure-deadline.worker.js";

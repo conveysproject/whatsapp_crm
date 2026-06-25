@@ -42,3 +42,9 @@ export const resumeFlowQueue = new Queue("resume-flow", {
   connection: redisConnection,
   defaultJobOptions: { attempts: 3, backoff: { type: "exponential", delay: 2000 } },
 });
+
+export const delayedResponseQueue = new Queue("delayed-response", {
+  connection: redisConnection,
+  // attempts:1 — sending a duplicate delayed message is worse than missing one
+  defaultJobOptions: { attempts: 1 },
+});
