@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, JSX } from "react";
+import { useState, useEffect, JSX } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/Button";
 import { MessageTextArea, WaBubblePreview, MediaAttach, type AttachedMedia } from "./automation-message-card";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -16,16 +17,37 @@ interface OooSettings {
 interface Props {
   initial: OooSettings;
   token: string;
-  hasBusinessHours: boolean;
 }
 
-export function OooCard({ initial, token, hasBusinessHours }: Props): JSX.Element {
+export function OooCard({ initial, token }: Props): JSX.Element {
+  const { getToken } = useAuth();
   const [enabled, setEnabled] = useState(initial.oooEnabled);
   const [message, setMessage] = useState(initial.oooMessage ?? "");
   const [media, setMedia] = useState<AttachedMedia | null>(initial.oooMessageData);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // null = still loading/unknown; true/false = confirmed from API
+  const [hasBusinessHours, setHasBusinessHours] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    async function checkBusinessHours(): Promise<void> {
+      try {
+        const t = await getToken();
+        const res = await fetch(`${API_URL}/v1/automation/business-hours`, {
+          headers: { Authorization: `Bearer ${t ?? ""}` },
+        });
+        if (res.ok) {
+          const body = await res.json() as { data: unknown[] };
+          setHasBusinessHours(body.data.length > 0);
+        }
+        // non-ok response: leave null (don't block the user)
+      } catch {
+        // network error: leave null (don't block the user)
+      }
+    }
+    void checkBusinessHours();
+  }, [getToken]);
 
   async function handleSave() {
     setSaving(true);
@@ -65,10 +87,10 @@ export function OooCard({ initial, token, hasBusinessHours }: Props): JSX.Elemen
           <button
             type="button"
             onClick={() => { setEnabled(!enabled); setSaved(false); }}
-            disabled={!hasBusinessHours}
-            title={!hasBusinessHours ? "Configure Business Hours first" : undefined}
+            disabled={hasBusinessHours !== true}
+            title={hasBusinessHours !== true ? "Configure Business Hours first" : undefined}
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-              !hasBusinessHours ? "opacity-40 cursor-not-allowed bg-gray-200" :
+              hasBusinessHours !== true ? "opacity-40 cursor-not-allowed bg-gray-200" :
               enabled ? "bg-green-500" : "bg-gray-200"
             }`}
           >

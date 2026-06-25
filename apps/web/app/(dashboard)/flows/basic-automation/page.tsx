@@ -25,17 +25,6 @@ async function getFlows(token: string): Promise<Flow[]> {
   }
 }
 
-async function getBusinessHours(token: string): Promise<Array<{ id: string; dayOfWeek: number }>> {
-  try {
-    const res = await fetch(`${API_URL}/v1/automation/business-hours`, {
-      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
-    });
-    return res.ok ? (await res.json() as { data: Array<{ id: string; dayOfWeek: number }> }).data : [];
-  } catch {
-    return [];
-  }
-}
-
 interface MediaData {
   mediaId: string;
   contentType: "image" | "video" | "document";
@@ -78,9 +67,8 @@ export default async function BasicAutomationPage(): Promise<JSX.Element> {
   const { getToken } = await auth.protect();
   const token = (await getToken()) ?? "";
 
-  const [flows, businessHours, automationSettings] = await Promise.all([
+  const [flows, automationSettings] = await Promise.all([
     getFlows(token),
-    getBusinessHours(token),
     getAutomationSettings(token),
   ]);
 
@@ -123,7 +111,6 @@ export default async function BasicAutomationPage(): Promise<JSX.Element> {
             oooMessageData: settings.oooMessageData,
           }}
           token={token}
-          hasBusinessHours={businessHours.length > 0}
         />
         <WelcomeCard
           initial={{
