@@ -27,6 +27,7 @@ export const delayedResponseWorker = new Worker<DelayedResponseJob>(
     const outboundSince = await prisma.message.findFirst({
       where: {
         conversationId,
+        organizationId,
         direction: "outbound",
         sentAt: { gte: scheduledDate },
       },
@@ -34,8 +35,8 @@ export const delayedResponseWorker = new Worker<DelayedResponseJob>(
     if (outboundSince) return; // agent replied — skip
 
     // 3. Check if conversation is still open
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: conversationId, organizationId },
       select: { id: true, status: true, whatsappContactId: true },
     });
     if (!conversation || conversation.status !== "open") return;

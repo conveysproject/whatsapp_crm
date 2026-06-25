@@ -17,7 +17,7 @@ vi.mock("../lib/prisma.js", () => ({
   prisma: {
     orgAutomationSettings: { findUnique: vi.fn() },
     message: { findFirst: vi.fn(), create: vi.fn() },
-    conversation: { findUnique: vi.fn(), update: vi.fn() },
+    conversation: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
     organization: { findUnique: vi.fn() },
     contact: { findFirst: vi.fn() },
   },
@@ -44,7 +44,7 @@ import type { DelayedResponseJob } from "./delayed-response.worker.js";
 const mockPrisma = prisma as {
   orgAutomationSettings: { findUnique: ReturnType<typeof vi.fn> };
   message: { findFirst: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
-  conversation: { findUnique: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
+  conversation: { findUnique: ReturnType<typeof vi.fn>; findFirst: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
   organization: { findUnique: ReturnType<typeof vi.fn> };
   contact: { findFirst: ReturnType<typeof vi.fn> };
 };
@@ -79,6 +79,7 @@ describe("delayed-response worker", () => {
     mockPrisma.orgAutomationSettings.findUnique.mockResolvedValue(BASE_SETTINGS);
     mockPrisma.message.findFirst.mockResolvedValue(null); // no outbound since scheduled
     mockPrisma.conversation.findUnique.mockResolvedValue(BASE_CONVERSATION);
+    mockPrisma.conversation.findFirst.mockResolvedValue(BASE_CONVERSATION);
     mockIsWithin.mockResolvedValue(true); // within business hours
     mockPrisma.organization.findUnique.mockResolvedValue(BASE_ORG);
     mockPrisma.contact.findFirst.mockResolvedValue(BASE_CONTACT);
@@ -100,6 +101,13 @@ describe("delayed-response worker", () => {
   it("skips when last message is outbound (agent already replied)", async () => {
     mockPrisma.message.findFirst.mockResolvedValue({ id: "m-1", direction: "outbound" });
     await runProcessor();
+    expect(mockPrisma.message.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: "org-1",
+        }),
+      })
+    );
     expect(mockSendText).not.toHaveBeenCalled();
   });
 
@@ -129,7 +137,7 @@ describe("delayed-response worker", () => {
   });
 
   it("skips when conversation is not open", async () => {
-    mockPrisma.conversation.findUnique.mockResolvedValue({ ...BASE_CONVERSATION, status: "resolved" });
+    mockPrisma.conversation.findFirst.mockResolvedValue({ ...BASE_CONVERSATION, status: "resolved" });
     await runProcessor();
     expect(mockSendText).not.toHaveBeenCalled();
   });
