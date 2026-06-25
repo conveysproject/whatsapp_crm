@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import type { AuthContext } from "../types/fastify.js";
 
 const mockPrisma = {
   businessHours: {
@@ -39,10 +40,10 @@ const DEFAULT_SETTINGS = {
   updatedAt: new Date(),
 };
 
-const mockAuth = {
+const mockAuth: AuthContext = {
   userId: "u-1",
   organizationId: "org-1",
-  role: "admin" as const,
+  role: "admin",
   permissions: {
     automation_access: "allow",
     "automation_access@automation_ooo": "allow",
@@ -51,11 +52,11 @@ const mockAuth = {
   },
 };
 
-function buildApp(authOverride?: Partial<typeof mockAuth>): Promise<FastifyInstance> {
+function buildApp(authOverride?: Partial<AuthContext>): Promise<FastifyInstance> {
   return buildAppWith({ ...mockAuth, ...authOverride });
 }
 
-async function buildAppWith(auth: typeof mockAuth): Promise<FastifyInstance> {
+async function buildAppWith(auth: AuthContext): Promise<FastifyInstance> {
   vi.resetModules();
   const app = Fastify({ logger: false });
   app.decorate("prisma", mockPrisma as unknown as PrismaClient);

@@ -1,5 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
+import { Prisma } from "@prisma/client";
 import { canAccess, canAccessSub } from "../lib/permissions.js";
+
+/** Convert a nullable JSON body value to the form Prisma expects. */
+function toJsonField(
+  value: Record<string, unknown> | null
+): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  return value === null ? Prisma.JsonNull : (value as Prisma.InputJsonValue);
+}
 
 interface BusinessHoursSlot {
   dayOfWeek: number;
@@ -114,12 +122,12 @@ export const automationSettingsRouter: FastifyPluginAsync = async (fastify) => {
           organizationId,
           ...(oooEnabled !== undefined && { oooEnabled }),
           ...(oooMessage !== undefined && { oooMessage }),
-          ...(oooMessageData !== undefined && { oooMessageData }),
+          ...(oooMessageData !== undefined && { oooMessageData: toJsonField(oooMessageData) }),
         },
         update: {
           ...(oooEnabled !== undefined && { oooEnabled }),
           ...(oooMessage !== undefined && { oooMessage }),
-          ...(oooMessageData !== undefined && { oooMessageData }),
+          ...(oooMessageData !== undefined && { oooMessageData: toJsonField(oooMessageData) }),
         },
       });
 
@@ -161,11 +169,11 @@ export const automationSettingsRouter: FastifyPluginAsync = async (fastify) => {
         ...(welcomeEnabled !== undefined && { welcomeEnabled }),
         ...(welcomePersonalized !== undefined && { welcomePersonalized }),
         ...(welcomeMessage !== undefined && { welcomeMessage }),
-        ...(welcomeMessageData !== undefined && { welcomeMessageData }),
+        ...(welcomeMessageData !== undefined && { welcomeMessageData: toJsonField(welcomeMessageData) }),
         ...(welcomeNewMessage !== undefined && { welcomeNewMessage }),
-        ...(welcomeNewData !== undefined && { welcomeNewData }),
+        ...(welcomeNewData !== undefined && { welcomeNewData: toJsonField(welcomeNewData) }),
         ...(welcomeReturningMessage !== undefined && { welcomeReturningMessage }),
-        ...(welcomeReturningData !== undefined && { welcomeReturningData }),
+        ...(welcomeReturningData !== undefined && { welcomeReturningData: toJsonField(welcomeReturningData) }),
         ...(welcomeFlowId !== undefined && { welcomeFlowId }),
       };
 
@@ -215,14 +223,14 @@ export const automationSettingsRouter: FastifyPluginAsync = async (fastify) => {
           ...(delayedEnabled !== undefined && { delayedEnabled }),
           ...(delayedMinutes !== undefined && { delayedMinutes }),
           ...(delayedMessage !== undefined && { delayedMessage }),
-          ...(delayedMessageData !== undefined && { delayedMessageData }),
+          ...(delayedMessageData !== undefined && { delayedMessageData: toJsonField(delayedMessageData) }),
           ...(delayedSendWithOoo !== undefined && { delayedSendWithOoo }),
         },
         update: {
           ...(delayedEnabled !== undefined && { delayedEnabled }),
           ...(delayedMinutes !== undefined && { delayedMinutes }),
           ...(delayedMessage !== undefined && { delayedMessage }),
-          ...(delayedMessageData !== undefined && { delayedMessageData }),
+          ...(delayedMessageData !== undefined && { delayedMessageData: toJsonField(delayedMessageData) }),
           ...(delayedSendWithOoo !== undefined && { delayedSendWithOoo }),
         },
       });

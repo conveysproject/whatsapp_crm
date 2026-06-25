@@ -53,9 +53,13 @@ export const delayedResponseWorker = new Worker<DelayedResponseJob>(
     });
     if (!org?.phoneNumberId || !org?.wabaAccessToken) return;
 
+    // whatsappContactId must be non-null to send a message
+    const recipientPhone = conversation.whatsappContactId;
+    if (!recipientPhone) return;
+
     // 6. Interpolate contact variables into message
     const contact = await prisma.contact.findFirst({
-      where: { organizationId, phoneNumber: conversation.whatsappContactId },
+      where: { organizationId, phoneNumber: recipientPhone },
       select: { firstName: true, lastName: true, phoneNumber: true, email: true },
     });
     const message = interpolate(settings.delayedMessage, contact);
@@ -63,7 +67,7 @@ export const delayedResponseWorker = new Worker<DelayedResponseJob>(
     // 7. Send
     const { messageId } = await sendTextMessage(
       org.phoneNumberId,
-      conversation.whatsappContactId,
+      recipientPhone,
       message,
       org.wabaAccessToken
     );

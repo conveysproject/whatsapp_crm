@@ -41,7 +41,7 @@ import { sendTextMessage } from "../lib/whatsapp.js";
 import { recordOutbound } from "../lib/record-outbound.js";
 import type { DelayedResponseJob } from "./delayed-response.worker.js";
 
-const mockPrisma = prisma as {
+const mockPrisma = prisma as unknown as {
   orgAutomationSettings: { findUnique: ReturnType<typeof vi.fn> };
   message: { findFirst: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
   conversation: { findUnique: ReturnType<typeof vi.fn>; findFirst: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
