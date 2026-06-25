@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { AutoRepliesSection } from "./auto-replies-section";
+import { BusinessHoursCard } from "./business-hours-card";
 import { FlowListActions } from "./flow-list-actions";
 import { PermissionGate } from "@/components/PermissionGate";
 
@@ -131,6 +132,8 @@ export default async function FlowsPage(): Promise<JSX.Element> {
       </div>
 
       <AutoRepliesSection />
+
+      <BusinessHoursCard />
     </div>
     </PermissionGate>
   );
