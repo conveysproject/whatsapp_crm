@@ -36,6 +36,8 @@ const DEFAULT_SETTINGS = {
   delayedMessage: null,
   delayedMessageData: null,
   delayedSendWithOoo: false,
+  intentMatchingEnabled: false,
+  intentMatchCostPaise: 0,
   createdAt: new Date(),
   updatedAt: new Date(),
 };
@@ -213,5 +215,58 @@ describe("PUT /v1/automation/settings/delayed", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json<{ data: { delayedMinutes: number } }>().data.delayedMinutes).toBe(15);
+  });
+});
+
+describe("GET /v1/automation/settings/intent-matching", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns intent matching settings", async () => {
+    mockPrisma.orgAutomationSettings.upsert.mockResolvedValue({
+      intentMatchingEnabled: false,
+      intentMatchCostPaise: 0,
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/automation/settings/intent-matching",
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: { intentMatchingEnabled: boolean; intentMatchCostPaise: number } }>();
+    expect(body.data.intentMatchingEnabled).toBe(false);
+    expect(body.data.intentMatchCostPaise).toBe(0);
+  });
+});
+
+describe("PUT /v1/automation/settings/intent-matching", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("enables intent matching", async () => {
+    mockPrisma.orgAutomationSettings.upsert.mockResolvedValue({
+      intentMatchingEnabled: true,
+      intentMatchCostPaise: 0,
+    });
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/automation/settings/intent-matching",
+      payload: { intentMatchingEnabled: true },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: { intentMatchingEnabled: boolean } }>();
+    expect(body.data.intentMatchingEnabled).toBe(true);
+  });
+
+  it("returns 403 when caller lacks automation_access", async () => {
+    const restrictedApp = await buildApp({ role: "agent", permissions: {} });
+    const res = await restrictedApp.inject({
+      method: "PUT",
+      url: "/v1/automation/settings/intent-matching",
+      payload: { intentMatchingEnabled: true },
+    });
+    expect(res.statusCode).toBe(403);
+    await restrictedApp.close();
   });
 });

@@ -238,4 +238,43 @@ export const automationSettingsRouter: FastifyPluginAsync = async (fastify) => {
       return reply.send({ data: settings });
     }
   );
+
+  // --- GET Intent Matching Settings ---
+
+  fastify.get("/automation/settings/intent-matching", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const settings = await fastify.prisma.orgAutomationSettings.upsert({
+      where: { organizationId },
+      create: { organizationId },
+      update: {},
+      select: { intentMatchingEnabled: true, intentMatchCostPaise: true },
+    });
+    return reply.send({ data: settings });
+  });
+
+  // --- PUT Intent Matching Settings ---
+
+  interface PutIntentMatchingBody {
+    intentMatchingEnabled?: boolean;
+  }
+
+  fastify.put<{ Body: PutIntentMatchingBody }>(
+    "/automation/settings/intent-matching",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const { intentMatchingEnabled } = request.body;
+      const settings = await fastify.prisma.orgAutomationSettings.upsert({
+        where: { organizationId },
+        create: {
+          organizationId,
+          ...(intentMatchingEnabled !== undefined && { intentMatchingEnabled }),
+        },
+        update: {
+          ...(intentMatchingEnabled !== undefined && { intentMatchingEnabled }),
+        },
+        select: { intentMatchingEnabled: true, intentMatchCostPaise: true },
+      });
+      return reply.send({ data: settings });
+    }
+  );
 };
