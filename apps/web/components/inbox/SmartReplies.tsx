@@ -2,6 +2,7 @@
 
 import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { clientFetch } from "@/lib/client-fetch";
 
 interface SmartRepliesProps {
   conversationId: string | null;
@@ -21,9 +22,9 @@ export function SmartReplies({ conversationId, onSelect }: SmartRepliesProps): J
       try {
         const token = await getToken();
         const api = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
-        const res = await fetch(`${api}/v1/conversations/${conversationId}/suggestions`, {
+        const res = await clientFetch(`${api}/v1/conversations/${conversationId}/suggestions`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${token ?? ""}` },
+          token: token ?? "",
         });
         if (!res.ok) return;
         const json = await res.json() as { data: { suggestions: string[] } };

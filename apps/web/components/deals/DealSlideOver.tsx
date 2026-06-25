@@ -2,6 +2,7 @@
 import { JSX, useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import type { Deal } from "./DealCard";
+import { clientFetch } from "@/lib/client-fetch";
 
 interface DealSlideOverProps {
   deal: Deal;
@@ -46,9 +47,10 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
     setError(null);
     const token = await getToken();
 
-    const res = await fetch(`${api}/v1/deals/${deal.id}`, {
+    const res = await clientFetch(`${api}/v1/deals/${deal.id}`, {
       method: "PATCH",
-      headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+      token: token ?? "",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: title.trim(),
         value: value ? parseFloat(value) : null,
@@ -65,16 +67,18 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
 
     try {
       if (sendNotification && notifyContact && deal.contact && notes.trim()) {
-        const convRes = await fetch(`${api}/v1/conversations?contactId=${deal.contact.id}&limit=1`, {
-          headers: { Authorization: `Bearer ${token ?? ""}` },
+        const convRes = await clientFetch(`${api}/v1/conversations?contactId=${deal.contact.id}&limit=1`, {
+          token: token ?? "",
+          silent: true,
         });
         if (convRes.ok) {
           const convBody = await convRes.json() as { data: Array<{ id: string }> };
           const conv = convBody.data[0];
           if (conv) {
-            const msgRes = await fetch(`${api}/v1/conversations/${conv.id}/messages`, {
+            const msgRes = await clientFetch(`${api}/v1/conversations/${conv.id}/messages`, {
               method: "POST",
-              headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+              token: token ?? "",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 contentType: "interactive",
                 interactive: {
@@ -112,9 +116,9 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
     setDeleting(true);
     setError(null);
     const token = await getToken();
-    const res = await fetch(`${api}/v1/deals/${deal.id}`, {
+    const res = await clientFetch(`${api}/v1/deals/${deal.id}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${token ?? ""}` },
+      token: token ?? "",
     });
     setDeleting(false);
     if (!res.ok) {

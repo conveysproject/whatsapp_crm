@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { isAdmin } from "@/lib/can";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -45,8 +46,9 @@ export default function MembersPage(): JSX.Element {
     queryKey: ["team-members"],
     queryFn: async () => {
       const token = await getToken();
-      return fetch(`${API_URL}/v1/users`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      return clientFetch(`${API_URL}/v1/users`, {
+        token: token ?? "",
+        silent: true,
       }).then((r) => r.json() as Promise<{ data: Member[] }>);
     },
   });
@@ -54,9 +56,9 @@ export default function MembersPage(): JSX.Element {
   const deleteMember = useMutation({
     mutationFn: async (id: string) => {
       const token = await getToken();
-      return fetch(`${API_URL}/v1/users/${id}`, {
+      return clientFetch(`${API_URL}/v1/users/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+        token: token ?? "",
       });
     },
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["team-members"] }); setDeleteId(null); },
@@ -70,9 +72,10 @@ export default function MembersPage(): JSX.Element {
       const clerkToken = await getToken();
 
       // Step 1: Create invitation on Railway
-      const res = await fetch(`${API_URL}/v1/invitations`, {
+      const res = await clientFetch(`${API_URL}/v1/invitations`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${clerkToken ?? ""}` },
+        token: clerkToken ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
       });
       if (!res.ok) {
@@ -84,9 +87,10 @@ export default function MembersPage(): JSX.Element {
 
       // Step 2: Send email via Vercel (GoDaddy SMTP works here, not on Railway)
       const acceptUrl = `/invitations/${invitation.token}/accept`;
-      const emailRes = await fetch("/api/internal/send-email", {
+      const emailRes = await clientFetch("/api/internal/send-email", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${clerkToken ?? ""}` },
+        token: clerkToken ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: invitation.email,
           subject: "You've been invited to join WBMSG",

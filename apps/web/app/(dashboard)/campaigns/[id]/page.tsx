@@ -4,6 +4,7 @@ import { JSX, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { clientFetch } from "@/lib/client-fetch";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -58,8 +59,8 @@ export default function CampaignDetailPage(): JSX.Element {
     queryKey: ["campaign-report", id],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/campaigns/${id}/report`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/campaigns/${id}/report`, {
+        token: token ?? "",
       });
       if (!res.ok) throw new Error("Failed");
       return (await res.json() as { data: { campaign: Campaign; stats: Stats } }).data;
@@ -72,8 +73,9 @@ export default function CampaignDetailPage(): JSX.Element {
     queryFn: async () => {
       if (!report?.campaign.templateId || report.campaign.campaignType !== "template") return null;
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/templates/${report.campaign.templateId}`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/templates/${report.campaign.templateId}`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return null;
       return (await res.json() as { data: { name: string } }).data;
@@ -109,9 +111,9 @@ export default function CampaignDetailPage(): JSX.Element {
     setActing(true);
     try {
       const token = await getToken();
-      await fetch(`${API_URL}/v1/campaigns/${id}/${action}`, {
+      await clientFetch(`${API_URL}/v1/campaigns/${id}/${action}`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+        token: token ?? "",
       });
       await queryClient.invalidateQueries({ queryKey: ["campaign-report", id] });
       await queryClient.invalidateQueries({ queryKey: ["campaigns"] });

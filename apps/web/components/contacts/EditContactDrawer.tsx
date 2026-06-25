@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import type { Contact, EditableContact } from "./AddContactModal";
 import { Toggle, SectionHeader, FieldSkeleton, LANGUAGES } from "./contact-shared";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -88,8 +89,9 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
     queryKey: ["contact-groups", false],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/contact-groups?archived=false`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/contact-groups?archived=false`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       return (await res.json() as { data: ContactGroup[] }).data;
@@ -101,8 +103,9 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
     queryKey: ["custom-fields"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/contacts/custom-fields`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/contacts/custom-fields`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       return (await res.json() as { data: CustomField[] }).data;
@@ -114,8 +117,9 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
     queryKey: ["org-users"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/users`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/users`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       return (await res.json() as { data: OrgUser[] }).data;
@@ -128,8 +132,9 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
     queryKey: ["org-contact-field-visibility"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/organizations/me`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/organizations/me`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       const json = (await res.json()) as { data?: { settings?: { contactConfig?: { hiddenFields?: string[] } } } };
@@ -215,9 +220,10 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
           Object.entries(customFieldValues).filter(([, v]) => v.trim())
         );
       }
-      const res = await fetch(`${API_URL}/v1/contacts/${contact.id}`, {
+      const res = await clientFetch(`${API_URL}/v1/contacts/${contact.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const json = await res.json() as { data?: Contact; error?: { message: string } };

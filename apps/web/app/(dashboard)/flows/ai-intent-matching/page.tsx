@@ -4,6 +4,7 @@ import { JSX, useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { PermissionGate } from "@/components/PermissionGate";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -73,8 +74,9 @@ export default function AiIntentMatchingPage(): JSX.Element {
     async function load(): Promise<void> {
       try {
         const t = await getToken();
-        const res = await fetch(`${API_URL}/v1/automation/settings/intent-matching`, {
-          headers: { Authorization: `Bearer ${t ?? ""}` },
+        const res = await clientFetch(`${API_URL}/v1/automation/settings/intent-matching`, {
+          token: t ?? "",
+          silent: true,
         });
         if (res.ok) {
           const body = await res.json() as { data: IntentMatchSettings };
@@ -91,9 +93,10 @@ export default function AiIntentMatchingPage(): JSX.Element {
     const next = !settings.intentMatchingEnabled;
     try {
       const t = await getToken();
-      const res = await fetch(`${API_URL}/v1/automation/settings/intent-matching`, {
+      const res = await clientFetch(`${API_URL}/v1/automation/settings/intent-matching`, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${t ?? ""}`, "Content-Type": "application/json" },
+        token: t ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ intentMatchingEnabled: next }),
       });
       if (res.ok) {

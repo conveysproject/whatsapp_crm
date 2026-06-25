@@ -3,6 +3,7 @@
 import { JSX, useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -91,8 +92,9 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
     queryKey: ["templates"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/templates`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/templates`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       return (await res.json() as { data: Template[] }).data.filter((t) => t.status === "approved");
@@ -128,9 +130,10 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
     try {
       const token = await getToken();
       const res = contactId
-        ? await fetch(`${API_URL}/v1/templates/${templateId}/send-to-contact`, {
+        ? await clientFetch(`${API_URL}/v1/templates/${templateId}/send-to-contact`, {
             method: "POST",
-            headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+            token: token ?? "",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               contactId,
               variables: [],
@@ -138,9 +141,10 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
               ...(cardUrls.length > 0 ? { cardMediaUrls: cardUrls } : {}),
             }),
           })
-        : await fetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
+        : await clientFetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
             method: "POST",
-            headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+            token: token ?? "",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               contentType: "template",
               templateId,

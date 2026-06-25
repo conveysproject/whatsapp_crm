@@ -3,6 +3,7 @@
 import { JSX, useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -55,7 +56,7 @@ export default function AssignmentRulesTab(): JSX.Element {
 
   async function authed(path: string, init?: RequestInit) {
     const token = await getToken();
-    return fetch(`${API_URL}${path}`, { ...init, headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json", ...(init?.headers ?? {}) } });
+    return clientFetch(`${API_URL}${path}`, { ...init, token: token ?? "", headers: { "Content-Type": "application/json", ...(init?.headers as Record<string, string> | undefined ?? {}) } });
   }
 
   const { data: rules = [] } = useQuery<Rule[]>({

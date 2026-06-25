@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/Button";
 import { MessageTextArea, WaBubblePreview, MediaAttach, type AttachedMedia } from "./automation-message-card";
 import { PermissionGate } from "@/components/PermissionGate";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -33,8 +34,9 @@ export function OooCard({ initial }: Props): JSX.Element {
     async function checkBusinessHours(): Promise<void> {
       try {
         const t = await getToken();
-        const res = await fetch(`${API_URL}/v1/automation/business-hours`, {
-          headers: { Authorization: `Bearer ${t ?? ""}` },
+        const res = await clientFetch(`${API_URL}/v1/automation/business-hours`, {
+          token: t ?? "",
+          silent: true,
         });
         if (res.ok) {
           const body = await res.json() as { data: unknown[] };
@@ -53,9 +55,10 @@ export function OooCard({ initial }: Props): JSX.Element {
     setError(null);
     try {
       const t = await getToken();
-      const res = await fetch(`${API_URL}/v1/automation/settings/ooo`, {
+      const res = await clientFetch(`${API_URL}/v1/automation/settings/ooo`, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${t ?? ""}`, "Content-Type": "application/json" },
+        token: t ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           oooEnabled: enabled,
           oooMessage: message || null,

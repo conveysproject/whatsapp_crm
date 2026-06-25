@@ -1,6 +1,7 @@
 "use client";
 import { JSX, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { clientFetch } from "@/lib/client-fetch";
 
 interface Contact {
   id: string;
@@ -36,8 +37,9 @@ export function AddDealModal({ pipelineId, stages, onClose, onCreated, defaultSt
     if (q.length < 2) { setContacts([]); return; }
     setSearching(true);
     const token = await getToken();
-    const res = await fetch(`${api}/v1/contacts?search=${encodeURIComponent(q)}&limit=8`, {
-      headers: { Authorization: `Bearer ${token ?? ""}` },
+    const res = await clientFetch(`${api}/v1/contacts?search=${encodeURIComponent(q)}&limit=8`, {
+      token: token ?? "",
+      silent: true,
     });
     if (res.ok) {
       const body = await res.json() as { data: Contact[] };
@@ -51,9 +53,10 @@ export function AddDealModal({ pipelineId, stages, onClose, onCreated, defaultSt
     setSaving(true);
     setError(null);
     const token = await getToken();
-    const res = await fetch(`${api}/v1/deals`, {
+    const res = await clientFetch(`${api}/v1/deals`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+      token: token ?? "",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: title.trim(),
         pipelineId,

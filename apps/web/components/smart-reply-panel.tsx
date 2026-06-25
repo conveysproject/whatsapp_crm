@@ -2,6 +2,7 @@
 
 import { JSX, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { clientFetch } from "@/lib/client-fetch";
 
 interface Props {
   conversationId: string;
@@ -20,12 +21,10 @@ export function SmartReplyPanel({ conversationId, onSelect }: Props): JSX.Elemen
     try {
       const token = await getToken();
       const api = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
-      const res = await fetch(`${api}/v1/ai/smart-replies`, {
+      const res = await clientFetch(`${api}/v1/ai/smart-replies`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token ?? ""}`,
-        },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversationId }),
       });
       if (!res.ok) {

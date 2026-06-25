@@ -2,6 +2,7 @@
 
 import { JSX, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -31,9 +32,9 @@ export function MediaAttach({ value, onChange }: MediaAttachProps): JSX.Element 
       const t = await getToken();
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch(`${API_URL}/v1/media/upload`, {
+      const res = await clientFetch(`${API_URL}/v1/media/upload`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${t ?? ""}` },
+        token: t ?? "",
         body: form,
       });
       if (!res.ok) {

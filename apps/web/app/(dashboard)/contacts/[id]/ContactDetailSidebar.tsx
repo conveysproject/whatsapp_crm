@@ -3,6 +3,7 @@
 import { JSX, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
+import { clientFetch } from "@/lib/client-fetch";
 import {
   SectionHeader,
   FieldSkeleton,
@@ -50,8 +51,9 @@ export function ContactDetailSidebar({ contact, onAssigned }: Props): JSX.Elemen
     queryKey: ["users"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/users`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/users`, {
+        token: token ?? "",
+        silent: true,
       });
       return res.ok ? (await res.json() as { data: OrgUser[] }).data : [];
     },
@@ -61,8 +63,9 @@ export function ContactDetailSidebar({ contact, onAssigned }: Props): JSX.Elemen
     queryKey: ["contact-groups", false],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/contact-groups?archived=false`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/contact-groups?archived=false`, {
+        token: token ?? "",
+        silent: true,
       });
       return res.ok ? (await res.json() as { data: ContactGroup[] }).data : [];
     },
@@ -72,8 +75,9 @@ export function ContactDetailSidebar({ contact, onAssigned }: Props): JSX.Elemen
     queryKey: ["custom-fields"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/contacts/custom-fields`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/contacts/custom-fields`, {
+        token: token ?? "",
+        silent: true,
       });
       return res.ok ? (await res.json() as { data: CustomField[] }).data : [];
     },
@@ -83,8 +87,9 @@ export function ContactDetailSidebar({ contact, onAssigned }: Props): JSX.Elemen
     queryKey: ["contact-trust-score", contact.id],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/contacts/${contact.id}/trust-score`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/contacts/${contact.id}/trust-score`, {
+        token: token ?? "",
+        silent: true,
       });
       return res.ok ? (await res.json() as { data: { score: number; label: string } }).data : null;
     },
@@ -95,8 +100,9 @@ export function ContactDetailSidebar({ contact, onAssigned }: Props): JSX.Elemen
     queryKey: ["org-contact-field-visibility"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/organizations/me`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/organizations/me`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       const json = (await res.json()) as { data?: { settings?: { contactConfig?: { hiddenFields?: string[] } } } };
@@ -116,9 +122,10 @@ export function ContactDetailSidebar({ contact, onAssigned }: Props): JSX.Elemen
     setAssigning(true);
     try {
       const token = await getToken();
-      await fetch(`${API_URL}/v1/contacts/${contact.id}/assign`, {
+      await clientFetch(`${API_URL}/v1/contacts/${contact.id}/assign`, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId }),
       });
       setAssignedId(userId);

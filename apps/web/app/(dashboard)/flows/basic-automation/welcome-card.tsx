@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/Button";
 import { MessageTextArea, WaBubblePreview } from "./automation-message-card";
 import { PermissionGate } from "@/components/PermissionGate";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -55,9 +56,10 @@ export function WelcomeCard({ initial, flows }: Props): JSX.Element {
         body["welcomeMessage"] = message || null;
       }
       const t = await getToken();
-      const res = await fetch(`${API_URL}/v1/automation/settings/welcome`, {
+      const res = await clientFetch(`${API_URL}/v1/automation/settings/welcome`, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${t ?? ""}`, "Content-Type": "application/json" },
+        token: t ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       if (!res.ok) {

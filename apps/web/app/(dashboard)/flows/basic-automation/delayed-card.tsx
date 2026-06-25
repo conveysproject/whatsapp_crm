@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/Button";
 import { MessageTextArea, WaBubblePreview, MediaAttach, type AttachedMedia } from "./automation-message-card";
 import { PermissionGate } from "@/components/PermissionGate";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -45,9 +46,10 @@ export function DelayedCard({ initial }: Props): JSX.Element {
         throw new Error("Delay must be between 1 minute and 24 hours");
       }
       const t = await getToken();
-      const res = await fetch(`${API_URL}/v1/automation/settings/delayed`, {
+      const res = await clientFetch(`${API_URL}/v1/automation/settings/delayed`, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${t ?? ""}`, "Content-Type": "application/json" },
+        token: t ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           delayedEnabled: enabled,
           delayedMinutes: totalMinutes,

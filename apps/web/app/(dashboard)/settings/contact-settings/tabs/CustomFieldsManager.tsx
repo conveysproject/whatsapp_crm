@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { canAccessSub } from "@/lib/can";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -117,8 +118,9 @@ export default function CustomFieldsManager(): JSX.Element {
     queryKey: ["custom-fields-all"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/contacts/custom-fields?all=1`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/contacts/custom-fields?all=1`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       return (await res.json() as { data: CustomField[] }).data;
@@ -198,9 +200,10 @@ export default function CustomFieldsManager(): JSX.Element {
       ? `${API_URL}/v1/contacts/custom-fields/${editingField.id}`
       : `${API_URL}/v1/contacts/custom-fields`;
 
-    const res = await fetch(url, {
+    const res = await clientFetch(url, {
       method: isEdit ? "PATCH" : "POST",
-      headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+      token: token ?? "",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     setSaving(false);
@@ -218,9 +221,10 @@ export default function CustomFieldsManager(): JSX.Element {
   async function handleToggleActive(f: CustomField) {
     setTogglingId(f.id);
     const token = await getToken();
-    await fetch(`${API_URL}/v1/contacts/custom-fields/${f.id}`, {
+    await clientFetch(`${API_URL}/v1/contacts/custom-fields/${f.id}`, {
       method: "PATCH",
-      headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+      token: token ?? "",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isActive: !f.isActive }),
     });
     setTogglingId(null);

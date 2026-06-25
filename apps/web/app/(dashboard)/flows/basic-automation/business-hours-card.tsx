@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, JSX } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/Button";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -89,8 +90,9 @@ export function BusinessHoursCard(): JSX.Element {
     async function load(): Promise<void> {
       try {
         const token = await getToken();
-        const res = await fetch(`${API_URL}/v1/automation/business-hours`, {
-          headers: { Authorization: `Bearer ${token ?? ""}` },
+        const res = await clientFetch(`${API_URL}/v1/automation/business-hours`, {
+          token: token ?? "",
+          silent: true,
         });
         if (res.ok) {
           const body = await res.json() as { data: Slot[] };
@@ -157,9 +159,10 @@ export function BusinessHoursCard(): JSX.Element {
     setError(null);
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/automation/business-hours`, {
+      const res = await clientFetch(`${API_URL}/v1/automation/business-hours`, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slots: rowsToSlots(rows) }),
       });
       if (!res.ok) {

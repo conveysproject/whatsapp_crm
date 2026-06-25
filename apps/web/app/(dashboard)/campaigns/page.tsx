@@ -3,6 +3,7 @@
 import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { clientFetch } from "@/lib/client-fetch";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -64,8 +65,9 @@ export default function CampaignsPage(): JSX.Element {
     queryKey: ["campaigns"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/campaigns`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/campaigns`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       return (await res.json() as { data: Campaign[] }).data;
@@ -100,9 +102,9 @@ export default function CampaignsPage(): JSX.Element {
 
   async function doAction(id: string, action: string) {
     const token = await getToken();
-    await fetch(`${API_URL}/v1/campaigns/${id}/${action}`, {
+    await clientFetch(`${API_URL}/v1/campaigns/${id}/${action}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token ?? ""}` },
+      token: token ?? "",
     });
     void queryClient.invalidateQueries({ queryKey: ["campaigns"] });
   }
@@ -110,9 +112,9 @@ export default function CampaignsPage(): JSX.Element {
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
     const token = await getToken();
-    await fetch(`${API_URL}/v1/campaigns/${id}`, {
+    await clientFetch(`${API_URL}/v1/campaigns/${id}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${token ?? ""}` },
+      token: token ?? "",
     });
     void queryClient.invalidateQueries({ queryKey: ["campaigns"] });
   }

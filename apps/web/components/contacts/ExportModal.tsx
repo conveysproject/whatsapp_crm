@@ -4,6 +4,7 @@ import { JSX, useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { TagInput } from "./TagInput";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -62,12 +63,11 @@ export function ExportModal({ open, onClose }: Props): JSX.Element | null {
     void (async () => {
       const token = await getToken();
       if (!token) return;
-      const headers = { Authorization: `Bearer ${token}` };
 
       void Promise.all([
-        fetch(`${API_URL}/v1/segments`, { headers }).then((r) => r.ok ? r.json() as Promise<{ data: Segment[] }> : null),
-        fetch(`${API_URL}/v1/contact-groups?archived=false`, { headers }).then((r) => r.ok ? r.json() as Promise<{ data: Group[] }> : null),
-        fetch(`${API_URL}/v1/contacts/custom-fields`, { headers }).then((r) => r.ok ? r.json() as Promise<{ data: CustomField[] }> : null),
+        clientFetch(`${API_URL}/v1/segments`, { token, silent: true }).then((r) => r.ok ? r.json() as Promise<{ data: Segment[] }> : null),
+        clientFetch(`${API_URL}/v1/contact-groups?archived=false`, { token, silent: true }).then((r) => r.ok ? r.json() as Promise<{ data: Group[] }> : null),
+        clientFetch(`${API_URL}/v1/contacts/custom-fields`, { token, silent: true }).then((r) => r.ok ? r.json() as Promise<{ data: CustomField[] }> : null),
       ]).then(([segsRes, groupsRes, cfRes]) => {
         if (segsRes) setSegments(segsRes.data ?? []);
         else setSegmentsError(true);
@@ -100,8 +100,9 @@ export function ExportModal({ open, onClose }: Props): JSX.Element | null {
     setCountError(false);
     try {
       const params = buildParams(lsIds, t, seg, gids, cf);
-      const res = await fetch(`${API_URL}/v1/contacts/export/count?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await clientFetch(`${API_URL}/v1/contacts/export/count?${params.toString()}`, {
+        token,
+        silent: true,
       });
       if (!res.ok) throw new Error("count failed");
       const body = await res.json() as { data: { count: number } };
@@ -129,8 +130,8 @@ export function ExportModal({ open, onClose }: Props): JSX.Element | null {
     setDownloading(true);
     try {
       const params = buildParams(leadStatusIds, tags, segmentId, groupIds, cfFilters);
-      const res = await fetch(`${API_URL}/v1/contacts/export?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await clientFetch(`${API_URL}/v1/contacts/export?${params.toString()}`, {
+        token,
       });
       if (!res.ok) throw new Error("export failed");
       const blob = await res.blob();

@@ -4,6 +4,7 @@ import { JSX, useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -22,7 +23,7 @@ export default function BasicConfigTab(): JSX.Element {
     queryKey: ["org-contact-config"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/organizations/me`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+      const res = await clientFetch(`${API_URL}/v1/organizations/me`, { token: token ?? "", silent: true });
       if (!res.ok) throw new Error("Failed to load config");
       const json = (await res.json()) as { data?: { settings?: { contactConfig?: Partial<ContactConfig> } } };
       const cc = json.data?.settings?.contactConfig ?? {};
@@ -56,9 +57,10 @@ export default function BasicConfigTab(): JSX.Element {
   const save = useMutation({
     mutationFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/organizations/me`, {
+      const res = await clientFetch(`${API_URL}/v1/organizations/me`, {
         method: "PATCH",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ settings: { contactConfig: { defaultLeadStatusId: defaultId || null, closureLeadStatusIds: closureIds, closureDeadlineDays: deadlineDays.trim() ? Math.max(0, parseInt(deadlineDays, 10) || 0) : null } } }),
       });
       if (!res.ok) throw new Error("Failed to save");

@@ -11,6 +11,7 @@ import { TemplatePicker } from "./TemplatePicker";
 import { MediaAssetPicker, type MediaAsset } from "@/components/media-asset-picker";
 import { CannedResponsePicker } from "@/components/canned-response-picker";
 import { SmartReplyPanel } from "@/components/smart-reply-panel";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -101,16 +102,18 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
     async function fetchBotData() {
       const token = await getToken();
       const api = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
-      const convRes = await fetch(`${api}/v1/conversations/${conversationId}`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const convRes = await clientFetch(`${api}/v1/conversations/${conversationId}`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!convRes.ok || cancelled) return;
       const convBody = await convRes.json() as { data: { contactId: string | null } };
       const cid = convBody.data.contactId;
       if (!cid || cancelled) return;
       setBotContactId(cid);
-      const botsRes = await fetch(`${api}/v1/chatbots/active-for/${cid}`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const botsRes = await clientFetch(`${api}/v1/chatbots/active-for/${cid}`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!botsRes.ok || cancelled) return;
       const botsBody = await botsRes.json() as { data: Array<{ id: string; name: string; startTrigger: string | null }> };
@@ -126,9 +129,10 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
     setSending(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
+      const res = await clientFetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: text.trim() }),
       });
       if (res.ok) {
@@ -156,9 +160,10 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
     setSending(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
+      const res = await clientFetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contentType: "interactive", interactive: payload }),
       });
       if (res.ok) {
@@ -182,18 +187,19 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
       // Upload to WhatsApp via our media endpoint
       const form = new FormData();
       form.append("file", file);
-      const uploadRes = await fetch(`${API_URL}/v1/media/upload`, {
+      const uploadRes = await clientFetch(`${API_URL}/v1/media/upload`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+        token: token ?? "",
         body: form,
       });
       if (!uploadRes.ok) return;
       const { data: uploaded } = await uploadRes.json() as { data: { mediaId: string; mimeType: string } };
 
       // Send media message
-      const sendRes = await fetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
+      const sendRes = await clientFetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contentType: pendingMediaTypeRef.current,
           mediaId: uploaded.mediaId,
@@ -217,9 +223,10 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
       setSending(true);
       try {
         const token = await getToken();
-        const res = await fetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
+        const res = await clientFetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+          token: token ?? "",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contentType: r.mediaData.type,
             mediaId: r.mediaData.fileUrl,
@@ -241,9 +248,10 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
     setSending(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
+      const res = await clientFetch(`${API_URL}/v1/conversations/${conversationId}/messages`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contentType: asset.type,
           mediaId: asset.fileUrl,
@@ -264,9 +272,9 @@ export function SendMessageForm({ conversationId, prefillText, onSent, onCreateD
     setSendingBot(chatbotId);
     try {
       const token = await getToken();
-      await fetch(
+      await clientFetch(
         `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/chatbots/${chatbotId}/quick-send/${botContactId}`,
-        { method: "POST", headers: { Authorization: `Bearer ${token ?? ""}` } }
+        { method: "POST", token: token ?? "" }
       );
     } finally {
       setSendingBot(null);

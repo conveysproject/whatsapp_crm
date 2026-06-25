@@ -3,6 +3,7 @@
 import { JSX, useState, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
+import { clientFetch } from "@/lib/client-fetch";
 import Link from "next/link";
 import { Toast, useToast } from "@/components/ui/Toast";
 import { AddContactModal, type Contact, type EditableContact } from "./AddContactModal";
@@ -103,7 +104,7 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
     queryKey: ["org-users"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/users`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+      const res = await clientFetch(`${API_URL}/v1/users`, { token: token ?? "", silent: true });
       if (!res.ok) return [];
       return (await res.json() as { data: { id: string; fullName: string }[] }).data;
     },
@@ -114,7 +115,7 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
     queryKey: ["org-contact-field-visibility"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/organizations/me`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+      const res = await clientFetch(`${API_URL}/v1/organizations/me`, { token: token ?? "", silent: true });
       if (!res.ok) return [];
       const json = (await res.json()) as { data?: { settings?: { contactConfig?: { hiddenFields?: string[] } } } };
       return json.data?.settings?.contactConfig?.hiddenFields ?? [];
@@ -134,8 +135,9 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
     if (!token) return;
     setSearching(true);
     try {
-      const res = await fetch(`${API_URL}/v1/contacts/search?q=${encodeURIComponent(q)}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await clientFetch(`${API_URL}/v1/contacts/search?q=${encodeURIComponent(q)}`, {
+        token,
+        silent: true,
       });
       if (res.ok) setContacts((await res.json() as { data: ContactWithLabels[] }).data);
     } finally { setSearching(false); }
@@ -205,7 +207,7 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
     setLoadingEditContact(true);
     const token = await getToken();
     if (!token) { setLoadingEditContact(false); return; }
-    const res = await fetch(`${API_URL}/v1/contacts/${contactId}`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await clientFetch(`${API_URL}/v1/contacts/${contactId}`, { token });
     if (!res.ok) { setLoadingEditContact(false); return; }
     setEditContact((await res.json() as { data: EditableContact }).data);
     setLoadingEditContact(false);
@@ -213,9 +215,10 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
 
   async function handleQuickAssign(contactId: string, userId: string | null) {
     const token = await getToken();
-    const res = await fetch(`${API_URL}/v1/contacts/${contactId}/assign`, {
+    const res = await clientFetch(`${API_URL}/v1/contacts/${contactId}/assign`, {
       method: "PUT",
-      headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+      token: token ?? "",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId }),
     });
     if (!res.ok) return;
@@ -234,7 +237,7 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
   async function handleDelete(contactId: string) {
     const token = await getToken();
     if (!token) return;
-    const res = await fetch(`${API_URL}/v1/contacts/${contactId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    const res = await clientFetch(`${API_URL}/v1/contacts/${contactId}`, { method: "DELETE", token });
     if (res.ok || res.status === 204) {
       setContacts((prev) => prev.filter((c) => c.id !== contactId));
       setSelectedIds((p) => { const n = new Set(p); n.delete(contactId); return n; });
@@ -248,9 +251,10 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
     if (!ids.length) return;
     const token = await getToken();
     if (!token) return;
-    const res = await fetch(`${API_URL}/v1/contacts/bulk`, {
+    const res = await clientFetch(`${API_URL}/v1/contacts/bulk`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      token,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contactIds: ids }),
     });
     if (res.ok) {
@@ -265,9 +269,10 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
     setDeletingAll(true);
     const token = await getToken();
     if (!token) { setDeletingAll(false); return; }
-    const res = await fetch(`${API_URL}/v1/contacts/bulk`, {
+    const res = await clientFetch(`${API_URL}/v1/contacts/bulk`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      token,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contactIds: contacts.map((c) => c.id) }),
     });
     setDeletingAll(false);

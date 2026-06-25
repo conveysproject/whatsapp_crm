@@ -5,6 +5,7 @@ import { MediaAssetPicker } from "@/components/media-asset-picker";
 import type { MediaAsset } from "@/components/media-asset-picker";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
+import { clientFetch } from "@/lib/client-fetch";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Input } from "@/components/ui/Input";
@@ -53,7 +54,7 @@ export default function NewCampaignPage(): JSX.Element {
     queryKey: ["templates-for-campaign"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/templates`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+      const res = await clientFetch(`${API_URL}/v1/templates`, { token: token ?? "", silent: true });
       if (!res.ok) return [];
       return (await res.json() as { data: Template[] }).data.filter((t) => t.status === "approved");
     },
@@ -63,7 +64,7 @@ export default function NewCampaignPage(): JSX.Element {
     queryKey: ["groups-for-campaign"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/contact-groups?limit=100`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+      const res = await clientFetch(`${API_URL}/v1/contact-groups?limit=100`, { token: token ?? "", silent: true });
       if (!res.ok) return [];
       return (await res.json() as { data: Group[] }).data;
     },
@@ -73,7 +74,7 @@ export default function NewCampaignPage(): JSX.Element {
     queryKey: ["segments-for-campaign"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/segments`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+      const res = await clientFetch(`${API_URL}/v1/segments`, { token: token ?? "", silent: true });
       if (!res.ok) return [];
       return (await res.json() as { data: Segment[] }).data;
     },
@@ -83,8 +84,9 @@ export default function NewCampaignPage(): JSX.Element {
     queryKey: ["preset-messages"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/canned-responses?category=nt_campaign&limit=100`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/canned-responses?category=nt_campaign&limit=100`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       return (await res.json() as { data: { id: string; name: string; content: string }[] }).data;
@@ -114,9 +116,10 @@ export default function NewCampaignPage(): JSX.Element {
     try {
       const token = await getToken();
 
-      const createRes = await fetch(`${API_URL}/v1/campaigns`, {
+      const createRes = await clientFetch(`${API_URL}/v1/campaigns`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
           campaignType,
@@ -137,9 +140,10 @@ export default function NewCampaignPage(): JSX.Element {
 
       const { data } = await createRes.json() as { data: { id: string } };
 
-      const scheduleRes = await fetch(`${API_URL}/v1/campaigns/${data.id}/schedule`, {
+      const scheduleRes = await clientFetch(`${API_URL}/v1/campaigns/${data.id}/schedule`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           segmentId: audienceMode === "segment" ? segmentId : undefined,
           scheduledAt: scheduleMode === "later" && scheduledAt ? new Date(scheduledAt).toISOString() : undefined,

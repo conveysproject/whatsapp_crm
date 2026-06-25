@@ -4,6 +4,7 @@ import { JSX, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -45,8 +46,9 @@ export function MediaAssetPicker({ open, onClose, onSelect, filterType }: Props)
     queryFn: async () => {
       const token = await getToken();
       const params = activeTab !== "all" ? `?type=${activeTab}` : "";
-      const res = await fetch(`${API_URL}/v1/media-assets${params}`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/media-assets${params}`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       return (await res.json() as { data: MediaAsset[] }).data;

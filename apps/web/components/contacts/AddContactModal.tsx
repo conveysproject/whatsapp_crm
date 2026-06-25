@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
+import { clientFetch } from "@/lib/client-fetch";
 
 export interface Contact {
   id: string;
@@ -193,8 +194,9 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
     queryKey: ["contact-groups", false],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/contact-groups?archived=false`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/contact-groups?archived=false`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       return (await res.json() as { data: ContactGroup[] }).data;
@@ -206,8 +208,9 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
     queryKey: ["custom-fields"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/contacts/custom-fields`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/contacts/custom-fields`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       return (await res.json() as { data: CustomField[] }).data;
@@ -219,8 +222,9 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
     queryKey: ["org-contact-field-visibility"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/organizations/me`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
+      const res = await clientFetch(`${API_URL}/v1/organizations/me`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       const json = (await res.json()) as { data?: { settings?: { contactConfig?: { hiddenFields?: string[] } } } };
@@ -318,9 +322,10 @@ export function AddContactModal({ open, onClose, onCreated }: Props): JSX.Elemen
           Object.entries(customFieldValues).filter(([, v]) => v.trim())
         );
       }
-      const res = await fetch(`${API_URL}/v1/contacts`, {
+      const res = await clientFetch(`${API_URL}/v1/contacts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const json = await res.json() as { data?: Contact; error?: { message: string } };

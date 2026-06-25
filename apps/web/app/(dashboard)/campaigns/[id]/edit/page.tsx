@@ -3,6 +3,7 @@
 import { JSX, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { clientFetch } from "@/lib/client-fetch";
 import Link from "next/link";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -36,7 +37,7 @@ export default function EditCampaignPage(): JSX.Element {
   useEffect(() => {
     async function load() {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/campaigns/${id}`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+      const res = await clientFetch(`${API_URL}/v1/campaigns/${id}`, { token: token ?? "" });
       if (!res.ok) { setLoading(false); return; }
       const data = (await res.json() as { data: Campaign }).data;
       setCampaign(data);
@@ -52,9 +53,10 @@ export default function EditCampaignPage(): JSX.Element {
     setSaving(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/campaigns/${id}`, {
+      const res = await clientFetch(`${API_URL}/v1/campaigns/${id}`, {
         method: "PATCH",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
           ...(campaign.campaignType !== "template" ? { textBody: freeTextBody, campaignType: campaign.campaignType } : {}),

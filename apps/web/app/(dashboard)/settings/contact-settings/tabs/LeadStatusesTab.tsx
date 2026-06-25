@@ -3,6 +3,7 @@
 import { JSX, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { clientFetch } from "@/lib/client-fetch";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -32,7 +33,7 @@ export default function LeadStatusesTab(): JSX.Element {
     queryKey: ["lead-statuses"],
     queryFn: async () => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/lead-statuses`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+      const res = await clientFetch(`${API_URL}/v1/lead-statuses`, { token: token ?? "", silent: true });
       if (!res.ok) return [];
       return (await res.json() as { data: LeadStatus[] }).data;
     },
@@ -42,11 +43,12 @@ export default function LeadStatusesTab(): JSX.Element {
     mutationFn: async (draft: { name: string; color: string }) => {
       const token = await getToken();
       const isEdit = editing && editing.id;
-      const res = await fetch(
+      const res = await clientFetch(
         isEdit ? `${API_URL}/v1/lead-statuses/${editing!.id}` : `${API_URL}/v1/lead-statuses`,
         {
           method: isEdit ? "PATCH" : "POST",
-          headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+          token: token ?? "",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(draft),
         }
       );
@@ -58,7 +60,7 @@ export default function LeadStatusesTab(): JSX.Element {
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/lead-statuses/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token ?? ""}` } });
+      const res = await clientFetch(`${API_URL}/v1/lead-statuses/${id}`, { method: "DELETE", token: token ?? "" });
       if (res.status === 409) throw new Error("This status is assigned to contacts — reassign them before deleting.");
       if (!res.ok) throw new Error("Failed to delete status");
     },
@@ -69,9 +71,10 @@ export default function LeadStatusesTab(): JSX.Element {
   const reorder = useMutation({
     mutationFn: async (orderedIds: string[]) => {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/lead-statuses/reorder`, {
+      const res = await clientFetch(`${API_URL}/v1/lead-statuses/reorder`, {
         method: "PATCH",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderedIds }),
       });
       if (!res.ok) throw new Error("Failed to reorder statuses");

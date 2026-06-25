@@ -7,6 +7,7 @@ import { BreadcrumbNav } from "@/components/layout/BreadcrumbNav";
 import { OnboardingProvider } from "@/app/(dashboard)/onboarding-context";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { Toaster } from "sonner";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -56,6 +57,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <OnboardingProvider status={status}>
+      <Toaster richColors position="top-right" />
       <div className="flex h-screen overflow-hidden bg-gray-50">
         <Sidebar />
         <div className="flex flex-col flex-1 min-w-0 min-h-0">

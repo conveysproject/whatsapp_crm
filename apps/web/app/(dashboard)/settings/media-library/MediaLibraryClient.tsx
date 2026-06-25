@@ -3,6 +3,7 @@
 import { JSX, useState, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -48,17 +49,14 @@ export function MediaLibraryClient(): JSX.Element {
   const [editForm, setEditForm] = useState({ title: "", description: "" });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  async function authHeaders(): Promise<Record<string, string>> {
-    const token = await getToken();
-    return { Authorization: `Bearer ${token ?? ""}` };
-  }
-
   const { data: assets = [], isLoading } = useQuery<MediaAsset[]>({
     queryKey: ["media-assets", activeTab],
     queryFn: async () => {
+      const token = await getToken();
       const params = activeTab !== "all" ? `?type=${activeTab}` : "";
-      const res = await fetch(`${API_URL}/v1/media-assets${params}`, {
-        headers: await authHeaders(),
+      const res = await clientFetch(`${API_URL}/v1/media-assets${params}`, {
+        token: token ?? "",
+        silent: true,
       });
       if (!res.ok) return [];
       return (await res.json() as { data: MediaAsset[] }).data;
@@ -96,10 +94,11 @@ export function MediaLibraryClient(): JSX.Element {
   async function handleAddUrl() {
     if (!urlForm.title || !urlForm.type || !urlForm.fileUrl) return;
     setSaving(true);
-    const headers = await authHeaders();
-    await fetch(`${API_URL}/v1/media-assets`, {
+    const token = await getToken();
+    await clientFetch(`${API_URL}/v1/media-assets`, {
       method: "POST",
-      headers: { ...headers, "Content-Type": "application/json" },
+      token: token ?? "",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: urlForm.title,
         type: urlForm.type,
@@ -116,10 +115,11 @@ export function MediaLibraryClient(): JSX.Element {
   async function handleEdit() {
     if (!editAsset || !editForm.title) return;
     setSaving(true);
-    const headers = await authHeaders();
-    await fetch(`${API_URL}/v1/media-assets/${editAsset.id}`, {
+    const token = await getToken();
+    await clientFetch(`${API_URL}/v1/media-assets/${editAsset.id}`, {
       method: "PUT",
-      headers: { ...headers, "Content-Type": "application/json" },
+      token: token ?? "",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: editForm.title, description: editForm.description || null }),
     });
     setSaving(false);
@@ -130,9 +130,10 @@ export function MediaLibraryClient(): JSX.Element {
   async function handleDelete(id: string) {
     if (!confirm("Delete this media asset? This cannot be undone.")) return;
     setDeleteId(id);
-    await fetch(`${API_URL}/v1/media-assets/${id}`, {
+    const token = await getToken();
+    await clientFetch(`${API_URL}/v1/media-assets/${id}`, {
       method: "DELETE",
-      headers: await authHeaders(),
+      token: token ?? "",
     });
     setDeleteId(null);
     void queryClient.invalidateQueries({ queryKey: ["media-assets"] });
