@@ -1,5 +1,6 @@
 import { JSX } from "react";
 import { PermissionGate } from "@/components/PermissionGate";
+import { BusinessHoursCard } from "./business-hours-card";
 
 export default function BasicAutomationPage(): JSX.Element {
   return (
@@ -11,10 +12,7 @@ export default function BasicAutomationPage(): JSX.Element {
             Out of office, welcome messages, and delayed response settings
           </p>
         </div>
-        <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-          <span className="text-5xl">⚙️</span>
-          <p className="text-gray-500 text-sm">Basic automation settings coming soon.</p>
-        </div>
+        <BusinessHoursCard />
       </div>
     </PermissionGate>
   );
