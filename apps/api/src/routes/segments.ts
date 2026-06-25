@@ -61,7 +61,7 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
       }
       const segment = await fastify.prisma.segment.update({
-        where: { id: request.params.id },
+        where: { id: request.params.id, organizationId },
         data: {
           ...(request.body.name !== undefined ? { name: request.body.name } : {}),
           ...(request.body.filters !== undefined ? { filters: request.body.filters as object } : {}),
@@ -84,7 +84,7 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
     if (!existing) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
     }
-    await fastify.prisma.segment.delete({ where: { id: request.params.id } });
+    await fastify.prisma.segment.delete({ where: { id: request.params.id, organizationId } });
     return reply.status(204).send();
   });
 
