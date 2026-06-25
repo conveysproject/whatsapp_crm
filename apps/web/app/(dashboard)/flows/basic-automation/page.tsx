@@ -1,8 +1,95 @@
 import { JSX } from "react";
+import { auth } from "@clerk/nextjs/server";
 import { PermissionGate } from "@/components/PermissionGate";
 import { BusinessHoursCard } from "./business-hours-card";
+import { OooCard } from "./ooo-card";
+import { WelcomeCard } from "./welcome-card";
+import { DelayedCard } from "./delayed-card";
 
-export default function BasicAutomationPage(): JSX.Element {
+const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+
+interface Flow {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
+async function getFlows(token: string): Promise<Flow[]> {
+  try {
+    const res = await fetch(`${API_URL}/v1/flows`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+    });
+    return res.ok ? (await res.json() as { data: Flow[] }).data : [];
+  } catch {
+    return [];
+  }
+}
+
+async function getBusinessHours(token: string): Promise<Array<{ id: string; dayOfWeek: number }>> {
+  try {
+    const res = await fetch(`${API_URL}/v1/automation/business-hours`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+    });
+    return res.ok ? (await res.json() as { data: Array<{ id: string; dayOfWeek: number }> }).data : [];
+  } catch {
+    return [];
+  }
+}
+
+interface AutomationSettings {
+  oooEnabled: boolean;
+  oooMessage: string | null;
+  welcomeEnabled: boolean;
+  welcomePersonalized: boolean;
+  welcomeMessage: string | null;
+  welcomeNewMessage: string | null;
+  welcomeReturningMessage: string | null;
+  welcomeFlowId: string | null;
+  delayedEnabled: boolean;
+  delayedMinutes: number;
+  delayedMessage: string | null;
+  delayedSendWithOoo: boolean;
+}
+
+async function getAutomationSettings(token: string): Promise<AutomationSettings | null> {
+  try {
+    const res = await fetch(`${API_URL}/v1/automation/settings`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json() as { data: AutomationSettings }).data;
+  } catch {
+    return null;
+  }
+}
+
+export default async function BasicAutomationPage(): Promise<JSX.Element> {
+  const { getToken } = await auth.protect();
+  const token = (await getToken()) ?? "";
+
+  const [flows, businessHours, automationSettings] = await Promise.all([
+    getFlows(token),
+    getBusinessHours(token),
+    getAutomationSettings(token),
+  ]);
+
+  const defaultSettings: AutomationSettings = {
+    oooEnabled: false,
+    oooMessage: null,
+    welcomeEnabled: false,
+    welcomePersonalized: false,
+    welcomeMessage: null,
+    welcomeNewMessage: null,
+    welcomeReturningMessage: null,
+    welcomeFlowId: null,
+    delayedEnabled: false,
+    delayedMinutes: 30,
+    delayedMessage: null,
+    delayedSendWithOoo: false,
+  };
+
+  const settings = automationSettings ?? defaultSettings;
+
   return (
     <PermissionGate permission="automation_access">
       <div className="space-y-6">
@@ -13,6 +100,35 @@ export default function BasicAutomationPage(): JSX.Element {
           </p>
         </div>
         <BusinessHoursCard />
+        <OooCard
+          initial={{
+            oooEnabled: settings.oooEnabled,
+            oooMessage: settings.oooMessage,
+          }}
+          token={token}
+          hasBusinessHours={businessHours.length > 0}
+        />
+        <WelcomeCard
+          initial={{
+            welcomeEnabled: settings.welcomeEnabled,
+            welcomePersonalized: settings.welcomePersonalized,
+            welcomeMessage: settings.welcomeMessage,
+            welcomeNewMessage: settings.welcomeNewMessage,
+            welcomeReturningMessage: settings.welcomeReturningMessage,
+            welcomeFlowId: settings.welcomeFlowId,
+          }}
+          flows={flows.filter((f) => f.isActive)}
+          token={token}
+        />
+        <DelayedCard
+          initial={{
+            delayedEnabled: settings.delayedEnabled,
+            delayedMinutes: settings.delayedMinutes,
+            delayedMessage: settings.delayedMessage,
+            delayedSendWithOoo: settings.delayedSendWithOoo,
+          }}
+          token={token}
+        />
       </div>
     </PermissionGate>
   );
