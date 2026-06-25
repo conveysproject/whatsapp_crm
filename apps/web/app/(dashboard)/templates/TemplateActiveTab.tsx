@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, type JSX } from "react";
+import { useState, useMemo, useEffect, type JSX } from "react";
+import { createPortal } from "react-dom";
 import { TemplateRow, type TemplateData } from "./TemplateRow";
 
 const STATUSES = ["all", "approved", "pending", "rejected"] as const;
@@ -9,10 +10,14 @@ const CATEGORIES = ["all", "marketing", "utility", "authentication"] as const;
 type StatusFilter = (typeof STATUSES)[number];
 type CategoryFilter = (typeof CATEGORIES)[number];
 
-function ReviewModal({ onClose }: { onClose: () => void }): JSX.Element {
-  return (
+function ReviewModal({ onClose }: { onClose: () => void }): JSX.Element | null {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  if (!mounted) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
       onClick={onClose}
     >
       <div
@@ -43,7 +48,8 @@ function ReviewModal({ onClose }: { onClose: () => void }): JSX.Element {
           Understood
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
