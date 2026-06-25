@@ -113,11 +113,14 @@ function TabSwitcher({ active, onChange }: { active: FilterTab; onChange: (t: Fi
         <button
           key={t}
           type="button"
+          disabled={t === "events"}
           onClick={() => onChange(t)}
           className={`rounded-full px-4 py-1 text-sm font-medium transition-colors capitalize ${
-            active === t
-              ? "bg-[#1D4B3E] text-white shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
+            t === "events"
+              ? "opacity-50 cursor-not-allowed text-gray-300"
+              : active === t
+                ? "bg-[#1D4B3E] text-white shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
           }`}
         >
           {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -332,10 +335,6 @@ export function SegmentBuilderV2({
     })();
   }, [getToken]);
 
-  useEffect(() => {
-    setRows(initial.map((rule) => ({ id: crypto.randomUUID(), tab: tabFromRule(rule), rule })));
-  }, [initial]);
-
   function updateRow(index: number, rule: FilterRule): void {
     const next = rows.map((r, i) => (i === index ? { ...r, rule } : r));
     setRows(next);
@@ -343,6 +342,7 @@ export function SegmentBuilderV2({
   }
 
   function changeTab(index: number, tab: FilterTab): void {
+    if (tab === "events") return; // disabled in PR1
     const rule = defaultRule(tab);
     const next = rows.map((r, i) => (i === index ? { ...r, tab, rule } : r));
     setRows(next);
