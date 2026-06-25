@@ -7,6 +7,7 @@ interface SegmentBody {
   name: string;
   filters: FilterRule[];
   match?: MatchMode;
+  whatsappOptedOnly?: boolean;
 }
 
 export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
@@ -65,6 +66,7 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
           ...(request.body.name !== undefined ? { name: request.body.name } : {}),
           ...(request.body.filters !== undefined ? { filters: request.body.filters as object } : {}),
           ...(request.body.match !== undefined ? { match: request.body.match } : {}),
+          ...(request.body.whatsappOptedOnly !== undefined ? { whatsappOptedOnly: request.body.whatsappOptedOnly } : {}),
         },
       });
       return reply.send({ data: segment });
@@ -98,7 +100,8 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
       fastify.prisma,
       organizationId,
       segment.filters as unknown as FilterRule[],
-      (segment.match as MatchMode) ?? "all"
+      (segment.match as MatchMode) ?? "all",
+      (segment as { whatsappOptedOnly?: boolean }).whatsappOptedOnly ?? false
     );
     return reply.send({ data: result });
   });

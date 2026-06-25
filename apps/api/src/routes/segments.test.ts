@@ -145,3 +145,29 @@ describe("PATCH /v1/segments/:id", () => {
     );
   });
 });
+
+describe("PATCH /v1/segments/:id — whatsappOptedOnly", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("persists whatsappOptedOnly when patched", async () => {
+    mockPrisma.segment.findFirst.mockResolvedValue({
+      id: "seg-1", organizationId: "org-1", name: "VIP", filters: [], match: "all", whatsappOptedOnly: false,
+    });
+    mockPrisma.segment.update.mockResolvedValue({
+      id: "seg-1", organizationId: "org-1", name: "VIP", filters: [], match: "all", whatsappOptedOnly: true,
+    });
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/segments/seg-1",
+      payload: { whatsappOptedOnly: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.segment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ whatsappOptedOnly: true }),
+      })
+    );
+  });
+});
