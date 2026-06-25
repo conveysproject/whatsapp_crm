@@ -114,7 +114,8 @@ export async function runAutomationTrigger(
       // Optionally kick off a welcome flow
       if (settings.welcomeFlowId) {
         const flow = await prisma.flow.findFirst({
-          where: { id: settings.welcomeFlowId, isActive: true },
+          where: { id: settings.welcomeFlowId, organizationId, isActive: true },
+          select: { id: true, flowDefinition: true },
         });
         if (flow) {
           // Lazy import avoids circular dependency with flow-runner
