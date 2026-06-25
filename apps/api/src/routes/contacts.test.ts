@@ -68,6 +68,31 @@ async function buildApp(): Promise<FastifyInstance> {
   return app;
 }
 
+describe("GET /v1/contacts/tags", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns deduplicated sorted tags for org", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([
+      { tags: ["VIP", "customer"] },
+      { tags: ["VIP", "prospect"] },
+      { tags: [] },
+    ]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/tags" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: string[] }>();
+    expect(body.data).toEqual(["VIP", "customer", "prospect"]);
+  });
+
+  it("returns empty array when no tags exist", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([{ tags: [] }, { tags: [] }]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts/tags" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: string[] }>().data).toEqual([]);
+  });
+});
+
 describe("GET /v1/contacts", () => {
   let app: FastifyInstance;
   beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
