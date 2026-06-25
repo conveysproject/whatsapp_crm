@@ -71,6 +71,8 @@ export async function runIntentMatching(
   const result = await matchIntentToAutomation(messageBody, candidates);
   if (!result.matchedId || result.confidence < CONFIDENCE_THRESHOLD) return;
 
+  let actionFired = false;
+
   if (result.matchType === "auto_reply") {
     const matched = autoReplies.find((ar) => ar.id === result.matchedId);
     if (!matched) return;
@@ -92,11 +94,12 @@ export async function runIntentMatching(
         body: replyText,
         whatsappMessageId: messageId,
       });
+      actionFired = true;
     }
 
     if (matched.flowId) {
       const flow = await prisma.flow.findFirst({
-        where: { id: matched.flowId, isActive: true },
+        where: { id: matched.flowId, organizationId, isActive: true },
       });
       if (flow) {
         await runFlow(
@@ -105,11 +108,12 @@ export async function runIntentMatching(
           flow.flowDefinition as unknown as FlowDefinition,
           { conversationId, organizationId, contactPhone, messageBody }
         );
+        actionFired = true;
       }
     }
   } else if (result.matchType === "flow") {
     const flow = await prisma.flow.findFirst({
-      where: { id: result.matchedId, isActive: true },
+      where: { id: result.matchedId, organizationId, isActive: true },
     });
     if (flow) {
       await runFlow(
@@ -118,15 +122,18 @@ export async function runIntentMatching(
         flow.flowDefinition as unknown as FlowDefinition,
         { conversationId, organizationId, contactPhone, messageBody }
       );
+      actionFired = true;
     }
   }
 
-  await prisma.creditLedger.create({
-    data: {
-      organizationId,
-      credits: BigInt(-settings.intentMatchCostPaise),
-      type: "intent_match",
-      notes: `${result.matchType}:${result.matchedId}`,
-    },
-  });
+  if (actionFired) {
+    await prisma.creditLedger.create({
+      data: {
+        organizationId,
+        credits: BigInt(-settings.intentMatchCostPaise),
+        type: "intent_match",
+        notes: `${result.matchType}:${result.matchedId}`,
+      },
+    });
+  }
 }
