@@ -49,6 +49,7 @@ import { webhookEndpointsRouter } from "./webhook-endpoints.js";
 import { countriesRouter } from "./countries.js";
 import { rolesRouter } from "./roles.js";
 import { notificationsRouter } from "./notifications.js";
+import { automationSettingsRouter } from "./automation-settings.js";
 
 export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoute);
@@ -101,4 +102,5 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(countriesRouter, { prefix: "/v1" });
   await fastify.register(rolesRouter, { prefix: "/v1" });
   await fastify.register(notificationsRouter, { prefix: "/v1" });
+  await fastify.register(automationSettingsRouter, { prefix: "/v1" });
 };
