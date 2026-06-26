@@ -564,9 +564,11 @@ model Segment {
   name              String
   filters           Json             @default("[]")
   match             String           @default("all")
-  whatsappOptedOnly Boolean          @default(false) @map("whatsapp_opted_only")
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
+  whatsappOptedOnly  Boolean          @default(false) @map("whatsapp_opted_only")
+  lastContactCount   Int?             @map("last_contact_count")
+  lastSyncAt         DateTime?        @map("last_sync_at")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
   contacts          SegmentContact[]
   campaigns         CampaignSegment[]
 

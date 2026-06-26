@@ -104,6 +104,10 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
       (segment.match as MatchMode) ?? "all",
       (segment as { whatsappOptedOnly?: boolean }).whatsappOptedOnly ?? false
     );
+    await fastify.prisma.segment.update({
+      where: { id: request.params.id, organizationId },
+      data: { lastContactCount: result.count, lastSyncAt: new Date() },
+    });
     return reply.send({ data: result });
   });
 };
