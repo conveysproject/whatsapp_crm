@@ -9,6 +9,40 @@ interface EventBody {
 }
 
 export const contactEventsRouter: FastifyPluginAsync = async (fastify) => {
+  fastify.get("/contacts/events/names", async (request, reply) => {
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "contacts_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access required" } });
+    }
+    const rows = await fastify.prisma.contactEvent.groupBy({
+      by: ["name"],
+      where: { organizationId },
+    });
+    const names = rows.map((r) => r.name).sort();
+    return reply.send({ data: names });
+  });
+
+  fastify.get<{ Params: { name: string } }>(
+    "/contacts/events/:name/properties",
+    async (request, reply) => {
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccess(role, permissions, "contacts_access")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access required" } });
+      }
+      const events = await fastify.prisma.contactEvent.findMany({
+        where: { organizationId, name: request.params.name },
+        select: { properties: true },
+        take: 200,
+      });
+      const keySet = new Set<string>();
+      for (const ev of events) {
+        const props = ev.properties as Record<string, unknown>;
+        for (const key of Object.keys(props)) keySet.add(key);
+      }
+      return reply.send({ data: Array.from(keySet).sort() });
+    }
+  );
+
   fastify.post<{ Params: { id: ContactId }; Body: EventBody }>(
     "/contacts/:id/events",
     async (request, reply) => {
@@ -32,34 +66,6 @@ export const contactEventsRouter: FastifyPluginAsync = async (fastify) => {
         },
       });
       return reply.status(201).send({ data: event });
-    }
-  );
-
-  fastify.get("/contacts/events/names", async (request, reply) => {
-    const { organizationId } = request.auth;
-    const rows = await fastify.prisma.contactEvent.groupBy({
-      by: ["name"],
-      where: { organizationId },
-    });
-    const names = rows.map((r) => r.name).sort();
-    return reply.send({ data: names });
-  });
-
-  fastify.get<{ Params: { name: string } }>(
-    "/contacts/events/:name/properties",
-    async (request, reply) => {
-      const { organizationId } = request.auth;
-      const events = await fastify.prisma.contactEvent.findMany({
-        where: { organizationId, name: request.params.name },
-        select: { properties: true },
-        take: 200,
-      });
-      const keySet = new Set<string>();
-      for (const ev of events) {
-        const props = ev.properties as Record<string, unknown>;
-        for (const key of Object.keys(props)) keySet.add(key);
-      }
-      return reply.send({ data: Array.from(keySet).sort() });
     }
   );
 };

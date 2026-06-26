@@ -55,6 +55,23 @@ describe("POST /v1/contacts/:id/events", () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it("returns 403 when user lacks contacts_access", async () => {
+    vi.resetModules(); vi.clearAllMocks();
+    const appDeny = Fastify({ logger: false });
+    appDeny.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    appDeny.addHook("onRequest", async (request) => {
+      request.auth = { userId: "u-2", organizationId: "org-1", role: "agent" as const, permissions: {} };
+    });
+    const { contactEventsRouter } = await import("./contact-events.js");
+    await appDeny.register(contactEventsRouter, { prefix: "/v1" });
+    const res = await appDeny.inject({
+      method: "POST", url: "/v1/contacts/c-1/events",
+      payload: { name: "test_event" },
+    });
+    expect(res.statusCode).toBe(403);
+    await appDeny.close();
+  });
 });
 
 describe("GET /v1/contacts/events/names", () => {
