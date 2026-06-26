@@ -4,7 +4,7 @@
 **Status:** Design — pending approval
 **Goal:** Bring WBMSG's agent + team management to **100% functional parity** with Interakt's Sales CRM, reusing WBMSG's existing global roles (option B) and adding a per-team **Lead/Member** hierarchy that matches Interakt's Create Team panel.
 
-**Onboarding divergence (deliberate):** Interakt creates agents directly (collecting name + WhatsApp number for its OTP login). WBMSG already onboards via the **Invite Agent → Clerk** flow, so we keep that and simply add team assignment + seat-gating to it. No new "Create Agent" panel, no mobile/2FA — Clerk owns identity. The *outcome* (admin adds an agent with a role and team, seat-limited) is identical to Interakt; the mechanism is our existing Clerk invite.
+**Onboarding divergence (deliberate):** Interakt creates agents directly, with the admin typing the agent's name + WhatsApp number (the number feeds its OTP login). WBMSG keeps the existing **Invite Agent → Clerk** flow: the admin sets email + role + team; the invitee fills their own name + mobile on the acceptance page. We capture the same data (incl. mobile, for CRM display), but identity/login stays Clerk — no WhatsApp-2FA. Same outcome, our existing auth.
 
 ## Source of truth (Interakt articles + UI screenshots)
 
@@ -127,7 +127,16 @@ All routes org-scoped; mutations gated on `settings_access@settings_teams`.
 
 WBMSG already onboards agents through the **Invite Agent** modal → Clerk invitation. Interakt's "Create Agent" is the same action; we keep our invite flow and only add the team fields and seat-gating:
 
-- `POST /v1/invitations` gains optional `{ teamId?, teamRole? }`. These are stored on the invitation and applied to the `User` when Clerk provisions them on acceptance. (Email + role are unchanged. Name comes from Clerk at signup; mobile is not collected — it only fed Interakt's WhatsApp-2FA, which WBMSG does not use.)
+**Split of fields** — admin sets routing data at invite time; the invitee fills their own profile at acceptance (cleaner than Interakt, where the admin types everything):
+
+| Field | Collected at | By |
+|---|---|---|
+| Email, Role | Invite modal | Admin |
+| Team + Lead/Member | Invite modal | Admin |
+| Full name, Mobile no. | Acceptance page | Invitee |
+
+- `POST /v1/invitations` gains optional `{ teamId?, teamRole? }`, stored on the invitation and applied to the `User` on acceptance. Email + role unchanged.
+- `POST /v1/invitations/:token/accept` body gains `mobileNumber?` (and any other self-profile fields). The accept handler writes `fullName` + `mobileNumber` to the new `User`, and applies the invitation's `teamId`/`teamRole`. The acceptance page ([accept/page.tsx](../../../apps/web/app/invitations/[token]/accept/page.tsx)) already collects full name — add a mobile-number input alongside it.
 - `GET /v1/invitations/seat-status` (or fold into the existing org/usage endpoint) returns `{ used, limit, canAdd }` from `checkPlanLimit(prisma, orgId, "team_members")` (resource already defined in [plan-limits.ts](../../../apps/api/src/lib/plan-limits.ts)).
 - The **Invite Agent** button is disabled when `canAdd = false`, with an "Add Seats" link to billing — same seat-limit behavior Interakt describes.
 
@@ -177,7 +186,7 @@ UI follows the existing slide-over + react-query pattern in [AssignmentRulesTab.
 
 ## The one divergence (mechanism, not behavior)
 
-- **Onboarding + login:** Interakt creates agents directly and logs them in via WhatsApp-number + OTP. WBMSG uses the existing **Invite Agent → Clerk** flow (extended with team + seat-gating). Same outcome — an admin adds a role-assigned, team-assigned, seat-limited agent — via our existing auth. No mobile field, no WhatsApp-2FA, no new panel.
+- **Onboarding + login:** Interakt creates agents directly and logs them in via WhatsApp-number + OTP. WBMSG uses the existing **Invite Agent → Clerk** flow (admin sets email/role/team; invitee fills name/mobile at acceptance; seat-gated). Same data captured and same outcome — a role-assigned, team-assigned, seat-limited agent — but login stays Clerk. No WhatsApp-2FA, no new panel.
 
 ## Out of scope (YAGNI)
 
