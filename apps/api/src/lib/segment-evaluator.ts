@@ -185,11 +185,50 @@ function buildFieldsClause(rule: FieldsRule): Record<string, unknown> {
   }
 }
 
-function buildClause(rule: FilterRule): Record<string, unknown> {
+function buildSubConditionClause(sub: EventSubCondition): Record<string, unknown> {
+  // properties are stored as JSON — we query via path operator
+  // Prisma JSON path filter: { path: ["property"], string_contains: value }
+  const jsonPath = ["properties", sub.property];
+  switch (sub.operator) {
+    case "is":
+      return { properties: { path: jsonPath, equals: sub.value } };
+    case "isNot":
+      return { NOT: { properties: { path: jsonPath, equals: sub.value } } };
+    case "contains":
+      return { properties: { path: jsonPath, string_contains: sub.value } };
+    case "doesNotContain":
+      return { NOT: { properties: { path: jsonPath, string_contains: sub.value } } };
+    case "isEmpty":
+      return { NOT: { properties: { path: jsonPath, not: null } } };
+    case "hasAnyValue":
+      return { properties: { path: jsonPath, not: null } };
+    default:
+      return {};
+  }
+}
+
+function buildEventsClause(rule: EventsRule, organizationId: string): Record<string, unknown> {
+  const subClauses = rule.subConditions
+    .map(buildSubConditionClause)
+    .filter((c) => Object.keys(c).length > 0);
+  const subMatchKey = rule.subMatch === "or" ? "OR" : "AND";
+
+  return {
+    contactEvents: {
+      some: {
+        organizationId,
+        name: rule.eventName,
+        ...(subClauses.length > 0 ? { [subMatchKey]: subClauses } : {}),
+      },
+    },
+  };
+}
+
+function buildClause(rule: FilterRule, organizationId: string): Record<string, unknown> {
   switch (rule.type) {
     case "tags":    return buildTagsClause(rule);
     case "fields":  return buildFieldsClause(rule);
-    case "events":  return {}; // handled in PR2
+    case "events":  return buildEventsClause(rule, organizationId);
   }
 }
 
@@ -204,8 +243,7 @@ export async function evaluateSegment(
 ): Promise<EvaluateResult> {
   const normalized = filters.map(normalizeRule);
   const clauses = normalized
-    .filter((r) => r.type !== "events")
-    .map(buildClause)
+    .map((r) => buildClause(r, organizationId))
     .filter((c) => Object.keys(c).length > 0);
 
   const matchKey = match === "any" ? "OR" : "AND";

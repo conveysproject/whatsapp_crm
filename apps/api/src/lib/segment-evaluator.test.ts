@@ -5,6 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 const mockFindMany = vi.fn();
 const mockPrisma = {
   contact: { findMany: mockFindMany },
+  contactEvent: { findMany: vi.fn() },
 } as unknown as PrismaClient;
 
 beforeEach(() => { vi.clearAllMocks(); });
@@ -212,5 +213,44 @@ describe("evaluateSegment — new type format", () => {
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ AND: [{ tags: { has: "VIP" } }] }),
     }));
+  });
+});
+
+describe("evaluateSegment — events rules", () => {
+  it("evaluates EventsRule hasDone with no sub-conditions", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    await evaluateSegment(mockPrisma, "org-1", [
+      {
+        type: "events",
+        action: "hasDone",
+        eventName: "flow_completed",
+        subConditions: [],
+        subMatch: "and",
+      },
+    ], "all");
+    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        AND: [{ contactEvents: { some: { organizationId: "org-1", name: "flow_completed" } } }],
+      }),
+    }));
+  });
+
+  it("evaluates EventsRule with sub-condition", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    await evaluateSegment(mockPrisma, "org-1", [
+      {
+        type: "events",
+        action: "hasDone",
+        eventName: "flow_completed",
+        subConditions: [{ property: "flowId", operator: "is", value: "f-1" }],
+        subMatch: "and",
+      },
+    ], "all");
+    const call = mockFindMany.mock.calls[0][0];
+    const eventClause = call.where.AND[0];
+    expect(eventClause.contactEvents.some.name).toBe("flow_completed");
+    expect(eventClause.contactEvents.some.AND).toBeDefined();
   });
 });
