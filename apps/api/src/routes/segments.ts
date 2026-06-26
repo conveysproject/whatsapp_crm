@@ -36,13 +36,19 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
     if (!canAccess(role, permissions, "contacts_access")) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Permission required: contacts_access" } });
     }
+    const filters = request.body.filters ?? [];
+    const match = request.body.match ?? "all";
+    const whatsappOptedOnly = request.body.whatsappOptedOnly ?? false;
+    const evalResult = await evaluateSegment(fastify.prisma, organizationId, filters, match, whatsappOptedOnly);
     const segment = await fastify.prisma.segment.create({
       data: {
         organizationId,
         name: request.body.name,
-        filters: request.body.filters as object,
-        match: request.body.match ?? "all",
-        whatsappOptedOnly: request.body.whatsappOptedOnly ?? false,
+        filters: filters as object,
+        match,
+        whatsappOptedOnly,
+        lastContactCount: evalResult.count,
+        lastSyncAt: new Date(),
       },
     });
     return reply.status(201).send({ data: segment });
@@ -61,6 +67,10 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
       if (!existing) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
       }
+      const updatedFilters = request.body.filters ?? (existing.filters as unknown as FilterRule[]);
+      const updatedMatch = (request.body.match ?? existing.match) as MatchMode;
+      const updatedOptedOnly = request.body.whatsappOptedOnly ?? (existing as { whatsappOptedOnly?: boolean }).whatsappOptedOnly ?? false;
+      const evalResult = await evaluateSegment(fastify.prisma, organizationId, updatedFilters, updatedMatch, updatedOptedOnly);
       const segment = await fastify.prisma.segment.update({
         where: { id: request.params.id, organizationId },
         data: {
@@ -68,6 +78,8 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
           ...(request.body.filters !== undefined ? { filters: request.body.filters as object } : {}),
           ...(request.body.match !== undefined ? { match: request.body.match } : {}),
           ...(request.body.whatsappOptedOnly !== undefined ? { whatsappOptedOnly: request.body.whatsappOptedOnly } : {}),
+          lastContactCount: evalResult.count,
+          lastSyncAt: new Date(),
         },
       });
       return reply.send({ data: segment });
@@ -97,13 +109,10 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
     if (!segment) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
     }
-    const result = await evaluateSegment(
-      fastify.prisma,
-      organizationId,
-      segment.filters as unknown as FilterRule[],
-      (segment.match as MatchMode) ?? "all",
-      (segment as { whatsappOptedOnly?: boolean }).whatsappOptedOnly ?? false
-    );
+    const filters = segment.filters as unknown as FilterRule[];
+    const match = (segment.match as MatchMode) ?? "all";
+    const whatsappOptedOnly = (segment as { whatsappOptedOnly?: boolean }).whatsappOptedOnly ?? false;
+    const result = await evaluateSegment(fastify.prisma, organizationId, filters, match, whatsappOptedOnly);
     await fastify.prisma.segment.update({
       where: { id: request.params.id, organizationId },
       data: { lastContactCount: result.count, lastSyncAt: new Date() },
