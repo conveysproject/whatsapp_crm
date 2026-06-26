@@ -101,23 +101,31 @@ export const teamsRouter: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ error: { code: "NO_LEAD", message: "A team must have at least one Lead" } });
       }
 
-      await fastify.prisma.team.update({
-        where: { id: team.id },
-        data: {
-          ...(name !== undefined ? { name } : {}),
-          ...(viewAllContacts !== undefined ? { viewAllContacts } : {}),
-        },
-      });
-
+      // Validate member org-membership BEFORE any write.
+      let memberIds: string[] | undefined;
       if (members) {
-        const ids = members.map((m) => m.userId);
-        const orgUsers = await fastify.prisma.user.findMany({ where: { organizationId, id: { in: ids } }, select: { id: true } });
-        if (orgUsers.length !== ids.length) {
+        memberIds = members.map((m) => m.userId);
+        const orgUsers = await fastify.prisma.user.findMany({ where: { organizationId, id: { in: memberIds } }, select: { id: true } });
+        if (orgUsers.length !== memberIds.length) {
           return reply.status(400).send({ error: { code: "INVALID_MEMBER", message: "All members must belong to this organization" } });
         }
+      }
+
+      // All validation passed — now write.
+      if (name !== undefined || viewAllContacts !== undefined) {
+        await fastify.prisma.team.update({
+          where: { id: team.id },
+          data: {
+            ...(name !== undefined ? { name } : {}),
+            ...(viewAllContacts !== undefined ? { viewAllContacts } : {}),
+          },
+        });
+      }
+
+      if (members && memberIds) {
         // Drop members no longer listed, then upsert the listed ones.
         await fastify.prisma.user.updateMany({
-          where: { organizationId, teamId: team.id, id: { notIn: ids } },
+          where: { organizationId, teamId: team.id, id: { notIn: memberIds } },
           data: { teamId: null, teamRole: null },
         });
         await fastify.prisma.$transaction(

@@ -187,6 +187,29 @@ describe("PATCH /v1/teams/:id", () => {
     await noPermApp.close();
     expect(res.statusCode).toBe(403);
   });
+
+  it("evicts dropped members when PATCH provides a new members list (200)", async () => {
+    mockPrisma.team.findFirst.mockResolvedValue({ id: "t1" });
+    mockPrisma.user.findMany.mockResolvedValue([{ id: "u2" }]);
+    mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.user.update.mockResolvedValue({});
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/teams/t1",
+      payload: { members: [{ userId: "u2", teamRole: "lead" }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.user.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: "org-1",
+          teamId: "t1",
+          id: { notIn: ["u2"] },
+        }),
+        data: { teamId: null, teamRole: null },
+      }),
+    );
+  });
 });
 
 describe("DELETE /v1/teams/:id", () => {
