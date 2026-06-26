@@ -867,3 +867,51 @@ describe("PATCH /v1/contacts/:id — salesCycleEnteredAt", () => {
     expect(updateArg.data["salesCycleEnteredAt"]).toBeUndefined();
   });
 });
+
+describe("PATCH /v1/contacts/:id — closureDeadline", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("sets closureDeadline and resets closureAlertedAt", async () => {
+    const existing = { id: "c-1", organizationId: "org-1", phoneNumber: "919000000001", tags: [], leadStatusId: "ls-1" };
+    mockPrisma.contact.findFirst.mockResolvedValue(existing);
+    mockPrisma.contact.update.mockResolvedValue({ ...existing, closureDeadline: new Date("2026-08-01") });
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/contacts/c-1",
+      payload: { closureDeadline: "2026-08-01T00:00:00.000Z" },
+    });
+    expect(res.statusCode).toBe(200);
+    const updateArg = mockPrisma.contact.update.mock.calls.at(-1)![0] as { data: Record<string, unknown> };
+    expect(updateArg.data["closureDeadline"]).toBeInstanceOf(Date);
+    expect(updateArg.data["closureAlertedAt"]).toBeNull();
+  });
+
+  it("clears closureDeadline when null is sent", async () => {
+    const existing = { id: "c-1", organizationId: "org-1", phoneNumber: "919000000001", tags: [], leadStatusId: "ls-1" };
+    mockPrisma.contact.findFirst.mockResolvedValue(existing);
+    mockPrisma.contact.update.mockResolvedValue({ ...existing, closureDeadline: null });
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/contacts/c-1",
+      payload: { closureDeadline: null },
+    });
+    expect(res.statusCode).toBe(200);
+    const updateArg = mockPrisma.contact.update.mock.calls.at(-1)![0] as { data: Record<string, unknown> };
+    expect(updateArg.data["closureDeadline"]).toBeNull();
+    expect(updateArg.data["closureAlertedAt"]).toBeNull();
+  });
+
+  it("rejects an invalid date string with 400", async () => {
+    const existing = { id: "c-1", organizationId: "org-1", phoneNumber: "919000000001", tags: [], leadStatusId: "ls-1" };
+    mockPrisma.contact.findFirst.mockResolvedValue(existing);
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/contacts/c-1",
+      payload: { closureDeadline: "not-a-date" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.contact.update).not.toHaveBeenCalled();
+  });
+});

@@ -96,6 +96,7 @@ interface ContactPatchBody {
   lastName?: string;
   email?: string;
   leadStatusId?: string;
+  closureDeadline?: string | null;
   tags?: string[];
   customFields?: Record<string, unknown>;
   countryId?: number | null;
@@ -474,6 +475,14 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
         if (!ls) return reply.status(400).send({ error: { code: "INVALID_LEAD_STATUS", message: "leadStatusId not found in organization" } });
       }
 
+      // Validate closureDeadline if provided
+      if (request.body.closureDeadline !== undefined && request.body.closureDeadline !== null) {
+        const parsed = new Date(request.body.closureDeadline);
+        if (isNaN(parsed.getTime())) {
+          return reply.status(400).send({ error: { code: "INVALID_DATE", message: "closureDeadline must be a valid ISO 8601 date string" } });
+        }
+      }
+
       const { firstName, lastName } = request.body;
       const derivedName =
         request.body.name ??
@@ -498,6 +507,12 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           ...(request.body.disableBot !== undefined ? { disableBot: request.body.disableBot } : {}),
           ...(request.body.notes !== undefined ? { notes: request.body.notes } : {}),
           ...("assignedUserId" in request.body ? { assignedUserId: request.body.assignedUserId ?? null } : {}),
+          ...("closureDeadline" in request.body
+            ? {
+                closureDeadline: request.body.closureDeadline ? new Date(request.body.closureDeadline) : null,
+                closureAlertedAt: null,
+              }
+            : {}),
         },
       });
 
