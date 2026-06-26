@@ -47,6 +47,9 @@ const mockPrisma = {
   user: {
     findMany: vi.fn().mockResolvedValue([]),
   },
+  team: {
+    findFirst: vi.fn().mockResolvedValue(null),
+  },
   $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
 };
 
@@ -87,6 +90,24 @@ async function buildAppAsViewer(): Promise<FastifyInstance> {
     await instance.register(contactsRouter);
   }, { prefix: "/v1" });
   await app.ready();
+  return app;
+}
+
+async function buildAppAsAgent(): Promise<FastifyInstance> {
+  const app = Fastify({ logger: false });
+  app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+  app.addHook("onRequest", async (request) => {
+    request.auth = {
+      userId: "agent-1",
+      organizationId: "org-1",
+      role: "agent" as const,
+      permissions: { contacts_access: "allow" },
+      teamId: null,
+      teamRole: null,
+    };
+  });
+  const { contactsRouter } = await import("./contacts.js");
+  await app.register(contactsRouter, { prefix: "/v1" });
   return app;
 }
 
@@ -430,6 +451,20 @@ describe("POST /v1/contacts/bulk/assign-groups", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(mockPrisma.groupContact.createMany).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("contact visibility — agent scoping", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildAppAsAgent(); });
+  afterEach(async () => { await app.close(); });
+
+  it("scopes contact list to assigned-only for a plain agent", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts" });
+    expect(res.statusCode).toBe(200);
+    const callArg = mockPrisma.contact.findMany.mock.calls[0][0] as { where: Record<string, unknown> };
+    expect(callArg.where.assignedUserId).toBe("agent-1");
   });
 });
 

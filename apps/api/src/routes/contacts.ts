@@ -10,6 +10,8 @@ import { normalizeFullPhone } from "../lib/phone-normalize.js";
 import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
 import { computeClosureDeadline } from "../lib/closure-deadline.js";
 import { applyAssignmentRules } from "../lib/assignment-engine.js";
+import { buildVisibilityWhere, type VisibilityAuth } from "../lib/visibility.js";
+import type { AuthContext } from "../types/fastify.js";
 
 function csvEscape(value: string): string {
   const str = value.replace(/"/g, '""');
@@ -21,9 +23,10 @@ function csvEscape(value: string): string {
 
 async function buildExportWhere(
   prisma: PrismaClient,
-  organizationId: string,
+  auth: AuthContext,
   rawUrl: string,
 ): Promise<Prisma.ContactWhereInput> {
+  const { organizationId } = auth;
   const rawSearch = rawUrl.split("?")[1] ?? "";
   const usp = new URLSearchParams(rawSearch);
 
@@ -64,15 +67,41 @@ async function buildExportWhere(
     }));
   }
 
+  const visWhere = await contactVisibilityWhere(prisma, auth);
+
   return {
     organizationId,
     deletedAt: null,
+    ...(visWhere ?? {}),
     ...(leadStatusIds.length > 0 && { leadStatusId: { in: leadStatusIds } }),
     ...(tags.length > 0 && { tags: { hasEvery: tags } }),
     ...(segmentContactIds !== undefined && { id: { in: segmentContactIds } }),
     ...(groupIds.length > 0 && { groupContacts: { some: { contactGroupId: { in: groupIds } } } }),
     ...(cfClauses.length > 0 && { AND: cfClauses }),
   };
+}
+
+async function contactVisibilityWhere(
+  prisma: PrismaClient,
+  auth: AuthContext,
+  field: "assignedUserId" = "assignedUserId",
+): Promise<Record<string, unknown> | undefined> {
+  // Org-wide roles short-circuit before any team lookup.
+  if (auth.role === "superAdmin" || auth.role === "admin" || auth.role === "viewer") return undefined;
+  let teamViewAll = false;
+  let teamMemberIds: string[] = [];
+  if (auth.teamId) {
+    const [team, members] = await Promise.all([
+      prisma.team.findFirst({ where: { id: auth.teamId, organizationId: auth.organizationId }, select: { viewAllContacts: true } }),
+      prisma.user.findMany({ where: { organizationId: auth.organizationId, teamId: auth.teamId }, select: { id: true } }),
+    ]);
+    teamViewAll = team?.viewAllContacts ?? false;
+    teamMemberIds = members.map((m) => m.id);
+  }
+  const va: VisibilityAuth = {
+    userId: auth.userId, role: auth.role, teamId: auth.teamId, teamRole: auth.teamRole, teamViewAll,
+  };
+  return buildVisibilityWhere(va, teamMemberIds, field);
 }
 
 interface ContactBody {
@@ -127,7 +156,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     if (!canAccessSub(role, permissions, "contacts_access", "contacts_export")) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access permission required" } });
     }
-    const where = await buildExportWhere(fastify.prisma, organizationId, request.raw.url ?? "");
+    const where = await buildExportWhere(fastify.prisma, request.auth, request.raw.url ?? "");
     const count = await fastify.prisma.contact.count({ where });
     return reply.send({ data: { count } });
   });
@@ -171,7 +200,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     }
 
     // Default: rich CSV with filters
-    const where = await buildExportWhere(fastify.prisma, organizationId, request.raw.url ?? "");
+    const where = await buildExportWhere(fastify.prisma, request.auth, request.raw.url ?? "");
 
     const [customFields, contacts] = await Promise.all([
       fastify.prisma.contactCustomField.findMany({
@@ -322,12 +351,14 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const tagFilter = query["tag"];
 
     const countryId = query["countryId"] ? parseInt(query["countryId"], 10) : undefined;
+    const visWhere = await contactVisibilityWhere(fastify.prisma, request.auth);
 
     const contacts = await fastify.prisma.contact.findMany({
       where: {
         organizationId,
         deletedAt: null,
         ...(nonSalesClosureFilter ?? {}),
+        ...(visWhere ?? {}),
         ...(cursor ? { id: { gt: cursor } } : {}),
         ...(tagFilter ? { tags: { has: tagFilter } } : {}),
         ...(countryId && !isNaN(countryId) ? { countryId } : {}),
@@ -374,8 +405,9 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.get<{ Params: { id: ContactId } }>("/contacts/:id", async (request, reply) => {
     const { organizationId, permissions } = request.auth;
+    const visWhere = await contactVisibilityWhere(fastify.prisma, request.auth);
     const contact = await fastify.prisma.contact.findFirst({
-      where: { id: request.params.id, organizationId, deletedAt: null },
+      where: { id: request.params.id, organizationId, deletedAt: null, ...(visWhere ?? {}) },
       include: {
         country: true,
         leadStatus: { select: { id: true, name: true, color: true } },
