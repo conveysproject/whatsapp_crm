@@ -18,7 +18,6 @@ interface LeadStatus {
   name: string;
   color: string;
   sortOrder: number;
-  isClosure: boolean;
 }
 
 export default function LeadStatusesTab(): JSX.Element {

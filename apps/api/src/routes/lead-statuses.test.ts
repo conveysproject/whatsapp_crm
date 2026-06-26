@@ -42,6 +42,28 @@ describe("lead-statuses API", () => {
     }));
   });
 
+  it("POST ignores isClosure in body — field is dropped", async () => {
+    mockPrisma.leadStatus.aggregate.mockResolvedValue({ _max: { sortOrder: null } });
+    mockPrisma.leadStatus.create.mockResolvedValue({ id: "s-new", organizationId: "org-1", name: "Won", color: "#10B981", sortOrder: 0 });
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/lead-statuses",
+      payload: { name: "Won", color: "#10B981", isClosure: true },
+    });
+    expect(res.statusCode).toBe(201);
+    const createArg = mockPrisma.leadStatus.create.mock.calls.at(-1)![0] as { data: Record<string, unknown> };
+    expect(createArg.data).not.toHaveProperty("isClosure");
+  });
+
+  it("PATCH ignores isClosure in body", async () => {
+    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "s1", organizationId: "org-1", name: "Old", color: "#aaa", sortOrder: 0 });
+    mockPrisma.leadStatus.update.mockResolvedValue({ id: "s1", organizationId: "org-1", name: "Old", color: "#bbb", sortOrder: 0 });
+    const res = await app.inject({ method: "PATCH", url: "/v1/lead-statuses/s1", payload: { color: "#bbb", isClosure: false } });
+    expect(res.statusCode).toBe(200);
+    const updateArg = mockPrisma.leadStatus.update.mock.calls.at(-1)![0] as { data: Record<string, unknown> };
+    expect(updateArg.data).not.toHaveProperty("isClosure");
+  });
+
   it("POST appends with sortOrder = max + 1", async () => {
     mockPrisma.leadStatus.aggregate.mockResolvedValue({ _max: { sortOrder: 4 } });
     mockPrisma.leadStatus.create.mockResolvedValue({ id: "s3", name: "Won", color: "#10B981", sortOrder: 5 });

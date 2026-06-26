@@ -6,7 +6,6 @@ const NAME_RE = /[^a-zA-Z0-9 \-_]/;
 interface StatusBody {
   name: string;
   color: string;
-  isClosure?: boolean;
 }
 
 function forbidden(): { error: { code: string; message: string } } {
@@ -30,7 +29,7 @@ export const leadStatusesRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: StatusBody }>("/lead-statuses", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
     if (!canAccessSub(role, permissions, "contacts_access", "contacts_manage_custom_fields")) return reply.status(403).send(forbidden());
-    const { name, color, isClosure } = request.body;
+    const { name, color } = request.body;
     if (!name?.trim() || !color?.trim()) {
       return reply.status(400).send({ error: { code: "MISSING_FIELDS", message: "name and color are required" } });
     }
@@ -44,7 +43,7 @@ export const leadStatusesRouter: FastifyPluginAsync = async (fastify) => {
     const sortOrder = (max._max.sortOrder ?? -1) + 1;
     try {
       const data = await fastify.prisma.leadStatus.create({
-        data: { organizationId, name: name.trim(), color: color.trim(), sortOrder, isClosure: isClosure ?? false },
+        data: { organizationId, name: name.trim(), color: color.trim(), sortOrder },
       });
       return reply.status(201).send({ data });
     } catch (err) {
@@ -77,7 +76,7 @@ export const leadStatusesRouter: FastifyPluginAsync = async (fastify) => {
     if (!canAccessSub(role, permissions, "contacts_access", "contacts_manage_custom_fields")) return reply.status(403).send(forbidden());
     const existing = await fastify.prisma.leadStatus.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Lead status not found" } });
-    const { name, color, isClosure } = request.body;
+    const { name, color } = request.body;
     if (name !== undefined && NAME_RE.test(name.trim())) {
       return reply.status(400).send({ error: { code: "INVALID_NAME", message: "Status names may only contain letters, numbers, spaces, hyphens, and underscores" } });
     }
@@ -87,7 +86,6 @@ export const leadStatusesRouter: FastifyPluginAsync = async (fastify) => {
         data: {
           ...(name !== undefined ? { name: name.trim() } : {}),
           ...(color !== undefined ? { color: color.trim() } : {}),
-          ...(isClosure !== undefined ? { isClosure } : {}),
         },
       });
       return reply.send({ data });

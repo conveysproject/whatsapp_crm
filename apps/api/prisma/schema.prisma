@@ -582,7 +582,6 @@ model LeadStatus {
   name           String
   color          String
   sortOrder      Int       @default(0) @map("sort_order")
-  isClosure      Boolean   @default(false) @map("is_closure")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
   contacts       Contact[]
