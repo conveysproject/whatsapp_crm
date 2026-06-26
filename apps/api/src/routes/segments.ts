@@ -42,6 +42,7 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
         name: request.body.name,
         filters: request.body.filters as object,
         match: request.body.match ?? "all",
+        whatsappOptedOnly: request.body.whatsappOptedOnly ?? false,
       },
     });
     return reply.status(201).send({ data: segment });
