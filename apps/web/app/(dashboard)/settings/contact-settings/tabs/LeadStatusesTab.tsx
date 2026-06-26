@@ -28,6 +28,7 @@ export default function LeadStatusesTab(): JSX.Element {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<StatusDraft | null | undefined>(undefined); // undefined=closed, null=add, draft=edit
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const { data: statuses = [], isLoading } = useQuery<LeadStatus[]>({
     queryKey: ["lead-statuses"],
@@ -64,7 +65,7 @@ export default function LeadStatusesTab(): JSX.Element {
       if (res.status === 409) throw new Error("This status is assigned to contacts — reassign them before deleting.");
       if (!res.ok) throw new Error("Failed to delete status");
     },
-    onSuccess: () => { setError(null); void qc.invalidateQueries({ queryKey: ["lead-statuses"] }); },
+    onSuccess: () => { setError(null); setDeleteTarget(null); void qc.invalidateQueries({ queryKey: ["lead-statuses"] }); },
     onError: (e: Error) => setError(e.message),
   });
 
@@ -130,7 +131,7 @@ export default function LeadStatusesTab(): JSX.Element {
                     status={s}
                     canManage={canManage}
                     onEdit={() => { setError(null); setEditing({ id: s.id, name: s.name, color: s.color }); }}
-                    onDelete={() => remove.mutate(s.id)}
+                    onDelete={() => { setError(null); setDeleteTarget({ id: s.id, name: s.name }); }}
                   />
                 ))}
               </div>
@@ -146,6 +147,35 @@ export default function LeadStatusesTab(): JSX.Element {
           onSave={(draft) => save.mutate(draft)}
           onClose={() => setEditing(undefined)}
         />
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteTarget(null)} />
+          <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+            <h3 className="text-base font-semibold text-gray-900 mb-2">
+              Delete &ldquo;{deleteTarget.name}&rdquo;?
+            </h3>
+            <p className="text-sm text-gray-500 mb-5">
+              Contacts using this status will be moved to Unassigned.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { remove.mutate(deleteTarget.id); }}
+                disabled={remove.isPending}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {remove.isPending ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -2,7 +2,20 @@
 
 import { JSX, useState } from "react";
 
-const SWATCHES = ["#FACC15", "#F87171", "#22C55E", "#EC4899", "#3B82F6"] as const;
+const SWATCHES = [
+  "#3B82F6", // blue
+  "#22C55E", // green
+  "#10B981", // emerald
+  "#14B8A6", // teal
+  "#8B5CF6", // violet
+  "#EC4899", // pink
+  "#F97316", // orange
+  "#EF4444", // red
+  "#FACC15", // yellow
+  "#64748B", // slate
+] as const;
+
+const NAME_RE = /[^a-zA-Z0-9 \-_]/;
 
 export interface StatusDraft {
   id?: string;
@@ -23,6 +36,7 @@ export default function StatusSlideOver({
 }): JSX.Element {
   const [name, setName] = useState(initial?.name ?? "");
   const [color, setColor] = useState(initial?.color ?? SWATCHES[0]);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -37,14 +51,18 @@ export default function StatusSlideOver({
             <label className="text-sm font-medium text-gray-700">Status Name</label>
             <input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setNameError(NAME_RE.test(e.target.value) ? "Only letters, numbers, spaces, hyphens, and underscores." : null);
+              }}
               placeholder="Enter status name"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
+            {nameError && <p className="text-xs text-red-500 mt-1">{nameError}</p>}
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700">Select Colour</label>
-            <div className="flex items-center gap-3">
+            <div className="grid grid-cols-5 gap-3">
               {SWATCHES.map((sw) => (
                 <button
                   key={sw}
@@ -61,7 +79,7 @@ export default function StatusSlideOver({
         <div className="px-6 py-4 border-t border-gray-200">
           <button
             onClick={() => onSave({ name: name.trim(), color })}
-            disabled={saving || !name.trim()}
+            disabled={saving || !name.trim() || !!nameError}
             className="w-full py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50"
           >
             {saving ? "Saving…" : "Save"}
