@@ -21,6 +21,11 @@ enum Role {
   viewer
 }
 
+enum TeamRole {
+  lead
+  member
+}
+
 enum InvitationStatus {
   pending
   accepted
@@ -298,6 +303,9 @@ model User {
   availability   String    @default("online") @map("availability")
   username       String?   @unique
   mobileNumber   String?   @map("mobile_number")
+  teamId       String?   @map("team_id")
+  teamRole     TeamRole? @map("team_role")
+  team         Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
   lastSignInAt   DateTime? @map("last_sign_in_at")
   settings       Json      @default("{}") // notification prefs, language, timezone, UI preferences
   deletedAt      DateTime? @map("deleted_at")
@@ -308,6 +316,7 @@ model User {
   memberships  OrganizationMember[]
 
   @@index([organizationId])
+  @@index([organizationId, teamId])
   @@map("users")
 }
 
@@ -813,6 +822,8 @@ model Team {
   organizationId String         @map("organization_id")
   name           String
   description    String?
+  viewAllContacts Boolean @default(false) @map("view_all_contacts")
+  members         User[]
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
   conversations  Conversation[]
