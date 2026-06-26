@@ -4,7 +4,7 @@ import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Trash2, PlusCircle } from "lucide-react";
 import { Dropdown, type DropdownOption } from "./Dropdown";
-import type { FilterRule, FilterTab, FieldsRule, MatchMode, RowState, TagsRule } from "./types";
+import type { FilterRule, FilterTab, FieldsRule, MatchMode, RowState, TagsRule, EventsRule, EventSubCondition } from "./types";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -113,14 +113,11 @@ function TabSwitcher({ active, onChange }: { active: FilterTab; onChange: (t: Fi
         <button
           key={t}
           type="button"
-          disabled={t === "events"}
           onClick={() => onChange(t)}
           className={`rounded-full px-4 py-1 text-sm font-medium transition-colors capitalize ${
-            t === "events"
-              ? "opacity-50 cursor-not-allowed text-gray-300"
-              : active === t
-                ? "bg-[#1D4B3E] text-white shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
+            active === t
+              ? "bg-[#1D4B3E] text-white shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
           }`}
         >
           {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -255,12 +252,136 @@ function FieldsRowContent({
   );
 }
 
-// ── Events placeholder ────────────────────────────────────────────────────────
+// ── Events row content ────────────────────────────────────────────────────────
 
-function EventsPlaceholder(): JSX.Element {
+function EventsRowContent({
+  rule,
+  eventNames,
+  getEventProperties,
+  onChange,
+}: {
+  rule: EventsRule;
+  eventNames: DropdownOption[];
+  getEventProperties: (name: string) => DropdownOption[];
+  onChange: (r: EventsRule) => void;
+}): JSX.Element {
+  const SUB_OPERATORS: DropdownOption[] = [
+    { value: "is",             label: "Is" },
+    { value: "isNot",          label: "Is not" },
+    { value: "contains",       label: "Contains" },
+    { value: "doesNotContain", label: "Does not contain" },
+    { value: "isEmpty",        label: "Is empty" },
+    { value: "hasAnyValue",    label: "Has any value" },
+  ];
+
+  const propertyOptions = getEventProperties(rule.eventName);
+
+  function addSub(): void {
+    onChange({
+      ...rule,
+      subConditions: [
+        ...rule.subConditions,
+        { property: "", operator: "is", value: "" },
+      ],
+    });
+  }
+
+  function updateSub(i: number, patch: Partial<EventSubCondition>): void {
+    onChange({
+      ...rule,
+      subConditions: rule.subConditions.map((s, idx) => (idx === i ? { ...s, ...patch } : s)),
+    });
+  }
+
+  function removeSub(i: number): void {
+    onChange({
+      ...rule,
+      subConditions: rule.subConditions.filter((_, idx) => idx !== i),
+    });
+  }
+
+  const needsSubValue = (op: string) => !["isEmpty", "hasAnyValue"].includes(op);
+
   return (
-    <div className="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-400 text-center">
-      Event-based filtering coming soon
+    <div className="space-y-3">
+      {/* Event action + name */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700 font-medium">
+          Has Done
+        </span>
+        <span className="text-gray-300 text-lg">·········</span>
+        <Dropdown
+          options={eventNames}
+          value={rule.eventName}
+          onChange={(v) => onChange({ ...rule, eventName: v, subConditions: [] })}
+          placeholder="Select Event Name"
+          searchable
+          className="w-52"
+        />
+      </div>
+
+      {/* Sub-conditions */}
+      {rule.subConditions.map((sub, i) => (
+        <div key={i} className="flex items-center gap-3 pl-8 flex-wrap">
+          {/* With / AND / OR label */}
+          {i === 0 ? (
+            <span className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              With
+            </span>
+          ) : (
+            <Dropdown
+              options={[{ value: "and", label: "AND" }, { value: "or", label: "OR" }]}
+              value={rule.subMatch}
+              onChange={(v) => onChange({ ...rule, subMatch: v as "and" | "or" })}
+              className="w-20"
+            />
+          )}
+          <span className="text-gray-300 text-lg">·········</span>
+          <Dropdown
+            options={propertyOptions}
+            value={sub.property}
+            onChange={(v) => updateSub(i, { property: v })}
+            placeholder="Select Property"
+            className="w-40"
+          />
+          <span className="text-gray-300 text-lg">·········</span>
+          <Dropdown
+            options={SUB_OPERATORS}
+            value={sub.operator}
+            onChange={(v) => updateSub(i, { operator: v as EventSubCondition["operator"], value: "" })}
+            className="w-40"
+          />
+          {needsSubValue(sub.operator) && (
+            <>
+              <span className="text-gray-300 text-lg">·········</span>
+              <input
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-40"
+                placeholder="Enter a value"
+                value={sub.value ?? ""}
+                onChange={(e) => updateSub(i, { value: e.target.value })}
+              />
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => removeSub(i)}
+            className="text-red-400 hover:text-red-600"
+            aria-label="Remove sub-condition"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+
+      {/* Add condition within event */}
+      <button
+        type="button"
+        onClick={addSub}
+        className="flex items-center gap-2 text-sm text-[#1D4B3E] hover:text-green-700 pl-8"
+      >
+        <PlusCircle className="h-4 w-4" />
+        Add Condition within Event
+      </button>
     </div>
   );
 }
@@ -310,15 +431,18 @@ export function SegmentBuilderV2({
   const [tags, setTags] = useState<DropdownOption[]>([]);
   const [leadStatuses, setLeadStatuses] = useState<DropdownOption[]>([]);
   const [customFields, setCustomFields] = useState<DropdownOption[]>([]);
+  const [eventNames, setEventNames] = useState<DropdownOption[]>([]);
+  const [eventProperties, setEventProperties] = useState<Record<string, DropdownOption[]>>({});
 
   useEffect(() => {
     void (async () => {
       const token = await getToken();
       const headers = { Authorization: `Bearer ${token ?? ""}` };
-      const [tagsRes, statusRes, cfRes] = await Promise.all([
+      const [tagsRes, statusRes, cfRes, eventsRes] = await Promise.all([
         fetch(`${API_URL}/v1/contacts/tags`, { headers }),
         fetch(`${API_URL}/v1/contacts/lead-statuses`, { headers }),
         fetch(`${API_URL}/v1/contacts/custom-fields`, { headers }),
+        fetch(`${API_URL}/v1/contacts/events/names`, { headers }),
       ]);
       if (tagsRes.ok) {
         const body = (await tagsRes.json()) as { data: string[] };
@@ -332,6 +456,10 @@ export function SegmentBuilderV2({
         const body = (await cfRes.json()) as { data: Array<{ id: string; inputName: string }> };
         setCustomFields(body.data.map((cf) => ({ value: cf.id, label: cf.inputName })));
       }
+      if (eventsRes.ok) {
+        const body = (await eventsRes.json()) as { data: string[] };
+        setEventNames(body.data.map((n) => ({ value: n, label: n.replace(/_/g, " ") })));
+      }
     })();
   }, [getToken]);
 
@@ -342,11 +470,32 @@ export function SegmentBuilderV2({
   }
 
   function changeTab(index: number, tab: FilterTab): void {
-    if (tab === "events") return; // disabled in PR1
     const rule = defaultRule(tab);
     const next = rows.map((r, i) => (i === index ? { ...r, tab, rule } : r));
     setRows(next);
     onChange(next.map((r) => r.rule));
+  }
+
+  async function fetchEventProperties(name: string): Promise<void> {
+    if (eventProperties[name]) return;
+    const token = await getToken();
+    const res = await fetch(`${API_URL}/v1/contacts/events/${encodeURIComponent(name)}/properties`, {
+      headers: { Authorization: `Bearer ${token ?? ""}` },
+    });
+    if (res.ok) {
+      const body = (await res.json()) as { data: string[] };
+      setEventProperties((prev) => ({
+        ...prev,
+        [name]: body.data.map((p) => ({ value: p, label: p })),
+      }));
+    }
+  }
+
+  function getEventProperties(name: string): DropdownOption[] {
+    if (name && !eventProperties[name]) {
+      void fetchEventProperties(name);
+    }
+    return eventProperties[name] ?? [];
   }
 
   function addRow(): void {
@@ -400,7 +549,14 @@ export function SegmentBuilderV2({
                 onChange={(r) => updateRow(i, r)}
               />
             )}
-            {row.tab === "events" && <EventsPlaceholder />}
+            {row.tab === "events" && (
+              <EventsRowContent
+                rule={row.rule as EventsRule}
+                eventNames={eventNames}
+                getEventProperties={getEventProperties}
+                onChange={(r) => updateRow(i, r)}
+              />
+            )}
           </div>
 
           {/* Connector between rows */}
