@@ -108,6 +108,7 @@ async function buildAppAsAgent(): Promise<FastifyInstance> {
   });
   const { contactsRouter } = await import("./contacts.js");
   await app.register(contactsRouter, { prefix: "/v1" });
+  await app.ready();
   return app;
 }
 

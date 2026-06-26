@@ -70,21 +70,20 @@ async function buildExportWhere(
   const visWhere = await contactVisibilityWhere(prisma, auth);
 
   return {
-    organizationId,
-    deletedAt: null,
     ...(visWhere ?? {}),
     ...(leadStatusIds.length > 0 && { leadStatusId: { in: leadStatusIds } }),
     ...(tags.length > 0 && { tags: { hasEvery: tags } }),
     ...(segmentContactIds !== undefined && { id: { in: segmentContactIds } }),
     ...(groupIds.length > 0 && { groupContacts: { some: { contactGroupId: { in: groupIds } } } }),
     ...(cfClauses.length > 0 && { AND: cfClauses }),
+    organizationId,
+    deletedAt: null,
   };
 }
 
 async function contactVisibilityWhere(
   prisma: PrismaClient,
   auth: AuthContext,
-  field: "assignedUserId" = "assignedUserId",
 ): Promise<Record<string, unknown> | undefined> {
   // Org-wide roles short-circuit before any team lookup.
   if (auth.role === "superAdmin" || auth.role === "admin" || auth.role === "viewer") return undefined;
@@ -101,7 +100,7 @@ async function contactVisibilityWhere(
   const va: VisibilityAuth = {
     userId: auth.userId, role: auth.role, teamId: auth.teamId, teamRole: auth.teamRole, teamViewAll,
   };
-  return buildVisibilityWhere(va, teamMemberIds, field);
+  return buildVisibilityWhere(va, teamMemberIds, "assignedUserId");
 }
 
 interface ContactBody {
@@ -355,10 +354,8 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
 
     const contacts = await fastify.prisma.contact.findMany({
       where: {
-        organizationId,
-        deletedAt: null,
-        ...(nonSalesClosureFilter ?? {}),
         ...(visWhere ?? {}),
+        ...(nonSalesClosureFilter ?? {}),
         ...(cursor ? { id: { gt: cursor } } : {}),
         ...(tagFilter ? { tags: { has: tagFilter } } : {}),
         ...(countryId && !isNaN(countryId) ? { countryId } : {}),
@@ -368,6 +365,8 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
             { phoneNumber: { contains: q } },
           ],
         } : {}),
+        organizationId,
+        deletedAt: null,
       },
       include: { country: true, leadStatus: { select: { id: true, name: true, color: true } }, groupContacts: { include: { contactGroup: { select: { id: true, title: true } } } } },
       take: limit + 1,
@@ -407,7 +406,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId, permissions } = request.auth;
     const visWhere = await contactVisibilityWhere(fastify.prisma, request.auth);
     const contact = await fastify.prisma.contact.findFirst({
-      where: { id: request.params.id, organizationId, deletedAt: null, ...(visWhere ?? {}) },
+      where: { ...(visWhere ?? {}), id: request.params.id, organizationId, deletedAt: null },
       include: {
         country: true,
         leadStatus: { select: { id: true, name: true, color: true } },
