@@ -10,9 +10,9 @@ vi.mock("../lib/clerk.js", () => ({ verifyClerkToken: mockVerifyClerkToken }));
 
 const mockPrisma = {
   user: { findUnique: vi.fn(), create: vi.fn() },
-  organization: { create: vi.fn(), update: vi.fn() },
+  organization: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
   vendorSetting: { createMany: vi.fn() },
-  leadStatus: { count: vi.fn(), createMany: vi.fn() },
+  leadStatus: { count: vi.fn(), createMany: vi.fn(), findMany: vi.fn() },
 };
 
 async function buildApp(): Promise<FastifyInstance> {
@@ -31,6 +31,8 @@ describe("POST /register", () => {
     mockPrisma.vendorSetting.createMany.mockResolvedValue({ count: 4 });
     mockPrisma.leadStatus.count.mockResolvedValue(0);
     mockPrisma.leadStatus.createMany.mockResolvedValue({ count: 7 });
+    mockPrisma.leadStatus.findMany.mockResolvedValue([{ id: "ls-won" }, { id: "ls-lost" }]);
+    mockPrisma.organization.findUnique.mockResolvedValue({ settings: {} });
   });
 
   it("seeds default role permissions for new org", async () => {
