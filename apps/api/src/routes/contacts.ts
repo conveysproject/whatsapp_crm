@@ -109,13 +109,17 @@ interface ContactPatchBody {
 }
 
 export const contactsRouter: FastifyPluginAsync = async (fastify) => {
-  // Section gate (Phase 2 / D15): every contacts route requires contacts_access.
-  // admin/superAdmin bypass via canAccess; writes still check their sub-permissions.
+  // contacts_access is required for all routes except GET /contacts, which performs
+  // its own inline check to support non-sales closure visibility.
   fastify.addHook("preHandler", async (request, reply) => {
     const { role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "contacts_access")) {
+    if (canAccess(role, permissions, "contacts_access")) return;
+    const rawPath = (request.raw.url ?? "").split("?")[0] ?? "";
+    const isContactsList = request.method === "GET" && (rawPath.endsWith("/contacts") || rawPath === "/contacts");
+    if (!isContactsList) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access permission required" } });
     }
+    // Fall through — GET /contacts handler checks org settings inline.
   });
 
   fastify.get("/contacts/export/count", async (request, reply) => {
@@ -295,7 +299,23 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get("/contacts", async (request, reply) => {
-    const { organizationId, permissions } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    let nonSalesClosureFilter: { leadStatusId: { in: string[] } } | undefined;
+    if (!canAccess(role, permissions, "contacts_access")) {
+      const orgForNsv = await fastify.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { settings: true },
+      });
+      const cc = ((orgForNsv?.settings as Record<string, unknown> | null)?.["contactConfig"] ?? {}) as {
+        nonSalesClosureVisible?: boolean;
+        closureLeadStatusIds?: string[];
+      };
+      const ids = cc.closureLeadStatusIds ?? [];
+      if (!cc.nonSalesClosureVisible || ids.length === 0) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access permission required" } });
+      }
+      nonSalesClosureFilter = { leadStatusId: { in: ids } };
+    }
     const query = request.query as Record<string, string>;
     const { cursor, limit } = parsePaginationParams(query);
     const q = query["q"]?.trim() ?? "";
@@ -307,6 +327,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       where: {
         organizationId,
         deletedAt: null,
+        ...(nonSalesClosureFilter ?? {}),
         ...(cursor ? { id: { gt: cursor } } : {}),
         ...(tagFilter ? { tags: { has: tagFilter } } : {}),
         ...(countryId && !isNaN(countryId) ? { countryId } : {}),

@@ -12,6 +12,7 @@ interface ContactConfig {
   defaultLeadStatusId: string | null;
   closureLeadStatusIds: string[];
   closureDeadlineDays: number | null;
+  nonSalesClosureVisible: boolean;
 }
 
 export default function BasicConfigTab(): JSX.Element {
@@ -27,13 +28,19 @@ export default function BasicConfigTab(): JSX.Element {
       if (!res.ok) throw new Error("Failed to load config");
       const json = (await res.json()) as { data?: { settings?: { contactConfig?: Partial<ContactConfig> } } };
       const cc = json.data?.settings?.contactConfig ?? {};
-      return { defaultLeadStatusId: cc.defaultLeadStatusId ?? null, closureLeadStatusIds: cc.closureLeadStatusIds ?? [], closureDeadlineDays: cc.closureDeadlineDays ?? null };
+      return {
+        defaultLeadStatusId: cc.defaultLeadStatusId ?? null,
+        closureLeadStatusIds: cc.closureLeadStatusIds ?? [],
+        closureDeadlineDays: cc.closureDeadlineDays ?? null,
+        nonSalesClosureVisible: cc.nonSalesClosureVisible ?? false,
+      };
     },
   });
 
   const [defaultId, setDefaultId] = useState<string>("");
   const [closureIds, setClosureIds] = useState<string[]>([]);
   const [deadlineDays, setDeadlineDays] = useState<string>("");
+  const [nonSalesVisible, setNonSalesVisible] = useState(false);
   const [saved, setSaved] = useState(false);
   const [closureOpen, setClosureOpen] = useState(false);
   const closureRef = useRef<HTMLDivElement>(null);
@@ -51,6 +58,7 @@ export default function BasicConfigTab(): JSX.Element {
       setDefaultId(config.defaultLeadStatusId ?? "");
       setClosureIds(config.closureLeadStatusIds ?? []);
       setDeadlineDays(config.closureDeadlineDays != null ? String(config.closureDeadlineDays) : "");
+      setNonSalesVisible(config.nonSalesClosureVisible ?? false);
     }
   }, [config]);
 
@@ -61,7 +69,16 @@ export default function BasicConfigTab(): JSX.Element {
         method: "PATCH",
         token: token ?? "",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settings: { contactConfig: { defaultLeadStatusId: defaultId || null, closureLeadStatusIds: closureIds, closureDeadlineDays: deadlineDays.trim() ? Math.max(0, parseInt(deadlineDays, 10) || 0) : null } } }),
+        body: JSON.stringify({
+          settings: {
+            contactConfig: {
+              defaultLeadStatusId: defaultId || null,
+              closureLeadStatusIds: closureIds,
+              closureDeadlineDays: deadlineDays.trim() ? Math.max(0, parseInt(deadlineDays, 10) || 0) : null,
+              nonSalesClosureVisible: nonSalesVisible,
+            },
+          },
+        }),
       });
       if (!res.ok) throw new Error("Failed to save");
     },
@@ -164,6 +181,38 @@ export default function BasicConfigTab(): JSX.Element {
           placeholder="Days from creation date"
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
+      </section>
+
+      {/* Non-sales closure visibility */}
+      <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Non-Sales Closure Visibility</h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Allow team members without CRM access (e.g. Support, Operations) to view contacts
+            that are in a closure status.
+          </p>
+        </div>
+        <label className="flex items-center gap-3 cursor-pointer">
+          <div
+            role="switch"
+            aria-checked={nonSalesVisible}
+            onClick={() => setNonSalesVisible((v) => !v)}
+            className={[
+              "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+              nonSalesVisible ? "bg-emerald-600" : "bg-gray-200",
+            ].join(" ")}
+          >
+            <span
+              className={[
+                "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform",
+                nonSalesVisible ? "translate-x-4" : "translate-x-0",
+              ].join(" ")}
+            />
+          </div>
+          <span className="text-sm text-gray-700">
+            {nonSalesVisible ? "Enabled" : "Disabled"}
+          </span>
+        </label>
       </section>
 
       <div className="flex items-center gap-3">

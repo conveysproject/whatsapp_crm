@@ -68,6 +68,26 @@ async function buildApp(): Promise<FastifyInstance> {
   return app;
 }
 
+async function buildAppAsViewer(): Promise<FastifyInstance> {
+  const app = Fastify();
+  app.decorateRequest("auth", null);
+  app.addHook("preHandler", async (request) => {
+    (request as unknown as { auth: { userId: string; organizationId: string; role: string; permissions: Record<string, string> } }).auth = {
+      userId: mockAuth.userId,
+      organizationId: mockAuth.organizationId,
+      role: "member",
+      permissions: {}, // no contacts_access
+    };
+  });
+  app.register(async (instance) => {
+    instance.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    const { contactsRouter } = await import("./contacts.js");
+    await instance.register(contactsRouter);
+  }, { prefix: "/v1" });
+  await app.ready();
+  return app;
+}
+
 describe("GET /v1/contacts/tags", () => {
   let app: FastifyInstance;
   beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
@@ -913,5 +933,48 @@ describe("PATCH /v1/contacts/:id — closureDeadline", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(mockPrisma.contact.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /v1/contacts — non-sales closure visibility", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildAppAsViewer(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns 403 when user lacks contacts_access and feature is disabled", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ settings: {} });
+    const res = await app.inject({ method: "GET", url: "/v1/contacts" });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("returns 403 when nonSalesClosureVisible is true but closureLeadStatusIds is empty", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      settings: { contactConfig: { nonSalesClosureVisible: true, closureLeadStatusIds: [] } },
+    });
+    const res = await app.inject({ method: "GET", url: "/v1/contacts" });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("returns filtered contacts when nonSalesClosureVisible is true and closureLeadStatusIds is set", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      settings: { contactConfig: { nonSalesClosureVisible: true, closureLeadStatusIds: ["ls-closed"] } },
+    });
+    mockPrisma.contact.findMany.mockResolvedValue([
+      { id: "c-1", organizationId: "org-1", phoneNumber: "919000000001", tags: [], leadStatusId: "ls-closed",
+        leadStatus: { id: "ls-closed", name: "Closed Won", color: "#10B981" }, groupContacts: [], assignedUserId: null },
+    ]);
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts" });
+    expect(res.statusCode).toBe(200);
+    const json = res.json() as { data: unknown[] };
+    expect(json.data).toHaveLength(1);
+    // Verify the Prisma query included the closure filter
+    const findArg = mockPrisma.contact.findMany.mock.calls.at(-1)![0] as { where: Record<string, unknown> };
+    expect(findArg.where["leadStatusId"]).toEqual({ in: ["ls-closed"] });
+  });
+
+  it("still blocks non-sales users from POST /contacts", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/contacts", payload: { phoneNumber: "919000000099" } });
+    expect(res.statusCode).toBe(403);
   });
 });
