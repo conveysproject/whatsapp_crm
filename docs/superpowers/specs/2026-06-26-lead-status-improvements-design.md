@@ -80,18 +80,18 @@ The contacts page only has a flat list view. There is no pipeline/board view gro
 ### Column Layout
 
 - Fixed width ~280px, container horizontally scrollable.
-- Header: colored status dot + status name + contact count badge (`meta.total` from the contacts response).
+- Header: colored status dot + status name + contact count badge — shows loaded count; appends "+" when `pagination.has_more === true` (e.g. "20+"). No separate count API call required.
 - Cards: initials avatar, full name (bold), phone number (gray), assigned user initials chip (bottom-right, shown only if set).
-- Footer: "Load more" button when `meta.page * meta.limit < meta.total`.
+- Footer: "Load more" button shown when `pagination.has_more === true`; fetches next page via `pagination.next_cursor`.
 
 ### Drag & Drop
 
 Uses `@dnd-kit/core` + `@dnd-kit/sortable` (already installed). `DragOverlay` shows a ghost card during drag.
 
 On `DragEnd`:
-1. If destination column differs from source — optimistic update (move card in local React Query cache).
-2. Call `PATCH /contacts/:id` with `{ leadStatusId: destinationStatusId }`.
-3. On error — roll back by invalidating both column queries.
+1. If destination column differs from source — call `PATCH /contacts/:id` with `{ leadStatusId: destinationStatusId }`.
+2. On success — invalidate both source and destination column query keys so they re-fetch fresh data.
+3. On error — invalidate source column only to restore the card (no optimistic state to roll back).
 
 ### React Query Keys
 
