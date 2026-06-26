@@ -16,6 +16,12 @@ const mockPrisma = {
     findMany: vi.fn(),
     deleteMany: vi.fn(),
   },
+  user: {
+    findMany: vi.fn().mockResolvedValue([]),
+  },
+  team: {
+    findFirst: vi.fn().mockResolvedValue(null),
+  },
 };
 
 const mockAuth = {
@@ -38,6 +44,24 @@ async function buildApp(): Promise<FastifyInstance> {
   return app;
 }
 
+async function buildAppAsAgent(): Promise<FastifyInstance> {
+  const app = Fastify({ logger: false });
+  app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+  app.addHook("onRequest", async (request) => {
+    request.auth = {
+      userId: "agent-1",
+      organizationId: "org-1",
+      role: "agent" as const,
+      permissions: { inbox_access: "allow" },
+      teamId: null as string | null,
+      teamRole: null as "lead" | "member" | null,
+    };
+  });
+  const { conversationsRouter } = await import("./conversations.js");
+  await app.register(conversationsRouter, { prefix: "/v1" });
+  return app;
+}
+
 describe("GET /v1/conversations", () => {
   let app: FastifyInstance;
   beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
@@ -53,7 +77,7 @@ describe("GET /v1/conversations", () => {
     expect(body.data).toHaveLength(1);
     expect(mockPrisma.conversation.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { organizationId: "org-1" },
+        where: expect.objectContaining({ organizationId: "org-1" }),
         orderBy: { lastMessageAt: "desc" },
       })
     );
@@ -350,6 +374,21 @@ describe("GET /v1/conversations — phone masking via privacy toggles", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ data: Array<{ contact: { phoneNumber: string } }> }>();
     expect(body.data[0]?.contact?.phoneNumber).toBe("919000000001");
+    await app.close();
+  });
+});
+
+describe("GET /v1/conversations — team visibility scoping", () => {
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("scopes inbox to own conversations for a plain agent", async () => {
+    mockPrisma.conversation.findMany.mockResolvedValue([]);
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    mockPrisma.team.findFirst.mockResolvedValue(null);
+    const app = await buildAppAsAgent();
+    const res = await app.inject({ method: "GET", url: "/v1/conversations" });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.conversation.findMany.mock.calls[0][0].where.assignedTo).toBe("agent-1");
     await app.close();
   });
 });

@@ -1,10 +1,37 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyInstance } from "fastify";
 import type { ConversationStatus } from "@prisma/client";
 import type { ConversationId } from "@WBMSG/shared";
 import { getIo } from "../lib/io-ref.js";
 import { summarizeConversation } from "../lib/claude.js";
 import { canAccess, maskPhone, shouldHidePhone } from "../lib/permissions.js";
 import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
+import { buildVisibilityWhere, type VisibilityAuth } from "../lib/visibility.js";
+import type { AuthContext } from "../types/fastify.js";
+
+async function conversationVisibilityWhere(
+  prisma: FastifyInstance["prisma"],
+  auth: AuthContext,
+): Promise<Record<string, unknown> | undefined> {
+  if (auth.role === "superAdmin" || auth.role === "admin" || auth.role === "viewer") return undefined;
+  let teamViewAll = false;
+  let teamMemberIds: string[] = [];
+  if (auth.teamId) {
+    const [team, members] = await Promise.all([
+      prisma.team.findFirst({ where: { id: auth.teamId, organizationId: auth.organizationId }, select: { viewAllContacts: true } }),
+      prisma.user.findMany({ where: { organizationId: auth.organizationId, teamId: auth.teamId }, select: { id: true } }),
+    ]);
+    teamViewAll = team?.viewAllContacts ?? false;
+    teamMemberIds = members.map((m) => m.id);
+  }
+  const va: VisibilityAuth = {
+    userId: auth.userId,
+    role: auth.role,
+    teamId: auth.teamId,
+    teamRole: auth.teamRole,
+    teamViewAll,
+  };
+  return buildVisibilityWhere(va, teamMemberIds, "assignedTo");
+}
 
 export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
   // Section gate (Phase 2 / D15): every inbox/conversation route requires inbox_access.
@@ -30,6 +57,9 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     if (contactId) where.contactId = contactId;
     // agents with assigned_chats_only permission see only their own conversations
     if (permissions["assigned_chats_only"] === "allow") where.assignedTo = userId;
+
+    const visWhere = await conversationVisibilityWhere(fastify.prisma, request.auth);
+    if (visWhere && permissions["assigned_chats_only"] !== "allow") Object.assign(where, visWhere);
 
     const conversations = await fastify.prisma.conversation.findMany({
       where,
@@ -64,6 +94,9 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     const where: Record<string, unknown> = { organizationId };
     // agents with assigned_chats_only permission see only their own conversations
     if (permissions["assigned_chats_only"] === "allow") where.assignedTo = userId;
+
+    const visWhere = await conversationVisibilityWhere(fastify.prisma, request.auth);
+    if (visWhere && permissions["assigned_chats_only"] !== "allow") Object.assign(where, visWhere);
 
     const conversations = await fastify.prisma.conversation.findMany({
       where: {
