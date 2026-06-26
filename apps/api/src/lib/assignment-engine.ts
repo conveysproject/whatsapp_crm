@@ -36,9 +36,9 @@ export function evaluateConditions(contact: EvalContact, conditions: AssignmentC
   });
 }
 
-export async function pickWorkloadBalancedAgent(prisma: PrismaClient, organizationId: string): Promise<string | null> {
+export async function pickWorkloadBalancedAgent(prisma: PrismaClient, organizationId: string, teamId?: string): Promise<string | null> {
   const agents = await prisma.user.findMany({
-    where: { organizationId, role: "agent", isActive: true },
+    where: { organizationId, role: "agent", isActive: true, ...(teamId ? { teamId } : {}) },
     select: { id: true },
   });
   if (agents.length === 0) return null;
@@ -93,7 +93,7 @@ export async function applyAssignmentRules(
     if (contact.assignedUserId && !rule.replacePrevious) return; // matched but must not overwrite
     let assignee: string | null = null;
     if (rule.assignType === "team") {
-      assignee = await pickWorkloadBalancedAgent(prisma, organizationId);
+      assignee = await pickWorkloadBalancedAgent(prisma, organizationId, rule.assignTo ?? undefined);
     } else {
       const u = await prisma.user.findFirst({ where: { id: rule.assignTo, organizationId, isActive: true }, select: { id: true } });
       assignee = u?.id ?? null;

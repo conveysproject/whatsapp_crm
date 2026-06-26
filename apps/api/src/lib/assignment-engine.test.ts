@@ -1,11 +1,23 @@
-import { describe, it, expect } from "vitest";
-import { evaluateConditions, type AssignmentCondition } from "./assignment-engine.js";
+import { describe, it, expect, vi } from "vitest";
+import { evaluateConditions, type AssignmentCondition, pickWorkloadBalancedAgent } from "./assignment-engine.js";
 
 const contact = {
   firstName: "Ravi", lastName: "Kumar", email: "ravi@acme.com",
   phoneNumber: "+919000000001", leadStatusId: "ls-1", countryCode: "IN",
   languageCode: "en", tags: ["vip", "jewellery"],
 };
+
+describe("pickWorkloadBalancedAgent", () => {
+  it("filters candidate agents to the given team", async () => {
+    const prisma = {
+      user: { findMany: vi.fn().mockResolvedValue([{ id: "a1" }]) },
+      contact: { groupBy: vi.fn().mockResolvedValue([]) },
+    } as never;
+    await pickWorkloadBalancedAgent(prisma, "org-1", "team-1");
+    expect((prisma as never as { user: { findMany: ReturnType<typeof vi.fn> } }).user.findMany)
+      .toHaveBeenCalledWith({ where: { organizationId: "org-1", role: "agent", isActive: true, teamId: "team-1" }, select: { id: true } });
+  });
+});
 
 describe("evaluateConditions", () => {
   it("empty conditions always match", () => {
