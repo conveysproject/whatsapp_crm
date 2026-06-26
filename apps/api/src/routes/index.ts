@@ -50,6 +50,7 @@ import { countriesRouter } from "./countries.js";
 import { rolesRouter } from "./roles.js";
 import { notificationsRouter } from "./notifications.js";
 import { automationSettingsRouter } from "./automation-settings.js";
+import { contactEventsRouter } from "./contact-events.js";
 
 export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoute);
@@ -60,6 +61,7 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(conversationsRouter, { prefix: "/v1" });
   await fastify.register(messagesRouter, { prefix: "/v1" });
   await fastify.register(contactsRouter, { prefix: "/v1" });
+  await fastify.register(contactEventsRouter, { prefix: "/v1" });
   await fastify.register(contactsImportRouter, { prefix: "/v1" });
   await fastify.register(segmentsRouter, { prefix: "/v1" });
   await fastify.register(templatesRouter, { prefix: "/v1" });
