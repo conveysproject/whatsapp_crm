@@ -4,7 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 
 const mockPrisma = {
   leadStatus: { findMany: vi.fn(), create: vi.fn(), findFirst: vi.fn(), update: vi.fn(), delete: vi.fn(), aggregate: vi.fn() },
-  contact: { count: vi.fn() },
+  contact: { count: vi.fn(), updateMany: vi.fn() },
   organization: { findUnique: vi.fn() },
   $queryRaw: vi.fn(),
   $transaction: vi.fn(),
@@ -52,20 +52,21 @@ describe("lead-statuses API", () => {
     }));
   });
 
-  it("DELETE returns 409 when contacts reference the status", async () => {
+  it("DELETE cascades contacts to null and deletes the status", async () => {
     mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "s1", organizationId: "org-1" });
-    mockPrisma.contact.count.mockResolvedValue(3);
-    const res = await app.inject({ method: "DELETE", url: "/v1/lead-statuses/s1" });
-    expect(res.statusCode).toBe(409);
-    expect(res.json<{ error: { code: string } }>().error.code).toBe("STATUS_IN_USE");
-    expect(mockPrisma.leadStatus.delete).not.toHaveBeenCalled();
-  });
+    mockPrisma.$transaction.mockImplementation(
+      async (fn: (tx: typeof mockPrisma) => Promise<void>) => fn(mockPrisma)
+    );
+    mockPrisma.contact.updateMany.mockResolvedValue({ count: 3 });
+    mockPrisma.leadStatus.delete.mockResolvedValue({ id: "s1" });
 
-  it("DELETE returns 204 when no contacts reference the status", async () => {
-    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "s1", organizationId: "org-1" });
-    mockPrisma.contact.count.mockResolvedValue(0);
     const res = await app.inject({ method: "DELETE", url: "/v1/lead-statuses/s1" });
+
     expect(res.statusCode).toBe(204);
+    expect(mockPrisma.contact.updateMany).toHaveBeenCalledWith({
+      where: { organizationId: "org-1", leadStatusId: "s1" },
+      data: { leadStatusId: null },
+    });
     expect(mockPrisma.leadStatus.delete).toHaveBeenCalledWith({ where: { id: "s1" } });
   });
 
@@ -158,7 +159,6 @@ describe("lead-statuses API", () => {
 
   it("DELETE returns 409 when status is a default/closure status in settings", async () => {
     mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "s1", organizationId: "org-1" });
-    mockPrisma.contact.count.mockResolvedValue(0);
     mockPrisma.organization.findUnique.mockResolvedValue({ settings: { contactConfig: { defaultLeadStatusId: "s1", closureLeadStatusIds: [] } } });
     const res = await app.inject({ method: "DELETE", url: "/v1/lead-statuses/s1" });
     expect(res.statusCode).toBe(409);
@@ -168,11 +168,33 @@ describe("lead-statuses API", () => {
 
   it("DELETE returns 409 when status is referenced by a flow", async () => {
     mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "s1", organizationId: "org-1" });
-    mockPrisma.contact.count.mockResolvedValue(0);
     mockPrisma.organization.findUnique.mockResolvedValue({ settings: {} });
     mockPrisma.$queryRaw.mockResolvedValue([{ exists: true }]);
     const res = await app.inject({ method: "DELETE", url: "/v1/lead-statuses/s1" });
     expect(res.statusCode).toBe(409);
     expect(mockPrisma.leadStatus.delete).not.toHaveBeenCalled();
+  });
+
+  it("POST returns 400 INVALID_NAME when name contains special characters", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/lead-statuses",
+      payload: { name: "New@Lead!", color: "#3B82F6" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_NAME");
+    expect(mockPrisma.leadStatus.create).not.toHaveBeenCalled();
+  });
+
+  it("PATCH /:id returns 400 INVALID_NAME when name contains special characters", async () => {
+    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "s1", organizationId: "org-1", name: "Old", color: "#000" });
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/lead-statuses/s1",
+      payload: { name: "Bad#Name" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_NAME");
+    expect(mockPrisma.leadStatus.update).not.toHaveBeenCalled();
   });
 });

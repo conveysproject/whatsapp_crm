@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
 import { canAccessSub } from "../lib/permissions.js";
 
+const NAME_RE = /[^a-zA-Z0-9 \-_]/;
+
 interface StatusBody {
   name: string;
   color: string;
@@ -31,6 +33,9 @@ export const leadStatusesRouter: FastifyPluginAsync = async (fastify) => {
     const { name, color, isClosure } = request.body;
     if (!name?.trim() || !color?.trim()) {
       return reply.status(400).send({ error: { code: "MISSING_FIELDS", message: "name and color are required" } });
+    }
+    if (NAME_RE.test(name.trim())) {
+      return reply.status(400).send({ error: { code: "INVALID_NAME", message: "Status names may only contain letters, numbers, spaces, hyphens, and underscores" } });
     }
     const max = await fastify.prisma.leadStatus.aggregate({
       where: { organizationId },
@@ -73,6 +78,9 @@ export const leadStatusesRouter: FastifyPluginAsync = async (fastify) => {
     const existing = await fastify.prisma.leadStatus.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Lead status not found" } });
     const { name, color, isClosure } = request.body;
+    if (name !== undefined && NAME_RE.test(name.trim())) {
+      return reply.status(400).send({ error: { code: "INVALID_NAME", message: "Status names may only contain letters, numbers, spaces, hyphens, and underscores" } });
+    }
     try {
       const data = await fastify.prisma.leadStatus.update({
         where: { id: request.params.id },
@@ -97,10 +105,6 @@ export const leadStatusesRouter: FastifyPluginAsync = async (fastify) => {
     const existing = await fastify.prisma.leadStatus.findFirst({ where: { id: request.params.id, organizationId } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Lead status not found" } });
     const id = request.params.id;
-    const inUse = await fastify.prisma.contact.count({ where: { organizationId, leadStatusId: id } });
-    if (inUse > 0) {
-      return reply.status(409).send({ error: { code: "STATUS_IN_USE", message: "This status is assigned to contacts — reassign them before deleting." } });
-    }
     // Block if referenced by Basic Config settings (default or closure statuses)
     const org = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { settings: true } });
     const contactConfig = ((org?.settings as Record<string, unknown> | null)?.["contactConfig"] ?? {}) as {
@@ -120,7 +124,10 @@ export const leadStatusesRouter: FastifyPluginAsync = async (fastify) => {
     if (flowUse[0]?.exists) {
       return reply.status(409).send({ error: { code: "STATUS_IN_USE", message: "This status is used by a flow — update the flow before deleting." } });
     }
-    await fastify.prisma.leadStatus.delete({ where: { id } });
+    await fastify.prisma.$transaction(async (tx) => {
+      await tx.contact.updateMany({ where: { organizationId, leadStatusId: id }, data: { leadStatusId: null } });
+      await tx.leadStatus.delete({ where: { id } });
+    });
     return reply.status(204).send();
   });
 };
