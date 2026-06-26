@@ -425,6 +425,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           ...(customFields ? { customFields: customFields as Prisma.InputJsonValue } : {}),
           ...(effectiveLeadStatusId ? { leadStatusId: effectiveLeadStatusId } : {}),
           ...(closureDeadline ? { closureDeadline } : {}),
+          ...(effectiveLeadStatusId ? { salesCycleEnteredAt: new Date() } : {}),
         },
       });
       if (groupIds && groupIds.length > 0) {
@@ -488,6 +489,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
           ...(lastName !== undefined ? { lastName } : {}),
           ...(request.body.email !== undefined ? { email: request.body.email } : {}),
           ...(request.body.leadStatusId ? { leadStatusId: request.body.leadStatusId } : {}),
+          ...(request.body.leadStatusId && existing.leadStatusId === null ? { salesCycleEnteredAt: new Date() } : {}),
           ...(request.body.tags !== undefined ? { tags: request.body.tags } : {}),
           ...(request.body.customFields !== undefined ? { customFields: request.body.customFields as Prisma.InputJsonValue } : {}),
           ...(request.body.countryId !== undefined ? { countryId: request.body.countryId } : {}),

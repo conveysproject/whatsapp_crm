@@ -814,3 +814,56 @@ describe("GET /v1/contacts — Contact Data Privacy masking", () => {
     await app.close();
   });
 });
+
+describe("POST /v1/contacts — salesCycleEnteredAt", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("sets salesCycleEnteredAt when contact is created with a lead status", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ settings: {} });
+    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "ls-1" });
+    mockPrisma.contact.create.mockResolvedValue({ id: "c-1", organizationId: "org-1", phoneNumber: "919000000001", leadStatusId: "ls-1" });
+    const res = await app.inject({ method: "POST", url: "/v1/contacts", payload: { phoneNumber: "919000000001", leadStatusId: "ls-1" } });
+    expect(res.statusCode).toBe(201);
+    const createArg = mockPrisma.contact.create.mock.calls.at(-1)![0] as { data: Record<string, unknown> };
+    expect(createArg.data["salesCycleEnteredAt"]).toBeInstanceOf(Date);
+  });
+
+  it("does NOT set salesCycleEnteredAt when contact is created without a lead status", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ settings: {} });
+    mockPrisma.contact.create.mockResolvedValue({ id: "c-2", organizationId: "org-1", phoneNumber: "919000000002" });
+    const res = await app.inject({ method: "POST", url: "/v1/contacts", payload: { phoneNumber: "919000000002" } });
+    expect(res.statusCode).toBe(201);
+    const createArg = mockPrisma.contact.create.mock.calls.at(-1)![0] as { data: Record<string, unknown> };
+    expect(createArg.data["salesCycleEnteredAt"]).toBeUndefined();
+  });
+});
+
+describe("PATCH /v1/contacts/:id — salesCycleEnteredAt", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("sets salesCycleEnteredAt when status first assigned via PATCH", async () => {
+    const existing = { id: "c-1", organizationId: "org-1", phoneNumber: "919000000001", tags: [], leadStatusId: null };
+    mockPrisma.contact.findFirst.mockResolvedValue(existing);
+    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "ls-2" });
+    mockPrisma.contact.update.mockResolvedValue({ ...existing, leadStatusId: "ls-2" });
+    const res = await app.inject({ method: "PATCH", url: "/v1/contacts/c-1", payload: { leadStatusId: "ls-2" } });
+    expect(res.statusCode).toBe(200);
+    const updateArg = mockPrisma.contact.update.mock.calls.at(-1)![0] as { data: Record<string, unknown> };
+    expect(updateArg.data["salesCycleEnteredAt"]).toBeInstanceOf(Date);
+  });
+
+  it("does NOT overwrite salesCycleEnteredAt when status changes from one to another", async () => {
+    const existing = { id: "c-1", organizationId: "org-1", phoneNumber: "919000000001", tags: [], leadStatusId: "ls-1" };
+    mockPrisma.contact.findFirst.mockResolvedValue(existing);
+    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "ls-2" });
+    mockPrisma.contact.update.mockResolvedValue({ ...existing, leadStatusId: "ls-2" });
+    const res = await app.inject({ method: "PATCH", url: "/v1/contacts/c-1", payload: { leadStatusId: "ls-2" } });
+    expect(res.statusCode).toBe(200);
+    const updateArg = mockPrisma.contact.update.mock.calls.at(-1)![0] as { data: Record<string, unknown> };
+    expect(updateArg.data["salesCycleEnteredAt"]).toBeUndefined();
+  });
+});

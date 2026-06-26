@@ -479,7 +479,8 @@ model Contact {
   leadStatusId   String?        @map("lead_status_id")
   leadStatus     LeadStatus?    @relation(fields: [leadStatusId], references: [id])
   closureDeadline  DateTime?    @map("closure_deadline")
-  closureAlertedAt DateTime?    @map("closure_alerted_at")
+  closureAlertedAt    DateTime?    @map("closure_alerted_at")
+  salesCycleEnteredAt DateTime?    @map("sales_cycle_entered_at")
   tags           String[]
   customFields   Json           @default("{}") @map("custom_fields")
   externalId     String?        @map("external_id")  // external CRM/ERP reference (WhatsJet: bsuid)
@@ -513,6 +514,7 @@ model Contact {
   @@unique([organizationId, phoneNumber])
   @@index([organizationId])
   @@index([organizationId, closureDeadline])
+  @@index([organizationId, salesCycleEnteredAt])
   @@index([organizationId, whatsappOptOut])
   @@index([organizationId, deletedAt])
   @@index([countryId])

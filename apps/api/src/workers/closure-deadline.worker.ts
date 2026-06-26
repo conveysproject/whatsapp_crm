@@ -23,13 +23,13 @@ async function processClosureDeadlines(): Promise<void> {
     // 1) Backfill closureDeadline for in-sales-cycle contacts that lack one
     const needsDeadline = await prisma.contact.findMany({
       where: { organizationId: org.id, deletedAt: null, leadStatusId: { not: null }, closureDeadline: null },
-      select: { id: true, createdAt: true },
+      select: { id: true, createdAt: true, salesCycleEnteredAt: true },
       take: 1000,
     });
     for (const c of needsDeadline) {
       await prisma.contact.update({
         where: { id: c.id },
-        data: { closureDeadline: computeClosureDeadline(c.createdAt, days) },
+        data: { closureDeadline: computeClosureDeadline(c.salesCycleEnteredAt ?? c.createdAt, days) },
       });
     }
 
