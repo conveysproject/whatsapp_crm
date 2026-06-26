@@ -208,6 +208,7 @@ function buildSubConditionClause(sub: EventSubCondition): Record<string, unknown
 }
 
 function buildEventsClause(rule: EventsRule, organizationId: string): Record<string, unknown> {
+  if (!rule.eventName) return {};
   const subClauses = rule.subConditions
     .map(buildSubConditionClause)
     .filter((c) => Object.keys(c).length > 0);

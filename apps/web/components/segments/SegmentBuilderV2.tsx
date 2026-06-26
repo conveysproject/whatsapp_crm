@@ -71,6 +71,15 @@ const USER_GROUP_OPERATORS: DropdownOption[] = [
   { value: "isEmpty", label: "Is empty" },
 ];
 
+const SUB_OPERATORS: DropdownOption[] = [
+  { value: "is",             label: "Is" },
+  { value: "isNot",          label: "Is not" },
+  { value: "contains",       label: "Contains" },
+  { value: "doesNotContain", label: "Does not contain" },
+  { value: "isEmpty",        label: "Is empty" },
+  { value: "hasAnyValue",    label: "Has any value" },
+];
+
 function getOperators(field: string): DropdownOption[] {
   const ft = getFieldType(field);
   switch (ft) {
@@ -265,15 +274,6 @@ function EventsRowContent({
   getEventProperties: (name: string) => DropdownOption[];
   onChange: (r: EventsRule) => void;
 }): JSX.Element {
-  const SUB_OPERATORS: DropdownOption[] = [
-    { value: "is",             label: "Is" },
-    { value: "isNot",          label: "Is not" },
-    { value: "contains",       label: "Contains" },
-    { value: "doesNotContain", label: "Does not contain" },
-    { value: "isEmpty",        label: "Is empty" },
-    { value: "hasAnyValue",    label: "Has any value" },
-  ];
-
   const propertyOptions = getEventProperties(rule.eventName);
 
   function addSub(): void {
@@ -281,7 +281,7 @@ function EventsRowContent({
       ...rule,
       subConditions: [
         ...rule.subConditions,
-        { property: "", operator: "is", value: "" },
+        { id: crypto.randomUUID(), property: "", operator: "is", value: "" },
       ],
     });
   }
@@ -322,7 +322,7 @@ function EventsRowContent({
 
       {/* Sub-conditions */}
       {rule.subConditions.map((sub, i) => (
-        <div key={i} className="flex items-center gap-3 pl-8 flex-wrap">
+        <div key={sub.id ?? i} className="flex items-center gap-3 pl-8 flex-wrap">
           {/* With / AND / OR label */}
           {i === 0 ? (
             <span className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700">
