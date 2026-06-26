@@ -55,6 +55,8 @@ const mockAuth = {
   organizationId: "org-1",
   role: "admin" as const,
   permissions: {},
+  teamId: null as string | null,
+  teamRole: null as "lead" | "member" | null,
 };
 
 async function buildApp(): Promise<FastifyInstance> {
@@ -281,7 +283,7 @@ describe("contacts section gate (D15)", () => {
     const app = Fastify({ logger: false });
     app.decorate("prisma", mockPrisma as unknown as PrismaClient);
     app.addHook("onRequest", async (r) => {
-      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions, teamId: null, teamRole: null };
     });
     const { contactsRouter } = await import("./contacts.js");
     await app.register(contactsRouter, { prefix: "/v1" });
@@ -710,7 +712,7 @@ describe("contact field masking (D8)", () => {
     const app = Fastify({ logger: false });
     app.decorate("prisma", mockPrisma as unknown as PrismaClient);
     app.addHook("onRequest", async (r) => {
-      r.auth = { userId: "u-9", organizationId: "org-1", role: "agent" as const, permissions };
+      r.auth = { userId: "u-9", organizationId: "org-1", role: "agent" as const, permissions, teamId: null, teamRole: null };
     });
     const { contactsRouter } = await import("./contacts.js");
     await app.register(contactsRouter, { prefix: "/v1" });
@@ -758,7 +760,7 @@ describe("GET /v1/contacts — Contact Data Privacy masking", () => {
     const app = Fastify({ logger: false });
     app.decorate("prisma", mockPrisma as unknown as PrismaClient);
     app.addHook("onRequest", async (request) => {
-      request.auth = { userId: "user-1", organizationId: "org-1", role: "agent" as const, permissions: { contacts_access: "allow", ...permissions } };
+      request.auth = { userId: "user-1", organizationId: "org-1", role: "agent" as const, permissions: { contacts_access: "allow", ...permissions }, teamId: null, teamRole: null };
     });
     const { contactsRouter } = await import("./contacts.js");
     await app.register(contactsRouter, { prefix: "/v1" });

@@ -9,7 +9,7 @@ const mockPrisma = {
   conversation: { findFirst: vi.fn(), create: vi.fn() },
   organization: { findUnique: vi.fn() },
 };
-const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
+const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {}, teamId: null as string | null, teamRole: null as "lead" | "member" | null };
 
 vi.mock("../lib/whatsapp.js", () => ({
   sendTemplateMessage: vi.fn().mockResolvedValue({ messageId: "wamid-tpl-1" }),
@@ -209,7 +209,7 @@ describe("templates section gate (D15)", () => {
     const app = Fastify({ logger: false });
     app.decorate("prisma", mockPrisma as unknown as PrismaClient);
     app.addHook("onRequest", async (r) => {
-      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions, teamId: null, teamRole: null };
     });
     const { templatesRouter } = await import("./templates.js");
     await app.register(templatesRouter, { prefix: "/v1" });

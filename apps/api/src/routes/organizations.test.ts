@@ -30,7 +30,7 @@ describe("organizations routes", () => {
     const { organizationRoutes } = await import("./organizations.js");
     await app.register(prismaPlugin);
     app.addHook("preHandler", async (req) => {
-      req.auth = { userId: "user_123", organizationId: "org_123", role: "admin", permissions: {} };
+      req.auth = { userId: "user_123", organizationId: "org_123", role: "admin", permissions: {}, teamId: null, teamRole: null };
     });
     await app.register(organizationRoutes, { prefix: "/v1" });
     await app.ready();
@@ -82,7 +82,7 @@ describe("POST /v1/organizations/branding/logo", () => {
     const { organizationRoutes } = await import("./organizations.js");
     await app.register(prismaPlugin);
     app.addHook("preHandler", async (req) => {
-      req.auth = { userId: "user_123", organizationId: "org_123", role: "admin", permissions: {} };
+      req.auth = { userId: "user_123", organizationId: "org_123", role: "admin", permissions: {}, teamId: null, teamRole: null };
     });
     await app.register(organizationRoutes, { prefix: "/v1" });
     await app.ready();

@@ -36,7 +36,7 @@ const mockPrisma = {
   manualSubscription: { create: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn().mockResolvedValue(null), update: vi.fn(), deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
   $transaction: vi.fn().mockResolvedValue([]),
 };
-const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
+const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {}, teamId: null as string | null, teamRole: null as "lead" | "member" | null };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -116,7 +116,7 @@ describe("settings_billing sub gate", () => {
     const app = Fastify({ logger: false });
     app.decorate("prisma", mockPrisma as unknown as PrismaClient);
     app.addHook("onRequest", async (r) => {
-      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions, teamId: null, teamRole: null };
     });
     const { billingRouter } = await import("./billing.js");
     await app.register(billingRouter, { prefix: "/v1" });

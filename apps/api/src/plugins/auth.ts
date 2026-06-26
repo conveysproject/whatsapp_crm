@@ -18,7 +18,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         return reply.status(401).send({ error: { code: "INVALID_IMPERSONATION_TOKEN", message: "Invalid or expired impersonation token" } });
       }
       const { organizationId, issuedBy } = JSON.parse(raw) as { organizationId: string; issuedBy: string };
-      request.auth = { userId: issuedBy, organizationId, role: "superAdmin", permissions: {} };
+      request.auth = { userId: issuedBy, organizationId, role: "superAdmin", permissions: {}, teamId: null, teamRole: null };
       return;
     }
 
@@ -49,14 +49,14 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     const cacheKey = `auth:user:${userId}`;
     const cached = await redis.get(cacheKey);
     if (cached) {
-      const { role, organizationId, permissions } = JSON.parse(cached) as Pick<AuthContext, "role" | "organizationId" | "permissions">;
-      request.auth = { userId, organizationId, role, permissions };
+      const { role, organizationId, permissions, teamId, teamRole } = JSON.parse(cached) as Pick<AuthContext, "role" | "organizationId" | "permissions" | "teamId" | "teamRole">;
+      request.auth = { userId, organizationId, role, permissions, teamId: teamId ?? null, teamRole: teamRole ?? null };
       return;
     }
 
     const user = await fastify.prisma.user.findFirst({
       where: { id: userId, isActive: true },
-      select: { role: true, organizationId: true },
+      select: { role: true, organizationId: true, teamId: true, teamRole: true },
     });
 
     if (!user) {
@@ -97,10 +97,10 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     await redis.setex(
       cacheKey,
       AUTH_CACHE_TTL,
-      JSON.stringify({ role: user.role, organizationId: user.organizationId, permissions })
+      JSON.stringify({ role: user.role, organizationId: user.organizationId, permissions, teamId: user.teamId, teamRole: user.teamRole })
     );
 
-    request.auth = { userId, organizationId: user.organizationId, role: user.role, permissions };
+    request.auth = { userId, organizationId: user.organizationId, role: user.role, permissions, teamId: user.teamId, teamRole: user.teamRole };
   });
 };
 

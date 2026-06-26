@@ -18,7 +18,7 @@ const mockPrisma = {
   organization: { update: vi.fn() },
 };
 
-const mockAuth = { userId: "user-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
+const mockAuth = { userId: "user-1", organizationId: "org-1", role: "admin" as const, permissions: {}, teamId: null as string | null, teamRole: null as "lead" | "member" | null };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -343,7 +343,7 @@ describe("settings_whatsapp sub gate", () => {
     const app = Fastify({ logger: false });
     app.decorate("prisma", subMockPrisma as unknown as PrismaClient);
     app.addHook("onRequest", async (r) => {
-      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions, teamId: null, teamRole: null };
     });
     const { whatsappAccountRouter } = await import("./whatsapp-account.js");
     await app.register(whatsappAccountRouter, { prefix: "/v1" });

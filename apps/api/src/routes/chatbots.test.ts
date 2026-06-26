@@ -9,7 +9,7 @@ const mockPrisma = {
   botSession: { upsert: vi.fn() },
   vendorSetting: { findFirst: vi.fn().mockResolvedValue(null) },
 };
-const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
+const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {}, teamId: null as string | null, teamRole: null as "lead" | "member" | null };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });

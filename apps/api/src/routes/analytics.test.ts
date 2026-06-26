@@ -17,7 +17,7 @@ const mockPrisma = {
   campaignRecipient: { groupBy: vi.fn() },
   user: { findMany: vi.fn() },
 };
-const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
+const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {}, teamId: null as string | null, teamRole: null as "lead" | "member" | null };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -126,7 +126,7 @@ describe("analytics section gate (D15)", () => {
     const app = Fastify({ logger: false });
     app.decorate("prisma", mockPrisma as unknown as PrismaClient);
     app.addHook("onRequest", async (r) => {
-      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions, teamId: null, teamRole: null };
     });
     const { analyticsRouter } = await import("./analytics.js");
     await app.register(analyticsRouter, { prefix: "/v1" });
@@ -177,7 +177,7 @@ describe("analytics sub gates", () => {
     const app = Fastify({ logger: false });
     app.decorate("prisma", mockPrisma as unknown as PrismaClient);
     app.addHook("onRequest", async (r) => {
-      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions, teamId: null, teamRole: null };
     });
     const { analyticsRouter } = await import("./analytics.js");
     await app.register(analyticsRouter, { prefix: "/v1" });

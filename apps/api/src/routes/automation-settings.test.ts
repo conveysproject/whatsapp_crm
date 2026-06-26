@@ -52,6 +52,8 @@ const mockAuth: AuthContext = {
     "automation_access@automation_welcome_message": "allow",
     "automation_access@automation_delayed_response": "allow",
   },
+  teamId: null,
+  teamRole: null,
 };
 
 function buildApp(authOverride?: Partial<AuthContext>): Promise<FastifyInstance> {

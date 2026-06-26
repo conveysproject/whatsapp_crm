@@ -193,4 +193,38 @@ describe("auth plugin — permission merge", () => {
     });
     await app.close();
   });
+
+  it("populates teamId and teamRole on auth context", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    vi.mocked(prisma.user.findFirst).mockResolvedValueOnce({
+      role: "agent",
+      organizationId: "org-1",
+      teamId: "team-1",
+      teamRole: "lead",
+    } as never);
+    vi.mocked(prisma.organizationMember.findFirst).mockResolvedValueOnce(null);
+    vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValueOnce(null);
+
+    const prismaPlugin = (await import("./prisma.js")).default;
+    const authPlugin = (await import("./auth.js")).default;
+    const teamApp = Fastify({ logger: false });
+    await teamApp.register(prismaPlugin);
+    await teamApp.register(authPlugin);
+    let capturedAuth: Record<string, unknown> = {};
+    teamApp.get("/team-probe", async (req) => {
+      capturedAuth = req.auth as unknown as Record<string, unknown>;
+      return { ok: true };
+    });
+    await teamApp.ready();
+
+    await teamApp.inject({
+      method: "GET",
+      url: "/team-probe",
+      headers: { authorization: "Bearer tok" },
+    });
+
+    expect(capturedAuth["teamId"]).toBe("team-1");
+    expect(capturedAuth["teamRole"]).toBe("lead");
+    await teamApp.close();
+  });
 });

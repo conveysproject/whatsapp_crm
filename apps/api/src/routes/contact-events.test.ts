@@ -11,7 +11,7 @@ const mockPrisma = {
   },
 };
 
-const mockAuth = { userId: "user-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
+const mockAuth = { userId: "user-1", organizationId: "org-1", role: "admin" as const, permissions: {}, teamId: null as string | null, teamRole: null as "lead" | "member" | null };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -61,7 +61,7 @@ describe("POST /v1/contacts/:id/events", () => {
     const appDeny = Fastify({ logger: false });
     appDeny.decorate("prisma", mockPrisma as unknown as PrismaClient);
     appDeny.addHook("onRequest", async (request) => {
-      request.auth = { userId: "u-2", organizationId: "org-1", role: "agent" as const, permissions: {} };
+      request.auth = { userId: "u-2", organizationId: "org-1", role: "agent" as const, permissions: {}, teamId: null, teamRole: null };
     });
     const { contactEventsRouter } = await import("./contact-events.js");
     await appDeny.register(contactEventsRouter, { prefix: "/v1" });

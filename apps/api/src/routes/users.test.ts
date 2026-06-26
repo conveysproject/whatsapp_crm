@@ -14,7 +14,7 @@ const mockPrisma = {
   },
 };
 
-const mockAuth = { userId: "user-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
+const mockAuth = { userId: "user-1", organizationId: "org-1", role: "admin" as const, permissions: {}, teamId: null as string | null, teamRole: null as "lead" | "member" | null };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -123,7 +123,7 @@ describe("settings_agents sub gate", () => {
     const app = Fastify({ logger: false });
     app.decorate("prisma", mockPrisma as unknown as PrismaClient);
     app.addHook("onRequest", async (r) => {
-      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions, teamId: null, teamRole: null };
     });
     const { userRoutes } = await import("./users.js");
     await app.register(userRoutes, { prefix: "/v1" });

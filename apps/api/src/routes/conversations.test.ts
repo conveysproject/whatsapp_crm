@@ -23,6 +23,8 @@ const mockAuth = {
   organizationId: "org-1",
   role: "agent" as const,
   permissions: { inbox_access: "allow" },
+  teamId: null as string | null,
+  teamRole: null as "lead" | "member" | null,
 };
 
 async function buildApp(): Promise<FastifyInstance> {
@@ -250,7 +252,7 @@ describe("inbox section gate (D15)", () => {
     const app = Fastify({ logger: false });
     app.decorate("prisma", mockPrisma as unknown as PrismaClient);
     app.addHook("onRequest", async (r) => {
-      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions };
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions, teamId: null, teamRole: null };
     });
     const { conversationsRouter } = await import("./conversations.js");
     await app.register(conversationsRouter, { prefix: "/v1" });
@@ -294,6 +296,8 @@ describe("GET /v1/conversations — phone masking via privacy toggles", () => {
         organizationId: "org-1",
         role: "agent" as const,
         permissions: { inbox_access: "allow", ...permissions },
+        teamId: null,
+        teamRole: null,
       };
     });
     const { conversationsRouter } = await import("./conversations.js");

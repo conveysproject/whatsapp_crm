@@ -37,6 +37,8 @@ const mockAuth = {
   organizationId: "org-1",
   role: "admin" as const,
   permissions: {},
+  teamId: null as string | null,
+  teamRole: null as "lead" | "member" | null,
 };
 
 async function buildApp(): Promise<FastifyInstance> {

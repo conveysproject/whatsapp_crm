@@ -12,7 +12,7 @@ const mockPrisma = {
   },
 };
 
-const mockAuth = { userId: "user-1", organizationId: "org-1", role: "admin" as const, permissions: {} };
+const mockAuth = { userId: "user-1", organizationId: "org-1", role: "admin" as const, permissions: {}, teamId: null as string | null, teamRole: null as "lead" | "member" | null };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
