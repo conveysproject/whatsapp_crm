@@ -214,7 +214,7 @@ function buildEventsClause(rule: EventsRule, organizationId: string): Record<str
   const subMatchKey = rule.subMatch === "or" ? "OR" : "AND";
 
   return {
-    contactEvents: {
+    events: {
       some: {
         organizationId,
         name: rule.eventName,

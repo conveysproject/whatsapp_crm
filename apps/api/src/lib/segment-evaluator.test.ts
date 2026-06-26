@@ -231,7 +231,7 @@ describe("evaluateSegment — events rules", () => {
     ], "all");
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
-        AND: [{ contactEvents: { some: { organizationId: "org-1", name: "flow_completed" } } }],
+        AND: [{ events: { some: { organizationId: "org-1", name: "flow_completed" } } }],
       }),
     }));
   });
@@ -250,7 +250,7 @@ describe("evaluateSegment — events rules", () => {
     ], "all");
     const call = mockFindMany.mock.calls[0][0];
     const eventClause = call.where.AND[0];
-    expect(eventClause.contactEvents.some.name).toBe("flow_completed");
-    expect(eventClause.contactEvents.some.AND).toBeDefined();
+    expect(eventClause.events.some.name).toBe("flow_completed");
+    expect(eventClause.events.some.AND).toBeDefined();
   });
 });
