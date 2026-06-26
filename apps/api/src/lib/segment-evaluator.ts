@@ -133,7 +133,7 @@ function buildDateClause(col: string, operator: string, value?: string, valueTo?
 function buildFieldsClause(rule: FieldsRule): Record<string, unknown> {
   const { field, operator, value, valueTo, customFieldId } = rule;
 
-  if (["firstName", "lastName", "email", "phoneNumber"].includes(field)) {
+  if (["firstName", "lastName", "name", "email", "phoneNumber", "externalId", "notes"].includes(field)) {
     return buildTextClause(field, operator, value);
   }
 
@@ -162,8 +162,15 @@ function buildFieldsClause(rule: FieldsRule): Record<string, unknown> {
     case "disableBot":
       return { disableBot: operator === "isTrue" || operator === "is true" };
 
+    case "closureDeadline":
+      return buildDateClause("closureDeadline", operator, value, valueTo);
+
     case "createdAt":
       return buildDateClause("createdAt", operator, value, valueTo);
+
+    case "waBlockedAt":
+      if (operator === "isEmpty" || operator === "isFalse") return { waBlockedAt: null };
+      return { NOT: { waBlockedAt: null } };
 
     case "lastMessageAt": {
       if (operator === "isEmpty") return { conversations: { none: {} } };

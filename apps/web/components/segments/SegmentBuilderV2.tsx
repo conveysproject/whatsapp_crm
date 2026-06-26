@@ -15,19 +15,24 @@ type FieldType = "text" | "date" | "boolean" | "status" | "user" | "group" | "cu
 interface FieldConfig { field: string; label: string; fieldType: FieldType }
 
 const FIELD_CONFIGS: FieldConfig[] = [
-  { field: "firstName",     label: "First Name",        fieldType: "text" },
-  { field: "lastName",      label: "Last Name",         fieldType: "text" },
-  { field: "email",         label: "Email",             fieldType: "text" },
-  { field: "phoneNumber",   label: "Phone Number",      fieldType: "text" },
-  { field: "leadStatusId",  label: "Status",            fieldType: "status" },
-  { field: "createdAt",     label: "Creation Date",     fieldType: "date" },
-  { field: "lastMessageAt", label: "Last Message Date", fieldType: "date" },
-  { field: "whatsappOptOut", label: "WhatsApp Opt-out", fieldType: "boolean" },
-  { field: "disableBot",    label: "Bot Disabled",      fieldType: "boolean" },
-  { field: "countryCode",   label: "Country",           fieldType: "text" },
-  { field: "languageCode",  label: "Language",          fieldType: "text" },
-  { field: "assignedUserId", label: "Assigned User",   fieldType: "user" },
-  { field: "groups",        label: "Groups",            fieldType: "group" },
+  { field: "firstName",      label: "First Name",         fieldType: "text" },
+  { field: "lastName",       label: "Last Name",          fieldType: "text" },
+  { field: "name",           label: "Full Name",          fieldType: "text" },
+  { field: "email",          label: "Email",              fieldType: "text" },
+  { field: "phoneNumber",    label: "Phone Number",       fieldType: "text" },
+  { field: "leadStatusId",   label: "Status",             fieldType: "status" },
+  { field: "createdAt",      label: "Creation Date",      fieldType: "date" },
+  { field: "lastMessageAt",  label: "Last Message Date",  fieldType: "date" },
+  { field: "closureDeadline", label: "Closure Deadline",  fieldType: "date" },
+  { field: "whatsappOptOut", label: "WhatsApp Opt-out",   fieldType: "boolean" },
+  { field: "waBlockedAt",    label: "WA Blocked",         fieldType: "boolean" },
+  { field: "disableBot",     label: "Bot Disabled",       fieldType: "boolean" },
+  { field: "countryCode",    label: "Country",            fieldType: "text" },
+  { field: "languageCode",   label: "Language",           fieldType: "text" },
+  { field: "assignedUserId", label: "Assigned User",      fieldType: "user" },
+  { field: "groups",         label: "Groups",             fieldType: "group" },
+  { field: "externalId",     label: "External ID",        fieldType: "text" },
+  { field: "notes",          label: "Notes",              fieldType: "text" },
 ];
 
 const FIELD_OPTIONS: DropdownOption[] = FIELD_CONFIGS.map((f) => ({ value: f.field, label: f.label }));
