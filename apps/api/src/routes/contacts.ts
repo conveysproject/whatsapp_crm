@@ -258,6 +258,19 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  fastify.get("/contacts/tags", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const rows = await fastify.prisma.contact.findMany({
+      where: { organizationId, deletedAt: null },
+      select: { tags: true },
+    });
+    const tagSet = new Set<string>();
+    for (const row of rows) {
+      for (const tag of row.tags) tagSet.add(tag);
+    }
+    return reply.send({ data: Array.from(tagSet).sort() });
+  });
+
   fastify.get<{ Querystring: { q?: string } }>("/contacts/search", async (request, reply) => {
     const { organizationId } = request.auth;
     const q = ((request.query as Record<string, string>)["q"] ?? "").trim();

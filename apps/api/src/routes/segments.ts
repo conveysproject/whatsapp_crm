@@ -7,6 +7,7 @@ interface SegmentBody {
   name: string;
   filters: FilterRule[];
   match?: MatchMode;
+  whatsappOptedOnly?: boolean;
 }
 
 export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
@@ -41,6 +42,7 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
         name: request.body.name,
         filters: request.body.filters as object,
         match: request.body.match ?? "all",
+        whatsappOptedOnly: request.body.whatsappOptedOnly ?? false,
       },
     });
     return reply.status(201).send({ data: segment });
@@ -60,11 +62,12 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
       }
       const segment = await fastify.prisma.segment.update({
-        where: { id: request.params.id },
+        where: { id: request.params.id, organizationId },
         data: {
           ...(request.body.name !== undefined ? { name: request.body.name } : {}),
           ...(request.body.filters !== undefined ? { filters: request.body.filters as object } : {}),
           ...(request.body.match !== undefined ? { match: request.body.match } : {}),
+          ...(request.body.whatsappOptedOnly !== undefined ? { whatsappOptedOnly: request.body.whatsappOptedOnly } : {}),
         },
       });
       return reply.send({ data: segment });
@@ -82,7 +85,7 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
     if (!existing) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Segment not found" } });
     }
-    await fastify.prisma.segment.delete({ where: { id: request.params.id } });
+    await fastify.prisma.segment.delete({ where: { id: request.params.id, organizationId } });
     return reply.status(204).send();
   });
 
@@ -98,7 +101,8 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
       fastify.prisma,
       organizationId,
       segment.filters as unknown as FilterRule[],
-      (segment.match as MatchMode) ?? "all"
+      (segment.match as MatchMode) ?? "all",
+      (segment as { whatsappOptedOnly?: boolean }).whatsappOptedOnly ?? false
     );
     return reply.send({ data: result });
   });

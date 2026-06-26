@@ -2,16 +2,38 @@ import type { PrismaClient } from "@prisma/client";
 
 export type MatchMode = "all" | "any";
 
-export type FilterRule =
-  | { field: "firstName" | "lastName" | "email" | "phoneNumber"; operator: "contains" | "equals" | "startsWith" | "isEmpty" | "isNotEmpty"; value?: string }
-  | { field: "leadStatusId"; operator: "equals" | "isNot"; value: string }
-  | { field: "tags"; operator: "contains" | "doesNotContain"; value: string }
-  | { field: "countryCode" | "languageCode"; operator: "equals" | "isNot"; value: string }
-  | { field: "assignedUserId"; operator: "equals" | "isNot" | "isEmpty"; value?: string }
-  | { field: "groups"; operator: "memberOf" | "notMemberOf"; value: string }
-  | { field: "whatsappOptOut" | "disableBot"; operator: "isTrue" | "isFalse" }
-  | { field: "createdAt" | "lastMessageAt"; operator: "after" | "before" | "between"; value: string; valueTo?: string }
-  | { field: "customField"; operator: "contains" | "equals" | "isEmpty"; customFieldId: string; value?: string };
+// ── New discriminated union ───────────────────────────────────────────────────
+
+export type TagsRule = {
+  type: "tags";
+  operator: "is" | "isNot";
+  value: string;
+};
+
+export type FieldsRule = {
+  type: "fields";
+  field: string;
+  operator: string;
+  value?: string;
+  valueTo?: string;
+  customFieldId?: string;
+};
+
+export type EventSubCondition = {
+  property: string;
+  operator: "is" | "isNot" | "contains" | "doesNotContain" | "isEmpty" | "hasAnyValue";
+  value?: string;
+};
+
+export type EventsRule = {
+  type: "events";
+  action: "hasDone";
+  eventName: string;
+  subConditions: EventSubCondition[];
+  subMatch: "and" | "or";
+};
+
+export type FilterRule = TagsRule | FieldsRule | EventsRule;
 
 export interface EvaluateResult {
   count: number;
@@ -24,74 +46,175 @@ export interface EvaluateResult {
   }>;
 }
 
-function buildClause(rule: FilterRule): Record<string, unknown> {
-  switch (rule.field) {
-    case "firstName":
-    case "lastName":
-    case "email":
-    case "phoneNumber": {
-      const col = rule.field;
-      if (rule.operator === "isEmpty") return { [col]: null };
-      if (rule.operator === "isNotEmpty") return { NOT: { [col]: null } };
-      if (rule.operator === "contains") return { [col]: { contains: rule.value, mode: "insensitive" } };
-      if (rule.operator === "startsWith") return { [col]: { startsWith: rule.value, mode: "insensitive" } };
-      return { [col]: { equals: rule.value, mode: "insensitive" } };
-    }
-    case "leadStatusId":
-      if (rule.operator === "isNot") return { NOT: { leadStatusId: rule.value } };
-      return { leadStatusId: rule.value };
-    case "tags":
-      if (rule.operator === "doesNotContain") return { NOT: { tags: { has: rule.value } } };
-      return { tags: { has: rule.value } };
-    case "countryCode":
-    case "languageCode": {
-      const col = rule.field;
-      if (rule.operator === "isNot") return { NOT: { [col]: rule.value } };
-      return { [col]: rule.value };
-    }
-    case "assignedUserId":
-      if (rule.operator === "isEmpty") return { assignedUserId: null };
-      if (rule.operator === "isNot") return { NOT: { assignedUserId: rule.value } };
-      return { assignedUserId: rule.value };
-    case "groups":
-      if (rule.operator === "notMemberOf") return { NOT: { groupContacts: { some: { contactGroupId: rule.value } } } };
-      return { groupContacts: { some: { contactGroupId: rule.value } } };
-    case "whatsappOptOut":
-      return { whatsappOptOut: rule.operator === "isTrue" };
-    case "disableBot":
-      return { disableBot: rule.operator === "isTrue" };
-    case "createdAt":
-      if (rule.operator === "between") return { createdAt: { gte: new Date(rule.value), lte: new Date(rule.valueTo!) } };
-      if (rule.operator === "after") return { createdAt: { gte: new Date(rule.value) } };
-      return { createdAt: { lte: new Date(rule.value) } };
-    case "lastMessageAt":
-      if (rule.operator === "between") return { conversations: { some: { lastMessageAt: { gte: new Date(rule.value), lte: new Date(rule.valueTo!) } } } };
-      if (rule.operator === "after") return { conversations: { some: { lastMessageAt: { gte: new Date(rule.value) } } } };
-      return { conversations: { some: { lastMessageAt: { lte: new Date(rule.value) } } } };
-    case "customField": {
-      if (rule.operator === "isEmpty") return { NOT: { customFieldValues: { some: { fieldId: rule.customFieldId } } } };
-      const valueClause =
-        rule.operator === "contains"
-          ? { contains: rule.value, mode: "insensitive" }
-          : { equals: rule.value };
-      return { customFieldValues: { some: { fieldId: rule.customFieldId, fieldValue: valueClause } } };
-    }
+// ── Backward compat coercion ──────────────────────────────────────────────────
+
+function normalizeRule(raw: unknown): FilterRule {
+  const r = raw as Record<string, unknown>;
+  if (r["type"]) return raw as FilterRule;
+  // old format — has `field` but no `type`
+  if (r["field"] === "tags") {
+    const op = r["operator"] === "doesNotContain" ? "isNot" : "is";
+    return { type: "tags", operator: op, value: (r["value"] as string) ?? "" };
+  }
+  return {
+    type: "fields",
+    field: r["field"] as string,
+    operator: r["operator"] as string,
+    value: r["value"] as string | undefined,
+    valueTo: r["valueTo"] as string | undefined,
+    customFieldId: r["customFieldId"] as string | undefined,
+  };
+}
+
+// ── Clause builders ───────────────────────────────────────────────────────────
+
+function buildTagsClause(rule: TagsRule): Record<string, unknown> {
+  if (rule.operator === "isNot") return { NOT: { tags: { has: rule.value } } };
+  return { tags: { has: rule.value } };
+}
+
+function buildTextClause(col: string, operator: string, value?: string): Record<string, unknown> {
+  switch (operator) {
+    case "is":
+    case "equals":
+      return { [col]: { equals: value, mode: "insensitive" } };
+    case "isNot":
+      return { NOT: { [col]: { equals: value, mode: "insensitive" } } };
+    case "contains":
+      return { [col]: { contains: value, mode: "insensitive" } };
+    case "doesNotContain":
+      return { NOT: { [col]: { contains: value, mode: "insensitive" } } };
+    case "startsWith":
+      return { [col]: { startsWith: value, mode: "insensitive" } };
+    case "isEmpty":
+      return { [col]: null };
+    case "isNotEmpty":
+    case "hasAnyValue":
+      return { NOT: { [col]: null } };
+    default:
+      return { [col]: { equals: value, mode: "insensitive" } };
   }
 }
+
+function buildDateClause(col: string, operator: string, value?: string, valueTo?: string): Record<string, unknown> {
+  const now = new Date();
+  switch (operator) {
+    case "lessThanDaysAgo": {
+      const days = parseInt(value ?? "0", 10);
+      const cutoff = new Date(now.getTime() - days * 86400000);
+      return { [col]: { gte: cutoff } };
+    }
+    case "moreThanDaysAgo": {
+      const days = parseInt(value ?? "0", 10);
+      const cutoff = new Date(now.getTime() - days * 86400000);
+      return { [col]: { lte: cutoff } };
+    }
+    case "after":
+      return { [col]: { gte: new Date(value!) } };
+    case "before":
+      return { [col]: { lte: new Date(value!) } };
+    case "on": {
+      const d = new Date(value!);
+      const start = new Date(d); start.setHours(0, 0, 0, 0);
+      const end = new Date(d); end.setHours(23, 59, 59, 999);
+      return { [col]: { gte: start, lte: end } };
+    }
+    case "between":
+      return { [col]: { gte: new Date(value!), lte: new Date(valueTo!) } };
+    case "isEmpty":
+      return { [col]: null };
+    case "hasAnyValue":
+      return { NOT: { [col]: null } };
+    default:
+      return {};
+  }
+}
+
+function buildFieldsClause(rule: FieldsRule): Record<string, unknown> {
+  const { field, operator, value, valueTo, customFieldId } = rule;
+
+  if (["firstName", "lastName", "email", "phoneNumber"].includes(field)) {
+    return buildTextClause(field, operator, value);
+  }
+
+  switch (field) {
+    case "leadStatusId":
+      if (operator === "isNot") return { NOT: { leadStatusId: value } };
+      return { leadStatusId: value };
+
+    case "countryCode":
+    case "languageCode":
+      if (operator === "isNot") return { NOT: { [field]: value } };
+      return { [field]: value };
+
+    case "assignedUserId":
+      if (operator === "isEmpty") return { assignedUserId: null };
+      if (operator === "isNot") return { NOT: { assignedUserId: value } };
+      return { assignedUserId: value };
+
+    case "groups":
+      if (operator === "notMemberOf") return { NOT: { groupContacts: { some: { contactGroupId: value } } } };
+      return { groupContacts: { some: { contactGroupId: value } } };
+
+    case "whatsappOptOut":
+      return { whatsappOptOut: operator === "isTrue" || operator === "is true" };
+
+    case "disableBot":
+      return { disableBot: operator === "isTrue" || operator === "is true" };
+
+    case "createdAt":
+      return buildDateClause("createdAt", operator, value, valueTo);
+
+    case "lastMessageAt": {
+      if (operator === "isEmpty") return { conversations: { none: {} } };
+      if (operator === "hasAnyValue") return { conversations: { some: {} } };
+      const clause = buildDateClause("lastMessageAt", operator, value, valueTo);
+      return { conversations: { some: { lastMessageAt: (clause["lastMessageAt"] as Record<string, unknown>) } } };
+    }
+
+    case "customField": {
+      if (operator === "isEmpty") return { NOT: { customFieldValues: { some: { fieldId: customFieldId } } } };
+      const valClause = operator === "contains"
+        ? { contains: value, mode: "insensitive" }
+        : { equals: value };
+      return { customFieldValues: { some: { fieldId: customFieldId, fieldValue: valClause } } };
+    }
+
+    default:
+      return {};
+  }
+}
+
+function buildClause(rule: FilterRule): Record<string, unknown> {
+  switch (rule.type) {
+    case "tags":    return buildTagsClause(rule);
+    case "fields":  return buildFieldsClause(rule);
+    case "events":  return {}; // handled in PR2
+  }
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
 
 export async function evaluateSegment(
   prisma: PrismaClient,
   organizationId: string,
   filters: FilterRule[],
-  match: MatchMode = "all"
+  match: MatchMode = "all",
+  whatsappOptedOnly = false
 ): Promise<EvaluateResult> {
-  const clauses = filters.map(buildClause);
+  const normalized = filters.map(normalizeRule);
+  const clauses = normalized
+    .filter((r) => r.type !== "events")
+    .map(buildClause)
+    .filter((c) => Object.keys(c).length > 0);
+
   const matchKey = match === "any" ? "OR" : "AND";
 
   const contacts = await prisma.contact.findMany({
     where: {
       organizationId,
       deletedAt: null,
+      ...(whatsappOptedOnly ? { whatsappOptOut: false } : {}),
       ...(clauses.length > 0 ? { [matchKey]: clauses } : {}),
     },
     select: {

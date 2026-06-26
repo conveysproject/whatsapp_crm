@@ -108,3 +108,109 @@ describe("evaluateSegment", () => {
     }));
   });
 });
+
+describe("evaluateSegment — new type format", () => {
+  it("evaluates TagsRule { type: 'tags', operator: 'is' }", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    await evaluateSegment(mockPrisma, "org-1", [
+      { type: "tags", operator: "is", value: "VIP" },
+    ], "all");
+    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ AND: [{ tags: { has: "VIP" } }] }),
+    }));
+  });
+
+  it("evaluates TagsRule { type: 'tags', operator: 'isNot' }", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    await evaluateSegment(mockPrisma, "org-1", [
+      { type: "tags", operator: "isNot", value: "spam" },
+    ], "all");
+    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ AND: [{ NOT: { tags: { has: "spam" } } }] }),
+    }));
+  });
+
+  it("evaluates FieldsRule text 'is' operator", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    await evaluateSegment(mockPrisma, "org-1", [
+      { type: "fields", field: "firstName", operator: "is", value: "Ravi" },
+    ], "all");
+    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ AND: [{ firstName: { equals: "Ravi", mode: "insensitive" } }] }),
+    }));
+  });
+
+  it("evaluates FieldsRule text 'isNot' operator", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    await evaluateSegment(mockPrisma, "org-1", [
+      { type: "fields", field: "firstName", operator: "isNot", value: "Bot" },
+    ], "all");
+    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        AND: [{ NOT: { firstName: { equals: "Bot", mode: "insensitive" } } }],
+      }),
+    }));
+  });
+
+  it("evaluates FieldsRule text 'doesNotContain' operator", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    await evaluateSegment(mockPrisma, "org-1", [
+      { type: "fields", field: "email", operator: "doesNotContain", value: "@spam" },
+    ], "all");
+    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        AND: [{ NOT: { email: { contains: "@spam", mode: "insensitive" } } }],
+      }),
+    }));
+  });
+
+  it("evaluates FieldsRule text 'hasAnyValue' operator", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    await evaluateSegment(mockPrisma, "org-1", [
+      { type: "fields", field: "email", operator: "hasAnyValue" },
+    ], "all");
+    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ AND: [{ NOT: { email: null } }] }),
+    }));
+  });
+
+  it("evaluates FieldsRule date 'lessThanDaysAgo' operator", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    const before = Date.now();
+    await evaluateSegment(mockPrisma, "org-1", [
+      { type: "fields", field: "createdAt", operator: "lessThanDaysAgo", value: "7" },
+    ], "all");
+    const after = Date.now();
+    const call = mockFindMany.mock.calls[0][0];
+    const gte: Date = call.where.AND[0].createdAt.gte;
+    expect(gte.getTime()).toBeGreaterThanOrEqual(before - 7 * 86400000 - 1000);
+    expect(gte.getTime()).toBeLessThanOrEqual(after - 7 * 86400000 + 1000);
+  });
+
+  it("applies whatsappOptedOnly implicit clause", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    await evaluateSegment(mockPrisma, "org-1", [], "all", true);
+    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ whatsappOptOut: false }),
+    }));
+  });
+
+  it("backward compat: old format tags rule still works", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    await evaluateSegment(mockPrisma, "org-1", [
+      { field: "tags", operator: "contains", value: "VIP" } as never,
+    ], "all");
+    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ AND: [{ tags: { has: "VIP" } }] }),
+    }));
+  });
+});

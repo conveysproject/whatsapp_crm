@@ -542,15 +542,16 @@ model ContactImport {
 
 
 model Segment {
-  id             String           @id @default(uuid())
-  organizationId String           @map("organization_id")
-  name           String
-  filters        Json             @default("[]")
-  match          String           @default("all")
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
-  contacts       SegmentContact[]
-  campaigns      CampaignSegment[]
+  id                String           @id @default(uuid())
+  organizationId    String           @map("organization_id")
+  name              String
+  filters           Json             @default("[]")
+  match             String           @default("all")
+  whatsappOptedOnly Boolean          @default(false) @map("whatsapp_opted_only")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  contacts          SegmentContact[]
+  campaigns         CampaignSegment[]
 
   @@index([organizationId])
   @@map("segments")
