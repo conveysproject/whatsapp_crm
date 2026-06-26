@@ -2,37 +2,50 @@
 
 **Date:** 2026-06-26
 **Status:** Design — pending approval
-**Goal:** Bring WBMSG's agent + team management to exact functional parity with Interakt's Sales CRM, using WBMSG's existing role system (option B — repurpose `manager` and `agent`, no new roles).
+**Goal:** Bring WBMSG's agent + team management to exact functional parity with Interakt's Sales CRM, reusing WBMSG's existing global roles (option B) and adding a per-team **Lead/Member** hierarchy that matches Interakt's Create Team panel.
 
-## Source of truth (Interakt articles)
+## Source of truth (Interakt articles + UI screenshots)
 
 - managing-and-creating-agents-team-on-sales-crm
 - add-agents-to-sales-crm
 - roles-and-permissions-in-sales-crm
 - create-and-manage-team-in-sales-crm
 
-## Role mapping
+## Two layers: global role vs team role
 
-WBMSG keeps its 5 existing roles. Interakt's 3 sales roles map onto them:
+Interakt has a **global role** (Super Admin / Sales Lead / Sales Agent) that governs *permissions*, and a **per-team hierarchy** (Lead / Member) set with a radio toggle in the Create Team panel that governs *contact visibility within a team*. WBMSG mirrors this with two independent attributes:
 
-| Interakt role | WBMSG role | Visibility |
+| Layer | Field | Governs |
 |---|---|---|
-| Super Admin | `superAdmin` / `admin` | All org contacts (unchanged) |
-| Sales Lead | `manager` | Own + unassigned + their team members' contacts |
-| Sales Agent | `agent` | Only contacts assigned to them (unless `contacts_view_all`) |
-| — | `viewer` | All org contacts, read-only (unchanged) |
+| Global role | `User.role` (`superAdmin`/`admin`/`manager`/`agent`/`viewer`) | Permissions — settings access, team management, etc. |
+| Team hierarchy | `User.teamRole` (`lead`/`member`) | Contact visibility within the team |
 
-A `manager` who has a `teamId` acts as that team's **Lead**. An `agent` with a `teamId` is a **Member**. Multiple managers (Leads) per team are allowed. One team per user.
+Global role mapping to Interakt:
+
+| Interakt global role | WBMSG `role` |
+|---|---|
+| Super Admin | `superAdmin` / `admin` |
+| Sales Lead | `manager` |
+| Sales Agent | `agent` |
+| — | `viewer` (read-only, unchanged) |
+
+When an agent is added to a team, `teamRole` **defaults** from global role (`manager`→`lead`, `agent`→`member`) but is **overridable** via the per-row Lead/Member radio — exactly like Interakt. A global `agent` can be made a team `lead`; a global `manager` can be a `member`.
 
 ## Data model
 
-One field added to `User`; a `viewAllContacts` flag and a reverse relation added to `Team`.
+`User` gains `teamId` + `teamRole`; `Team` gains `viewAllContacts` + the reverse relation.
 
 ```prisma
+enum TeamRole {
+  lead
+  member
+}
+
 model User {
   // ...existing fields
-  teamId  String?  @map("team_id")
-  team    Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  teamId    String?    @map("team_id")
+  teamRole  TeamRole?  @map("team_role")   // null when not in a team
+  team      Team?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
 }
 
 model Team {
@@ -43,41 +56,45 @@ model Team {
 ```
 
 - One team per user (`teamId` nullable scalar — not a join table). Interakt assigns an agent to a single team.
-- `onDelete: SetNull` — deleting a team clears `teamId` on all members, matching Interakt's "deleting a team removes team-based visibility."
-- `viewAllContacts` — per-team Lead Controls toggle. When `true`, members of that team can view all org contacts (exact Interakt "View All Contacts" behavior, scoped per team).
+- `teamRole` is meaningful only when `teamId` is set; cleared to `null` when the user leaves a team.
+- `onDelete: SetNull` clears `teamId` on all members when a team is deleted (and `teamRole` is cleared in the same delete handler), matching Interakt's "deleting a team removes team-based visibility."
+- `viewAllContacts` — per-team Lead Controls toggle. When `true`, every member of that team can view all org contacts (exact Interakt "View All Contacts" behavior, scoped per team).
 
 Migration: `add_team_membership_and_view_all`.
 
 ## Contact visibility rules
 
-Applied in `GET /contacts` ([apps/api/src/routes/contacts.ts](../../../apps/api/src/routes/contacts.ts)) before the Prisma query, as an additional `where` constraint. Existing org-scoping and non-sales-closure-visibility logic is preserved.
+Applied in `GET /contacts` ([apps/api/src/routes/contacts.ts](../../../apps/api/src/routes/contacts.ts)) before the Prisma query, as an additional `where` constraint. Existing org-scoping and non-sales-closure-visibility logic is preserved. Evaluated in precedence order — first match wins:
 
-| Caller | Additional `where` filter |
-|---|---|
-| `superAdmin` / `admin` / `viewer` | none (all org contacts) |
-| `agent` whose team has `viewAllContacts = true` | none (all org contacts) |
-| `agent` (default) | `assignedUserId = self.id` |
-| `manager` with a team | `OR[ assignedUserId = null, assignedUserId = self.id, assignedUserId in (team member ids) ]` |
-| `manager` without a team | `OR[ assignedUserId = null, assignedUserId = self.id ]` |
+| # | Caller | Additional `where` filter |
+|---|---|---|
+| 1 | `superAdmin` / `admin` / `viewer` | none (all org contacts) |
+| 2 | any user whose team has `viewAllContacts = true` | none (all org contacts) |
+| 3 | `teamRole = lead` | `OR[ assignedUserId = null, assignedUserId = self.id, assignedUserId in (team member ids) ]` |
+| 4 | global `manager` with no team | `OR[ assignedUserId = null, assignedUserId = self.id ]` |
+| 5 | everyone else (`agent`, `teamRole = member`, unteamed agent) | `assignedUserId = self.id` |
 
-"Team member ids" = all users where `teamId = manager.teamId` (managers + agents in the team). Computed with a single `user.findMany({ where: { organizationId, teamId } , select: { id } })`. The caller's own team (with its `viewAllContacts` flag) is loaded once from `request.auth` / a `user.findUnique` and reused.
+"Team member ids" = all users where `teamId = self.teamId` (the whole team, leads + members). Computed with a single `user.findMany({ where: { organizationId, teamId }, select: { id } })`. The caller's own `{ teamId, teamRole, team.viewAllContacts }` is loaded once (via `request.auth` enrichment or a `user.findUnique`) and reused.
 
-The same scoping is reused by `GET /contacts/export` and `GET /contacts/export/count` via the shared `buildExportWhere` helper, so exports respect visibility too.
+This is implemented as a pure `buildContactVisibilityWhere(auth, teamMemberIds)` helper so it can be unit-tested in isolation and reused by every contact-reading route.
+
+The same scoping is reused by `GET /contacts/export`, `GET /contacts/export/count` (via the shared `buildExportWhere` helper) and `GET /contacts/:id`, so exports and single-contact reads respect visibility too.
 
 ### Inbox parity
 
-Interakt: an agent's inbox is limited to conversations with contacts they can see. WBMSG already has `inbox_access@assigned_chats_only`. We confirm conversation list scoping mirrors contact scoping: an `agent` without `contacts_view_all` sees only conversations whose `assignedTo = self` (existing behavior — audited, not rebuilt here). Manager team-scoping for the inbox is a follow-up if conversation `assignedTo` does not already cover it.
+Interakt: "If a Sales Agent has limited contact visibility, their Inbox will also be limited to only those contacts." WBMSG already has `inbox_access@assigned_chats_only`. We confirm conversation list scoping mirrors contact scoping: a `member`/`agent` sees only conversations whose `assignedTo = self` (existing behavior — audited, not rebuilt here). Team-Lead scoping of the inbox to the whole team is a follow-up once contact scoping lands.
 
 ## Permissions
 
-Agent "view all contacts" is **data-driven per team** (`Team.viewAllContacts`), not a role permission — this matches Interakt's per-team Lead Controls toggle. No new permission key is needed for visibility.
+Contact visibility is **data-driven** (`User.teamRole` + `Team.viewAllContacts`), not a role permission — matching Interakt's per-team toggle and Lead/Member hierarchy. No new permission key is needed for visibility.
 
-Changes to [apps/api/src/lib/default-role-permissions.ts](../../../apps/api/src/lib/default-role-permissions.ts):
+Per Interakt's Permissions Overview table, **Manage Teams = Super Admin + Sales Lead**, **Edit Roles = Super Admin only**. Changes to [apps/api/src/lib/default-role-permissions.ts](../../../apps/api/src/lib/default-role-permissions.ts):
 
-- `manager`: add `"settings_access@settings_teams": "allow"` — Interakt's Sales Lead can add/edit/delete teams.
+- `manager`: add `"settings_access@settings_teams": "allow"`.
 - `admin`: add `"settings_access@settings_teams": "allow"`.
+- Role editing stays restricted to `superAdmin`/`admin` (existing roles page — unchanged; managers do **not** get `settings_roles`).
 
-`superAdmin` bypasses all checks (unchanged). The visibility logic reads `Team.viewAllContacts` directly in the `GET /contacts` scoping builder; only a user with `settings_access@settings_teams` can flip it via `PATCH /v1/teams/:id`.
+`superAdmin` bypasses all checks (unchanged). Only a user with `settings_access@settings_teams` can create/edit/delete teams or flip `viewAllContacts`.
 
 ## API
 
@@ -85,65 +102,76 @@ Changes to [apps/api/src/lib/default-role-permissions.ts](../../../apps/api/src/
 
 All routes org-scoped; mutations gated on `settings_access@settings_teams`.
 
-- `GET /v1/teams` — return each team with `{ id, name, description, viewAllContacts, members: [{ id, fullName, email, role }] }`.
-- `POST /v1/teams` — body `{ name, memberIds: string[], viewAllContacts? }`. Validation:
+- `GET /v1/teams` — return each team with `{ id, name, description, viewAllContacts, members: [{ id, fullName, email, role, teamRole }] }`. Lead names are derived from members where `teamRole = lead` (for the list's "Team Lead" column).
+- `POST /v1/teams` — body `{ name, members: [{ userId, teamRole }], viewAllContacts? }`. Validation:
   - `name` required, non-empty, unique within org.
-  - `memberIds` must include **at least one `manager`** (Lead) and **at least one `agent`** (Member).
-  - All `memberIds` must belong to the org and not already be in another team (or get reassigned — see below).
-  - On success: create team (with `viewAllContacts`, default `false`), set `teamId` on each member.
-- `PATCH /v1/teams/:id` — body `{ name?, memberIds?, viewAllContacts? }`. Same Lead/Member validation when `memberIds` provided. `viewAllContacts` toggle is the Lead Controls switch. Members removed from the list get `teamId = null`; members added get `teamId = this team` (moved out of any prior team).
-- `DELETE /v1/teams/:id` — clears `teamId` on all members (DB `SetNull`), deletes team.
+  - `members` must contain **at least one `lead`** (Interakt: "at least one agent added and at least one marked as Lead").
+  - All `userId`s belong to the org; users already in another team are **moved** to this team.
+  - On success: create team, set `teamId` + `teamRole` on each member.
+- `PATCH /v1/teams/:id` — body `{ name?, members?, viewAllContacts? }`. Same ≥1-lead validation when `members` provided. `viewAllContacts` is the Lead Controls toggle. Members dropped from the list get `teamId = null, teamRole = null`; members added/changed get the team + their `teamRole`.
+- `DELETE /v1/teams/:id` — clears `teamId` + `teamRole` on all members, deletes team.
 
 ### User ↔ team assignment
 
-`PATCH /v1/users/:id` accepts `teamId` (nullable). Moving a user to a team removes them from a previous team automatically (single `teamId` scalar). Constraint: an org cannot leave a team with zero Leads or zero Members via this path — validated, returns 400 if it would orphan the team. (Simplest enforcement: team Lead/Member invariant is checked on team mutation; `PATCH /v1/users` reassignment re-validates affected teams.)
+`PATCH /v1/users/:id` accepts `teamId` (nullable) and `teamRole`. Moving a user into a team removes them from any prior team (single `teamId` scalar) and re-validates that the prior team still has ≥1 lead — returns 400 if the move would leave a team with no Lead. Setting `teamId = null` also clears `teamRole`.
 
 ### Assignment engine — [apps/api/src/lib/assignment-engine.ts](../../../apps/api/src/lib/assignment-engine.ts)
 
 `pickWorkloadBalancedAgent(prisma, organizationId, teamId?)`:
-- When called for an `assignType = "team"` rule, pass the rule's `assignTo` (team id) as `teamId`.
-- Filter candidate agents to `role = "agent", isActive = true, teamId = <team>`.
+- For an `assignType = "team"` rule, pass the rule's `assignTo` (team id) as `teamId`.
+- Filter candidates to `role = "agent", isActive = true, teamId = <team>`.
 - When `teamId` is undefined (org-wide fallback), behavior is unchanged (all active agents).
 
-This fixes the existing bug where team assignment round-robins across all org agents.
+Fixes the existing bug where team assignment round-robins across all org agents.
 
 ## UI
 
+### `/settings/teams` (new page) — "Manage Teams"
+
+- **List view** columns: `Team Name | Team Lead(s) | Team Members | actions (edit / delete)`, with a **Create Team** button top-right (mirrors Interakt's list).
+- **Create / Edit slide-over** ("Create a Team"):
+  - **Team Name** input.
+  - **Select Team Members** — searchable dropdown of org users; each pick adds a row.
+  - **Member rows table**: `Agent Name | Email | Phone No. | Lead/Member radio | remove (minus icon)`. Radio defaults from global role, overridable. Save disabled until name is set and ≥1 row is marked **Lead**.
+  - **Lead Controls**: a "Members can view all contacts" toggle (sets `Team.viewAllContacts`).
+- **Delete** shows a confirm dialog warning that team-based visibility is removed.
+
+### Other pages
+
 | Page | Change |
 |---|---|
-| [apps/web/app/(dashboard)/settings/team/page.tsx](../../../apps/web/app/(dashboard)/settings/team/page.tsx) | Redirect target changes from `/settings/members` to `/settings/teams`. |
-| `/settings/teams` (new page) | List teams (name, member count, Leads). Create Team modal: name + member multi-select (each member shows their role badge; validates ≥1 manager and ≥1 agent). Edit/delete. **Lead Controls** per team: a "Members can view all contacts" toggle on each team → sets `Team.viewAllContacts`. |
-| [apps/web/app/(dashboard)/settings/members/page.tsx](../../../apps/web/app/(dashboard)/settings/members/page.tsx) | Add a **Team** column to the agents table. Edit-agent flow gains a team picker. |
+| [settings/team/page.tsx](../../../apps/web/app/(dashboard)/settings/team/page.tsx) | Redirect target changes from `/settings/members` to `/settings/teams`. |
+| [settings/members/page.tsx](../../../apps/web/app/(dashboard)/settings/members/page.tsx) | Add a **Team** column to the agents table; edit-agent flow gains a team + Lead/Member picker. |
+| Invite flow (same page) | Add an optional **Assign a Team** (+ Lead/Member) selector; applied when the invited user is provisioned. Name/mobile remain Clerk-sourced (WBMSG uses Clerk, not Interakt's WhatsApp-2FA agent creation). |
 
-UI follows the existing pattern in [AssignmentRulesTab.tsx](../../../apps/web/app/(dashboard)/settings/contact-settings/tabs/AssignmentRulesTab.tsx) (slide-over + react-query mutations).
+UI follows the existing slide-over + react-query pattern in [AssignmentRulesTab.tsx](../../../apps/web/app/(dashboard)/settings/contact-settings/tabs/AssignmentRulesTab.tsx).
 
 ## Constraints (matching Interakt exactly)
 
-- Every team has ≥1 Lead (`manager`) and ≥1 Member (`agent`) — enforced on create/update.
-- Team name required and unique within org.
-- One team per user.
-- Deleting a team clears `teamId` on members and removes team-based visibility.
-- Agents see only their own contacts unless their team's `viewAllContacts` is on.
-- Team Leads (managers) see their team members' contacts but **not** other teams' contacts.
-- Only `superAdmin` / `admin` / `manager` can manage teams (`settings_access@settings_teams`).
+- Every team must have a name (unique within org), ≥1 member, and **≥1 Lead** — enforced on create/update.
+- One team per user; `teamRole` set per membership via the Lead/Member radio.
+- Deleting a team clears `teamId`/`teamRole` on members and removes team-based visibility.
+- Members (and unteamed agents) see only their own assigned contacts unless their team's `viewAllContacts` is on.
+- Team Leads see their own + their team members' contacts, but **not** other teams' contacts.
+- Only `superAdmin` / `admin` / `manager` (those with `settings_access@settings_teams`) can manage teams. Editing global roles stays `superAdmin` / `admin` only.
 
 ## Out of scope (YAGNI / deferred)
 
-- Seat-limit enforcement on agent creation (Interakt's "5 seats" — WBMSG handles limits via plan checks elsewhere; not part of this change).
-- WhatsApp-number-as-login / 2FA (Interakt-specific auth; WBMSG uses Clerk).
+- Seat-limit enforcement on agent creation (Interakt's "5 seats" — WBMSG handles plan limits elsewhere).
+- WhatsApp-number-as-login / 2FA agent creation (Interakt-specific; WBMSG uses Clerk).
 - Multi-team membership per user.
-- Manager team-scoping for the conversation inbox beyond existing `assignedTo` behavior — follow-up once contact scoping lands.
+- Team-Lead scoping of the conversation inbox beyond existing `assignedTo` behavior — follow-up once contact scoping lands.
 
 ## Testing
 
-- Unit: visibility `where`-builder for each role × team state (incl. `viewAllContacts` on/off). Lead/Member validation on team create/update. `pickWorkloadBalancedAgent` team filtering.
-- Integration: agent sees only assigned contacts; manager sees team contacts but not other teams'; admin sees all; flipping a team's `viewAllContacts` changes its agents' visibility.
+- Unit: `buildContactVisibilityWhere` for every (global role × teamRole × viewAllContacts) combination. ≥1-Lead validation on team create/update and on user reassignment. `pickWorkloadBalancedAgent` team filtering. `teamRole` default-from-global-role logic.
+- Integration: member sees only assigned contacts; lead sees own + team members' but not other teams'; admin sees all; flipping a team's `viewAllContacts` flips its members' visibility; deleting a team drops visibility.
 - RBAC audit: every new/changed route re-checked for org scoping and `settings_access@settings_teams` gating (per project security-audit requirement).
 
 ## Security audit checklist (per-task gate)
 
 - [ ] All team routes scope by `organizationId`.
-- [ ] Team mutations gated on `settings_access@settings_teams`.
-- [ ] `Team.viewAllContacts` can only be flipped by a user with `settings_access@settings_teams` (not by an agent).
+- [ ] Team mutations + `viewAllContacts` flips gated on `settings_access@settings_teams` (not flippable by an agent/member).
 - [ ] Visibility filter cannot be bypassed via export, single-contact GET, or conversation routes.
-- [ ] `PATCH /v1/users/:id` cannot move a user into another org's team.
+- [ ] `PATCH /v1/users/:id` and `POST/PATCH /v1/teams` cannot place a user into another org's team or read cross-org users.
+- [ ] `teamRole` cannot be self-elevated by an agent (only via team-management routes).
