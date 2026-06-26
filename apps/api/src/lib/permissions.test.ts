@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { canAccess, canAccessSub, shouldHidePhone, shouldHideContactFields } from "./permissions.js";
+import { DEFAULT_ROLE_PERMISSIONS } from "./default-role-permissions.js";
 
 describe("canAccess", () => {
   it("admin and superAdmin bypass all checks", () => {
@@ -88,5 +89,13 @@ describe("shouldHideContactFields", () => {
 
   it("returns false when hide_contact_fields is deny", () => {
     expect(shouldHideContactFields({ "hide_phone_number@hide_contact_fields": "deny" })).toBe(false);
+  });
+});
+
+describe("DEFAULT_ROLE_PERMISSIONS", () => {
+  it("grants settings_teams to admin and manager, not agent", () => {
+    expect(DEFAULT_ROLE_PERMISSIONS.admin["settings_access@settings_teams"]).toBe("allow");
+    expect(DEFAULT_ROLE_PERMISSIONS.manager["settings_access@settings_teams"]).toBe("allow");
+    expect(DEFAULT_ROLE_PERMISSIONS.agent["settings_access@settings_teams"]).toBeUndefined();
   });
 });
