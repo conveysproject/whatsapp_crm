@@ -16,6 +16,7 @@ export type FieldsRule = {
 };
 
 export type EventSubCondition = {
+  id?: string;
   property: string;
   operator: "is" | "isNot" | "contains" | "doesNotContain" | "isEmpty" | "hasAnyValue";
   value?: string;

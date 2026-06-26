@@ -508,6 +508,7 @@ model Contact {
   groupContacts      GroupContact[]
   conversations      Conversation[]
   deals              Deal[]
+  events             ContactEvent[]
 
   @@unique([organizationId, phoneNumber])
   @@index([organizationId])
@@ -516,6 +517,22 @@ model Contact {
   @@index([organizationId, deletedAt])
   @@index([countryId])
   @@map("contacts")
+}
+
+model ContactEvent {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  contactId      String   @map("contact_id")
+  contact        Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  name           String
+  properties     Json     @default("{}")
+  occurredAt     DateTime @default(now()) @map("occurred_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, contactId])
+  @@index([organizationId, name])
+  @@index([contactId, name])
+  @@map("contact_events")
 }
 
 model ContactImport {

@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
+import type { FilterRule } from "./segment-evaluator.js";
+
+// Backward-compat tests use old-format rules (no `type` field) intentionally — cast to bypass type check
+const oldFmt = (rules: object[]) => rules as unknown as FilterRule[];
 
 // Mock prisma for unit tests
 const mockFindMany = vi.fn();
 const mockPrisma = {
   contact: { findMany: mockFindMany },
+  contactEvent: { findMany: vi.fn() },
 } as unknown as PrismaClient;
 
 beforeEach(() => { vi.clearAllMocks(); });
@@ -15,9 +20,9 @@ describe("evaluateSegment", () => {
     mockFindMany.mockResolvedValue([
       { id: "c1", firstName: "Ravi", lastName: "Kumar", phoneNumber: "+919000000001", leadStatus: { name: "New Lead", color: "#F97316" } },
     ]);
-    const result = await evaluateSegment(mockPrisma, "org-1", [
+    const result = await evaluateSegment(mockPrisma, "org-1", oldFmt([
       { field: "leadStatusId", operator: "equals", value: "ls-1" },
-    ], "all");
+    ]), "all");
     expect(result.count).toBe(1);
     expect(result.contacts[0].phoneNumber).toBe("+919000000001");
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -28,9 +33,9 @@ describe("evaluateSegment", () => {
   it("builds a NOT clause for leadStatusId isNot", async () => {
     const { evaluateSegment } = await import("./segment-evaluator.js");
     mockFindMany.mockResolvedValue([]);
-    await evaluateSegment(mockPrisma, "org-1", [
+    await evaluateSegment(mockPrisma, "org-1", oldFmt([
       { field: "leadStatusId", operator: "isNot", value: "ls-9" },
-    ], "all");
+    ]), "all");
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ AND: [{ NOT: { leadStatusId: "ls-9" } }] }),
     }));
@@ -39,10 +44,10 @@ describe("evaluateSegment", () => {
   it("uses OR clause when match is any", async () => {
     const { evaluateSegment } = await import("./segment-evaluator.js");
     mockFindMany.mockResolvedValue([]);
-    await evaluateSegment(mockPrisma, "org-1", [
+    await evaluateSegment(mockPrisma, "org-1", oldFmt([
       { field: "leadStatusId", operator: "equals", value: "ls-1" },
       { field: "tags", operator: "contains", value: "VIP" },
-    ], "any");
+    ]), "any");
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ OR: expect.any(Array) }),
     }));
@@ -51,9 +56,9 @@ describe("evaluateSegment", () => {
   it("evaluates tags doesNotContain", async () => {
     const { evaluateSegment } = await import("./segment-evaluator.js");
     mockFindMany.mockResolvedValue([]);
-    await evaluateSegment(mockPrisma, "org-1", [
+    await evaluateSegment(mockPrisma, "org-1", oldFmt([
       { field: "tags", operator: "doesNotContain", value: "spam" },
-    ], "all");
+    ]), "all");
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ AND: [{ NOT: { tags: { has: "spam" } } }] }),
     }));
@@ -62,9 +67,9 @@ describe("evaluateSegment", () => {
   it("evaluates whatsappOptOut isTrue", async () => {
     const { evaluateSegment } = await import("./segment-evaluator.js");
     mockFindMany.mockResolvedValue([]);
-    await evaluateSegment(mockPrisma, "org-1", [
+    await evaluateSegment(mockPrisma, "org-1", oldFmt([
       { field: "whatsappOptOut", operator: "isTrue" },
-    ], "all");
+    ]), "all");
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ AND: [{ whatsappOptOut: true }] }),
     }));
@@ -73,9 +78,9 @@ describe("evaluateSegment", () => {
   it("evaluates createdAt between", async () => {
     const { evaluateSegment } = await import("./segment-evaluator.js");
     mockFindMany.mockResolvedValue([]);
-    await evaluateSegment(mockPrisma, "org-1", [
+    await evaluateSegment(mockPrisma, "org-1", oldFmt([
       { field: "createdAt", operator: "between", value: "2024-01-01", valueTo: "2024-12-31" },
-    ], "all");
+    ]), "all");
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
         AND: [{ createdAt: { gte: new Date("2024-01-01"), lte: new Date("2024-12-31") } }],
@@ -86,9 +91,9 @@ describe("evaluateSegment", () => {
   it("evaluates customField equals", async () => {
     const { evaluateSegment } = await import("./segment-evaluator.js");
     mockFindMany.mockResolvedValue([]);
-    await evaluateSegment(mockPrisma, "org-1", [
+    await evaluateSegment(mockPrisma, "org-1", oldFmt([
       { field: "customField", operator: "equals", customFieldId: "cf-1", value: "Gold" },
-    ], "all");
+    ]), "all");
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
         AND: [{ customFieldValues: { some: { fieldId: "cf-1", fieldValue: { equals: "Gold" } } } }],
@@ -212,5 +217,44 @@ describe("evaluateSegment — new type format", () => {
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ AND: [{ tags: { has: "VIP" } }] }),
     }));
+  });
+});
+
+describe("evaluateSegment — events rules", () => {
+  it("evaluates EventsRule hasDone with no sub-conditions", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    await evaluateSegment(mockPrisma, "org-1", [
+      {
+        type: "events",
+        action: "hasDone",
+        eventName: "flow_completed",
+        subConditions: [],
+        subMatch: "and",
+      },
+    ], "all");
+    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        AND: [{ events: { some: { organizationId: "org-1", name: "flow_completed" } } }],
+      }),
+    }));
+  });
+
+  it("evaluates EventsRule with sub-condition", async () => {
+    const { evaluateSegment } = await import("./segment-evaluator.js");
+    mockFindMany.mockResolvedValue([]);
+    await evaluateSegment(mockPrisma, "org-1", [
+      {
+        type: "events",
+        action: "hasDone",
+        eventName: "flow_completed",
+        subConditions: [{ property: "flowId", operator: "is", value: "f-1" }],
+        subMatch: "and",
+      },
+    ], "all");
+    const call = mockFindMany.mock.calls[0][0];
+    const eventClause = call.where.AND[0];
+    expect(eventClause.events.some.name).toBe("flow_completed");
+    expect(eventClause.events.some.AND).toBeDefined();
   });
 });
