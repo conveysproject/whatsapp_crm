@@ -238,6 +238,17 @@ export const campaignWorker = new Worker<CampaignJob>(
           whatsappMessageId: messageId,
         });
 
+        if (contact) {
+          await prisma.contactEvent.create({
+            data: {
+              organizationId,
+              contactId: contact.id,
+              name: "campaign_sent",
+              properties: { campaignId, campaignName: campaign.name },
+            },
+          }).catch(() => undefined);
+        }
+
         sent++;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);

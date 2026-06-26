@@ -170,7 +170,7 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                 const recipientStatus = su.status as CampaignRecipientStatus;
                 const recipient = await fastify.prisma.campaignRecipient.findFirst({
                   where: { messageId: su.id },
-                  select: { id: true, status: true },
+                  select: { id: true, status: true, contactId: true, campaign: { select: { id: true } } },
                 });
                 if (recipient) {
                   const currentRecipientRank = RECIPIENT_RANK[recipient.status] ?? -1;
@@ -181,6 +181,28 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                       data: { status: recipientStatus },
                     });
                   }
+                }
+
+                if (org && recipient?.contactId && su.status === "delivered") {
+                  await fastify.prisma.contactEvent.create({
+                    data: {
+                      organizationId: org.id,
+                      contactId: recipient.contactId,
+                      name: "campaign_delivered",
+                      properties: { campaignId: recipient.campaign.id },
+                    },
+                  }).catch(() => undefined);
+                }
+
+                if (org && recipient?.contactId && su.status === "read") {
+                  await fastify.prisma.contactEvent.create({
+                    data: {
+                      organizationId: org.id,
+                      contactId: recipient.contactId,
+                      name: "campaign_read",
+                      properties: { campaignId: recipient.campaign.id },
+                    },
+                  }).catch(() => undefined);
                 }
               }
             }

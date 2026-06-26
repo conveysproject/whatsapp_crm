@@ -18,9 +18,32 @@ export const flowWorker = new Worker<FlowJob>(
       console.log(`[flow-worker] flow ${flowId} not found or inactive`);
       return;
     }
+
+    if (payload.contactId) {
+      await prisma.contactEvent.create({
+        data: {
+          organizationId: payload.organizationId,
+          contactId: payload.contactId,
+          name: "flow_started",
+          properties: { flowId, flowName: flow.name },
+        },
+      }).catch(() => undefined); // non-fatal — never block flow execution
+    }
+
     try {
       await runFlow(prisma, flowId, flow.flowDefinition as unknown as FlowDefinition, payload);
       console.log(`[flow-worker] flow ${flowId} completed`);
+
+      if (payload.contactId) {
+        await prisma.contactEvent.create({
+          data: {
+            organizationId: payload.organizationId,
+            contactId: payload.contactId,
+            name: "flow_completed",
+            properties: { flowId, flowName: flow.name },
+          },
+        }).catch(() => undefined);
+      }
     } catch (err) {
       console.error(`[flow-worker] flow ${flowId} error:`, err instanceof Error ? err.message : err);
       throw err;
