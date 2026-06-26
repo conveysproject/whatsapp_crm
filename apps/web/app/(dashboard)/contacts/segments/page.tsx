@@ -84,14 +84,23 @@ function RulePill({ rule }: { rule: FilterRule }) {
   );
 }
 
-function OverviewText({ filters, match }: { filters: FilterRule[]; match: MatchMode }) {
-  if (!filters.length) return <span className="italic text-gray-400">No filters</span>;
+function OverviewText({ filters, match, whatsappOptedOnly }: { filters: FilterRule[]; match: MatchMode; whatsappOptedOnly: boolean }) {
+  const hasFilters = filters.length > 0;
+  if (!hasFilters && !whatsappOptedOnly) return <span className="italic text-gray-400">No filters</span>;
   const connector = match === "any" ? " OR " : " AND ";
   const parts: JSX.Element[] = [];
   filters.forEach((rule, i) => {
     if (i > 0) parts.push(<span key={`sep-${i}`} className="text-gray-400">{connector}</span>);
     parts.push(<RulePill key={i} rule={rule} />);
   });
+  if (whatsappOptedOnly) {
+    if (parts.length > 0) parts.push(<span key="wa-sep" className="text-gray-400"> AND </span>);
+    parts.push(
+      <span key="wa-opted" className="font-medium text-gray-700">
+        &#123;<span className="text-[#1D4B3E]">Field</span>&#125; WhatsApp Opted is true
+      </span>
+    );
+  }
   return <span className="text-sm text-gray-600">Where {parts}</span>;
 }
 
@@ -134,7 +143,7 @@ function SegmentRow({
         {segment.name}
       </td>
       <td className="px-4 py-3">
-        <OverviewText filters={segment.filters} match={segment.match} />
+        <OverviewText filters={segment.filters} match={segment.match} whatsappOptedOnly={segment.whatsappOptedOnly} />
       </td>
       <td className="px-4 py-3 text-sm text-gray-700 w-36 whitespace-nowrap">
         {segment.lastContactCount !== null
