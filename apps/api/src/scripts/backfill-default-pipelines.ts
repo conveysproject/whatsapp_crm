@@ -9,12 +9,15 @@
  * Run from repo root:
  *   npx tsx apps/api/src/scripts/backfill-default-pipelines.ts [--apply]
  */
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { seedDefaultPipeline } from "../lib/seed-default-pipeline.js";
 
 const apply = process.argv.includes("--apply");
 
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({ connectionString: process.env["DATABASE_URL"]! });
+const prisma = new PrismaClient({ adapter });
 
 async function main(): Promise<void> {
   const orgs = await prisma.organization.findMany({ select: { id: true, name: true } });
