@@ -2,7 +2,9 @@
 
 **Date:** 2026-06-26
 **Status:** Design — pending approval
-**Goal:** Bring WBMSG's agent + team management to exact functional parity with Interakt's Sales CRM, reusing WBMSG's existing global roles (option B) and adding a per-team **Lead/Member** hierarchy that matches Interakt's Create Team panel.
+**Goal:** Bring WBMSG's agent + team management to **100% functional parity** with Interakt's Sales CRM, reusing WBMSG's existing global roles (option B) and adding a per-team **Lead/Member** hierarchy that matches Interakt's Create Team panel.
+
+**One deliberate infrastructure divergence:** Interakt authenticates agents via WhatsApp-number + OTP (2FA). WBMSG authenticates via Clerk. We replicate Interakt's **Create Agent panel and fields exactly** (name, email, role, country code, mobile, team) but the login mechanism underneath stays Clerk — changing it would mean rebuilding M1 auth. Every user-visible behavior is identical; only the auth plumbing differs.
 
 ## Source of truth (Interakt articles + UI screenshots)
 
@@ -76,13 +78,23 @@ Applied in `GET /contacts` ([apps/api/src/routes/contacts.ts](../../../apps/api/
 
 "Team member ids" = all users where `teamId = self.teamId` (the whole team, leads + members). Computed with a single `user.findMany({ where: { organizationId, teamId }, select: { id } })`. The caller's own `{ teamId, teamRole, team.viewAllContacts }` is loaded once (via `request.auth` enrichment or a `user.findUnique`) and reused.
 
-This is implemented as a pure `buildContactVisibilityWhere(auth, teamMemberIds)` helper so it can be unit-tested in isolation and reused by every contact-reading route.
+This is implemented as a pure `buildVisibilityWhere(auth, teamMemberIds, "assignedUserId")` helper (the same helper the inbox uses, parameterised on the assignee column) so it can be unit-tested in isolation and reused by every contact-reading route.
 
 The same scoping is reused by `GET /contacts/export`, `GET /contacts/export/count` (via the shared `buildExportWhere` helper) and `GET /contacts/:id`, so exports and single-contact reads respect visibility too.
 
-### Inbox parity
+### Inbox parity (in scope — full)
 
-Interakt: "If a Sales Agent has limited contact visibility, their Inbox will also be limited to only those contacts." WBMSG already has `inbox_access@assigned_chats_only`. We confirm conversation list scoping mirrors contact scoping: a `member`/`agent` sees only conversations whose `assignedTo = self` (existing behavior — audited, not rebuilt here). Team-Lead scoping of the inbox to the whole team is a follow-up once contact scoping lands.
+Interakt: "If a Sales Agent has limited contact visibility, their Inbox will also be limited to only those contacts." The inbox visibility rules are the **same precedence list** as contacts, applied to the conversation list (`GET /conversations`) keyed on `Conversation.assignedTo` instead of `Contact.assignedUserId`:
+
+| # | Caller | Conversation `where` filter |
+|---|---|---|
+| 1 | `superAdmin` / `admin` / `viewer` | none |
+| 2 | team `viewAllContacts = true` | none |
+| 3 | `teamRole = lead` | `assignedTo in (team member ids ∪ self)` |
+| 4 | global `manager` with no team | `OR[ assignedTo = null, assignedTo = self.id ]` |
+| 5 | everyone else | `assignedTo = self.id` |
+
+The shared `buildVisibilityWhere(auth, teamMemberIds, fieldName)` helper produces both the contact and conversation filters from one code path (parameterised on the assignee column), so contacts and inbox can never drift. Single-conversation reads and conversation message routes enforce the same scope.
 
 ## Permissions
 
@@ -110,6 +122,16 @@ All routes org-scoped; mutations gated on `settings_access@settings_teams`.
   - On success: create team, set `teamId` + `teamRole` on each member.
 - `PATCH /v1/teams/:id` — body `{ name?, members?, viewAllContacts? }`. Same ≥1-lead validation when `members` provided. `viewAllContacts` is the Lead Controls toggle. Members dropped from the list get `teamId = null, teamRole = null`; members added/changed get the team + their `teamRole`.
 - `DELETE /v1/teams/:id` — clears `teamId` + `teamRole` on all members, deletes team.
+
+### Agent creation & seats (Interakt "Create Agent" parity)
+
+Interakt's Create Agent panel has fields: First Name, Last Name, Email, Role, Country Code, Mobile No., Assign a Team — and disables Create Agent once the plan's seat limit is hit (default 5), with an "Add Seats" path. WBMSG matches this UX over the Clerk invite flow:
+
+- `POST /v1/invitations` accepts `{ email, role, firstName?, lastName?, countryCode?, mobileNumber?, teamId?, teamRole? }`. Name/mobile are stored on the invitation and applied to the `User` when Clerk provisions them; `teamId`/`teamRole` are applied on acceptance.
+- `GET /v1/invitations/seat-status` (or fold into existing org/usage endpoint) returns `{ used, limit, canAdd }` from the existing `checkPlanLimit(prisma, orgId, "team_members")` machinery (resource already defined in [plan-limits.ts](../../../apps/api/src/lib/plan-limits.ts)).
+- The Create Agent button is disabled when `canAdd = false`, with an "Add Seats" link to billing — mirroring Interakt.
+
+Login remains Clerk (WhatsApp-2FA is the one documented divergence). All fields and the seat-gating behavior are identical to Interakt.
 
 ### User ↔ team assignment
 
@@ -142,7 +164,7 @@ Fixes the existing bug where team assignment round-robins across all org agents.
 |---|---|
 | [settings/team/page.tsx](../../../apps/web/app/(dashboard)/settings/team/page.tsx) | Redirect target changes from `/settings/members` to `/settings/teams`. |
 | [settings/members/page.tsx](../../../apps/web/app/(dashboard)/settings/members/page.tsx) | Add a **Team** column to the agents table; edit-agent flow gains a team + Lead/Member picker. |
-| Invite flow (same page) | Add an optional **Assign a Team** (+ Lead/Member) selector; applied when the invited user is provisioned. Name/mobile remain Clerk-sourced (WBMSG uses Clerk, not Interakt's WhatsApp-2FA agent creation). |
+| Create Agent panel (same page) | Full Interakt-parity side panel: First Name, Last Name, Email, Role, Country Code, Mobile No., Assign a Team (+ Lead/Member). Button disabled at seat limit with an "Add Seats" link. Submits to the extended `POST /v1/invitations`. |
 
 UI follows the existing slide-over + react-query pattern in [AssignmentRulesTab.tsx](../../../apps/web/app/(dashboard)/settings/contact-settings/tabs/AssignmentRulesTab.tsx).
 
@@ -155,17 +177,18 @@ UI follows the existing slide-over + react-query pattern in [AssignmentRulesTab.
 - Team Leads see their own + their team members' contacts, but **not** other teams' contacts.
 - Only `superAdmin` / `admin` / `manager` (those with `settings_access@settings_teams`) can manage teams. Editing global roles stays `superAdmin` / `admin` only.
 
-## Out of scope (YAGNI / deferred)
+## The one divergence (infrastructure, not behavior)
 
-- Seat-limit enforcement on agent creation (Interakt's "5 seats" — WBMSG handles plan limits elsewhere).
-- WhatsApp-number-as-login / 2FA agent creation (Interakt-specific; WBMSG uses Clerk).
-- Multi-team membership per user.
-- Team-Lead scoping of the conversation inbox beyond existing `assignedTo` behavior — follow-up once contact scoping lands.
+- **Login mechanism:** Interakt uses WhatsApp-number + OTP (2FA); WBMSG uses Clerk. The Create Agent panel, fields, seat-gating, and every post-login behavior are identical — only the credential/login step differs. Replicating WhatsApp-2FA would require rebuilding M1 auth and is explicitly not done.
+
+## Out of scope (YAGNI)
+
+- Multi-team membership per user (Interakt is also one-team-per-agent).
 
 ## Testing
 
-- Unit: `buildContactVisibilityWhere` for every (global role × teamRole × viewAllContacts) combination. ≥1-Lead validation on team create/update and on user reassignment. `pickWorkloadBalancedAgent` team filtering. `teamRole` default-from-global-role logic.
-- Integration: member sees only assigned contacts; lead sees own + team members' but not other teams'; admin sees all; flipping a team's `viewAllContacts` flips its members' visibility; deleting a team drops visibility.
+- Unit: `buildVisibilityWhere` for every (global role × teamRole × viewAllContacts) combination, for both `assignedUserId` (contacts) and `assignedTo` (conversations) columns. ≥1-Lead validation on team create/update and on user reassignment. `pickWorkloadBalancedAgent` team filtering. `teamRole` default-from-global-role logic. Seat-status `canAdd` computation.
+- Integration: member sees only assigned contacts **and** only their conversations; lead sees own + team for both contacts and inbox but not other teams'; admin sees all; flipping `viewAllContacts` flips both contact and inbox visibility; deleting a team drops visibility; Create Agent disabled at seat limit.
 - RBAC audit: every new/changed route re-checked for org scoping and `settings_access@settings_teams` gating (per project security-audit requirement).
 
 ## Security audit checklist (per-task gate)
