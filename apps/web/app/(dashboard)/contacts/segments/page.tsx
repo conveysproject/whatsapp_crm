@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/Button";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { canAccess } from "@/lib/can";
 import { PermissionGate } from "@/components/PermissionGate";
-import { SegmentBuilderV2 } from "@/components/segments/SegmentBuilderV2";
 import type { FilterRule, MatchMode } from "@/components/segments/types";
+
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -187,11 +187,6 @@ export default function SegmentsPage(): JSX.Element {
   const router = useRouter();
 
   const [search, setSearch] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newFilters, setNewFilters] = useState<FilterRule[]>([]);
-  const [newMatch, setNewMatch] = useState<MatchMode>("all");
-  const [newWhatsappOptedOnly, setNewWhatsappOptedOnly] = useState(false);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
@@ -210,24 +205,6 @@ export default function SegmentsPage(): JSX.Element {
   const filtered = segments.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
   );
-
-  const createSegment = useMutation({
-    mutationFn: async () => {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/v1/segments`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName, filters: newFilters, match: newMatch, whatsappOptedOnly: newWhatsappOptedOnly }),
-      });
-      if (!res.ok) throw new Error("Failed to create segment");
-      return res.json();
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["segments"] });
-      setModalOpen(false);
-      setNewName(""); setNewFilters([]); setNewMatch("all"); setNewWhatsappOptedOnly(false);
-    },
-  });
 
   const deleteSegment = useMutation({
     mutationFn: async (id: string) => {
@@ -264,7 +241,7 @@ export default function SegmentsPage(): JSX.Element {
             <p className="text-sm text-gray-500 mt-0.5">Create &amp; update audience segments</p>
           </div>
           {canManage && (
-            <Button onClick={() => setModalOpen(true)}>+ Create New Segment</Button>
+            <Button onClick={() => router.push("/contacts/segments/new")}>+ Create New Segment</Button>
           )}
         </div>
 
@@ -311,37 +288,6 @@ export default function SegmentsPage(): JSX.Element {
           )}
         </div>
       </div>
-
-      {/* Create Segment modal */}
-      <Dialog.Root open={modalOpen} onOpenChange={setModalOpen}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-xl focus:outline-none max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <Dialog.Title className="text-lg font-semibold text-gray-900">Save Segment</Dialog.Title>
-              <Dialog.Close className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></Dialog.Close>
-            </div>
-            <div className="mb-4">
-              <input
-                autoFocus
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="Segment name (e.g. All VIP Contacts)"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-              />
-            </div>
-            <SegmentBuilderV2
-              initial={newFilters} match={newMatch} whatsappOptedOnly={newWhatsappOptedOnly}
-              onChange={setNewFilters} onMatchChange={setNewMatch} onWhatsappOptedOnlyChange={setNewWhatsappOptedOnly}
-            />
-            <div className="mt-6 flex justify-end">
-              <Button onClick={() => createSegment.mutate()} disabled={!newName.trim() || createSegment.isPending}>
-                {createSegment.isPending ? "Saving…" : "Save Segment"}
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
 
       {/* Delete confirm dialog */}
       <Dialog.Root open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
