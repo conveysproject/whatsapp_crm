@@ -4,7 +4,7 @@
 **Status:** Design — pending approval
 **Goal:** Bring WBMSG's agent + team management to **100% functional parity** with Interakt's Sales CRM, reusing WBMSG's existing global roles (option B) and adding a per-team **Lead/Member** hierarchy that matches Interakt's Create Team panel.
 
-**One deliberate infrastructure divergence:** Interakt authenticates agents via WhatsApp-number + OTP (2FA). WBMSG authenticates via Clerk. We replicate Interakt's **Create Agent panel and fields exactly** (name, email, role, country code, mobile, team) but the login mechanism underneath stays Clerk — changing it would mean rebuilding M1 auth. Every user-visible behavior is identical; only the auth plumbing differs.
+**Onboarding divergence (deliberate):** Interakt creates agents directly (collecting name + WhatsApp number for its OTP login). WBMSG already onboards via the **Invite Agent → Clerk** flow, so we keep that and simply add team assignment + seat-gating to it. No new "Create Agent" panel, no mobile/2FA — Clerk owns identity. The *outcome* (admin adds an agent with a role and team, seat-limited) is identical to Interakt; the mechanism is our existing Clerk invite.
 
 ## Source of truth (Interakt articles + UI screenshots)
 
@@ -123,15 +123,13 @@ All routes org-scoped; mutations gated on `settings_access@settings_teams`.
 - `PATCH /v1/teams/:id` — body `{ name?, members?, viewAllContacts? }`. Same ≥1-lead validation when `members` provided. `viewAllContacts` is the Lead Controls toggle. Members dropped from the list get `teamId = null, teamRole = null`; members added/changed get the team + their `teamRole`.
 - `DELETE /v1/teams/:id` — clears `teamId` + `teamRole` on all members, deletes team.
 
-### Agent creation & seats (Interakt "Create Agent" parity)
+### Agent invitation & seats (extend the existing flow — no new "Create Agent" panel)
 
-Interakt's Create Agent panel has fields: First Name, Last Name, Email, Role, Country Code, Mobile No., Assign a Team — and disables Create Agent once the plan's seat limit is hit (default 5), with an "Add Seats" path. WBMSG matches this UX over the Clerk invite flow:
+WBMSG already onboards agents through the **Invite Agent** modal → Clerk invitation. Interakt's "Create Agent" is the same action; we keep our invite flow and only add the team fields and seat-gating:
 
-- `POST /v1/invitations` accepts `{ email, role, firstName?, lastName?, countryCode?, mobileNumber?, teamId?, teamRole? }`. Name/mobile are stored on the invitation and applied to the `User` when Clerk provisions them; `teamId`/`teamRole` are applied on acceptance.
-- `GET /v1/invitations/seat-status` (or fold into existing org/usage endpoint) returns `{ used, limit, canAdd }` from the existing `checkPlanLimit(prisma, orgId, "team_members")` machinery (resource already defined in [plan-limits.ts](../../../apps/api/src/lib/plan-limits.ts)).
-- The Create Agent button is disabled when `canAdd = false`, with an "Add Seats" link to billing — mirroring Interakt.
-
-Login remains Clerk (WhatsApp-2FA is the one documented divergence). All fields and the seat-gating behavior are identical to Interakt.
+- `POST /v1/invitations` gains optional `{ teamId?, teamRole? }`. These are stored on the invitation and applied to the `User` when Clerk provisions them on acceptance. (Email + role are unchanged. Name comes from Clerk at signup; mobile is not collected — it only fed Interakt's WhatsApp-2FA, which WBMSG does not use.)
+- `GET /v1/invitations/seat-status` (or fold into the existing org/usage endpoint) returns `{ used, limit, canAdd }` from `checkPlanLimit(prisma, orgId, "team_members")` (resource already defined in [plan-limits.ts](../../../apps/api/src/lib/plan-limits.ts)).
+- The **Invite Agent** button is disabled when `canAdd = false`, with an "Add Seats" link to billing — same seat-limit behavior Interakt describes.
 
 ### User ↔ team assignment
 
@@ -164,7 +162,7 @@ Fixes the existing bug where team assignment round-robins across all org agents.
 |---|---|
 | [settings/team/page.tsx](../../../apps/web/app/(dashboard)/settings/team/page.tsx) | Redirect target changes from `/settings/members` to `/settings/teams`. |
 | [settings/members/page.tsx](../../../apps/web/app/(dashboard)/settings/members/page.tsx) | Add a **Team** column to the agents table; edit-agent flow gains a team + Lead/Member picker. |
-| Create Agent panel (same page) | Full Interakt-parity side panel: First Name, Last Name, Email, Role, Country Code, Mobile No., Assign a Team (+ Lead/Member). Button disabled at seat limit with an "Add Seats" link. Submits to the extended `POST /v1/invitations`. |
+| Invite Agent modal (same page) | Existing modal gains **Assign a Team** (+ Lead/Member) fields. Invite button disabled at seat limit with an "Add Seats" link. No new panel — the current invite flow is extended. |
 
 UI follows the existing slide-over + react-query pattern in [AssignmentRulesTab.tsx](../../../apps/web/app/(dashboard)/settings/contact-settings/tabs/AssignmentRulesTab.tsx).
 
@@ -177,9 +175,9 @@ UI follows the existing slide-over + react-query pattern in [AssignmentRulesTab.
 - Team Leads see their own + their team members' contacts, but **not** other teams' contacts.
 - Only `superAdmin` / `admin` / `manager` (those with `settings_access@settings_teams`) can manage teams. Editing global roles stays `superAdmin` / `admin` only.
 
-## The one divergence (infrastructure, not behavior)
+## The one divergence (mechanism, not behavior)
 
-- **Login mechanism:** Interakt uses WhatsApp-number + OTP (2FA); WBMSG uses Clerk. The Create Agent panel, fields, seat-gating, and every post-login behavior are identical — only the credential/login step differs. Replicating WhatsApp-2FA would require rebuilding M1 auth and is explicitly not done.
+- **Onboarding + login:** Interakt creates agents directly and logs them in via WhatsApp-number + OTP. WBMSG uses the existing **Invite Agent → Clerk** flow (extended with team + seat-gating). Same outcome — an admin adds a role-assigned, team-assigned, seat-limited agent — via our existing auth. No mobile field, no WhatsApp-2FA, no new panel.
 
 ## Out of scope (YAGNI)
 
