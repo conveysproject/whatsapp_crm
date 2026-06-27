@@ -2,6 +2,7 @@
 import { JSX, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
+import Link from "next/link";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { isAdmin } from "@/lib/can";
 import { clientFetch } from "@/lib/client-fetch";
@@ -16,6 +17,27 @@ interface Member {
   mobileNumber: string | null;
   createdAt: string;
   lastSignInAt: string | null;
+}
+
+interface TeamMember {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+  teamRole: string;
+}
+
+interface Team {
+  id: string;
+  name: string;
+  viewAllContacts: boolean;
+  members: TeamMember[];
+}
+
+interface SeatStatus {
+  used: number;
+  limit: number;
+  canAdd: boolean;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -37,6 +59,8 @@ export default function MembersPage(): JSX.Element {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "manager" | "agent" | "viewer">("agent");
+  const [inviteTeamId, setInviteTeamId] = useState("");
+  const [inviteTeamRole, setInviteTeamRole] = useState<"lead" | "member">("member");
   const [inviting, setInviting] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -52,6 +76,40 @@ export default function MembersPage(): JSX.Element {
       }).then((r) => r.json() as Promise<{ data: Member[] }>);
     },
   });
+
+  const { data: teamsData } = useQuery<{ data: Team[] }>({
+    queryKey: ["teams"],
+    queryFn: async () => {
+      const token = await getToken();
+      return clientFetch(`${API_URL}/v1/teams`, {
+        token: token ?? "",
+        silent: true,
+      }).then((r) => r.json() as Promise<{ data: Team[] }>);
+    },
+  });
+
+  const { data: seatStatusData } = useQuery<{ data: SeatStatus }>({
+    queryKey: ["seat-status"],
+    queryFn: async () => {
+      const token = await getToken();
+      return clientFetch(`${API_URL}/v1/invitations/seat-status`, {
+        token: token ?? "",
+        silent: true,
+      }).then((r) => r.json() as Promise<{ data: SeatStatus }>);
+    },
+  });
+
+  // Build userId → teamName map from teams response
+  const userTeamMap = new Map<string, string>();
+  for (const team of teamsData?.data ?? []) {
+    for (const m of team.members) {
+      userTeamMap.set(m.id, team.name);
+    }
+  }
+
+  const teams = teamsData?.data ?? [];
+  const seatStatus = seatStatusData?.data;
+  const canInvite = seatStatus?.canAdd !== false;
 
   const deleteMember = useMutation({
     mutationFn: async (id: string) => {
@@ -71,12 +129,24 @@ export default function MembersPage(): JSX.Element {
     try {
       const clerkToken = await getToken();
 
+      // Build invite body — only include teamId/teamRole when a team is chosen
+      const inviteBody: {
+        email: string;
+        role: string;
+        teamId?: string;
+        teamRole?: "lead" | "member";
+      } = { email: inviteEmail, role: inviteRole };
+      if (inviteTeamId) {
+        inviteBody.teamId = inviteTeamId;
+        inviteBody.teamRole = inviteTeamRole;
+      }
+
       // Step 1: Create invitation on Railway
       const res = await clientFetch(`${API_URL}/v1/invitations`, {
         method: "POST",
         token: clerkToken ?? "",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+        body: JSON.stringify(inviteBody),
       });
       if (!res.ok) {
         const json = await res.json() as { error?: { message?: string } };
@@ -106,8 +176,11 @@ export default function MembersPage(): JSX.Element {
       setInviteOpen(false);
       setInviteEmail("");
       setInviteRole("agent");
+      setInviteTeamId("");
+      setInviteTeamRole("member");
       setInviteSuccess(`Invitation sent to ${inviteEmail}`);
       setTimeout(() => setInviteSuccess(null), 4000);
+      void qc.invalidateQueries({ queryKey: ["seat-status"] });
     } catch {
       setInviteError("Unexpected error. Please try again.");
     } finally {
@@ -142,19 +215,34 @@ export default function MembersPage(): JSX.Element {
           </span>
           <div>
             <h1 className="text-xl font-bold text-gray-900">Manage Agents</h1>
-            <p className="text-sm text-gray-500">Invite team members and manage their roles from here.</p>
+            <p className="text-sm text-gray-500">
+              Invite team members and manage their roles from here.
+              {seatStatus && seatStatus.limit >= 0 && (
+                <span className="ml-2 text-gray-400">
+                  ({seatStatus.used} / {seatStatus.limit} seats used)
+                </span>
+              )}
+            </p>
           </div>
         </div>
         {canAdmin && (
-          <button
-            onClick={() => setInviteOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Invite Agent
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={() => { if (canInvite) setInviteOpen(true); }}
+              disabled={!canInvite}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Invite Agent
+            </button>
+            {!canInvite && (
+              <Link href="/settings/billing" className="text-xs text-emerald-600 hover:underline">
+                Add Seats
+              </Link>
+            )}
+          </div>
         )}
       </div>
 
@@ -180,6 +268,7 @@ export default function MembersPage(): JSX.Element {
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Phone No.</th>
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</th>
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</th>
+              <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Team</th>
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Joined</th>
               <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Last Logged In</th>
               <th className="w-20 px-5 py-3" />
@@ -188,7 +277,7 @@ export default function MembersPage(): JSX.Element {
           <tbody className="divide-y divide-gray-50">
             {members.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-5 py-12 text-center text-sm text-gray-400">
+                <td colSpan={8} className="px-5 py-12 text-center text-sm text-gray-400">
                   {search ? "No agents match your search." : "No agents yet. Invite one above."}
                 </td>
               </tr>
@@ -209,6 +298,9 @@ export default function MembersPage(): JSX.Element {
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 capitalize">
                       {ROLE_LABELS[m.role] ?? m.role}
                     </span>
+                  </td>
+                  <td className="px-5 py-3.5 text-gray-600 text-sm">
+                    {userTeamMap.get(m.id) ?? "—"}
                   </td>
                   <td className="px-5 py-3.5 text-gray-500 text-xs">
                     {new Date(m.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
@@ -284,6 +376,32 @@ export default function MembersPage(): JSX.Element {
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Assign a Team</label>
+                <select
+                  value={inviteTeamId}
+                  onChange={(e) => setInviteTeamId(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">No team</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+              {inviteTeamId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Team Role</label>
+                  <select
+                    value={inviteTeamRole}
+                    onChange={(e) => setInviteTeamRole(e.target.value as "lead" | "member")}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="member">Member</option>
+                    <option value="lead">Lead</option>
+                  </select>
+                </div>
+              )}
               <div className="flex gap-3 pt-1">
                 <button
                   type="button"
