@@ -20,6 +20,7 @@ export default function AcceptInvitationPage(): JSX.Element {
   const [meta, setMeta] = useState<InvitationMeta | null>(null);
   const [metaError, setMetaError] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
+  const [mobileNumber, setMobileNumber] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -46,7 +47,7 @@ export default function AcceptInvitationPage(): JSX.Element {
       const res = await fetch(`${API_URL}/v1/invitations/${token}/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${clerkToken ?? ""}` },
-        body: JSON.stringify({ clerkUserId: userId, fullName }),
+        body: JSON.stringify({ clerkUserId: userId, fullName, mobileNumber: mobileNumber || undefined }),
       });
       if (!res.ok) {
         const json = await res.json() as { error?: { message?: string } };
@@ -71,7 +72,7 @@ export default function AcceptInvitationPage(): JSX.Element {
       const res = await fetch("/api/invitations/accept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, fullName, password }),
+        body: JSON.stringify({ token, fullName, password, mobileNumber: mobileNumber || undefined }),
       });
       const json = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) { setError(json.error ?? "Failed to create account."); return; }
@@ -115,6 +116,13 @@ export default function AcceptInvitationPage(): JSX.Element {
             onChange={(e) => setFullName(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
+          <input
+            type="tel"
+            placeholder="Mobile number (optional)"
+            value={mobileNumber}
+            onChange={(e) => setMobileNumber(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button
             onClick={() => { void acceptWithCurrentUser(); }}
@@ -142,6 +150,13 @@ export default function AcceptInvitationPage(): JSX.Element {
             required
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          <input
+            type="tel"
+            placeholder="Mobile number (optional)"
+            value={mobileNumber}
+            onChange={(e) => setMobileNumber(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           <input

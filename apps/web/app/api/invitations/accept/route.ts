@@ -54,10 +54,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { token, fullName, password } = body as {
+  const { token, fullName, password, mobileNumber } = body as {
     token?: string;
     fullName?: string;
     password?: string;
+    mobileNumber?: string;
   };
 
   // ── Input validation ───────────────────────────────────────────────────────
@@ -133,6 +134,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const msg = err instanceof Error ? err.message : "Failed to join organization";
     console.error("[invitations/accept] Clerk org membership error:", msg);
     return NextResponse.json({ error: msg }, { status: 500 });
+  }
+
+  // ── Step 4: Notify backend accept endpoint to write mobileNumber ─────────
+  // The Clerk webhook handles DB user creation, but mobileNumber is not
+  // available there. Call the accept endpoint directly to persist it.
+  if (mobileNumber) {
+    try {
+      await fetch(`${API_URL}/v1/invitations/${encodeURIComponent(token)}/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clerkUserId, fullName: fullName.trim(), mobileNumber }),
+      });
+    } catch {
+      // Non-fatal: mobile number persistence failure should not block sign-up
+      console.error("[invitations/accept] Failed to persist mobileNumber");
+    }
   }
 
   return NextResponse.json({ ok: true });
