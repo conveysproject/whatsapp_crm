@@ -643,6 +643,33 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: conversation ?? null });
   });
 
+  // ── Bulk tag assign ───────────────────────────────────────────────────────
+  fastify.post<{ Body: { contactIds: string[]; tags: string[] } }>(
+    "/contacts/bulk/assign-tags",
+    async (request, reply) => {
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "contacts_access", "contacts_bulk_tag")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_bulk_tag permission required" } });
+      }
+      const { contactIds, tags } = request.body;
+      if (!contactIds.length || !tags.length) return reply.status(204).send();
+
+      const contacts = await fastify.prisma.contact.findMany({
+        where: { id: { in: contactIds }, organizationId, deletedAt: null },
+        select: { id: true, tags: true },
+      });
+
+      await Promise.all(
+        contacts.map((c) => {
+          const merged = Array.from(new Set([...c.tags, ...tags]));
+          return fastify.prisma.contact.update({ where: { id: c.id }, data: { tags: merged } });
+        }),
+      );
+
+      return reply.status(204).send();
+    },
+  );
+
   // ── Bulk delete ──────────────────────────────────────────────────────────
   fastify.delete<{ Body: { contactIds: string[] } }>("/contacts/bulk", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;

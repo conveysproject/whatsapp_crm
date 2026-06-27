@@ -1016,3 +1016,56 @@ describe("GET /v1/contacts — non-sales closure visibility", () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+describe("POST /v1/contacts/bulk/assign-tags", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("appends tags to each contact, deduplicating existing", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([
+      { id: "c-1", tags: ["vip"] },
+      { id: "c-2", tags: [] },
+    ]);
+    mockPrisma.contact.update.mockResolvedValue({});
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/contacts/bulk/assign-tags",
+      payload: { contactIds: ["c-1", "c-2"], tags: ["vip", "lead"] },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(mockPrisma.contact.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "c-1" }, data: { tags: ["vip", "lead"] } })
+    );
+    expect(mockPrisma.contact.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "c-2" }, data: { tags: ["vip", "lead"] } })
+    );
+  });
+
+  it("returns 204 with no updates when tags list is empty", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/contacts/bulk/assign-tags",
+      payload: { contactIds: ["c-1"], tags: [] },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(mockPrisma.contact.findMany).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when contacts_bulk_tag sub-permission is missing", async () => {
+    const restricted = Fastify({ logger: false });
+    restricted.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    restricted.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-2", organizationId: "org-1", role: "agent" as const, permissions: { contacts_access: "allow" }, teamId: null, teamRole: null };
+    });
+    const { contactsRouter } = await import("./contacts.js");
+    await restricted.register(contactsRouter, { prefix: "/v1" });
+    const res = await restricted.inject({
+      method: "POST",
+      url: "/v1/contacts/bulk/assign-tags",
+      payload: { contactIds: ["c-1"], tags: ["vip"] },
+    });
+    expect(res.statusCode).toBe(403);
+    await restricted.close();
+  });
+});
