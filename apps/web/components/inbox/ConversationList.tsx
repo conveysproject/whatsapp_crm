@@ -3,6 +3,7 @@
 import { JSX, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useConversations, useSearchConversations } from "@/hooks/useConversations";
+import { useInboxLabels } from "@/hooks/useInboxLabels";
 import { IntentBadge } from "@/components/intent-badge";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -26,16 +27,22 @@ function formatTime(iso: string | null): string {
 export function ConversationList({ selectedId, onSelect }: Props): JSX.Element {
   const [activeTab, setActiveTab] = useState<StatusTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeLabelId, setActiveLabelId] = useState<string | undefined>(undefined);
+  const [labelFilterOpen, setLabelFilterOpen] = useState(false);
   const { getToken } = useAuth();
+  const { data: allLabels = [] } = useInboxLabels();
 
   const isSearching = searchQuery.trim().length >= 2;
   const { data: conversations, isLoading: listLoading } = useConversations(
-    isSearching ? undefined : (activeTab === "all" ? undefined : activeTab)
+    isSearching ? undefined : (activeTab === "all" ? undefined : activeTab),
+    isSearching ? undefined : activeLabelId,
   );
   const { data: searchResults, isLoading: searchLoading } = useSearchConversations(searchQuery);
 
   const items = isSearching ? (searchResults ?? []) : (conversations ?? []);
   const isLoading = isSearching ? searchLoading : listLoading;
+
+  const activeLabel = allLabels.find((l) => l.id === activeLabelId);
 
   async function handleSelect(id: string) {
     onSelect(id);
@@ -97,6 +104,62 @@ export function ConversationList({ selectedId, onSelect }: Props): JSX.Element {
         </div>
       )}
 
+      {/* Label filter row — hidden while searching */}
+      {!isSearching && allLabels.length > 0 && (
+        <div className="px-3 py-1.5 border-b border-gray-100 shrink-0">
+          <div className="relative inline-block">
+            <button
+              onClick={() => setLabelFilterOpen((v) => !v)}
+              className="flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-gray-700"
+            >
+              {activeLabel ? (
+                <>
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: activeLabel.color }} />
+                  <span className="font-medium">{activeLabel.name}</span>
+                  <span
+                    onClick={(e) => { e.stopPropagation(); setActiveLabelId(undefined); }}
+                    className="ml-0.5 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  >
+                    ×
+                  </span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
+                  </svg>
+                  Filter by label
+                </>
+              )}
+            </button>
+
+            {labelFilterOpen && (
+              <div className="absolute top-full left-0 mt-1 w-44 bg-white rounded-lg border border-gray-200 shadow-lg z-20">
+                {allLabels.map((l) => (
+                  <button
+                    key={l.id}
+                    onClick={() => { setActiveLabelId(l.id); setLabelFilterOpen(false); }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-xs text-left hover:bg-gray-50"
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: l.color }} />
+                    {l.name}
+                    <span className="ml-auto text-gray-400">{l.count}</span>
+                  </button>
+                ))}
+                {activeLabelId && (
+                  <button
+                    onClick={() => { setActiveLabelId(undefined); setLabelFilterOpen(false); }}
+                    className="w-full px-3 py-2 text-xs text-left text-gray-400 hover:bg-gray-50 border-t border-gray-100"
+                  >
+                    Clear filter
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* List */}
       <div className="flex flex-col overflow-y-auto flex-1">
         {isLoading && (
@@ -155,7 +218,19 @@ export function ConversationList({ selectedId, onSelect }: Props): JSX.Element {
                 )}
               </div>
 
-              {/* Row 3: intent tag (renders only if cached) */}
+              {/* Row 3: label badge (if assigned) */}
+              {conv.label && (
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span
+                    className="inline-flex items-center gap-1 h-4 px-1.5 rounded-full text-[10px] font-medium text-white"
+                    style={{ backgroundColor: conv.label.color }}
+                  >
+                    {conv.label.name}
+                  </span>
+                </div>
+              )}
+
+              {/* Row 4: intent tag (renders only if cached) */}
               {conv.lastMessage?.id && conv.lastMessage.direction === "inbound" && conv.lastMessage.body && (
                 <IntentBadge
                   messageId={conv.lastMessage.id}
