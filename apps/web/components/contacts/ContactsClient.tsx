@@ -534,7 +534,7 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
                                   {c.tags.slice(0, 3).map((tag) => {
                                     const { bg, text } = getTagColor(tag);
                                     return (
-                                      <span key={tag} className={`inline-flex items-center h-5 px-2 rounded-full text-[11px] font-medium ${bg} ${text}`}>{tag}</span>
+                                      <span key={tag} className={`inline-flex items-center h-5 px-2 rounded-full text-[11px] font-medium whitespace-nowrap ${bg} ${text}`}>{tag}</span>
                                     );
                                   })}
                                   {c.tags.length > 3 && (
