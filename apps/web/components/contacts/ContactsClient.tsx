@@ -515,7 +515,7 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
                           </td>
                           <td className="px-4 py-3.5">
                             {c.leadStatus ? (
-                              <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-700">
+                              <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-semibold whitespace-nowrap bg-gray-100 text-gray-700">
                                 <span
                                   className="w-2 h-2 rounded-full shrink-0"
                                   style={{ backgroundColor: c.leadStatus.color }}
