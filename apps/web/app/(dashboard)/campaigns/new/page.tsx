@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX, useState } from "react";
+import { JSX, useState, useEffect, useRef } from "react";
 import { MediaAssetPicker } from "@/components/media-asset-picker";
 import type { MediaAsset } from "@/components/media-asset-picker";
 import { useAuth } from "@clerk/nextjs";
@@ -17,6 +17,7 @@ import { PermissionGate } from "@/components/PermissionGate";
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 interface Template { id: string; name: string; bodyText: string | null; language: string; status: string }
+interface TemplateDetail { id: string; name: string; language: string; components: unknown[] }
 interface Group { id: string; title: string; _count: { contacts: number } }
 interface Segment { id: string; name: string }
 
@@ -47,6 +48,7 @@ export default function NewCampaignPage(): JSX.Element {
   const [scheduledAt, setScheduledAt] = useState("");
   const [saving, setSaving] = useState(false);
   const [mediaUrl, setMediaUrl] = useState("");
+  const [cardMediaUrls, setCardMediaUrls] = useState<string[]>([]);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
 
   // Data fetching
@@ -96,6 +98,41 @@ export default function NewCampaignPage(): JSX.Element {
 
   const selectedTemplate = templates.find((t) => t.id === templateId);
 
+  const { data: templateDetail } = useQuery<TemplateDetail | null>({
+    queryKey: ["template-detail", templateId],
+    queryFn: async () => {
+      if (!templateId) return null;
+      const token = await getToken();
+      const res = await clientFetch(`${API_URL}/v1/templates/${templateId}`, { token: token ?? "", silent: true });
+      if (!res.ok) return null;
+      return (await res.json() as { data: TemplateDetail }).data;
+    },
+    enabled: !!templateId,
+  });
+
+  const carouselCardCount = (() => {
+    if (!templateDetail) return 0;
+    const carousel = (templateDetail.components as Array<{ type?: string; cards?: unknown[] }>)
+      .find((c) => (c.type ?? "").toUpperCase() === "CAROUSEL");
+    if (!carousel?.cards) return 0;
+    return (carousel.cards as Array<{ components?: Array<{ type?: string; format?: string }> }>)
+      .filter((card) =>
+        card.components?.some(
+          (cc) => (cc.type ?? "").toUpperCase() === "HEADER" &&
+            ["IMAGE", "VIDEO", "DOCUMENT"].includes((cc.format ?? "").toUpperCase())
+        )
+      ).length;
+  })();
+
+  // Reset card URLs when template selection changes
+  const prevTemplateIdRef = useRef(templateId);
+  useEffect(() => {
+    if (prevTemplateIdRef.current !== templateId) {
+      prevTemplateIdRef.current = templateId;
+      setCardMediaUrls(Array(carouselCardCount).fill(""));
+    }
+  }, [templateId, carouselCardCount]);
+
   const estimatedCount = audienceMode === "groups"
     ? groups.filter((g) => selectedGroupIds.includes(g.id)).reduce((sum, g) => sum + g._count.contacts, 0)
     : null;
@@ -127,7 +164,10 @@ export default function NewCampaignPage(): JSX.Element {
           textBody: campaignType === "non_template" ? freeTextBody : undefined,
           messageInterval: messageInterval > 0 ? messageInterval : undefined,
           contactGroup: audienceMode === "groups" ? selectedGroupIds : undefined,
-          mediaUrl: campaignType === "template" && mediaUrl ? mediaUrl : undefined,
+          mediaUrl: campaignType === "template" && mediaUrl && carouselCardCount === 0 ? mediaUrl : undefined,
+          cardMediaUrls: campaignType === "template" && carouselCardCount > 0 && cardMediaUrls.some(Boolean)
+            ? cardMediaUrls
+            : undefined,
         }),
       });
 
@@ -264,7 +304,7 @@ export default function NewCampaignPage(): JSX.Element {
                     </div>
                   </div>
                 )}
-                {selectedTemplate && (
+                {selectedTemplate && carouselCardCount === 0 && (
                   <div className="space-y-1.5">
                     <label className="block text-sm font-medium text-gray-700">
                       Media URL <span className="text-gray-400 text-xs font-normal">(optional — overrides template header image)</span>
@@ -284,6 +324,29 @@ export default function NewCampaignPage(): JSX.Element {
                         Library
                       </button>
                     </div>
+                  </div>
+                )}
+                {selectedTemplate && carouselCardCount > 0 && (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Carousel Card Images
+                      <span className="text-gray-400 text-xs font-normal ml-1">({carouselCardCount} cards — one image URL per card)</span>
+                    </label>
+                    {Array.from({ length: carouselCardCount }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 w-14 shrink-0">Card {i + 1}</span>
+                        <input
+                          value={cardMediaUrls[i] ?? ""}
+                          onChange={(e) => {
+                            const next = [...cardMediaUrls];
+                            next[i] = e.target.value;
+                            setCardMediaUrls(next);
+                          }}
+                          placeholder="https://…"
+                          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        />
+                      </div>
+                    ))}
                   </div>
                 )}
                 {templates.length === 0 && (
