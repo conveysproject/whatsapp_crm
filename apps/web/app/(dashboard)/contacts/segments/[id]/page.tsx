@@ -156,7 +156,7 @@ export default function SegmentDetailPage(): JSX.Element {
             {contacts.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
-                  {matchCount === null ? "Save filters to see matching contacts." : "No contacts match this segment."}
+                  {matchCount === null ? "Preview or save to see matching contacts." : "No contacts match this segment."}
                 </td>
               </tr>
             ) : contacts.map((c) => (
