@@ -132,7 +132,7 @@ export function ConversationHeader({
             )}
 
             {/* Conversation label */}
-            <span className="text-gray-200">·</span>
+            {currentLabel && <span className="text-gray-200">·</span>}
             <div className="relative" ref={labelRef}>
               {currentLabel ? (
                 <div className="flex items-center gap-1">
