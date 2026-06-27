@@ -38,6 +38,7 @@ import { adminRouter } from "./admin.js";
 import { bootstrapRouter } from "./bootstrap.js";
 import { superAdminsRouter } from "./super-admins.js";
 import { tagsRouter } from "./labels.js";
+import { inboxLabelsRouter } from "./inbox-labels.js";
 import { mediaRouter } from "./media.js";
 import { infoMaterialsRouter } from "./info-materials.js";
 import { mediaAssetsRouter } from "./media-assets.js";
@@ -93,6 +94,7 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(bootstrapRouter, { prefix: "/v1" });
   await fastify.register(superAdminsRouter, { prefix: "/v1" });
   await fastify.register(tagsRouter, { prefix: "/v1" });
+  await fastify.register(inboxLabelsRouter, { prefix: "/v1" });
   await fastify.register(mediaRouter, { prefix: "/v1" });
   await fastify.register(infoMaterialsRouter, { prefix: "/v1" });
   await fastify.register(mediaAssetsRouter, { prefix: "/v1" });
