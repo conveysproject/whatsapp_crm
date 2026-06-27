@@ -23,6 +23,7 @@ export interface Conversation {
   serviceWindowActive?: boolean;
   lastMessage: LastMessage | null;
   contact?: { id: string; firstName: string | null; lastName: string | null; phoneNumber: string; tags: string[] } | null;
+  label?: { id: string; name: string; color: string } | null;
 }
 
 interface ConversationsResponse {
@@ -31,9 +32,10 @@ interface ConversationsResponse {
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
-async function fetchConversations(token: string, status?: string): Promise<Conversation[]> {
+async function fetchConversations(token: string, status?: string, labelId?: string): Promise<Conversation[]> {
   const params = new URLSearchParams();
   if (status && status !== "all") params.set("status", status);
+  if (labelId) params.set("labelId", labelId);
   const res = await fetch(`${API_URL}/v1/conversations?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -42,15 +44,15 @@ async function fetchConversations(token: string, status?: string): Promise<Conve
   return json.data;
 }
 
-export function useConversations(status?: string) {
+export function useConversations(status?: string, labelId?: string) {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["conversations", status ?? "all"],
+    queryKey: ["conversations", status ?? "all", labelId ?? "none"],
     queryFn: async () => {
       const token = await getToken();
-      return fetchConversations(token ?? "", status);
+      return fetchConversations(token ?? "", status, labelId);
     },
   });
 
