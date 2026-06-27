@@ -71,3 +71,48 @@ describe("settings_tags sub gate", () => {
     await app.close();
   });
 });
+
+describe("PATCH /v1/tags/:tag (rename)", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("renames a tag across all contacts in the org", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([
+      { id: "c-1", tags: ["vip", "lead"] },
+      { id: "c-2", tags: ["vip"] },
+    ]);
+    mockPrisma.contact.update.mockResolvedValue({});
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/tags/vip",
+      payload: { newTag: "premium" },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(mockPrisma.contact.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "c-1" }, data: { tags: ["premium", "lead"] } })
+    );
+    expect(mockPrisma.contact.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "c-2" }, data: { tags: ["premium"] } })
+    );
+  });
+
+  it("returns 400 when newTag is missing", async () => {
+    const res = await app.inject({ method: "PATCH", url: "/v1/tags/vip", payload: {} });
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.contact.findMany).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when settings_tags sub-permission is missing", async () => {
+    const restricted = Fastify({ logger: false });
+    restricted.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    restricted.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-2", organizationId: "org-1", role: "agent" as const, permissions: { settings_access: "allow" }, teamId: null, teamRole: null };
+    });
+    const { tagsRouter } = await import("./labels.js");
+    await restricted.register(tagsRouter, { prefix: "/v1" });
+    const res = await restricted.inject({ method: "PATCH", url: "/v1/tags/vip", payload: { newTag: "premium" } });
+    expect(res.statusCode).toBe(403);
+    await restricted.close();
+  });
+});

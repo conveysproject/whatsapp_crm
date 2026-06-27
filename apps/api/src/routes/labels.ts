@@ -47,4 +47,34 @@ export const tagsRouter: FastifyPluginAsync = async (fastify) => {
 
     return reply.status(204).send();
   });
+
+  // Rename a tag — replaces it on every contact in the org
+  fastify.patch<{ Params: { tag: string }; Body: { newTag: string } }>("/tags/:tag", async (request, reply) => {
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "settings_access", "settings_tags")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_tags permission required" } });
+    }
+    const oldTag = decodeURIComponent(request.params.tag);
+    const { newTag } = request.body;
+    if (!newTag?.trim()) {
+      return reply.status(400).send({ error: { code: "INVALID", message: "newTag is required" } });
+    }
+    const trimmed = newTag.trim().toLowerCase();
+
+    const contacts = await fastify.prisma.contact.findMany({
+      where: { organizationId, deletedAt: null, tags: { has: oldTag } },
+      select: { id: true, tags: true },
+    });
+
+    await Promise.all(
+      contacts.map((c) =>
+        fastify.prisma.contact.update({
+          where: { id: c.id },
+          data: { tags: c.tags.map((t) => (t === oldTag ? trimmed : t)) },
+        }),
+      ),
+    );
+
+    return reply.status(204).send();
+  });
 };
