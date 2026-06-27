@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX, useState } from "react";
+import { JSX, useState, useRef, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useConversations, useSearchConversations } from "@/hooks/useConversations";
 import { useInboxLabels } from "@/hooks/useInboxLabels";
@@ -29,7 +29,18 @@ export function ConversationList({ selectedId, onSelect }: Props): JSX.Element {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeLabelId, setActiveLabelId] = useState<string | undefined>(undefined);
   const [labelFilterOpen, setLabelFilterOpen] = useState(false);
+  const labelFilterRef = useRef<HTMLDivElement>(null);
   const { getToken } = useAuth();
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (labelFilterRef.current && !labelFilterRef.current.contains(e.target as Node)) {
+        setLabelFilterOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   const { data: allLabels = [] } = useInboxLabels();
 
   const isSearching = searchQuery.trim().length >= 2;
@@ -107,7 +118,7 @@ export function ConversationList({ selectedId, onSelect }: Props): JSX.Element {
       {/* Label filter row — hidden while searching */}
       {!isSearching && allLabels.length > 0 && (
         <div className="px-3 py-1.5 border-b border-gray-100 shrink-0">
-          <div className="relative inline-block">
+          <div className="relative inline-block" ref={labelFilterRef}>
             <button
               onClick={() => setLabelFilterOpen((v) => !v)}
               className="flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-gray-700"

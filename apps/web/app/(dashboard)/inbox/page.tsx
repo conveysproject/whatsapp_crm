@@ -49,18 +49,28 @@ export default function InboxPage(): JSX.Element {
 
   const handleLabelChange = useCallback(async (name: string | null) => {
     if (!selectedConversationId) return;
-    const token = await getToken();
-    if (name) {
-      await fetch(`${API_URL}/v1/conversations/${selectedConversationId}/label`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-    } else {
-      await fetch(`${API_URL}/v1/conversations/${selectedConversationId}/label`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token ?? ""}` },
-      });
+    try {
+      const token = await getToken();
+      let res: Response;
+      if (name) {
+        res = await fetch(`${API_URL}/v1/conversations/${selectedConversationId}/label`, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+      } else {
+        res = await fetch(`${API_URL}/v1/conversations/${selectedConversationId}/label`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token ?? ""}` },
+        });
+      }
+      if (!res.ok) {
+        console.error("label change failed", res.status);
+        return;
+      }
+    } catch (err) {
+      console.error("label change failed", err);
+      return;
     }
     await queryClient.invalidateQueries({ queryKey: ["conversations"] });
     await queryClient.invalidateQueries({ queryKey: ["inbox-labels"] });
