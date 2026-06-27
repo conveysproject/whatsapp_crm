@@ -124,9 +124,11 @@ export default function NewCampaignPage(): JSX.Element {
       ).length;
   })();
 
-  // Reset card URLs when carousel card count changes
+  // Resize card URLs array when carousel card count changes, preserving existing entries
   useEffect(() => {
-    setCardMediaUrls(Array(carouselCardCount).fill(""));
+    setCardMediaUrls((prev) =>
+      Array.from({ length: carouselCardCount }, (_, i) => prev[i] ?? "")
+    );
   }, [carouselCardCount]);
 
   const estimatedCount = audienceMode === "groups"
@@ -135,7 +137,12 @@ export default function NewCampaignPage(): JSX.Element {
 
   function canAdvance(): boolean {
     if (step === 1) return name.trim().length > 0;
-    if (step === 2) return campaignType === "template" ? templateId !== "" : freeTextBody.trim().length > 0;
+    if (step === 2) {
+      if (campaignType !== "template") return freeTextBody.trim().length > 0;
+      if (!templateId) return false;
+      if (carouselCardCount > 0) return cardMediaUrls.slice(0, carouselCardCount).every((u) => u.trim().length > 0);
+      return true;
+    }
     if (step === 3) {
       if (audienceMode === "groups") return selectedGroupIds.length > 0;
       if (audienceMode === "segment") return segmentId !== "";

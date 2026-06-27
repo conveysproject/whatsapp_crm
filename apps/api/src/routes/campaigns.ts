@@ -95,6 +95,12 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
     if (!limitCheck.allowed) {
       return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Campaign limit of ${limitCheck.limit} reached` } });
     }
+    if (request.body.cardMediaUrls !== undefined) {
+      if (!Array.isArray(request.body.cardMediaUrls) ||
+          !request.body.cardMediaUrls.every((u) => typeof u === "string")) {
+        return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "cardMediaUrls must be an array of strings" } });
+      }
+    }
     const { name, templateId, textBody, campaignType, scheduledAt, messageInterval } = request.body;
     // For text campaigns, store the body in templateId field (worker reads it regardless of type)
     const resolvedTemplateId = campaignType === "text" || campaignType === "non_template"
@@ -154,6 +160,7 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
           ...(scheduledAt !== undefined ? { scheduledAt: scheduledAt ? new Date(scheduledAt) : null } : {}),
           ...(messageInterval !== undefined ? { messageInterval } : {}),
           ...(request.body.mediaUrl !== undefined ? { mediaUrl: request.body.mediaUrl } : {}),
+          ...(request.body.cardMediaUrls !== undefined ? { cardMediaUrls: request.body.cardMediaUrls } : {}),
         },
       });
       return reply.send({ data: updated });

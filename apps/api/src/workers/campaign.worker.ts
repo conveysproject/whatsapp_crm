@@ -207,7 +207,8 @@ export const campaignWorker = new Worker<CampaignJob>(
             return bodyComp?.text ? (bodyComp.text.match(/\{\{\d+\}\}/g) ?? []).length : 0;
           })();
           const bodyVars = contact ? contactBodyVars(contact, bodyVarCount) : [];
-          const cardMediaUrls = (campaign.cardMediaUrls as string[] | null) ?? [];
+          const rawUrls = campaign.cardMediaUrls;
+          const cardMediaUrls = Array.isArray(rawUrls) ? (rawUrls as string[]) : [];
           const carouselCardCount = extractCarouselImageCardCount(stored as unknown[]);
           const cardVars = carouselCardCount > 0 && cardMediaUrls.length > 0
             ? cardMediaUrls.slice(0, carouselCardCount).map((url) => ({ headerMediaUrl: url }))
