@@ -14,6 +14,8 @@ import { ExportModal } from "./ExportModal";
 import { ContactTrustBadge } from "@/components/trust-score/ContactTrustBadge";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { canAccessSub } from "@/lib/can";
+import { BulkTagModal } from "./BulkTagModal";
+import { getTagColor } from "@/lib/tag-color";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -96,6 +98,9 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
   const [showExportModal, setShowExportModal] = useState(false);
   const [assignPopoverId, setAssignPopoverId] = useState<string | null>(null);
   const assignPopoverRef = useRef<HTMLDivElement>(null);
+  const [showBulkTagModal, setShowBulkTagModal] = useState(false);
+  const [selectedTag, setSelectedTag] = useState("");
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
 
   const { toast, toastState, setToastOpen } = useToast();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,25 +135,36 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
     + (isVisible("tags") ? 1 : 0)
     + (isVisible("assigned_user_id") ? 1 : 0);
 
-  const search = useCallback(async (q: string) => {
+  const search = useCallback(async (q: string, tag: string) => {
     const token = await getToken();
     if (!token) return;
     setSearching(true);
     try {
-      const res = await clientFetch(`${API_URL}/v1/contacts/search?q=${encodeURIComponent(q)}`, {
-        token,
-        silent: true,
-      });
+      const url = `${API_URL}/v1/contacts/search?q=${encodeURIComponent(q)}${tag ? `&tag=${encodeURIComponent(tag)}` : ""}`;
+      const res = await clientFetch(url, { token, silent: true });
       if (res.ok) setContacts((await res.json() as { data: ContactWithLabels[] }).data);
     } finally { setSearching(false); }
   }, [getToken]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!query.trim()) { setContacts(initialContacts); return; }
-    debounceRef.current = setTimeout(() => { void search(query); }, 300);
+    if (!query.trim() && !selectedTag) { setContacts(initialContacts); return; }
+    debounceRef.current = setTimeout(() => { void search(query, selectedTag); }, 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, search, initialContacts]);
+  }, [query, selectedTag, search, initialContacts]);
+
+  useEffect(() => {
+    void (async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/contacts/tags`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (res.ok) {
+        const body = (await res.json()) as { data: string[] };
+        setAvailableTags(body.data);
+      }
+    })();
+  }, [getToken]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -387,6 +403,19 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
                 )}
               </div>
+
+              {availableTags.length > 0 && (
+                <select
+                  value={selectedTag}
+                  onChange={(e) => { setSelectedTag(e.target.value); setPage(1); }}
+                  className="h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  <option value="">All tags</option>
+                  {availableTags.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* Table */}
@@ -502,9 +531,12 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
                             <td className="px-4 py-3.5">
                               {c.tags && c.tags.length > 0 ? (
                                 <div className="flex flex-wrap gap-1">
-                                  {c.tags.slice(0, 3).map((tag) => (
-                                    <span key={tag} className="inline-flex items-center h-5 px-2 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600">{tag}</span>
-                                  ))}
+                                  {c.tags.slice(0, 3).map((tag) => {
+                                    const { bg, text } = getTagColor(tag);
+                                    return (
+                                      <span key={tag} className={`inline-flex items-center h-5 px-2 rounded-full text-[11px] font-medium ${bg} ${text}`}>{tag}</span>
+                                    );
+                                  })}
                                   {c.tags.length > 3 && (
                                     <span className="inline-flex items-center h-5 px-2 rounded-full text-[11px] font-medium bg-gray-100 text-gray-400">+{c.tags.length - 3}</span>
                                   )}
@@ -676,6 +708,7 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
           <div className="w-px h-4 bg-gray-600" />
           {canBulkTag && (
             <button
+              onClick={() => setShowBulkTagModal(true)}
               className="flex items-center gap-1.5 text-sm font-medium text-brand-300 hover:text-brand-200 transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
@@ -726,6 +759,21 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
       )}
       <ExportModal open={showExportModal} onClose={() => setShowExportModal(false)} />
       <Toast title={toastState.title} variant={toastState.variant} open={toastState.open} onOpenChange={setToastOpen} />
+      {showBulkTagModal && (
+        <BulkTagModal
+          contactIds={[...selectedIds]}
+          onClose={() => setShowBulkTagModal(false)}
+          onSuccess={(newTags) => {
+            setContacts((prev) =>
+              prev.map((c) =>
+                selectedIds.has(c.id)
+                  ? { ...c, tags: Array.from(new Set([...(c.tags ?? []), ...newTags])) }
+                  : c,
+              ),
+            );
+          }}
+        />
+      )}
     </>
   );
 }
