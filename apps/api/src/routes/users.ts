@@ -194,4 +194,50 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({ data });
     }
   );
+
+  fastify.patch<{ Params: { id: string }; Body: { teamId: string | null; teamRole?: "lead" | "member" } }>(
+    "/users/:id/team",
+    {
+      schema: {
+        params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+        body: {
+          type: "object",
+          required: ["teamId"],
+          properties: {
+            teamId: { type: ["string", "null"] },
+            teamRole: { type: "string", enum: ["lead", "member"] },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { role, permissions, organizationId } = request.auth;
+      if (!canAccessSub(role, permissions, "settings_access", "settings_agents")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_agents permission required" } });
+      }
+      const target = await fastify.prisma.user.findFirst({
+        where: { id: request.params.id, organizationId },
+        select: { id: true, organizationId: true, teamId: true, teamRole: true },
+      });
+      if (!target) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "User not found" } });
+
+      // If moving a lead out of their current team, ensure another lead remains.
+      if (target.teamId && target.teamId !== request.body.teamId && target.teamRole === "lead") {
+        const otherLeads = await fastify.prisma.user.count({
+          where: { organizationId, teamId: target.teamId, teamRole: "lead", id: { not: target.id } },
+        });
+        if (otherLeads === 0) {
+          return reply.status(400).send({ error: { code: "LAST_LEAD", message: "Assign another Lead before moving this one" } });
+        }
+      }
+
+      const teamId = request.body.teamId;
+      const data = teamId === null
+        ? { teamId: null as null, teamRole: null as null }
+        : { teamId, teamRole: request.body.teamRole ?? ("member" as const) };
+      await fastify.prisma.user.update({ where: { id: target.id }, data });
+      await invalidateAuthCache(target.id);
+      return reply.send({ data: { id: target.id, ...data } });
+    },
+  );
 };

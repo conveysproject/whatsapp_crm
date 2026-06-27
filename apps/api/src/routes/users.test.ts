@@ -6,7 +6,7 @@ const { mockRedisDel } = vi.hoisted(() => ({ mockRedisDel: vi.fn().mockResolvedV
 vi.mock("../lib/redis.js", () => ({ redis: { del: mockRedisDel } }));
 
 const mockPrisma = {
-  user: { findMany: vi.fn(), update: vi.fn(), findFirst: vi.fn() },
+  user: { findMany: vi.fn(), update: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
   organizationMember: {
     findFirst: vi.fn(),
     update: vi.fn(),
@@ -154,5 +154,41 @@ describe("settings_agents sub gate", () => {
     const res = await app.inject({ method: "PATCH", url: "/v1/users/u-2/role", payload: { role: "agent" } });
     expect(res.statusCode).toBe(200);
     await app.close();
+  });
+});
+
+describe("PATCH /v1/users/:id/team", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("rejects move that leaves the old team with no lead (400)", async () => {
+    // target currently lead of team-old which has only this lead
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u9", organizationId: "org-1", teamId: "team-old", teamRole: "lead" });
+    mockPrisma.user.count.mockResolvedValue(0); // no other lead remains
+    const res = await app.inject({ method: "PATCH", url: "/v1/users/u9/team", payload: { teamId: "team-new", teamRole: "member" } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("moves a user to a new team", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u9", organizationId: "org-1", teamId: null, teamRole: null });
+    mockPrisma.user.update.mockResolvedValue({ id: "u9", teamId: "team-new", teamRole: "member" });
+    const res = await app.inject({ method: "PATCH", url: "/v1/users/u9/team", payload: { teamId: "team-new", teamRole: "member" } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { teamId: "team-new", teamRole: "member" } }));
+  });
+
+  it("returns 403 when caller lacks settings_agents permission", async () => {
+    const noPermApp = Fastify({ logger: false });
+    noPermApp.decorate("prisma", mockPrisma as unknown as import("@prisma/client").PrismaClient);
+    noPermApp.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-caller", organizationId: "org-1", role: "manager" as const, permissions: { settings_access: "allow" }, teamId: null, teamRole: null };
+    });
+    const { userRoutes } = await import("./users.js");
+    await noPermApp.register(userRoutes, { prefix: "/v1" });
+    const res = await noPermApp.inject({ method: "PATCH", url: "/v1/users/u9/team", payload: { teamId: "team-new" } });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+    await noPermApp.close();
   });
 });
