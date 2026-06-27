@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX, useState, useEffect, useRef } from "react";
+import { JSX, useState, useEffect } from "react";
 import { MediaAssetPicker } from "@/components/media-asset-picker";
 import type { MediaAsset } from "@/components/media-asset-picker";
 import { useAuth } from "@clerk/nextjs";
@@ -124,14 +124,10 @@ export default function NewCampaignPage(): JSX.Element {
       ).length;
   })();
 
-  // Reset card URLs when template selection changes
-  const prevTemplateIdRef = useRef(templateId);
+  // Reset card URLs when carousel card count changes
   useEffect(() => {
-    if (prevTemplateIdRef.current !== templateId) {
-      prevTemplateIdRef.current = templateId;
-      setCardMediaUrls(Array(carouselCardCount).fill(""));
-    }
-  }, [templateId, carouselCardCount]);
+    setCardMediaUrls(Array(carouselCardCount).fill(""));
+  }, [carouselCardCount]);
 
   const estimatedCount = audienceMode === "groups"
     ? groups.filter((g) => selectedGroupIds.includes(g.id)).reduce((sum, g) => sum + g._count.contacts, 0)
