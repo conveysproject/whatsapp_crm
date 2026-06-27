@@ -81,6 +81,19 @@ function isTransientError(err: unknown): boolean {
   return false;
 }
 
+function extractCarouselImageCardCount(components: unknown[]): number {
+  const carousel = (components as Array<{ type?: string; cards?: unknown[] }>)
+    .find((c) => c.type?.toUpperCase() === "CAROUSEL");
+  if (!carousel?.cards) return 0;
+  return (carousel.cards as Array<{ components?: Array<{ type?: string; format?: string }> }>)
+    .filter((card) =>
+      card.components?.some(
+        (cc) => cc.type?.toUpperCase() === "HEADER" &&
+          ["IMAGE", "VIDEO", "DOCUMENT"].includes((cc.format ?? "").toUpperCase())
+      )
+    ).length;
+}
+
 export const campaignWorker = new Worker<CampaignJob>(
   "campaigns",
   async (job) => {
@@ -194,7 +207,16 @@ export const campaignWorker = new Worker<CampaignJob>(
             return bodyComp?.text ? (bodyComp.text.match(/\{\{\d+\}\}/g) ?? []).length : 0;
           })();
           const bodyVars = contact ? contactBodyVars(contact, bodyVarCount) : [];
-          const components = buildTemplateComponents(stored, { body: bodyVars });
+          const cardMediaUrls = (campaign.cardMediaUrls as string[] | null) ?? [];
+          const carouselCardCount = extractCarouselImageCardCount(stored as unknown[]);
+          const cardVars = carouselCardCount > 0 && cardMediaUrls.length > 0
+            ? cardMediaUrls.slice(0, carouselCardCount).map((url) => ({ headerMediaUrl: url }))
+            : undefined;
+
+          const components = buildTemplateComponents(stored, {
+            body: bodyVars,
+            ...(cardVars ? { cards: cardVars } : {}),
+          });
           ({ messageId } = await sendTemplateMessage(
             phoneNumberId, phone, metaTemplate.name, metaTemplate.language, components, accessToken
           ));
