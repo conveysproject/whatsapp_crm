@@ -706,6 +706,7 @@ model Campaign {
   scheduledAt      DateTime?           @map("scheduled_at")
   messageInterval  Int?                @map("message_interval") // seconds between sends
   mediaUrl         String?             @map("media_url") @db.Text
+  cardMediaUrls    Json?               @map("card_media_urls")
   sentAt         DateTime?           @map("sent_at")
   createdAt      DateTime            @default(now()) @map("created_at")
   updatedAt      DateTime            @updatedAt @map("updated_at")
