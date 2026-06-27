@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import type { Contact, EditableContact } from "./AddContactModal";
 import { Toggle, SectionHeader, FieldSkeleton, LANGUAGES } from "./contact-shared";
+import { TagCombobox } from "./TagCombobox";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 import { clientFetch } from "@/lib/client-fetch";
 
@@ -63,7 +64,6 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
     assignedUserId: contact?.assignedUserId ?? "",
   });
   const [tags, setTags] = useState<string[]>(contact?.tags ?? []);
-  const [tagInput, setTagInput] = useState("");
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>(
     contact?.customFields
       ? Object.fromEntries(Object.entries(contact.customFields).map(([k, v]) => [k, String(v)]))
@@ -163,16 +163,6 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
       ...f,
       groupIds: f.groupIds.includes(id) ? f.groupIds.filter((g) => g !== id) : [...f.groupIds, id],
     }));
-  }
-
-  function addTag(value: string) {
-    const trimmed = value.trim();
-    if (trimmed && !tags.includes(trimmed)) setTags((prev) => [...prev, trimmed]);
-    setTagInput("");
-  }
-
-  function removeTag(tag: string) {
-    setTags((prev) => prev.filter((t) => t !== tag));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -396,26 +386,7 @@ export function EditContactDrawer({ open, loading = false, contact, onClose, onU
               {isVisible("tags") && (
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-gray-500">Tags</label>
-                  <div className="min-h-[38px] rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 flex flex-wrap gap-1.5 items-center focus-within:ring-2 focus-within:ring-brand-500 focus-within:bg-white transition-colors cursor-text">
-                    {tags.map((tag) => (
-                      <span key={tag} className="inline-flex items-center gap-1 bg-gray-200 text-gray-700 rounded-full text-xs px-2 py-0.5 shrink-0">
-                        {tag}
-                        <button type="button" onClick={() => removeTag(tag)} className="hover:text-red-500 leading-none ml-0.5">&times;</button>
-                      </span>
-                    ))}
-                    <input
-                      className="flex-1 min-w-[80px] text-sm bg-transparent outline-none placeholder-gray-400"
-                      placeholder={tags.length === 0 ? "Add tag…" : ""}
-                      value={tagInput}
-                      onChange={(e) => setTagInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(tagInput); }
-                        if (e.key === "Backspace" && !tagInput && tags.length > 0) removeTag(tags[tags.length - 1]!);
-                      }}
-                      onBlur={() => { if (tagInput.trim()) addTag(tagInput); }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-400">Press Enter or comma to add a tag</p>
+                  <TagCombobox tags={tags} onChange={setTags} />
                 </div>
               )}
             </div>
