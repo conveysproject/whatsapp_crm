@@ -15,6 +15,7 @@ interface CampaignBody {
   scheduledAt?: string;
   messageInterval?: number;
   mediaUrl?: string;
+  cardMediaUrls?: string[];
   // GAP-S70: accept CSV string OR array; normalize to array
   contactGroup?: string | string[];
   contactLabels?: string | string[];
@@ -109,6 +110,7 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         messageInterval: messageInterval ?? null,
         mediaUrl: request.body.mediaUrl ?? null,
+        cardMediaUrls: request.body.cardMediaUrls ?? null,
       },
     });
     // Persist group associations
