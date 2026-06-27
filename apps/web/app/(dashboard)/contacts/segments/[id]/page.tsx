@@ -36,6 +36,7 @@ export default function SegmentDetailPage(): JSX.Element {
   const [contacts, setContacts] = useState<ContactPreview[]>([]);
   const [matchCount, setMatchCount] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -83,6 +84,25 @@ export default function SegmentDetailPage(): JSX.Element {
     }
   }
 
+  async function handlePreview(): Promise<void> {
+    setPreviewing(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/segments/preview`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ filters, match, whatsappOptedOnly }),
+      });
+      if (res.ok) {
+        const result = (await res.json() as { data: { count: number; contacts: ContactPreview[] } }).data;
+        setMatchCount(result.count);
+        setContacts(result.contacts);
+      }
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
   if (loading) return <div className="animate-pulse h-40 bg-gray-100 rounded-xl" />;
   if (!segment) return <p className="text-gray-500">Segment not found.</p>;
 
@@ -103,7 +123,10 @@ export default function SegmentDetailPage(): JSX.Element {
           onWhatsappOptedOnlyChange={setWhatsappOptedOnly}
         />
         <div className="flex items-center gap-3 pt-2">
-          <Button onClick={() => { void handleSave(); }} disabled={saving}>
+          <Button variant="secondary" onClick={() => { void handlePreview(); }} disabled={previewing || saving}>
+            {previewing ? "Previewing…" : "Preview"}
+          </Button>
+          <Button onClick={() => { void handleSave(); }} disabled={saving || previewing}>
             {saving ? "Saving…" : "Save Segment"}
           </Button>
           {matchCount !== null && (
