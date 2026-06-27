@@ -116,7 +116,7 @@ export const campaignsRouter: FastifyPluginAsync = async (fastify) => {
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         messageInterval: messageInterval ?? null,
         mediaUrl: request.body.mediaUrl ?? null,
-        cardMediaUrls: request.body.cardMediaUrls ?? null,
+        cardMediaUrls: (request.body.cardMediaUrls ?? null) as string[] | undefined,
       },
     });
     // Persist group associations
