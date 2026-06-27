@@ -57,6 +57,9 @@ function CardEditor({ card, index, onChange, onRemove, canRemove }: {
           placeholder="Card body text"
           className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
         />
+        <p className={`text-xs mt-0.5 ${(card.bodyText?.length ?? 0) > 60 ? 'text-red-500' : 'text-gray-400'}`}>
+          {card.bodyText?.length ?? 0}/60
+        </p>
       </div>
 
       <div className="space-y-2">

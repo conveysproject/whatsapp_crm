@@ -155,7 +155,28 @@ export function validateForm(state: TemplateFormState): string[] {
   if (state.subType === 'lto' && state.bodyText.length > 600) errors.push('LTO body text max 600 characters.');
   else if (state.bodyText.length > 1024) errors.push('Body text max 1024 characters.');
   if (state.subType === 'lto' && state.ltoText.length > 16) errors.push('LTO offer text max 16 characters.');
-  if (state.subType === 'carousel' && (state.cards.length < 2 || state.cards.length > 10)) errors.push('Carousel must have 2–10 cards.');
+  if (state.subType === 'carousel') {
+    if (state.cards.length < 2 || state.cards.length > 10) errors.push('Carousel must have 2–10 cards.');
+    // Per-card body length (Meta limit: 60 chars)
+    state.cards.forEach((card, i) => {
+      if (card.bodyText && card.bodyText.length > 60) {
+        errors.push(`Card ${i + 1} body text max 60 characters.`);
+      }
+    });
+    // All cards must have same number of buttons
+    const buttonCounts = state.cards.map((c) => c.buttons.length);
+    if (new Set(buttonCounts).size > 1) {
+      errors.push('All carousel cards must have the same number of buttons.');
+    }
+    // All cards must have the same button types (in order)
+    if (new Set(buttonCounts).size === 1 && state.cards.length > 1) {
+      const firstTypes = state.cards[0]!.buttons.map((b) => b.type);
+      const mismatch = state.cards.slice(1).some(
+        (card) => card.buttons.map((b) => b.type).join(',') !== firstTypes.join(',')
+      );
+      if (mismatch) errors.push('All carousel cards must have the same type of buttons.');
+    }
+  }
   for (const btn of state.buttons) {
     if (btn.text.length > 25) errors.push(`Button "${btn.text}" label max 25 characters.`);
     if (btn.type === 'url' && btn.url.length > 2000) errors.push('URL button URL max 2000 characters.');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildComponents, extractVariables } from './buildComponents';
+import { buildComponents, extractVariables, validateForm } from './buildComponents';
 import type { TemplateFormState } from './templateFormTypes';
 import { INITIAL_STATE } from './templateFormTypes';
 
@@ -194,5 +194,71 @@ describe('buildComponents — carousel', () => {
     expect(carousel).toBeDefined();
     const cards = carousel.cards as unknown[];
     expect(cards).toHaveLength(2);
+  });
+});
+
+describe("validateForm — carousel validations", () => {
+  const baseCard = (overrides: Partial<import("./templateFormTypes").CarouselCard> = {}): import("./templateFormTypes").CarouselCard => ({
+    id: "c1",
+    headerMediaUrl: "https://example.com/img.jpg",
+    bodyText: "",
+    buttons: [],
+    ...overrides,
+  });
+
+  const baseState = (): import("./templateFormTypes").TemplateFormState => ({
+    ...INITIAL_STATE,
+    name: "test_template",
+    category: "marketing",
+    subType: "carousel",
+    language: "en",
+    headerType: "none",
+    headerText: "",
+    headerMediaUrl: "",
+    bodyText: "Check these out",
+    footerText: "",
+    buttons: [],
+    cards: [baseCard({ id: "c1" }), baseCard({ id: "c2" })],
+  });
+
+  it("errors when a card body exceeds 60 characters", () => {
+    const state = baseState();
+    state.cards[0]!.bodyText = "A".repeat(61);
+    const errors = validateForm(state);
+    expect(errors).toContain("Card 1 body text max 60 characters.");
+  });
+
+  it("allows card body of exactly 60 characters", () => {
+    const state = baseState();
+    state.cards[0]!.bodyText = "A".repeat(60);
+    const errors = validateForm(state);
+    expect(errors).not.toContain("Card 1 body text max 60 characters.");
+  });
+
+  it("errors when cards have different button counts", () => {
+    const state = baseState();
+    state.cards[0]!.buttons = [{ id: "b1", type: "quick_reply", text: "Yes", url: "", urlIsDynamic: false, urlExample: "", phone: "" }];
+    state.cards[1]!.buttons = [];
+    const errors = validateForm(state);
+    expect(errors.some((e) => e.includes("same number of buttons"))).toBe(true);
+  });
+
+  it("errors when cards have different button types", () => {
+    const state = baseState();
+    const qr = { id: "b1", type: "quick_reply" as const, text: "Yes", url: "", urlIsDynamic: false, urlExample: "", phone: "" };
+    const url = { id: "b2", type: "url" as const, text: "Learn More", url: "https://x.com", urlIsDynamic: false, urlExample: "", phone: "" };
+    state.cards[0]!.buttons = [qr];
+    state.cards[1]!.buttons = [url];
+    const errors = validateForm(state);
+    expect(errors.some((e) => e.includes("same type of buttons"))).toBe(true);
+  });
+
+  it("passes when all cards have the same button count and types", () => {
+    const state = baseState();
+    const qr = (id: string) => ({ id, type: "quick_reply" as const, text: "Yes", url: "", urlIsDynamic: false, urlExample: "", phone: "" });
+    state.cards[0]!.buttons = [qr("b1")];
+    state.cards[1]!.buttons = [qr("b2")];
+    const errors = validateForm(state);
+    expect(errors.filter((e) => e.includes("button"))).toEqual([]);
   });
 });
