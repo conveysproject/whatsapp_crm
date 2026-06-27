@@ -39,8 +39,8 @@ Palette: 10 distinct color pairs covering blue, green, purple, orange, pink, tea
 ### Tag autocomplete — new shared component
 `TagCombobox.tsx` replaces the raw `<input>` in `EditContactDrawer` and is used in the bulk modal and inbox edit. On focus it fetches `GET /v1/contacts/tags`, shows a dropdown of existing org tags filtered by typed text, plus an inline "+ Create [text]" option. Keyboard-navigable. Falls back gracefully if the fetch fails (free-text only).
 
-### CSV per-row tags — extend field mapping
-The import worker (`contacts-import.ts`) already supports a `fieldMapping` object. Add `tags` as a valid mappable field. When mapped, each row's value is split on `|` (matching our existing export format) and merged with `batchTags` before upsert.
+### CSV per-row tags — already implemented ✓
+The import worker already calls `extractField(row, fieldMapping, "tags")` and `mergeTagsUnion` (splits on `;`). The import UI already exposes `Tags` as a mappable field. No changes needed for Gap 4.
 
 ---
 
@@ -54,12 +54,9 @@ Replaces free-text tag inputs across the app. Props: `tags: string[]`, `onChange
 
 ### 3. `apps/api/src/routes/contacts.ts`
 - Add `POST /v1/contacts/bulk/assign-tags` — appends tags to selected contacts, guards with `contacts_bulk_tag` permission.
-- Add `PATCH /v1/tags/:tag` (rename) — updates `tags` array on all org contacts, replacing `oldTag` string with `newTag`. Guards with `settings_tags` permission.
-
-  > Note: rename endpoint lives in `labels.ts` which already owns the tags namespace — move it there.
 
 ### 4. `apps/api/src/routes/labels.ts`
-- Add `PATCH /v1/tags/:tag` (rename) — body `{ newTag: string }`. Updates all contacts in org: remove old tag, add new tag. Requires `settings_tags` permission.
+- Add `PATCH /v1/tags/:tag` (rename) — body `{ newTag: string }`. Updates all contacts in org: remove old tag string, add new tag string. Requires `settings_tags` permission. Lives here alongside existing `GET /v1/tags` and `DELETE /v1/tags/:tag`.
 
 ### 5. `apps/web/components/contacts/BulkTagModal.tsx` (new)
 Modal opened by the "Tag selected" button. Shows "Assign tags to N contacts", uses `TagCombobox`, confirm → `POST /v1/contacts/bulk/assign-tags` → updates local contact state (appends tags to selected rows in-memory).
@@ -82,9 +79,8 @@ Modal opened by the "Tag selected" button. Shows "Assign tags to N contacts", us
 - Add inline rename: clicking a tag name makes it editable in-place → confirm → `PATCH /v1/tags/:tag`.
 - Apply `getTagColor` to tag pills.
 
-### 10. CSV import field mapping
-- In `apps/api/src/routes/contacts-import.ts` (and the import worker if field expansion happens there): when `fieldMapping` includes a `tags` key, read that column per row, split on `|`, merge with `batchTags`.
-- Expose `tags` as a selectable mapping option in the import UI (`apps/web/components/contacts/` import flow).
+### 10. CSV import field mapping — already implemented ✓
+No changes needed. `contact-import.worker.ts` already calls `extractField(row, fieldMapping, "tags")` and `mergeTagsUnion` (splits on `;`, merges with `batchTags`). `Step2MapFields.tsx` already exposes `Tags` as a mappable field with auto-detection for columns containing "tag". Gap 4 is fully closed.
 
 ---
 
@@ -136,14 +132,6 @@ User clicks tag name in settings/labels → editable input
 → 200 → LabelsClient updates tag name in local state
 ```
 
-### CSV per-row tags
-```
-User uploads CSV → field mapping step
-→ maps CSV column → "Tags" field
-→ POST /v1/contacts/import/start (fieldMapping includes tags key)
-→ import worker: per row, reads tags column, splits on |, merges with batchTags
-→ contact upsert includes merged tags
-```
 
 ---
 
