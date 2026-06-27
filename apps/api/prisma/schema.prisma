@@ -252,6 +252,7 @@ model Conversation {
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
   messages          Message[]
+  conversationLabel ConversationLabel?
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -907,6 +908,34 @@ model MessageLabel {
   @@index([messageId])
   @@index([labelId])
   @@map("message_labels")
+}
+
+// ─── Inbox (Conversation) Labels ─────────────────────────────────────────────
+
+model InboxLabel {
+  id             String              @id @default(uuid())
+  organizationId String              @map("organization_id")
+  name           String
+  color          String
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  conversationLabels ConversationLabel[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("inbox_labels")
+}
+
+model ConversationLabel {
+  id             String       @id @default(uuid())
+  conversationId String       @unique @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  inboxLabelId   String       @map("inbox_label_id")
+  inboxLabel     InboxLabel   @relation(fields: [inboxLabelId], references: [id], onDelete: Cascade)
+  assignedAt     DateTime     @default(now()) @map("assigned_at")
+
+  @@index([inboxLabelId])
+  @@map("conversation_labels")
 }
 
 // ─── Custom Fields ────────────────────────────────────────────────────────────
