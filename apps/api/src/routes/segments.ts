@@ -20,6 +20,18 @@ export const segmentsRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: segments });
   });
 
+  fastify.post<{ Body: { filters?: FilterRule[]; match?: MatchMode; whatsappOptedOnly?: boolean } }>(
+    "/segments/preview",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const filters = request.body.filters ?? [];
+      const match = request.body.match ?? "all";
+      const whatsappOptedOnly = request.body.whatsappOptedOnly ?? false;
+      const result = await evaluateSegment(fastify.prisma, organizationId, filters, match, whatsappOptedOnly);
+      return reply.send({ data: result });
+    },
+  );
+
   fastify.get<{ Params: { id: SegmentId } }>("/segments/:id", async (request, reply) => {
     const { organizationId } = request.auth;
     const segment = await fastify.prisma.segment.findFirst({

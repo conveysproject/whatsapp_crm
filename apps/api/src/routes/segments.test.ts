@@ -171,3 +171,37 @@ describe("PATCH /v1/segments/:id — whatsappOptedOnly", () => {
     );
   });
 });
+
+describe("POST /v1/segments/preview", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns count and contacts without touching segment records", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([
+      { id: "c-1", firstName: "Alice", lastName: "Smith", phoneNumber: "+1234567890", leadStatus: null },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/segments/preview",
+      payload: { filters: [], match: "all", whatsappOptedOnly: false },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: { count: number; contacts: unknown[] } }>();
+    expect(body.data.count).toBe(1);
+    expect(body.data.contacts).toHaveLength(1);
+    expect(mockPrisma.segment.create).not.toHaveBeenCalled();
+    expect(mockPrisma.segment.update).not.toHaveBeenCalled();
+  });
+
+  it("defaults filters to [] and match to all when body is empty", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/segments/preview",
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { count: number } }>().data.count).toBe(0);
+  });
+});
