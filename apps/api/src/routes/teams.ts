@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { canAccessSub } from "../lib/permissions.js";
+import { invalidateAuthCache } from "../lib/auth-cache.js";
 
 interface MemberInput { userId: string; teamRole: "lead" | "member" }
 
@@ -73,8 +74,9 @@ export const teamsRouter: FastifyPluginAsync = async (fastify) => {
       });
 
       await fastify.prisma.$transaction(
-        members.map((m) => fastify.prisma.user.update({ where: { id: m.userId }, data: { teamId: team.id, teamRole: m.teamRole } })),
+        members.map((m) => fastify.prisma.user.update({ where: { id: m.userId, organizationId }, data: { teamId: team.id, teamRole: m.teamRole } })),
       );
+      await Promise.all(members.map((m) => invalidateAuthCache(m.userId)));
 
       return reply.status(201).send({ data: { id: team.id } });
     },
@@ -123,14 +125,20 @@ export const teamsRouter: FastifyPluginAsync = async (fastify) => {
       }
 
       if (members && memberIds) {
+        // Capture evictees BEFORE dropping them so we can invalidate their caches.
+        const evicted = await fastify.prisma.user.findMany({
+          where: { organizationId, teamId: team.id, id: { notIn: memberIds } },
+          select: { id: true },
+        });
         // Drop members no longer listed, then upsert the listed ones.
         await fastify.prisma.user.updateMany({
           where: { organizationId, teamId: team.id, id: { notIn: memberIds } },
           data: { teamId: null, teamRole: null },
         });
         await fastify.prisma.$transaction(
-          members.map((m) => fastify.prisma.user.update({ where: { id: m.userId }, data: { teamId: team.id, teamRole: m.teamRole } })),
+          members.map((m) => fastify.prisma.user.update({ where: { id: m.userId, organizationId }, data: { teamId: team.id, teamRole: m.teamRole } })),
         );
+        await Promise.all([...evicted.map((u) => u.id), ...memberIds].map((id) => invalidateAuthCache(id)));
       }
 
       return reply.send({ data: { id: team.id } });
@@ -150,11 +158,16 @@ export const teamsRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Team not found" } });
     }
 
+    const affected = await fastify.prisma.user.findMany({
+      where: { organizationId, teamId: team.id },
+      select: { id: true },
+    });
     await fastify.prisma.user.updateMany({
       where: { organizationId, teamId: team.id },
       data: { teamId: null, teamRole: null },
     });
     await fastify.prisma.team.delete({ where: { id: team.id } });
+    await Promise.all(affected.map((u) => invalidateAuthCache(u.id)));
 
     return reply.status(204).send();
   });

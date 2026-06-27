@@ -1,11 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { Role } from "@prisma/client";
-import { redis } from "../lib/redis.js";
 import { canAccessSub } from "../lib/permissions.js";
-
-function invalidateAuthCache(userId: string): Promise<number> {
-  return redis.del(`auth:user:${userId}`);
-}
+import { invalidateAuthCache } from "../lib/auth-cache.js";
 
 export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/users", async (request) => {

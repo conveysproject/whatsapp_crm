@@ -2,6 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
+vi.mock("../lib/auth-cache.js", () => ({
+  invalidateAuthCache: vi.fn().mockResolvedValue(1),
+}));
+
 const mockPrisma = {
   team: {
     findMany: vi.fn(),
@@ -190,7 +194,11 @@ describe("PATCH /v1/teams/:id", () => {
 
   it("evicts dropped members when PATCH provides a new members list (200)", async () => {
     mockPrisma.team.findFirst.mockResolvedValue({ id: "t1" });
-    mockPrisma.user.findMany.mockResolvedValue([{ id: "u2" }]);
+    // First findMany: org validation (returns the new member list)
+    // Second findMany: evictee capture (returns users being dropped)
+    mockPrisma.user.findMany
+      .mockResolvedValueOnce([{ id: "u2" }])   // org validation
+      .mockResolvedValueOnce([{ id: "u1" }]);   // evictee capture
     mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.user.update.mockResolvedValue({});
     const res = await app.inject({
@@ -225,6 +233,7 @@ describe("DELETE /v1/teams/:id", () => {
 
   it("deletes team and clears member assignments (204)", async () => {
     mockPrisma.team.findFirst.mockResolvedValue({ id: "t1" });
+    mockPrisma.user.findMany.mockResolvedValue([{ id: "u1" }, { id: "u2" }]); // affected members
     mockPrisma.user.updateMany.mockResolvedValue({ count: 2 });
     mockPrisma.team.delete.mockResolvedValue({ id: "t1" });
     const res = await app.inject({ method: "DELETE", url: "/v1/teams/t1" });
