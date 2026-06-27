@@ -1,11 +1,11 @@
 import type { FastifyPluginAsync } from "fastify";
 import { prisma } from "../lib/prisma.js";
-import type { Role } from "@prisma/client";
+import type { Role, TeamRole } from "@prisma/client";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 import { canAccessSub } from "../lib/permissions.js";
 
 export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.post<{ Body: { email: string; role: Role } }>(
+  fastify.post<{ Body: { email: string; role: Role; teamId?: string; teamRole?: TeamRole } }>(
     "/invitations",
     {
       schema: {
@@ -15,6 +15,8 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
           properties: {
             email: { type: "string", format: "email" },
             role: { type: "string", enum: ["admin", "manager", "agent", "viewer"] },
+            teamId: { type: "string" },
+            teamRole: { type: "string", enum: ["lead", "member"] },
           },
         },
       },
@@ -45,6 +47,7 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
           email: request.body.email,
           role: request.body.role,
           expiresAt,
+          ...(request.body.teamId ? { teamId: request.body.teamId, teamRole: request.body.teamRole ?? "member" } : {}),
         },
         select: { id: true, email: true, role: true, token: true, expiresAt: true },
       });
@@ -52,6 +55,14 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
       // Email is sent by the web app (Vercel) after this response —
       // Railway cannot reach GoDaddy SMTP directly.
       return reply.status(201).send({ data: invitation });
+    }
+  );
+
+  fastify.get(
+    "/invitations/seat-status",
+    async (request, reply) => {
+      const { allowed, limit, current } = await checkPlanLimit(prisma, request.auth.organizationId, "team_members");
+      return reply.send({ data: { used: current, limit, canAdd: allowed } });
     }
   );
 
@@ -75,7 +86,7 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  fastify.post<{ Params: { token: string }; Body: { clerkUserId: string; fullName: string } }>(
+  fastify.post<{ Params: { token: string }; Body: { clerkUserId: string; fullName: string; mobileNumber?: string } }>(
     "/invitations/:token/accept",
     {
       config: { public: true },
@@ -87,6 +98,7 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
           properties: {
             clerkUserId: { type: "string" },
             fullName: { type: "string" },
+            mobileNumber: { type: "string" },
           },
         },
       },
@@ -108,6 +120,8 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
             email: invitation.email,
             fullName: request.body.fullName,
             role: invitation.role,
+            ...(request.body.mobileNumber ? { mobileNumber: request.body.mobileNumber } : {}),
+            ...(invitation.teamId ? { teamId: invitation.teamId, teamRole: invitation.teamRole ?? "member" } : {}),
           },
         }),
         prisma.invitation.update({

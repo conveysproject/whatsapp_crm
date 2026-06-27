@@ -328,6 +328,8 @@ model Invitation {
   token          String           @unique @default(uuid())
   status         InvitationStatus @default(pending)
   expiresAt      DateTime         @map("expires_at")
+  teamId         String?          @map("team_id")
+  teamRole       TeamRole?        @map("team_role")
   createdAt      DateTime         @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
