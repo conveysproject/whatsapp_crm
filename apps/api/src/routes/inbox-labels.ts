@@ -10,7 +10,7 @@ function randomColor(): string {
   return LABEL_COLORS[Math.floor(Math.random() * LABEL_COLORS.length)]!;
 }
 
-const NAME_RE = /^[a-zA-Z0-9 -]{1,22}$/;
+const NAME_RE = /^[a-zA-Z0-9 \-]{1,22}$/;
 
 export const inboxLabelsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/inbox-labels", async (request, reply) => {

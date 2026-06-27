@@ -96,6 +96,15 @@ describe("PUT /v1/conversations/:id/label", () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it("returns 400 when name contains comma", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/conversations/conv-1/label",
+      payload: { name: "Billing," },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 describe("DELETE /v1/conversations/:id/label", () => {
