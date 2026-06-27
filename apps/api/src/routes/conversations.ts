@@ -44,10 +44,10 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── List with status / assignee filters ────────────────────────────────
   fastify.get<{
-    Querystring: { status?: string; assignedTo?: string; teamId?: string; page?: string; contactId?: string };
+    Querystring: { status?: string; assignedTo?: string; teamId?: string; page?: string; contactId?: string; labelId?: string };
   }>("/conversations", async (request, reply) => {
     const { userId, organizationId, permissions } = request.auth;
-    const { status, assignedTo, teamId, page, contactId } = request.query;
+    const { status, assignedTo, teamId, page, contactId, labelId } = request.query;
     const pageNum = Math.max(1, parseInt(page ?? "1", 10));
 
     const where: Record<string, unknown> = { organizationId };
@@ -55,6 +55,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     if (assignedTo) where.assignedTo = assignedTo;
     if (teamId) where.teamId = teamId;
     if (contactId) where.contactId = contactId;
+    if (labelId) where["conversationLabel"] = { inboxLabelId: labelId };
     // agents with assigned_chats_only permission see only their own conversations
     if (permissions["assigned_chats_only"] === "allow") where.assignedTo = userId;
 
@@ -66,6 +67,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       include: {
         contact: { select: { id: true, firstName: true, lastName: true, phoneNumber: true, tags: true } },
         messages: { orderBy: { sentAt: "desc" }, take: 1, select: { id: true, body: true, direction: true, contentType: true } },
+        conversationLabel: { include: { inboxLabel: { select: { id: true, name: true, color: true } } } },
       },
       orderBy: { lastMessageAt: "desc" },
       skip: (pageNum - 1) * 50,
@@ -81,6 +83,10 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       serviceWindowActive: c.lastInboundAt != null && now - c.lastInboundAt.getTime() < 86_400_000,
       lastMessage: c.messages?.[0] ?? null,
       messages: undefined,  // remove the array from response
+      label: c.conversationLabel
+        ? { id: c.conversationLabel.inboxLabel.id, name: c.conversationLabel.inboxLabel.name, color: c.conversationLabel.inboxLabel.color }
+        : null,
+      conversationLabel: undefined,
     }));
     return reply.send({ data });
   });
@@ -112,6 +118,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       include: {
         contact: { select: { id: true, firstName: true, lastName: true, phoneNumber: true, tags: true } },
         messages: { orderBy: { sentAt: "desc" }, take: 1, select: { id: true, body: true, direction: true, contentType: true } },
+        conversationLabel: { include: { inboxLabel: { select: { id: true, name: true, color: true } } } },
       },
       orderBy: { lastMessageAt: "desc" },
       take: 20,
@@ -125,6 +132,10 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       serviceWindowActive: c.lastInboundAt != null && now - c.lastInboundAt.getTime() < 86_400_000,
       lastMessage: c.messages?.[0] ?? null,
       messages: undefined,
+      label: c.conversationLabel
+        ? { id: c.conversationLabel.inboxLabel.id, name: c.conversationLabel.inboxLabel.name, color: c.conversationLabel.inboxLabel.color }
+        : null,
+      conversationLabel: undefined,
     }));
     return reply.send({ data });
   });
