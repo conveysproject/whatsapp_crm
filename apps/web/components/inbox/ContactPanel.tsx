@@ -4,6 +4,8 @@ import { JSX, useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useContactDetail } from "@/hooks/useContactDetail";
 import { ContactTrustBadge } from "@/components/trust-score/ContactTrustBadge";
+import { TagCombobox } from "@/components/contacts/TagCombobox";
+import { getTagColor } from "@/lib/tag-color";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -27,12 +29,16 @@ export function ContactPanel({ contactId, contactName, conversationStatus, lastM
   const [notes, setNotes] = useState<string>("");
   const [notesSaved, setNotesSaved] = useState(false);
   const savedNotesRef = useRef<string>("");
+  const [editingTags, setEditingTags] = useState(false);
+  const [localTags, setLocalTags] = useState<string[]>([]);
+  const [savingTags, setSavingTags] = useState(false);
 
-  // Initialise notes once contact loads (useEffect avoids render-time setState)
+  // Initialise notes and tags once contact loads (useEffect avoids render-time setState)
   useEffect(() => {
     if (contact) {
       setNotes(contact.notes ?? "");
       savedNotesRef.current = contact.notes ?? "";
+      setLocalTags(contact.tags ?? []);
     }
   }, [contact?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -49,6 +55,20 @@ export function ContactPanel({ contactId, contactName, conversationStatus, lastM
       setNotesSaved(true);
       setTimeout(() => setNotesSaved(false), 2000);
     } catch { /* non-critical */ }
+  }
+
+  async function handleSaveTags() {
+    setSavingTags(true);
+    try {
+      const token = await getToken();
+      await fetch(`${API_URL}/v1/contacts/${contactId}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ tags: localTags }),
+      });
+      setEditingTags(false);
+    } catch { /* non-critical */ }
+    finally { setSavingTags(false); }
   }
 
   const initials = contactName.split(" ").map((w) => w[0]?.toUpperCase() ?? "").slice(0, 2).join("");
@@ -89,12 +109,44 @@ export function ContactPanel({ contactId, contactName, conversationStatus, lastM
 
           {/* Tags */}
           <div className="px-4 py-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Tags</p>
-            {contact?.tags && contact.tags.length > 0 ? (
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tags</p>
+              {!editingTags && (
+                <button
+                  onClick={() => setEditingTags(true)}
+                  className="text-xs text-brand-600 hover:text-brand-700 font-medium"
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+            {editingTags ? (
+              <div className="space-y-2">
+                <TagCombobox tags={localTags} onChange={setLocalTags} placeholder="Add tag…" />
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => { setEditingTags(false); setLocalTags(contact?.tags ?? []); }}
+                    className="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void handleSaveTags()}
+                    disabled={savingTags}
+                    className="text-xs font-medium text-white bg-brand-600 px-3 py-1 rounded-lg hover:bg-brand-700 disabled:opacity-50"
+                  >
+                    {savingTags ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              </div>
+            ) : localTags.length > 0 ? (
               <div className="flex flex-wrap gap-1">
-                {contact.tags.map((tag) => (
-                  <span key={tag} className="inline-flex items-center h-5 px-2 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600">{tag}</span>
-                ))}
+                {localTags.map((tag) => {
+                  const { bg, text } = getTagColor(tag);
+                  return (
+                    <span key={tag} className={`inline-flex items-center h-5 px-2 rounded-full text-[11px] font-medium ${bg} ${text}`}>{tag}</span>
+                  );
+                })}
               </div>
             ) : (
               <p className="text-xs text-gray-400">No tags</p>
