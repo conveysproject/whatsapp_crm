@@ -3,6 +3,7 @@
 import { JSX, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import type { TagStat } from "./page";
+import { getTagColor } from "@/lib/tag-color";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 const PER_PAGE = 10;
@@ -18,6 +19,9 @@ export function ManageTagsClient({ initialTags }: Props): JSX.Element {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [page, setPage] = useState(1);
+  const [renamingTag, setRenamingTag] = useState<string | null>(null);
+  const [renameInput, setRenameInput] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   const filtered = tags.filter((t) => t.tag.toLowerCase().includes(search.toLowerCase()));
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
@@ -57,6 +61,26 @@ export function ManageTagsClient({ initialTags }: Props): JSX.Element {
       setPage(1);
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleRename(oldTag: string) {
+    const newTag = renameInput.trim().toLowerCase();
+    if (!newTag || newTag === oldTag) { setRenamingTag(null); return; }
+    setRenaming(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/v1/tags/${encodeURIComponent(oldTag)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+        body: JSON.stringify({ newTag }),
+      });
+      if (res.ok) {
+        setTags((prev) => prev.map((t) => (t.tag === oldTag ? { ...t, tag: newTag } : t)));
+        setRenamingTag(null);
+      }
+    } finally {
+      setRenaming(false);
     }
   }
 
@@ -147,12 +171,49 @@ export function ManageTagsClient({ initialTags }: Props): JSX.Element {
                     />
                   </td>
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                      <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                      </svg>
-                      {tag}
-                    </span>
+                    {renamingTag === tag ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          autoFocus
+                          value={renameInput}
+                          onChange={(e) => setRenameInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void handleRename(tag);
+                            if (e.key === "Escape") setRenamingTag(null);
+                          }}
+                          className="text-sm border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-36"
+                        />
+                        <button
+                          onClick={() => void handleRename(tag)}
+                          disabled={renaming}
+                          className="text-xs font-medium text-emerald-600 hover:text-emerald-800 disabled:opacity-50"
+                        >
+                          {renaming ? "…" : "Save"}
+                        </button>
+                        <button onClick={() => setRenamingTag(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setRenamingTag(tag); setRenameInput(tag); }}
+                        className="flex items-center gap-1.5 group"
+                        title="Click to rename"
+                      >
+                        {(() => {
+                          const { bg, text } = getTagColor(tag);
+                          return (
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${bg} ${text}`}>
+                              <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                              </svg>
+                              {tag}
+                            </span>
+                          );
+                        })()}
+                        <svg className="w-3 h-3 text-gray-300 group-hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-600">{count} {count === 1 ? "contact" : "contacts"}</td>
                   <td className="px-4 py-3 text-gray-400">—</td>
