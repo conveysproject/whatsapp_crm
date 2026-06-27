@@ -47,6 +47,25 @@ export default function InboxPage(): JSX.Element {
     await queryClient.invalidateQueries({ queryKey: ["conversations"] });
   }, [selectedConversationId, getToken, queryClient]);
 
+  const handleLabelChange = useCallback(async (name: string | null) => {
+    if (!selectedConversationId) return;
+    const token = await getToken();
+    if (name) {
+      await fetch(`${API_URL}/v1/conversations/${selectedConversationId}/label`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+    } else {
+      await fetch(`${API_URL}/v1/conversations/${selectedConversationId}/label`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+    }
+    await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    await queryClient.invalidateQueries({ queryKey: ["inbox-labels"] });
+  }, [selectedConversationId, getToken, queryClient]);
+
   return (
     <PermissionGate permission="inbox_access">
     <WhatsAppGate feature="Inbox">
@@ -71,6 +90,7 @@ export default function InboxPage(): JSX.Element {
             contactName={contactName}
             onToggleContactPanel={() => setContactPanelOpen((v) => !v)}
             onStatusChange={handleStatusChange}
+            onLabelChange={handleLabelChange}
           />
         ) : selectedConversation && (
           <div className="px-4 py-2.5 bg-white border-b border-gray-200 shrink-0">
