@@ -75,10 +75,22 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
       let organizationId: string;
 
       if (existingUser) {
-        // Only the org admin may update business details after initial setup.
-        // Agents/viewers hitting this endpoint (e.g. via API) must be rejected.
         if (existingUser.role !== "admin") {
-          return reply.status(403).send({ error: "Only org admins can update business details" });
+          // Check if this is a webhook-stub race: org was auto-created but the
+          // founder's admin role hasn't been written yet (webhook fired before /register).
+          // If the org has no industry set, it's an unprovisioned stub — promote and continue.
+          const orgStub = await fastify.prisma.organization.findUnique({
+            where: { id: existingUser.organizationId },
+            select: { industry: true },
+          });
+          if (orgStub?.industry) {
+            // Org is fully provisioned — this non-admin is not the founder.
+            return reply.status(403).send({ error: "Only org admins can update business details" });
+          }
+          await fastify.prisma.user.update({
+            where: { id: userId },
+            data: { role: "admin" },
+          });
         }
 
         organizationId = existingUser.organizationId;
