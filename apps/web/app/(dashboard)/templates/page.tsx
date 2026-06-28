@@ -58,9 +58,14 @@ export default async function TemplatesPage({
           <div className="flex items-center gap-3">
             {activeTab === "active" && <TemplateSyncButton />}
             {canManage && activeTab === "active" && (
-              <Link href="/templates/new">
-                <Button>New Template</Button>
-              </Link>
+              <div className="flex gap-2">
+                <Link href="/templates/ai-create">
+                  <Button variant="secondary">✨ Create with AI</Button>
+                </Link>
+                <Link href="/templates/new">
+                  <Button>New Template</Button>
+                </Link>
+              </div>
             )}
           </div>
         </div>

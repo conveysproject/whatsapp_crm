@@ -1,4 +1,4 @@
-import type { JSX } from "react";
+import { Suspense, type JSX } from "react";
 import { auth } from "@clerk/nextjs/server";
 import { TemplateForm } from "./TemplateForm";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -40,7 +40,9 @@ export default async function NewTemplatePage({
 
   return (
     <PermissionGate permission="templates_access" sub="templates_create">
-      <TemplateForm initialState={initialState} />
+      <Suspense>
+        <TemplateForm initialState={initialState} />
+      </Suspense>
     </PermissionGate>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
-import { useState, useMemo, type JSX } from "react";
+import { useState, useMemo, useEffect, type JSX } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { HeaderSection } from "./sections/HeaderSection";
 import { BodySection } from "./sections/BodySection";
 import { FooterSection } from "./sections/FooterSection";
@@ -358,6 +358,26 @@ export function TemplateForm({ initialState = INITIAL_STATE }: { initialState?: 
   const [step, setStep] = useState(initialState !== INITIAL_STATE ? 2 : 1);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("from_ai") !== "true") return;
+    try {
+      const raw = sessionStorage.getItem("ai_template_draft");
+      if (!raw) return;
+      const draft = JSON.parse(raw) as TemplateFormState;
+      setState(draft);
+      sessionStorage.removeItem("ai_template_draft");
+      // Auto-advance to step 2 (edit) so the user sees the pre-filled form
+      setStep(2);
+      // If auto-submit was flagged, advance to step 3
+      const autoSubmit = sessionStorage.getItem("ai_template_auto_submit");
+      if (autoSubmit === "true") {
+        sessionStorage.removeItem("ai_template_auto_submit");
+        setStep(3);
+      }
+    } catch { /* malformed sessionStorage — ignore */ }
+  }, [searchParams]);
 
   function patch(p: Partial<TemplateFormState>): void {
     setState((s) => ({ ...s, ...p }));
