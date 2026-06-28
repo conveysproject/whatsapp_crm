@@ -65,6 +65,24 @@ export const inbox: DocCategory = {
       ],
     },
     {
+      title: "Assigning Conversations",
+      slug: "assigning-conversations",
+      description: "How to assign a conversation to a specific agent.",
+      sections: [
+        {
+          paragraphs: [
+            "Open a conversation and click the person icon (Assign) in the top-right of the conversation header.",
+            "A searchable dropdown appears listing available agents. If your admin has enabled 'Show only same-team members in assignee list' in Team Controls, only your teammates are shown.",
+            "Click an agent to assign the conversation to them. The button updates to show the assignee's first name in green.",
+            "To unassign, open the dropdown and click Unassign.",
+          ],
+        },
+        {
+          tip: "Assigned agents receive an in-app notification when a conversation is assigned to them.",
+        },
+      ],
+    },
+    {
       title: "Conversation Labels",
       slug: "labels",
       description:

@@ -16,29 +16,44 @@ export const settings: DocCategory = {
         {
           paragraphs: [
             "Go to Settings > Members to manage everyone in your workspace.",
-            "The member list shows each person's Name, Email, Role, Created date, and Last Sign-in.",
+            "The member list shows each agent's Name, Phone, Email, Role, Team, Joined date, and Last Sign-in.",
             "Use the search bar to find a member by name or email.",
           ],
         },
         {
           heading: "Inviting Members",
           paragraphs: [
-            "Click Invite, enter the person's email address, and select their role — Admin, Manager, Agent, or Viewer. An invitation email is sent automatically.",
+            "Click Invite Agent, enter the person's email, select their role (Admin, Manager, Agent, or Viewer), and optionally assign them to a team and team role (Lead or Member). An invitation email is sent automatically.",
+            "The invite button is disabled when your seat limit is reached. Click Add Seats to upgrade.",
           ],
         },
         {
-          heading: "Managing Members",
+          heading: "Editing a Member",
           paragraphs: [
-            "To change a member's role, click their row and use the role dropdown.",
-            "To remove a member, click Remove Access. Their data is retained but they can no longer log in.",
+            "Click the pencil icon on any member row to open the Edit Agent modal.",
+            "You can change their Role and Team assignment (including team role) from here.",
+            "Admins cannot edit their own role.",
           ],
         },
         {
-          heading: "Teams",
+          heading: "Removing a Member",
           paragraphs: [
-            "Teams group agents together for routing and visibility purposes.",
-            "Create a team by entering a team name, assigning members, and setting a team lead.",
-            "When teams are configured, agents can be scoped to see only their team's conversations, and routing rules can assign conversations to a specific team.",
+            "Click the trash icon on the member row and confirm. The agent is deactivated immediately and can no longer log in. Their data and conversation history are retained.",
+          ],
+        },
+        {
+          heading: "Managing Teams",
+          paragraphs: [
+            "Go to Settings > Manage Teams (also accessible from the settings gear popup) to create and edit teams.",
+            "Each team has a name, a list of members, and one or more Leads. At least one Lead is required per team.",
+            "Toggle 'Members can view all contacts' per team to allow that team's agents to see contacts assigned to other teams.",
+          ],
+        },
+        {
+          heading: "Team Controls",
+          paragraphs: [
+            "The Team Controls toggle on the Manage Teams page — 'Show only same-team members in assignee list' — restricts the conversation assignee dropdown in the inbox to show only agents in the same team as the current user.",
+            "When disabled, all org members are shown in the assignee dropdown.",
           ],
         },
       ],
