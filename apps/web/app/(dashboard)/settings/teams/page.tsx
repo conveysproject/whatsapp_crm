@@ -40,6 +40,16 @@ interface MemberRow {
   teamRole: "lead" | "member";
 }
 
+interface OrgSettings {
+  teamControls?: {
+    showTeamMembersInAssignee?: boolean;
+  };
+}
+
+interface OrgData {
+  settings: OrgSettings;
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function TeamsPage(): JSX.Element {
@@ -51,6 +61,36 @@ export default function TeamsPage(): JSX.Element {
   const [deleteTarget, setDeleteTarget] = useState<Team | null>(null);
 
   // ── Queries ────────────────────────────────────────────────────────────────
+
+  const { data: orgData } = useQuery<{ data: OrgData }>({
+    queryKey: ["org-me"],
+    queryFn: async () => {
+      const token = await getToken();
+      return clientFetch(`${API_URL}/v1/organizations/me`, {
+        token: token ?? "",
+        silent: true,
+      }).then((r) => r.json() as Promise<{ data: OrgData }>);
+    },
+  });
+
+  const showTeamMembersInAssignee =
+    orgData?.data?.settings?.teamControls?.showTeamMembersInAssignee ?? false;
+
+  const updateOrgSettings = useMutation({
+    mutationFn: async (settings: OrgSettings) => {
+      const token = await getToken();
+      const res = await clientFetch(`${API_URL}/v1/organizations/me`, {
+        method: "PATCH",
+        token: token ?? "",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings }),
+      });
+      if (!res.ok) throw new Error("Failed to update setting");
+      return res.json();
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["org-me"] }),
+    onError: () => toast.error("Failed to save setting"),
+  });
 
   const { data: teamsData, isLoading: teamsLoading } = useQuery<{ data: Team[] }>({
     queryKey: ["teams"],
@@ -146,6 +186,35 @@ export default function TeamsPage(): JSX.Element {
           </svg>
           Create Team
         </button>
+      </div>
+
+      {/* Team Controls */}
+      <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Team Controls</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-900">Show only same-team members in assignee list</p>
+            <p className="text-xs text-gray-500 mt-0.5">Agents will only see teammates when assigning conversations.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              updateOrgSettings.mutate({
+                teamControls: { showTeamMembersInAssignee: !showTeamMembersInAssignee },
+              })
+            }
+            disabled={updateOrgSettings.isPending}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-60 ${
+              showTeamMembersInAssignee ? "bg-emerald-500" : "bg-gray-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                showTeamMembersInAssignee ? "translate-x-4" : "translate-x-0.5"
+              }`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Table */}
