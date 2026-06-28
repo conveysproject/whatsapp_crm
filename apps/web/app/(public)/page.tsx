@@ -13,12 +13,12 @@ export const metadata: Metadata = {
 };
 
 const FEATURES = [
-  { icon: "📥", tag: "Inbox", tc: "#0BBF77", tb: "#E6F9F1", title: "Unified Team Inbox", desc: "All WhatsApp conversations in one shared inbox. Assign chats, add notes, set priorities — your whole team in sync." },
-  { icon: "👥", tag: "CRM", tc: "#0284C7", tb: "#E0F2FE", title: "Contact & Deal Management", desc: "Full CRM with lifecycle stages, custom fields, deal pipelines. Track every lead from first message to closed deal." },
-  { icon: "🤖", tag: "AI", tc: "#7C3AED", tb: "#EDE9FE", title: "AI Smart Replies", desc: "Claude AI detects intent, drafts on-brand replies, and summarizes long conversations in one click." },
-  { icon: "📢", tag: "Campaigns", tc: "#B45309", tb: "#FEF3C7", title: "Broadcast & Templates", desc: "Create Meta-approved templates, segment your audience, schedule campaigns, and track every result." },
-  { icon: "⚡", tag: "Automation", tc: "#DC2626", tb: "#FEE2E2", title: "Visual Flow Builder", desc: "Build chatbots and automation flows without code. Welcome series, follow-ups, lead qualification — set once, run forever." },
-  { icon: "📊", tag: "Analytics", tc: "#059669", tb: "#D1FAE5", title: "Revenue Analytics", desc: "Conversion funnels, team performance, response times, revenue attribution. AI predicts churn before it happens." },
+  { icon: "📥", tag: "Inbox", tc: "#0BBF77", tb: "#E6F9F1", title: "Shared Team Inbox", desc: "All WhatsApp conversations in one place. Multiple agents, real-time updates, Open/Pending/Resolved status — no message left behind." },
+  { icon: "👥", tag: "Contacts", tc: "#0284C7", tb: "#E0F2FE", title: "Contact & Deal Management", desc: "Import contacts from CSV, build segments with 15+ filter conditions, track deals on a Kanban board with custom pipeline stages." },
+  { icon: "🤖", tag: "AI", tc: "#7C3AED", tb: "#EDE9FE", title: "AI Smart Replies", desc: "AI reads the conversation and suggests a ready-to-send reply. Your agents review before sending — always in control." },
+  { icon: "📢", tag: "Campaigns", tc: "#B45309", tb: "#FEF3C7", title: "Broadcast Campaigns", desc: "Send template or text campaigns to segments, groups, or labels. Schedule delivery and track sent, delivered, read, and replied per contact." },
+  { icon: "⚡", tag: "Automation", tc: "#DC2626", tb: "#FEE2E2", title: "Visual Flow Builder", desc: "Drag-and-drop automation canvas. 10+ trigger types, action nodes, condition branches, keyword auto-replies — no code needed." },
+  { icon: "📊", tag: "Analytics", tc: "#059669", tb: "#D1FAE5", title: "Team Analytics", desc: "Conversation trends, campaign delivery rates, agent leaderboard, first response time, and campaign performance in one dashboard." },
 ];
 
 const PRICING = [
@@ -416,9 +416,9 @@ export default function LandingPage(): JSX.Element {
           </div>
           <div className="steps">
             {[
-              {n:"01",ic:"🔗",tt:"Connect WhatsApp",ds:"Link your WhatsApp Business Account via Meta API. Takes 5 minutes. Your existing number, zero downtime."},
-              {n:"02",ic:"📋",tt:"Import & Organize",ds:"Bulk import contacts from CSV or sync from Shopify. AI auto-segments by purchase history and engagement."},
-              {n:"03",ic:"🚀",tt:"Automate & Grow",ds:"Activate pre-built flows: welcome series, cart recovery, re-engagement. Revenue grows on autopilot."},
+              {n:"01",ic:"🔗",tt:"Connect WhatsApp",ds:"Link your WhatsApp Business Account via Meta Embedded Signup. Your existing number, your data — zero downtime."},
+              {n:"02",ic:"📋",tt:"Import & Organise",ds:"Bulk import contacts from CSV. Build dynamic segments with filter rules, create groups, assign labels — all in minutes."},
+              {n:"03",ic:"🚀",tt:"Automate & Respond",ds:"Set up welcome messages, keyword auto-replies, and multi-step flows. AI suggests replies; your team closes faster."},
             ].map((s,i) => (
               <div key={s.n} className="step">
                 <div className="step-bg">{s.n}</div>
@@ -438,16 +438,15 @@ export default function LandingPage(): JSX.Element {
           <div className="ai-2col">
             <div>
               <div className="ai-pill">Powered by Claude AI</div>
-              <h2 className="h2">Your AI sales co-pilot, 24/7</h2>
+              <h2 className="h2">AI that helps your team respond faster</h2>
               <p className="sec-sub" style={{margin:0,textAlign:"left"}}>
-                WBMSG&rsquo;s AI engine — built on Anthropic Claude — reads every conversation, detects purchase intent, and suggests the perfect reply. Your team closes faster, responds smarter.
+                Smart reply suggestions and intent-matching automation — AI works alongside your agents, not instead of them. Every suggestion is reviewed before it&rsquo;s sent.
               </p>
               <div className="ai-feats">
                 {[
-                  {ic:"💡",tt:"Intent Detection",ds:"Knows when a lead is ready to buy vs. just browsing"},
-                  {ic:"✍️",tt:"Smart Reply Drafts",ds:"Generates on-brand, personalized responses instantly"},
-                  {ic:"📝",tt:"Conversation Summary",ds:"Condense 100-message threads into 3 bullet points"},
-                  {ic:"📈",tt:"Churn Prediction",ds:"Flags customers likely to lapse — before they do"},
+                  {ic:"💡",tt:"Intent Detection",ds:"AI routes incoming messages to the right automation based on what the customer is asking"},
+                  {ic:"✍️",tt:"Smart Reply Drafts",ds:"Suggests a context-aware reply for your agent to review and send — or edit first"},
+                  {ic:"📝",tt:"Conversation Summary",ds:"Condenses the thread so a new agent can pick up without reading everything"},
                 ].map(f => (
                   <div key={f.tt} className="ai-ft">
                     <div className="ai-ft-ic">{f.ic}</div>
