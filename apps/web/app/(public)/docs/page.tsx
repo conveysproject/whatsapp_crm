@@ -2,17 +2,30 @@ import Link from "next/link";
 import type { JSX } from "react";
 import type { Metadata } from "next";
 import { registry } from "../../../lib/docs/registry";
+import { webSiteSchema } from "../../../lib/docs/structured-data";
+
+const BASE = "https://wbmsg.com";
 
 export const metadata: Metadata = {
   title: "Help Center — WBMSG",
   description: "Learn how to set up and use WBMSG — your WhatsApp CRM. Guides for inbox, contacts, campaigns, automation, analytics, and more.",
+  alternates: { canonical: `${BASE}/docs` },
+  openGraph: {
+    title: "WBMSG Help Center",
+    description: "Complete documentation for WBMSG — the WhatsApp-first CRM. Covers inbox, contacts, campaigns, automation, analytics, and more.",
+    url: `${BASE}/docs`,
+    type: "website",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "WBMSG Help Center" }],
+  },
 };
 
 export default function DocsHomePage(): JSX.Element {
+  const schema = webSiteSchema();
   const totalArticles = registry.reduce((sum, cat) => sum + cat.articles.length, 0);
 
   return (
     <div className="dhp">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <style>{`
         .dhp-hero {
           text-align: center; padding: 3rem 0 2.5rem;

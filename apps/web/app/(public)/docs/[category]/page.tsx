@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import type { JSX } from "react";
 import type { Metadata } from "next";
 import { registry } from "../../../../lib/docs/registry";
+import { breadcrumbSchema } from "../../../../lib/docs/structured-data";
+
+const BASE = "https://wbmsg.com";
 
 interface Props {
   params: Promise<{ category: string }>;
@@ -19,6 +22,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: `${cat.title} — WBMSG Help Center`,
     description: cat.description,
+    alternates: { canonical: `${BASE}/docs/${cat.slug}` },
+    openGraph: {
+      title: `${cat.title} — WBMSG Help Center`,
+      description: cat.description,
+      url: `${BASE}/docs/${cat.slug}`,
+      type: "website",
+      images: [{ url: "/og-image.png", width: 1200, height: 630, alt: `${cat.title} — WBMSG Help Center` }],
+    },
   };
 }
 
@@ -27,8 +38,11 @@ export default async function CategoryPage({ params }: Props): Promise<JSX.Eleme
   const cat = registry.find((c) => c.slug === category);
   if (!cat) notFound();
 
+  const bcSchema = breadcrumbSchema(cat);
+
   return (
     <div className="dcp">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(bcSchema) }} />
       <style>{`
         .dcp-bc { display: flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--t3); margin-bottom: 1.5rem; }
         .dcp-bc a { color: var(--t3); text-decoration: none; transition: color .15s; }

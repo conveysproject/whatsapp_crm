@@ -4,6 +4,9 @@ import { notFound } from "next/navigation";
 import type { JSX } from "react";
 import type { Metadata } from "next";
 import { registry } from "../../../../../lib/docs/registry";
+import { articleSchema, breadcrumbSchema, howToSchema } from "../../../../../lib/docs/structured-data";
+
+const BASE = "https://wbmsg.com";
 
 interface Props {
   params: Promise<{ category: string; slug: string }>;
@@ -23,10 +26,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: `${art.title} — WBMSG Help Center`,
     description: art.description,
+    alternates: { canonical: `${BASE}/docs/${category}/${slug}` },
     openGraph: {
       title: `${art.title} — WBMSG Help Center`,
       description: art.description,
+      url: `${BASE}/docs/${category}/${slug}`,
       type: "article",
+      images: [{ url: "/og-image.png", width: 1200, height: 630, alt: `${art.title} — WBMSG Help Center` }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${art.title} — WBMSG Help Center`,
+      description: art.description,
+      images: ["/og-image.png"],
     },
   };
 }
@@ -41,8 +53,17 @@ export default async function ArticlePage({ params }: Props): Promise<JSX.Elemen
   const prev = artIndex > 0 ? cat.articles[artIndex - 1] : null;
   const next = artIndex < cat.articles.length - 1 ? cat.articles[artIndex + 1] : null;
 
+  const schemas = [
+    articleSchema(art, cat),
+    breadcrumbSchema(cat, art),
+    howToSchema(art),
+  ].filter(Boolean);
+
   return (
     <article className="dap">
+      {schemas.map((s, i) => (
+        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(s) }} />
+      ))}
       <style>{`
         .dap-bc { display: flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--t3); margin-bottom: 1.5rem; flex-wrap: wrap; }
         .dap-bc a { color: var(--t3); text-decoration: none; transition: color .15s; }
