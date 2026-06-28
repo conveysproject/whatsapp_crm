@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { JSX } from "react";
 import type { Metadata } from "next";
+import PricingSection from "./pricing-section";
 
 const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-br", weight: ["500", "600", "700", "800"] });
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm", weight: ["400", "500"] });
@@ -19,12 +20,6 @@ const FEATURES = [
   { icon: "📢", tag: "Campaigns", tc: "#B45309", tb: "#FEF3C7", title: "Broadcast Campaigns", desc: "Send template or text campaigns to segments, groups, or labels. Schedule delivery and track sent, delivered, read, and replied per contact." },
   { icon: "⚡", tag: "Automation", tc: "#DC2626", tb: "#FEE2E2", title: "Visual Flow Builder", desc: "Drag-and-drop automation canvas. 10+ trigger types, action nodes, condition branches, keyword auto-replies — no code needed." },
   { icon: "📊", tag: "Analytics", tc: "#059669", tb: "#D1FAE5", title: "Team Analytics", desc: "Conversation trends, campaign delivery rates, agent leaderboard, first response time, and campaign performance in one dashboard." },
-];
-
-const PRICING = [
-  { name: "Starter", price: "$12", period: "/mo", desc: "Solo founders & small teams", agents: "3 agents", contacts: "1,000 contacts", popular: false, features: ["Unified WhatsApp inbox", "Basic CRM (contacts & deals)", "5 broadcast templates", "Basic analytics", "Email support"] },
-  { name: "Growth", price: "$36", period: "/mo", desc: "Growing teams & SMBs", agents: "10 agents", contacts: "10,000 contacts", popular: true, features: ["Everything in Starter", "AI Smart Replies (Claude)", "Unlimited broadcasts", "Automation flow builder", "Advanced analytics", "Priority support"] },
-  { name: "Scale", price: "$96", period: "/mo", desc: "Scale-ups & power users", agents: "Unlimited agents", contacts: "100,000 contacts", popular: false, features: ["Everything in Growth", "Agency sub-accounts", "White-label option", "Custom AI training", "Dedicated account manager", "SLA guarantee"] },
 ];
 
 export default function LandingPage(): JSX.Element {
@@ -192,44 +187,6 @@ export default function LandingPage(): JSX.Element {
         .ins-btn-o { font-size: .7rem; padding: 5px 13px; border-radius: 7px; border: 1px solid var(--bd); color: var(--t2); text-decoration: none; transition: border-color .18s; }
         .ins-btn-o:hover { border-color: var(--g); color: var(--t1); }
 
-        /* PRICING */
-        .p3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 1.2rem; }
-        .pc { background: #fff; border: 1px solid var(--bd); border-radius: var(--r); padding: 1.75rem; display: flex; flex-direction: column; box-shadow: var(--sh); transition: box-shadow .2s; }
-        .pc:hover { box-shadow: var(--sh2); }
-        .pc-pop { background: var(--g9); border-color: var(--g9); box-shadow: var(--sh3) !important; }
-        .pop-badge { font-size: .62rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; text-align: center; padding: 5px; border-radius: 7px; margin-bottom: 1.2rem; background: var(--g); color: #fff; }
-        .pn { font-family: var(--font-br); font-size: .84rem; font-weight: 700; margin-bottom: 5px; }
-        .pn-d { color: rgba(255,255,255,.55); }
-        .pp { display: flex; align-items: baseline; gap: 4px; margin-bottom: 4px; }
-        .pp-v { font-family: var(--font-br); font-size: 2.6rem; font-weight: 800; color: var(--t1); line-height: 1; }
-        .pp-vd { color: #fff; }
-        .pp-p { font-size: .8rem; color: var(--t3); }
-        .pp-pd { color: rgba(255,255,255,.45); }
-        .pd { font-size: .76rem; color: var(--t3); margin-bottom: 1.1rem; }
-        .pdd { color: rgba(255,255,255,.4); }
-        .pdiv { border: none; border-top: 1px solid var(--bd); margin: 1rem 0; }
-        .pdiv-d { border-top-color: rgba(255,255,255,.1); }
-        .pm { display: flex; gap: 1rem; margin-bottom: 1rem; }
-        .pm-v { font-size: .79rem; font-weight: 700; color: var(--t1); }
-        .pm-vd { color: #fff; }
-        .pm-l { font-size: .67rem; color: var(--t3); }
-        .pm-ld { color: rgba(255,255,255,.38); }
-        .pm-sep { border-left: 1px solid var(--bd); padding-left: 1rem; }
-        .pm-sep-d { border-left-color: rgba(255,255,255,.1); }
-        .pfs { list-style: none; margin: 0 0 1.4rem; padding: 0; display: flex; flex-direction: column; gap: 9px; flex: 1; }
-        .pf { display: flex; gap: 9px; font-size: .81rem; color: var(--t2); align-items: flex-start; }
-        .pf-d { color: rgba(255,255,255,.68); }
-        .chk { color: var(--g); flex-shrink: 0; margin-top: 1px; }
-        .chk-d { color: #6EE7B7; }
-        .pc-cta { display: block; text-align: center; padding: 12px; border-radius: var(--r-sm); font-family: var(--font-br); font-weight: 700; font-size: .88rem; text-decoration: none; transition: all .18s; }
-        .cta-p { background: var(--g); color: #fff; }
-        .cta-p:hover { background: var(--g7); box-shadow: 0 4px 16px rgba(11,191,119,.35); }
-        .cta-wh { background: #fff; color: var(--g9); }
-        .cta-wh:hover { background: var(--g50); }
-        .cta-o { border: 1.5px solid var(--bd); color: var(--t2); }
-        .cta-o:hover { border-color: var(--g); color: var(--t1); }
-        .p-note { text-align: center; font-size: .76rem; color: var(--t3); margin-top: 1.5rem; }
-
         /* FOOTER */
         .ft { padding: 4rem 0 2rem; border-top: 1px solid var(--bd); }
         .ft-g { display: grid; grid-template-columns: 2.5fr 1fr 1fr 1fr; gap: 3rem; margin-bottom: 3rem; }
@@ -259,12 +216,12 @@ export default function LandingPage(): JSX.Element {
         @media (max-width: 960px) {
           .hero-in, .ai-2col { grid-template-columns: 1fr; }
           .phone-wrap { justify-content: center; }
-          .g3, .steps, .p3 { grid-template-columns: 1fr 1fr; }
+          .g3, .steps { grid-template-columns: 1fr 1fr; }
           .nav-lnks { display: none; }
           .ft-g { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 600px) {
-          .g3, .steps, .p3, .ft-g { grid-template-columns: 1fr; }
+          .g3, .steps, .ft-g { grid-template-columns: 1fr; }
         }
       `}</style>
 
@@ -487,81 +444,8 @@ export default function LandingPage(): JSX.Element {
         </div>
       </section>
 
-      {/* AGENCY */}
-      <section id="agency" className="sec sec-alt">
-        <div className="wrap">
-          <div className="sec-hd">
-            <div className="pill" style={{background:"#FEF3C7",color:"#92400E",borderColor:"#FDE68A",marginBottom:"1rem"}}>Agency & Reseller Program</div>
-            <h2 className="h2">Manage 100+ clients.<br /><span style={{color:"#B45309"}}>One dashboard.</span></h2>
-            <p className="sec-sub">White-label WBMSG under your brand. Create sub-accounts for every client, set your own pricing, and build a recurring SaaS revenue stream.</p>
-          </div>
-          <div className="g3" style={{marginBottom:"2.5rem"}}>
-            {[
-              {ic:"🏷️",tt:"White-Label Ready",ds:"Your brand, your domain. Clients never see WBMSG."},
-              {ic:"🗂️",tt:"Sub-Account Management",ds:"Create and manage unlimited client workspaces from a single hub."},
-              {ic:"💰",tt:"Recurring Revenue",ds:"Mark up seats and features. Build your own SaaS income stream."},
-            ].map(a => (
-              <div key={a.tt} className="card">
-                <div style={{fontSize:"2rem",marginBottom:".9rem"}}>{a.ic}</div>
-                <div className="card-tt">{a.tt}</div>
-                <div className="card-ds">{a.ds}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{textAlign:"center"}}>
-            <Link href="/sign-up" className="btn-pl">Apply for Agency Access →</Link>
-          </div>
-        </div>
-      </section>
-
       {/* PRICING */}
-      <section id="pricing" className="sec">
-        <div className="wrap">
-          <div className="sec-hd">
-            <div className="pill" style={{marginBottom:"1rem"}}>Transparent Pricing · No Hidden Fees</div>
-            <h2 className="h2">Simple, honest pricing</h2>
-          </div>
-          <div className="p3">
-            {PRICING.map(p => {
-              const dk = p.popular;
-              return (
-                <div key={p.name} className={`pc ${dk ? "pc-pop" : ""}`}>
-                  {dk && <div className="pop-badge">Most Popular</div>}
-                  <div className={`pn ${dk ? "pn-d" : ""}`} style={{color: dk ? undefined : "var(--t3)"}}>{p.name}</div>
-                  <div className="pp">
-                    <span className={`pp-v ${dk ? "pp-vd" : ""}`}>{p.price}</span>
-                    <span className={`pp-p ${dk ? "pp-pd" : ""}`}>{p.period}</span>
-                  </div>
-                  <div className={`pd ${dk ? "pdd" : ""}`}>{p.desc}</div>
-                  <hr className={`pdiv ${dk ? "pdiv-d" : ""}`} />
-                  <div className="pm">
-                    <div>
-                      <div className={`pm-v ${dk ? "pm-vd" : ""}`}>{p.agents}</div>
-                      <div className={`pm-l ${dk ? "pm-ld" : ""}`}>Seats</div>
-                    </div>
-                    <div className={`pm-sep ${dk ? "pm-sep-d" : ""}`}>
-                      <div className={`pm-v ${dk ? "pm-vd" : ""}`}>{p.contacts}</div>
-                      <div className={`pm-l ${dk ? "pm-ld" : ""}`}>Contacts</div>
-                    </div>
-                  </div>
-                  <ul className="pfs">
-                    {p.features.map(f => (
-                      <li key={f} className={`pf ${dk ? "pf-d" : ""}`}>
-                        <svg className={`chk ${dk ? "chk-d" : ""}`} width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <Link href="/sign-up" className={`pc-cta ${dk ? "cta-wh" : p.name === "Scale" ? "cta-o" : "cta-p"}`}>
-                    {dk ? "Start 14-Day Free Trial" : "Get Started"}
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-          <p className="p-note">All plans include 14-day free trial · No credit card required · Cancel anytime</p>
-        </div>
-      </section>
+      <PricingSection />
 
       {/* FINAL CTA */}
       <section className="sec sec-dk" style={{textAlign:"center"}}>
@@ -572,7 +456,7 @@ export default function LandingPage(): JSX.Element {
             <span style={{color:"#6EE7B7"}}>Let&rsquo;s fix that.</span>
           </h2>
           <p style={{fontSize:"1.02rem",color:"rgba(255,255,255,.55)",marginBottom:"2rem",maxWidth:"460px",margin:"1rem auto 2rem",lineHeight:1.7}}>
-            Join 5,000+ Indian SMBs using WBMSG to turn WhatsApp into their #1 revenue channel.
+            India-first WhatsApp CRM. Zero message markup. Your team, your conversations, your growth.
           </p>
           <div style={{display:"flex",flexWrap:"wrap",justifyContent:"center",gap:"12px"}}>
             <Link href="/sign-up" className="btn-wh">Start Free — 14 Days</Link>
