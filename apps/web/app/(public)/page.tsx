@@ -84,10 +84,6 @@ export default function LandingPage(): JSX.Element {
         .h1-acc { color: var(--g); }
         .sub { font-size: 1.05rem; line-height: 1.75; color: var(--t2); margin-bottom: 2rem; max-width: 520px; }
         .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 3rem; }
-        .stats { display: flex; flex-wrap: wrap; gap: 2.5rem; }
-        .stat-v { font-family: var(--font-br); font-size: 1.7rem; font-weight: 800; color: var(--t1); line-height: 1; }
-        .stat-bar { width: 24px; height: 3px; background: var(--g); border-radius: 2px; margin: 5px 0 4px; }
-        .stat-l { font-size: .75rem; color: var(--t3); font-weight: 500; }
 
         /* PHONE */
         .phone-wrap { display: flex; justify-content: flex-end; position: relative; }
@@ -258,7 +254,7 @@ export default function LandingPage(): JSX.Element {
             <Image src="/wbmsg_logo.png" alt="WBMSG" width={200} height={56} style={{ height: "36px", width: "auto" }} priority />
           </Link>
           <div className="nav-lnks">
-            {["Features#features","How It Works#how-it-works","Pricing#pricing","For Agencies#agency"].map(s => {
+            {["Features#features","How It Works#how-it-works","Pricing#pricing"].map(s => {
               const [label, hash] = s.split("#");
               return <a key={hash} href={`#${hash}`} className="nav-lnk">{label}</a>;
             })}
@@ -274,7 +270,7 @@ export default function LandingPage(): JSX.Element {
       <section className="hero">
         <div className="hero-in">
           <div>
-            <div className="pill"><span className="pill-dot" /> WhatsApp CRM · Built for India</div>
+            <div className="pill"><span className="pill-dot" /> Meta Tech Provider · India-First</div>
             <h1 className="h1">
               Turn Every <span className="h1-acc">WhatsApp</span>{" "}
               Message Into Revenue
@@ -284,19 +280,6 @@ export default function LandingPage(): JSX.Element {
             </p>
             <div className="hero-cta">
               <Link href="/sign-up" className="btn-pl">Start Free — No Credit Card</Link>
-              <Link href="/sign-up" className="btn-ol">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                Watch Demo
-              </Link>
-            </div>
-            <div className="stats">
-              {[["5,000+","Active SMBs"],["99.9%","Uptime SLA"],["< 5s","WA Delivery"]].map(([v,l]) => (
-                <div key={l}>
-                  <div className="stat-v">{v}</div>
-                  <div className="stat-bar" />
-                  <div className="stat-l">{l}</div>
-                </div>
-              ))}
             </div>
           </div>
 
@@ -319,21 +302,21 @@ export default function LandingPage(): JSX.Element {
               </div>
               <div className="chat">
                 <div className="m1 b-in">
-                  Hi! Is your Growth plan still $36/mo? 🙏
+                  Hi! Is your Growth plan available for my team? 🙏
                   <div className="msg-t">10:42</div>
                 </div>
                 <div className="m2 b-out" style={{alignSelf:"flex-end"}}>
-                  Yes! Growth is $36/mo — 10 agents, 10K contacts & AI replies ✨
+                  Yes! Growth is ₹599/mo — 10 agents, 10K contacts & AI replies ✨
                   <div className="msg-t">10:42 ✓✓</div>
                 </div>
                 <div className="m3 b-in">
-                  Can I see a demo? We&rsquo;re a team of 8. 😊
+                  Sounds good! We&rsquo;re a team of 8. Can we try it? 😊
                   <div className="msg-t">10:43</div>
                 </div>
                 <div className="m4" style={{display:"flex",flexDirection:"column",alignItems:"flex-end"}}>
                   <div className="ai-tag">🤖 AI Draft</div>
                   <div className="b-ai">
-                    Perfect! Book a 20-min demo: WBMSG.com/demo 🗓️ I&rsquo;ll walk your full team through it!
+                    Great! Start your 14-day free trial at wbmsg.com/sign-up — no credit card needed 🎉
                     <div className="ai-acts">
                       <button className="ai-send">Send ✓</button>
                       <button className="ai-edit">Edit</button>
@@ -460,7 +443,7 @@ export default function LandingPage(): JSX.Element {
               </div>
               <div className="ins" style={{background:"var(--g50)",border:"1px solid var(--g200)"}}>
                 <div className="ins-lbl" style={{color:"var(--g7)"}}>Suggested Reply</div>
-                <div className="ins-txt">&ldquo;Hi Priya! Growth plan is perfect for your 8-person team — $36/mo. Want a quick demo? 🗓️&rdquo;</div>
+                <div className="ins-txt">&ldquo;Hi Priya! Growth plan is perfect for your 8-person team — ₹599/mo, 14-day free trial. Want to get started? 🚀&rdquo;</div>
                 <div className="ins-acts">
                   <Link href="/sign-up" className="ins-btn-p">Send Now</Link>
                   <Link href="/sign-up" className="ins-btn-o">Edit Reply</Link>
