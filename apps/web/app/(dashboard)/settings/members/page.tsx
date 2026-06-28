@@ -65,6 +65,12 @@ export default function MembersPage(): JSX.Element {
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editMember, setEditMember] = useState<Member | null>(null);
+  const [editRole, setEditRole] = useState<typeof ROLES[number]>("agent");
+  const [editTeamId, setEditTeamId] = useState<string>("");
+  const [editTeamRole, setEditTeamRole] = useState<"lead" | "member">("member");
+  const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const { data } = useQuery<{ data: Member[] }>({
     queryKey: ["team-members"],
@@ -185,6 +191,70 @@ export default function MembersPage(): JSX.Element {
       setInviteError("Unexpected error. Please try again.");
     } finally {
       setInviting(false);
+    }
+  }
+
+  function openEdit(m: Member) {
+    setEditMember(m);
+    setEditRole((ROLES.includes(m.role as typeof ROLES[number]) ? m.role : "agent") as typeof ROLES[number]);
+    const currentTeam = teams.find((t) => t.members.some((tm) => tm.id === m.id));
+    setEditTeamId(currentTeam?.id ?? "");
+    const currentTeamMember = currentTeam?.members.find((tm) => tm.id === m.id);
+    setEditTeamRole((currentTeamMember?.teamRole === "lead" ? "lead" : "member") as "lead" | "member");
+    setEditError(null);
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editMember) return;
+    setEditing(true);
+    setEditError(null);
+    try {
+      const token = await getToken();
+      const original = editMember;
+      const originalTeam = teams.find((t) => t.members.some((tm) => tm.id === original.id));
+      const originalTeamMember = originalTeam?.members.find((tm) => tm.id === original.id);
+
+      if (editRole !== original.role) {
+        const res = await clientFetch(`${API_URL}/v1/users/${original.id}/role`, {
+          method: "PATCH",
+          token: token ?? "",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: editRole }),
+        });
+        if (!res.ok) {
+          const json = await res.json() as { error?: { message?: string } };
+          setEditError(json.error?.message ?? "Failed to update role.");
+          return;
+        }
+      }
+
+      const teamChanged = editTeamId !== (originalTeam?.id ?? "");
+      const teamRoleChanged = editTeamRole !== (originalTeamMember?.teamRole ?? "member");
+      if (teamChanged || (!teamChanged && editTeamId && teamRoleChanged)) {
+        const res = await clientFetch(`${API_URL}/v1/users/${original.id}/team`, {
+          method: "PATCH",
+          token: token ?? "",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            teamId: editTeamId || null,
+            teamRole: editTeamId ? editTeamRole : undefined,
+          }),
+        });
+        if (!res.ok) {
+          const json = await res.json() as { error?: { message?: string } };
+          setEditError(json.error?.message ?? "Failed to update team.");
+          return;
+        }
+      }
+
+      setEditMember(null);
+      void qc.invalidateQueries({ queryKey: ["team-members"] });
+      void qc.invalidateQueries({ queryKey: ["teams"] });
+    } catch {
+      setEditError("Unexpected error. Please try again.");
+    } finally {
+      setEditing(false);
     }
   }
 
@@ -313,15 +383,26 @@ export default function MembersPage(): JSX.Element {
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2 justify-end">
                       {canAdmin && (
-                        <button
-                          onClick={() => setDeleteId(m.id)}
-                          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                          title="Remove agent"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        <>
+                          <button
+                            onClick={() => openEdit(m)}
+                            className="p-1 text-gray-400 hover:text-emerald-600 transition-colors"
+                            title="Edit agent"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => setDeleteId(m.id)}
+                            className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                            title="Remove agent"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -416,6 +497,87 @@ export default function MembersPage(): JSX.Element {
                   className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
                 >
                   {inviting ? "Sending…" : "Send Invite"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Edit Agent</h2>
+              <button onClick={() => setEditMember(null)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="text-sm text-gray-500">{editMember.fullName ?? editMember.email}</p>
+            <form onSubmit={(e) => void saveEdit(e)} className="space-y-4">
+              {editError && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-sm px-3 py-2 rounded-lg">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {editError}
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <select
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value as typeof ROLES[number])}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Team</label>
+                <select
+                  value={editTeamId}
+                  onChange={(e) => setEditTeamId(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">No team</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+              {editTeamId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Team Role</label>
+                  <select
+                    value={editTeamRole}
+                    onChange={(e) => setEditTeamRole(e.target.value as "lead" | "member")}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="member">Member</option>
+                    <option value="lead">Lead</option>
+                  </select>
+                </div>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditMember(null)}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editing}
+                  className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {editing ? "Saving…" : "Save Changes"}
                 </button>
               </div>
             </form>
