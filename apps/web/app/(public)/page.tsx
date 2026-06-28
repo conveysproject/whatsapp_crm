@@ -109,12 +109,33 @@ export default function LandingPage(): JSX.Element {
         .sk-v { font-family: var(--font-br); font-weight: 700; color: var(--t1); }
         .sk-s { color: var(--t3); margin-top: 1px; }
 
-        /* TRUST */
-        .trust { background: var(--g50); border-top: 1px solid var(--bd); border-bottom: 1px solid var(--bd); padding: 2.5rem 0; }
-        .trust-lbl { font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--t3); text-align: center; margin-bottom: 1.5rem; }
-        .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-        .chip { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--bd); border-radius: var(--r-sm); padding: 8px 18px; font-size: .82rem; color: var(--t2); font-weight: 500; box-shadow: var(--sh); transition: border-color .18s; }
-        .chip:hover { border-color: var(--g200); }
+        /* CREDENTIAL BAR */
+        .cred-bar {
+          background: var(--g9); border-top: 1px solid rgba(255,255,255,.06);
+          border-bottom: 1px solid rgba(255,255,255,.06); padding: 1.25rem 0;
+        }
+        .cred-inner {
+          max-width: 1240px; margin: auto; padding: 0 1.5rem;
+          display: flex; align-items: center; justify-content: space-between;
+          flex-wrap: wrap; gap: 1rem;
+        }
+        .cred-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .cred-chip {
+          display: flex; align-items: center; gap: 7px;
+          font-size: .78rem; font-weight: 700; color: #6EE7B7;
+          padding: 5px 13px; border-radius: 999px;
+          border: 1px solid rgba(110,231,183,.2);
+          background: rgba(110,231,183,.07);
+        }
+        .cred-sep { width: 1px; height: 32px; background: rgba(255,255,255,.1); flex-shrink: 0; }
+        .ind-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .ind-chip {
+          display: flex; align-items: center; gap: 7px;
+          background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+          border-radius: var(--r-sm); padding: 6px 14px;
+          font-size: .78rem; color: rgba(255,255,255,.55); font-weight: 500;
+        }
+        @media (max-width: 768px) { .cred-sep { display: none; } }
 
         /* SECTIONS */
         .sec { padding: 5.5rem 0; }
@@ -344,13 +365,22 @@ export default function LandingPage(): JSX.Element {
         </div>
       </section>
 
-      {/* TRUST */}
-      <div className="trust">
-        <div className="wrap">
-          <p className="trust-lbl">Trusted across every industry</p>
-          <div className="chips">
-            {[["🛒","Retail & D2C"],["🏥","Healthcare"],["🎓","EdTech"],["🏠","Real Estate"],["🍕","Food & Bev"],["💼","Services"]].map(([ic,lb]) => (
-              <div key={lb} className="chip"><span style={{fontSize:"1.1rem"}}>{ic}</span> {lb}</div>
+      {/* CREDENTIAL BAR */}
+      <div className="cred-bar">
+        <div className="cred-inner">
+          <div className="cred-chips">
+            {[
+              "✓ Meta Tech Provider",
+              "✓ Business Verified by Meta",
+              "✓ Official WhatsApp API",
+            ].map((label) => (
+              <div key={label} className="cred-chip">{label}</div>
+            ))}
+          </div>
+          <div className="cred-sep" />
+          <div className="ind-chips">
+            {[["🛒","Retail"],["🏥","Healthcare"],["🎓","EdTech"],["🏠","Real Estate"],["🍕","Food & Bev"],["💼","Services"]].map(([ic,lb]) => (
+              <div key={lb} className="ind-chip"><span style={{fontSize:"1rem"}}>{ic}</span> {lb}</div>
             ))}
           </div>
         </div>
