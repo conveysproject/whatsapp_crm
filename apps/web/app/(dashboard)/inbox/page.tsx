@@ -2,17 +2,19 @@
 
 import { JSX, useState, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PermissionGate } from "@/components/PermissionGate";
 import { ConversationList } from "@/components/inbox/ConversationList";
 import { MessageThread } from "@/components/inbox/MessageThread";
 import { SendMessageForm } from "@/components/inbox/SendMessageForm";
-import { ConversationHeader } from "@/components/inbox/ConversationHeader";
+import { ConversationHeader, type Agent } from "@/components/inbox/ConversationHeader";
 import { ContactPanel } from "@/components/inbox/ContactPanel";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
 import { useBotStatus } from "@/hooks/useBotStatus";
 import { useConversations } from "@/hooks/useConversations";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { CreateOfferModal } from "@/components/deals/CreateOfferModal";
+import { clientFetch } from "@/lib/client-fetch";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -26,6 +28,48 @@ export default function InboxPage(): JSX.Element {
   const { data: conversations } = useConversations();
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
+  const { user: currentUser } = useCurrentUser();
+
+  // Fetch all org members for assignee dropdown
+  const { data: usersData } = useQuery<{ data: Agent[] }>({
+    queryKey: ["team-members"],
+    queryFn: async () => {
+      const token = await getToken();
+      return clientFetch(`${API_URL}/v1/users`, { token: token ?? "", silent: true })
+        .then((r) => r.json() as Promise<{ data: Agent[] }>);
+    },
+  });
+
+  // Fetch org settings for team controls flag
+  const { data: orgData } = useQuery<{ data: { settings: { teamControls?: { showTeamMembersInAssignee?: boolean } } } }>({
+    queryKey: ["org-me"],
+    queryFn: async () => {
+      const token = await getToken();
+      return clientFetch(`${API_URL}/v1/organizations/me`, { token: token ?? "", silent: true })
+        .then((r) => r.json() as Promise<{ data: { settings: { teamControls?: { showTeamMembersInAssignee?: boolean } } } }>);
+    },
+  });
+
+  // Fetch teams to know current user's team
+  const { data: teamsData } = useQuery<{ data: { id: string; members: { id: string }[] }[] }>({
+    queryKey: ["teams"],
+    queryFn: async () => {
+      const token = await getToken();
+      return clientFetch(`${API_URL}/v1/teams`, { token: token ?? "", silent: true })
+        .then((r) => r.json() as Promise<{ data: { id: string; members: { id: string }[] }[] }>);
+    },
+  });
+
+  // Build filtered agent list based on team controls setting
+  const allAgents = usersData?.data ?? [];
+  const showTeamOnly = orgData?.data?.settings?.teamControls?.showTeamMembersInAssignee ?? false;
+  const agents: Agent[] = (() => {
+    if (!showTeamOnly || !currentUser) return allAgents;
+    const myTeam = teamsData?.data?.find((t) => t.members.some((m) => m.id === currentUser.id));
+    if (!myTeam) return allAgents;
+    const myTeamIds = new Set(myTeam.members.map((m) => m.id));
+    return allAgents.filter((a) => myTeamIds.has(a.id));
+  })();
 
   const selectedConversation = selectedConversationId
     ? conversations?.find((c) => c.id === selectedConversationId) ?? null
@@ -43,6 +87,17 @@ export default function InboxPage(): JSX.Element {
       method: "POST",
       headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
+    });
+    await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+  }, [selectedConversationId, getToken, queryClient]);
+
+  const handleAssign = useCallback(async (userId: string | null) => {
+    if (!selectedConversationId) return;
+    const token = await getToken();
+    await fetch(`${API_URL}/v1/conversations/${selectedConversationId}/assign`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ assignedTo: userId }),
     });
     await queryClient.invalidateQueries({ queryKey: ["conversations"] });
   }, [selectedConversationId, getToken, queryClient]);
@@ -98,9 +153,11 @@ export default function InboxPage(): JSX.Element {
             conversation={selectedConversation}
             contact={contact}
             contactName={contactName}
+            agents={agents}
             onToggleContactPanel={() => setContactPanelOpen((v) => !v)}
             onStatusChange={handleStatusChange}
             onLabelChange={handleLabelChange}
+            onAssign={handleAssign}
           />
         ) : selectedConversation && (
           <div className="px-4 py-2.5 bg-white border-b border-gray-200 shrink-0">
