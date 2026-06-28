@@ -127,3 +127,197 @@ describe("POST /v1/ai/intent", () => {
     expect(body.data.confidence).toBe(0.91);
   });
 });
+
+// ── AI Creator mocks ────────────────────────────────────────────────────────
+vi.mock("../lib/ai-creator.js", () => ({
+  generateTemplate: vi.fn().mockResolvedValue({
+    templateState: {
+      name: "eid_sale",
+      category: "marketing",
+      language: "en",
+      parameterFormat: "positional",
+      subType: "standard",
+      headerType: "image",
+      headerText: "",
+      headerMediaUrl: "",
+      bodyText: "Get 30% off this Eid! Use code EID30.",
+      footerText: "Valid till 30 June",
+      addSecurityRecommendation: false,
+      codeExpirationMinutes: "",
+      otpType: "copy_code",
+      otpButtonText: "",
+      ltoText: "",
+      ltoHasExpiration: true,
+      couponExampleCode: "",
+      buttons: [{ id: "b1", type: "url", text: "Shop Now", url: "https://example.com", urlIsDynamic: false, urlExample: "", phone: "", couponExample: "" }],
+      cards: [],
+      variableExamples: {},
+    },
+    imagePrompt: "Festive Eid sale banner with 30% off",
+  }),
+  refineTemplate: vi.fn().mockResolvedValue({
+    templateState: {
+      name: "eid_sale",
+      category: "marketing",
+      language: "en",
+      parameterFormat: "positional",
+      subType: "standard",
+      headerType: "image",
+      headerText: "",
+      headerMediaUrl: "",
+      bodyText: "30% off!",
+      footerText: "",
+      addSecurityRecommendation: false,
+      codeExpirationMinutes: "",
+      otpType: "copy_code",
+      otpButtonText: "",
+      ltoText: "",
+      ltoHasExpiration: true,
+      couponExampleCode: "",
+      buttons: [],
+      cards: [],
+      variableExamples: {},
+    },
+    regenerateImage: false,
+  }),
+  generateFlow: vi.fn().mockResolvedValue({
+    flowDefinition: {
+      startNodeId: "node-1",
+      nodes: [
+        { id: "node-1", type: "keyword_match", config: { keyword: "refund", matchType: "contains" }, next: "node-2", nextNo: null },
+        { id: "node-2", type: "send_text", config: { text: "Here is our refund policy." }, next: null, nextNo: null },
+      ],
+    },
+    triggerType: "keyword_match",
+    suggestedName: "Refund Handling",
+  }),
+  refineFlow: vi.fn().mockResolvedValue({
+    flowDefinition: {
+      startNodeId: "node-1",
+      nodes: [
+        { id: "node-1", type: "keyword_match", config: { keyword: "refund", matchType: "contains" }, next: "node-2", nextNo: null },
+        { id: "node-2", type: "wait", config: { duration: 1, unit: "hours" }, next: "node-3", nextNo: null },
+        { id: "node-3", type: "send_text", config: { text: "Here is our refund policy." }, next: null, nextNo: null },
+      ],
+    },
+    triggerType: "keyword_match",
+  }),
+}));
+
+vi.mock("../lib/fal-image.js", () => ({
+  generateAndUploadImage: vi.fn().mockResolvedValue("https://cdn.example.com/org-1/image.jpg"),
+}));
+
+describe("POST /v1/ai/creator/template/generate", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("generates template and image url from description", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/ai/creator/template/generate",
+      payload: { description: "30% off Eid sale with Shop Now button" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { data: { templateState: object; imageUrl: string } };
+    expect(body.data.imageUrl).toBe("https://cdn.example.com/org-1/image.jpg");
+    expect(body.data.templateState).toMatchObject({ name: "eid_sale", category: "marketing" });
+  });
+
+  it("returns 400 if description is missing", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/ai/creator/template/generate", payload: {} });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 400 if description contains a phone number", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/ai/creator/template/generate",
+      payload: { description: "Send message to +919876543210 about sale" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("POST /v1/ai/creator/template/refine", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("refines template and returns updated state", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/ai/creator/template/refine",
+      payload: {
+        templateState: { name: "eid_sale", bodyText: "Get 30% off this Eid!" },
+        imageUrl: "https://cdn.example.com/org-1/old.jpg",
+        refinement: "Make the body shorter",
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { data: { templateState: object; regenerateImage: boolean } };
+    expect(body.data.regenerateImage).toBe(false);
+  });
+});
+
+describe("POST /v1/ai/creator/template/image", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("generates and uploads image, returns url", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/ai/creator/template/image",
+      payload: { prompt: "Festive Eid sale banner with 30% off" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { data: { imageUrl: string } };
+    expect(body.data.imageUrl).toBe("https://cdn.example.com/org-1/image.jpg");
+  });
+});
+
+describe("POST /v1/ai/creator/flow/generate", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("generates flow definition from description", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/ai/creator/flow/generate",
+      payload: { description: "When customer says refund send our policy" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { data: { flowDefinition: object; triggerType: string; suggestedName: string } };
+    expect(body.data.triggerType).toBe("keyword_match");
+    expect(body.data.suggestedName).toBe("Refund Handling");
+  });
+
+  it("returns 400 if description is missing", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/ai/creator/flow/generate", payload: {} });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("POST /v1/ai/creator/flow/refine", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("refines flow and returns updated definition", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/ai/creator/flow/refine",
+      payload: {
+        flowDefinition: { startNodeId: "node-1", nodes: [] },
+        triggerType: "keyword_match",
+        refinement: "Add a 1-hour wait before sending",
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { data: { flowDefinition: { nodes: unknown[] } } };
+    expect(body.data.flowDefinition.nodes).toHaveLength(3);
+  });
+});

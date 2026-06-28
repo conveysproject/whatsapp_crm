@@ -2,6 +2,18 @@ import type { FastifyPluginAsync } from "fastify";
 import { generateSuggestions, detectIntent, analyzeSentiment, generateSmartReplies, detectIntentWithConfidence, buildAiContext, summarizeConversation, AI_CONTEXT_LONG } from "../lib/claude.js";
 import { findTopRelevantSections, generateAnswerFromSections } from "../lib/ai-rag.js";
 import type { ConversationId, MessageId } from "@WBMSG/shared";
+import { generateTemplate, refineTemplate, generateFlow, refineFlow } from "../lib/ai-creator.js";
+import { generateAndUploadImage } from "../lib/fal-image.js";
+
+const PII_PATTERN = /(\+\d{10,}|\b\d{10,}\b|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
+
+function containsPii(value: unknown): boolean {
+  if (typeof value === "string") return PII_PATTERN.test(value);
+  if (typeof value === "object" && value !== null) {
+    return Object.values(value).some(containsPii);
+  }
+  return false;
+}
 
 export const aiRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: ConversationId } }>(
@@ -228,4 +240,87 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
       },
     });
   });
+
+  // ── AI Creator: Template generation ──────────────────────────────────────
+  fastify.post<{ Body: { description: string } }>("/ai/creator/template/generate", async (request, reply) => {
+    const { description } = request.body;
+    if (!description || description.trim().length < 3) {
+      return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "description is required" } });
+    }
+    if (containsPii(description)) {
+      return reply.status(400).send({ error: { code: "PII_DETECTED", message: "Description must not contain personal data" } });
+    }
+    const { organizationId } = request.auth;
+    const { templateState, imagePrompt } = await generateTemplate(description.trim());
+    let imageUrl = "";
+    if (imagePrompt && templateState.headerType === "image") {
+      try {
+        imageUrl = await generateAndUploadImage(imagePrompt, organizationId);
+      } catch { /* non-critical — preview shows placeholder */ }
+    }
+    return reply.send({ data: { templateState, imageUrl } });
+  });
+
+  // ── AI Creator: Template refinement ────────────────────────────────────────
+  fastify.post<{ Body: { templateState: object; imageUrl: string; refinement: string } }>(
+    "/ai/creator/template/refine",
+    async (request, reply) => {
+      const { templateState, imageUrl, refinement } = request.body;
+      if (!templateState || !refinement) {
+        return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "templateState and refinement are required" } });
+      }
+      if (containsPii(refinement)) {
+        return reply.status(400).send({ error: { code: "PII_DETECTED", message: "Refinement must not contain personal data" } });
+      }
+      const { organizationId } = request.auth;
+      const result = await refineTemplate(templateState, imageUrl ?? "", refinement);
+      let newImageUrl = imageUrl;
+      if (result.regenerateImage && result.imagePrompt) {
+        try {
+          newImageUrl = await generateAndUploadImage(result.imagePrompt, organizationId);
+        } catch { /* non-critical */ }
+      }
+      return reply.send({ data: { templateState: result.templateState, imageUrl: newImageUrl, regenerateImage: result.regenerateImage } });
+    }
+  );
+
+  // ── AI Creator: Standalone image generation ────────────────────────────────
+  fastify.post<{ Body: { prompt: string } }>("/ai/creator/template/image", async (request, reply) => {
+    const { prompt } = request.body;
+    if (!prompt || prompt.trim().length < 3) {
+      return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "prompt is required" } });
+    }
+    const { organizationId } = request.auth;
+    const imageUrl = await generateAndUploadImage(prompt.trim(), organizationId);
+    return reply.send({ data: { imageUrl } });
+  });
+
+  // ── AI Creator: Flow generation ────────────────────────────────────────────
+  fastify.post<{ Body: { description: string } }>("/ai/creator/flow/generate", async (request, reply) => {
+    const { description } = request.body;
+    if (!description || description.trim().length < 3) {
+      return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "description is required" } });
+    }
+    if (containsPii(description)) {
+      return reply.status(400).send({ error: { code: "PII_DETECTED", message: "Description must not contain personal data" } });
+    }
+    const result = await generateFlow(description.trim());
+    return reply.send({ data: result });
+  });
+
+  // ── AI Creator: Flow refinement ────────────────────────────────────────────
+  fastify.post<{ Body: { flowDefinition: object; triggerType: string; refinement: string } }>(
+    "/ai/creator/flow/refine",
+    async (request, reply) => {
+      const { flowDefinition, triggerType, refinement } = request.body;
+      if (!flowDefinition || !triggerType || !refinement) {
+        return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "flowDefinition, triggerType and refinement are required" } });
+      }
+      if (containsPii(refinement)) {
+        return reply.status(400).send({ error: { code: "PII_DETECTED", message: "Refinement must not contain personal data" } });
+      }
+      const result = await refineFlow(flowDefinition, triggerType, refinement);
+      return reply.send({ data: result });
+    }
+  );
 };
