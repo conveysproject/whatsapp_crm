@@ -254,7 +254,7 @@ export default function PricingSection(): JSX.Element {
           {PLANS.map((plan) => {
             const dk = plan.popular;
             const price = cycle === "annual" ? plan.annualMonthly : plan.monthlyPrice;
-            const annualNote = cycle === "annual" && plan.annualTotal
+            const annualNote = cycle === "annual" && plan.annualTotal !== null
               ? `Billed ${formatINR(plan.annualTotal)}/year`
               : null;
 
