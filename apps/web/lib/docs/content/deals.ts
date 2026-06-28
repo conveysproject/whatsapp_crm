@@ -14,6 +14,13 @@ export const deals: DocCategory = {
       description: "How the Deals module works and what you can see on the Kanban board.",
       sections: [
         {
+          image: {
+            src: "/docs/screenshots/deals/deals.png",
+            alt: "WBMSG deals Kanban board",
+            caption: "The Deals Kanban board — drag cards between stages to move deals through your pipeline",
+          },
+        },
+        {
           paragraphs: [
             "The Deals module gives you a Kanban board view for managing your sales pipeline. Each column on the board represents a stage, and each card represents a deal.",
             "If you have multiple pipelines, switch between them using the pipeline dropdown at the top of the page.",

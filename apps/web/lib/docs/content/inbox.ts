@@ -22,6 +22,11 @@ export const inbox: DocCategory = {
             "Message Thread (center) — the full conversation history and compose form",
             "Contact Panel (right, toggleable) — contact details, fields, and deal links",
           ],
+          image: {
+            src: "/docs/screenshots/inbox/inbox-overview.png",
+            alt: "WBMSG inbox three-panel layout",
+            caption: "The WBMSG inbox: conversation list (left), message thread (center), contact panel (right)",
+          },
         },
         {
           paragraphs: [

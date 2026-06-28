@@ -16,6 +16,13 @@ export const automation: DocCategory = {
         "The four automation layers available in WBMSG and when to use each one.",
       sections: [
         {
+          image: {
+            src: "/docs/screenshots/automation/flows.png",
+            alt: "WBMSG automation flows page",
+            caption: "The Flows page — all automation tools in one place",
+          },
+        },
+        {
           heading: "Automation in WBMSG",
           paragraphs: [
             "WBMSG has four levels of automation:",

@@ -1,3 +1,9 @@
+export interface DocImage {
+  src: string
+  alt: string
+  caption?: string
+}
+
 export interface DocSection {
   heading?: string
   paragraphs?: string[]
@@ -5,6 +11,7 @@ export interface DocSection {
   tip?: string
   warning?: string
   note?: string
+  image?: DocImage
 }
 
 export interface DocArticle {

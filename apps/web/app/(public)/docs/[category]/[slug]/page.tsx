@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { JSX } from "react";
@@ -103,6 +104,10 @@ export default async function ArticlePage({ params }: Props): Promise<JSX.Elemen
         .dap-note-ic { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
         .dap-note-text { font-size: .84rem; color: #1E40AF; line-height: 1.6; }
 
+        .dap-img-wrap { margin-top: 1.25rem; border-radius: 10px; overflow: hidden; border: 1px solid var(--bd); box-shadow: 0 2px 12px rgba(0,20,10,.06); }
+        .dap-img-wrap img { width: 100%; height: auto; display: block; }
+        .dap-img-caption { font-size: .76rem; color: var(--t3); text-align: center; padding: .5rem .75rem; background: var(--g50); border-top: 1px solid var(--bd); }
+
         .dap-nav {
           display: flex; gap: 1rem; margin-top: 3rem; padding-top: 2rem;
           border-top: 1px solid var(--bd);
@@ -174,6 +179,22 @@ export default async function ArticlePage({ params }: Props): Promise<JSX.Elemen
                   </li>
                 ))}
               </ol>
+            )}
+
+            {sec.image && (
+              <div className="dap-img-wrap">
+                <Image
+                  src={sec.image.src}
+                  alt={sec.image.alt}
+                  width={1440}
+                  height={900}
+                  style={{ width: "100%", height: "auto" }}
+                  unoptimized
+                />
+                {sec.image.caption && (
+                  <div className="dap-img-caption">{sec.image.caption}</div>
+                )}
+              </div>
             )}
 
             {sec.tip && (

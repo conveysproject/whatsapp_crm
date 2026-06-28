@@ -16,6 +16,13 @@ export const campaigns: DocCategory = {
         "Understand how broadcast campaigns work on WhatsApp and when to use them.",
       sections: [
         {
+          image: {
+            src: "/docs/screenshots/campaigns/campaigns-list.png",
+            alt: "WBMSG campaigns list",
+            caption: "The Campaigns page — view all broadcasts by status",
+          },
+        },
+        {
           heading: "Campaigns",
           paragraphs: [
             "A campaign is a broadcast message sent to multiple contacts at once.",

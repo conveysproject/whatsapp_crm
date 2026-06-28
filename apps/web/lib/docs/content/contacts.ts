@@ -16,6 +16,13 @@ export const contacts: DocCategory = {
         "A tour of the Contacts list — what columns are shown, how to search, sort, and navigate pages.",
       sections: [
         {
+          image: {
+            src: "/docs/screenshots/contacts/contacts-list.png",
+            alt: "WBMSG contacts list",
+            caption: "The Contacts page — search, filter, and manage all your contacts",
+          },
+        },
+        {
           heading: "The Contacts Table",
           paragraphs: [
             "The Contacts page displays all contacts for your organization in a paginated table. Use the entries selector at the top-left to show 25, 50, or 100 rows per page.",

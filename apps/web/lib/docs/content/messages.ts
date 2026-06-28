@@ -18,6 +18,11 @@ export const messages: DocCategory = {
             "Go to Messages in the sidebar to open the Message Log.",
             "The log shows every message sent and received across your entire organization.",
           ],
+          image: {
+            src: "/docs/screenshots/messages/messages-log.png",
+            alt: "WBMSG message log",
+            caption: "The Message Log — filter, search, and audit all messages across your organization",
+          },
         },
         {
           heading: "Filters",

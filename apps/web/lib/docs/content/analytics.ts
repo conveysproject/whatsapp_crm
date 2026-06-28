@@ -14,6 +14,13 @@ export const analytics: DocCategory = {
       description: "What you see when you first log in to WBMSG.",
       sections: [
         {
+          image: {
+            src: "/docs/screenshots/analytics/dashboard.png",
+            alt: "WBMSG analytics dashboard",
+            caption: "The Analytics dashboard — org metrics, agent performance, and conversation trends",
+          },
+        },
+        {
           paragraphs: [
             "The dashboard greets you with a time-aware message — Good morning, Good afternoon, or Good evening — followed by your first name.",
             "A WhatsApp status badge sits at the top of the page. It shows green 'WhatsApp Connected' when your account is linked and receiving messages, or amber 'WhatsApp Disconnected' when the connection is broken.",

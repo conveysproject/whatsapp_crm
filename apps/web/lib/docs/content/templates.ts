@@ -16,6 +16,13 @@ export const templates: DocCategory = {
         "Understand why Meta requires pre-approved templates and how they enable outbound messaging.",
       sections: [
         {
+          image: {
+            src: "/docs/screenshots/templates/template-library.png",
+            alt: "WBMSG template library",
+            caption: "The Template Library — view, search, and manage all your approved WhatsApp templates",
+          },
+        },
+        {
           heading: "The 24-Hour Messaging Window",
           paragraphs: [
             "WhatsApp allows businesses to send free-form messages to a contact only within 24 hours of the contact's last message to you. This is the customer service window. Once that window closes, you must use a pre-approved Message Template to initiate or re-open a conversation.",

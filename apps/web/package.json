@@ -16,7 +16,8 @@
     "test:e2e:debug": "playwright test --debug",
     "cy:open": "cypress open",
     "cy:run": "cypress run",
-    "cy:run:component": "cypress run --component"
+    "cy:run:component": "cypress run --component",
+    "screenshots": "tsx scripts/capture-docs-screenshots.ts"
   },
   "dependencies": {
     "@WBMSG/shared": "workspace:*",
