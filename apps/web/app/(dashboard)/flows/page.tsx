@@ -78,9 +78,14 @@ export default async function FlowsPage(): Promise<JSX.Element> {
           </p>
         </div>
         {canManage && (
-          <Link href="/flows/new">
-            <Button>+ New Flow</Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/flows/ai-create">
+              <Button variant="secondary">✨ Create with AI</Button>
+            </Link>
+            <Link href="/flows/new">
+              <Button>+ New Flow</Button>
+            </Link>
+          </div>
         )}
       </div>
 
