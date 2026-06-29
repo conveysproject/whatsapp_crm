@@ -269,8 +269,8 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
       if (!templateState || !refinement) {
         return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "templateState and refinement are required" } });
       }
-      if (containsPii(refinement)) {
-        return reply.status(400).send({ error: { code: "PII_DETECTED", message: "Refinement must not contain personal data" } });
+      if (containsPii(templateState) || containsPii(refinement)) {
+        return reply.status(400).send({ error: { code: "PII_DETECTED", message: "Request must not contain personal data" } });
       }
       const { organizationId } = request.auth;
       const result = await refineTemplate(templateState, imageUrl ?? "", refinement);
@@ -289,6 +289,9 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
     const { prompt } = request.body;
     if (!prompt || prompt.trim().length < 3) {
       return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "prompt is required" } });
+    }
+    if (containsPii(prompt)) {
+      return reply.status(400).send({ error: { code: "PII_DETECTED", message: "Prompt must not contain personal data" } });
     }
     const { organizationId } = request.auth;
     const imageUrl = await generateAndUploadImage(prompt.trim(), organizationId);
@@ -316,8 +319,8 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
       if (!flowDefinition || !triggerType || !refinement) {
         return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "flowDefinition, triggerType and refinement are required" } });
       }
-      if (containsPii(refinement)) {
-        return reply.status(400).send({ error: { code: "PII_DETECTED", message: "Refinement must not contain personal data" } });
+      if (containsPii(flowDefinition) || containsPii(refinement)) {
+        return reply.status(400).send({ error: { code: "PII_DETECTED", message: "Request must not contain personal data" } });
       }
       const result = await refineFlow(flowDefinition, triggerType, refinement);
       return reply.send({ data: result });

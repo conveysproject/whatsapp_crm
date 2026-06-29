@@ -123,7 +123,11 @@ RESPONSE FORMAT — return ONLY this JSON, no markdown:
 
 function parseJson<T>(text: string): T {
   const cleaned = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/, "").trim();
-  return JSON.parse(cleaned) as T;
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    throw new Error(`AI returned invalid JSON. Raw response: ${cleaned.slice(0, 200)}`);
+  }
 }
 
 export async function generateTemplate(description: string): Promise<AiTemplateResult> {
