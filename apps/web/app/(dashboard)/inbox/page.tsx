@@ -22,7 +22,7 @@ export default function InboxPage(): JSX.Element {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [prefillText, setPrefillText] = useState("");
   const [showOffer, setShowOffer] = useState(false);
-  const [contactPanelOpen, setContactPanelOpen] = useState(false);
+  const [contactPanelOpen, setContactPanelOpen] = useState(true);
 
   const botActive = useBotStatus(selectedConversationId);
   const { data: conversations } = useConversations();
@@ -188,7 +188,7 @@ export default function InboxPage(): JSX.Element {
       </div>
 
       {/* Contact detail panel */}
-      {contactPanelOpen && contact && contactName && selectedConversation && (
+      {contact && contactName && selectedConversation && (
         <ContactPanel
           contactId={contact.id}
           contactName={contactName}
