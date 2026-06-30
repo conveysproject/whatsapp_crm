@@ -71,43 +71,54 @@ function TemplateMessageBubble({ body }: { body: string }): JSX.Element {
   const footerText = parsed.footer;
   const buttons = parsed.buttons ?? [];
   const carousel = parsed.carousel ?? [];
+  const isMediaHeader = ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat);
 
   return (
-    <div className="flex flex-col gap-1 min-w-[180px]">
-      {headerMediaUrl && (
-        <MediaMessage
-          mediaUrl={headerMediaUrl}
-          contentType={headerFormat.toLowerCase() as "image" | "video" | "document"}
-        />
+    <div className="flex flex-col w-full min-w-[220px]">
+      {/* Media header — full-width, flush to bubble edges */}
+      {headerMediaUrl && isMediaHeader && (
+        <div className="w-full overflow-hidden">
+          {headerFormat === "IMAGE"
+            ? <img src={headerMediaUrl} alt="" className="w-full object-cover max-h-52 block" />
+            : <MediaMessage mediaUrl={headerMediaUrl} contentType={headerFormat.toLowerCase() as "video" | "document"} />
+          }
+        </div>
       )}
+
+      {/* Text header */}
       {headerText && (
-        <p className="font-semibold text-gray-900 leading-snug">{headerText}</p>
+        <p className="px-3 pt-2 font-semibold text-[15px] text-gray-900 leading-snug">{headerText}</p>
       )}
-      {bodyText
-        ? <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap"
-             dangerouslySetInnerHTML={{ __html: formatWhatsAppText(bodyText.replace(/\{\{\d+\}\}/g, "")) }} />
-        : !headerText && !headerMediaUrl && <p className="text-xs text-gray-400 italic">Template message</p>
-      }
+
+      {/* Body */}
+      <div className="px-3 pt-2 pb-1">
+        {bodyText
+          ? <p className="text-[14.2px] text-gray-900 leading-relaxed whitespace-pre-wrap"
+               dangerouslySetInnerHTML={{ __html: formatWhatsAppText(bodyText.replace(/\{\{\d+\}\}/g, "")) }} />
+          : !headerText && !headerMediaUrl && <p className="text-xs text-gray-400 italic">Template message</p>
+        }
+      </div>
+
+      {/* Footer */}
       {footerText && (
-        <p className="text-xs text-gray-400 mt-0.5">{footerText}</p>
+        <p className="px-3 pb-2 text-[12px] text-[#667781] leading-snug">{footerText}</p>
       )}
+
+      {/* Carousel */}
       {carousel.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto mt-1 pb-1 -mx-1 px-1">
+        <div className="flex gap-2 overflow-x-auto px-3 pb-2 pt-1">
           {carousel.map((card, i) => (
-            <div key={i} className="min-w-[140px] max-w-[160px] flex-shrink-0 rounded-lg border border-gray-200 overflow-hidden bg-white">
+            <div key={i} className="min-w-[150px] max-w-[170px] flex-shrink-0 rounded-xl border border-[#e9edef] overflow-hidden bg-white">
               {card.headerMediaUrl && (
-                <MediaMessage
-                  mediaUrl={card.headerMediaUrl}
-                  contentType={(card.headerFormat ?? "image").toLowerCase() as "image" | "video" | "document"}
-                />
+                <img src={card.headerMediaUrl} alt="" className="w-full object-cover h-24 block" />
               )}
               {card.body && (
-                <p className="text-xs text-gray-800 p-2 leading-snug">{card.body}</p>
+                <p className="text-xs text-gray-800 px-2.5 py-2 leading-snug">{card.body}</p>
               )}
               {(card.buttons ?? []).length > 0 && (
-                <div className="border-t border-gray-100 px-2 py-1">
+                <div className="flex flex-col">
                   {(card.buttons ?? []).map((btn, j) => (
-                    <div key={j} className="text-center text-xs text-[#00a884] font-medium py-0.5">
+                    <div key={j} className="border-t border-[#e9edef] py-2 text-center text-xs text-[#00a884] font-medium">
                       {btn.text ?? "Button"}
                     </div>
                   ))}
@@ -117,10 +128,12 @@ function TemplateMessageBubble({ body }: { body: string }): JSX.Element {
           ))}
         </div>
       )}
+
+      {/* Buttons — WhatsApp style: full-width, separated by hairlines */}
       {buttons.length > 0 && (
-        <div className="flex flex-col gap-1 mt-2 border-t border-gray-200 pt-2">
+        <div className="flex flex-col">
           {buttons.map((btn, i) => (
-            <div key={i} className="text-center text-xs text-[#00a884] font-medium py-1 border border-[#00a884]/30 rounded-lg">
+            <div key={i} className="border-t border-[#e9edef] py-2.5 px-3 text-center text-[13px] text-[#00a884] font-medium tracking-[0.01em]">
               {btn.text ?? "Button"}
             </div>
           ))}
@@ -312,7 +325,8 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
             <div className={`flex ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}>
               <div
                 className={[
-                  "max-w-xs lg:max-w-md px-4 py-2 rounded-2xl text-sm",
+                  "max-w-xs lg:max-w-md rounded-2xl text-sm",
+                  msg.contentType === "template" ? "overflow-hidden p-0" : "px-4 py-2",
                   msg.direction === "outbound"
                     ? "bg-wa-light text-gray-900 rounded-br-none"
                     : "bg-white border border-gray-200 text-gray-900 rounded-bl-none shadow-card",
@@ -336,7 +350,10 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
                     )}
                   </>
                 )}
-                <p className="text-xs text-gray-400 mt-1 text-right flex items-center justify-end gap-0.5">
+                <p className={[
+                  "text-xs text-gray-400 mt-1 text-right flex items-center justify-end gap-0.5",
+                  msg.contentType === "template" ? "px-3 pb-2" : "",
+                ].join(" ")}>
                   {formatTime(msg.sentAt)}
                   {msg.direction === "outbound" && <MessageTicks status={msg.status} />}
                 </p>
