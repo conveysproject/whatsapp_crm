@@ -280,13 +280,13 @@ export default function WhatsAppAccountPage(): JSX.Element {
             <p className="text-xs text-gray-400">Conversations per day</p>
           </div>
 
-          {/* API Health */}
+          {/* Messaging Health */}
           <div className={`rounded-xl border shadow-sm p-4 space-y-1.5 ${
             s?.meta_health_status === "BLOCKED" || s?.meta_health_status === "UNAVAILABLE"
               ? "bg-red-50 border-red-200"
               : "bg-white border-gray-200"
           }`}>
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">API Health</p>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Messaging Health</p>
             {s?.meta_health_status ? (
               <>
                 {(() => {
