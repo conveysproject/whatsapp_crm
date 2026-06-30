@@ -442,19 +442,17 @@ export default function WhatsAppAccountPage(): JSX.Element {
                 </button>
               </div>
 
-              {/* Phone preview — always visible */}
-              <div className="flex flex-col items-center py-8 px-4" style={{ background: "#F0F2F5" }}>
-                <WhatsAppPhonePreview
-                  name={s?.display_name ?? "Business Name"}
-                  phone={s?.current_phone_number_number ?? ""}
-                  about={s?.business_profile_about ?? ""}
-                  pictureUrl={s?.business_profile_picture_url}
-                  website={(() => { try { const ws = JSON.parse(s?.business_profile_websites ?? "[]") as string[]; return ws[0] ?? ""; } catch { return ""; } })()}
-                />
-                <p className="text-xs text-gray-400 mt-4 text-center">
-                  This experience may look different across devices.
-                </p>
-              </div>
+              {/* WhatsApp profile preview — exact Meta layout */}
+              <WhatsAppProfilePreview
+                name={s?.display_name}
+                phone={s?.current_phone_number_number}
+                description={s?.business_profile_description}
+                category={s?.business_profile_vertical ? (VERTICAL_LABEL[s.business_profile_vertical] ?? s.business_profile_vertical) : undefined}
+                address={s?.business_profile_address}
+                email={s?.business_profile_email}
+                websites={(() => { try { return (JSON.parse(s?.business_profile_websites ?? "[]") as string[]).filter(Boolean); } catch { return []; } })()}
+                pictureUrl={s?.business_profile_picture_url}
+              />
 
               {/* Pending display name change */}
               {s?.new_display_name && (
@@ -905,77 +903,84 @@ export default function WhatsAppAccountPage(): JSX.Element {
 
 // ── Phone preview ──────────────────────────────────────────────────────────────
 
-function WhatsAppPhonePreview({ name, phone, about, pictureUrl, website }: {
-  name: string; phone: string; about: string; pictureUrl?: string; website?: string;
+function WhatsAppProfilePreview({ name, phone, description, category, address, email, websites, pictureUrl }: {
+  name?: string; phone?: string; description?: string; category?: string;
+  address?: string; email?: string; websites?: string[]; pictureUrl?: string;
 }) {
   const initial = (name || "B").charAt(0).toUpperCase();
+  const teal = "#008069";
+  const ws = (websites ?? []).filter(Boolean);
   return (
-    /* Phone frame */
-    <div className="relative w-44 rounded-[2rem] border-4 border-gray-800 bg-gray-800 shadow-2xl overflow-hidden" style={{ minHeight: 340 }}>
-      {/* Status bar */}
-      <div className="bg-gray-800 flex items-center justify-between px-4 pt-2 pb-1">
-        <span className="text-white text-[9px] font-semibold">9:41</span>
-        <div className="flex gap-1 items-center">
-          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M1.5 8.5C5 5 10.5 3 12 3s7 2 10.5 5.5" /><path d="M5 12c1.9-1.9 4.4-3 7-3s5.1 1.1 7 3" /><path d="M8.5 15.5c.9-.9 2.2-1.5 3.5-1.5s2.6.6 3.5 1.5" /><circle cx="12" cy="19" r="1" /></svg>
-          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="11" rx="2" /><path d="M22 11h1a1 1 0 010 2h-1" /></svg>
-        </div>
-      </div>
-
-      {/* WhatsApp header */}
-      <div className="bg-[#075E54] px-3 py-2 flex items-center gap-2">
-        <svg className="w-4 h-4 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-        </svg>
+    <div className="w-full bg-white divide-y divide-gray-100">
+      {/* Avatar + name + phone + share */}
+      <div className="flex flex-col items-center pt-8 pb-5 px-6">
         {pictureUrl ? (
-          <img src={pictureUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
+          <img src={pictureUrl} alt="" className="w-20 h-20 rounded-full object-cover" />
         ) : (
-          <div className="w-7 h-7 rounded-full bg-[#25D366] flex items-center justify-center shrink-0">
-            <span className="text-white text-xs font-bold">{initial}</span>
+          <div className="w-20 h-20 rounded-full bg-gray-300 flex items-center justify-center">
+            <span className="text-white text-3xl font-medium">{initial}</span>
           </div>
         )}
-        <div className="min-w-0">
-          <p className="text-white text-[11px] font-semibold leading-tight truncate">{name || "Business Name"}</p>
-          <p className="text-[#b2dfdb] text-[9px] leading-tight">Business account</p>
-        </div>
-        <div className="ml-auto flex gap-2">
-          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+        <p className="mt-3 text-[15px] font-semibold text-gray-900 text-center leading-snug">
+          {name || "Business Name"}
+        </p>
+        {phone && <p className="text-[13px] text-gray-500 mt-0.5">{phone}</p>}
+        {/* Share */}
+        <div className="mt-4 flex flex-col items-center">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#E7F8EE" }}>
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill={teal}>
+              <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/>
+            </svg>
+          </div>
+          <span className="text-[11px] mt-1 font-medium" style={{ color: teal }}>Share</span>
         </div>
       </div>
 
-      {/* Profile body */}
-      <div className="bg-[#ECE5DD] flex-1">
-        {/* Avatar + name block */}
-        <div className="bg-white pt-5 pb-3 flex flex-col items-center gap-2 border-b border-gray-200">
-          {pictureUrl ? (
-            <img src={pictureUrl} alt="" className="w-16 h-16 rounded-full object-cover border-2 border-white shadow" />
-          ) : (
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shadow">
-              <span className="text-white text-2xl font-bold">{initial}</span>
-            </div>
-          )}
-          <div className="text-center px-2">
-            <p className="text-[12px] font-semibold text-gray-900 leading-tight">{name || "Business Name"}</p>
-            {phone && <p className="text-[10px] text-gray-500 mt-0.5">{phone}</p>}
-          </div>
+      {/* Description */}
+      {description && (
+        <div className="px-5 py-4">
+          <p className="text-[13px] text-gray-700 leading-relaxed">{description}</p>
         </div>
+      )}
 
-        {/* Info rows */}
-        <div className="bg-white mt-2 divide-y divide-gray-100">
-          {about && (
-            <div className="px-3 py-2">
-              <p className="text-[9px] text-[#075E54] font-medium mb-0.5">About</p>
-              <p className="text-[10px] text-gray-700 leading-snug line-clamp-3">{about}</p>
-            </div>
-          )}
-          {website && (
-            <div className="px-3 py-2 flex items-center gap-2">
-              <svg className="w-3 h-3 text-[#075E54] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
-              <p className="text-[10px] text-[#128C7E] truncate">{website.replace(/^https?:\/\//, "")}</p>
-            </div>
-          )}
-        </div>
+      {/* Info rows */}
+      <div className="divide-y divide-gray-100">
+        {category && (
+          <div className="flex items-center gap-3 px-5 py-3">
+            <svg className="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill={teal}>
+              <path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/>
+            </svg>
+            <span className="text-[13px] text-gray-700">{category}</span>
+          </div>
+        )}
+        {address && (
+          <div className="flex items-start gap-3 px-5 py-3">
+            <svg className="w-[18px] h-[18px] shrink-0 mt-0.5" viewBox="0 0 24 24" fill={teal}>
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+            <span className="text-[13px] leading-snug" style={{ color: teal }}>{address}</span>
+          </div>
+        )}
+        {email && (
+          <div className="flex items-center gap-3 px-5 py-3">
+            <svg className="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill={teal}>
+              <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+            </svg>
+            <span className="text-[13px]" style={{ color: teal }}>{email}</span>
+          </div>
+        )}
+        {ws.map((url, i) => (
+          <div key={i} className="flex items-center gap-3 px-5 py-3">
+            <svg className="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill={teal}>
+              <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95a15.65 15.65 0 00-1.38-3.56A8.03 8.03 0 0118.92 8zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2s.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56A8.008 8.008 0 015.08 16zm2.95-8H5.08a7.96 7.96 0 014.33-3.56A15.65 15.65 0 008.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2s.07-1.35.16-2h4.68c.09.65.16 1.32.16 2s-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95a8.008 8.008 0 01-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2s-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/>
+            </svg>
+            <span className="text-[13px] truncate" style={{ color: teal }}>{url}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="px-5 py-3">
+        <p className="text-[11px] text-gray-400 text-center">This experience may look different across devices.</p>
       </div>
     </div>
   );
