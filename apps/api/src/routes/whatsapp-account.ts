@@ -303,6 +303,7 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       isSMB?: boolean;
       flow?: "onboarding" | "reconnect";
       redirectUri?: string;
+      forceRegister?: boolean;
     };
   }>("/whatsapp-account/connect", async (request, reply) => {
     const { organizationId } = request.auth;
@@ -316,6 +317,7 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       isSMB = false,
       flow = "reconnect",
       redirectUri,
+      forceRegister = false,
     } = request.body;
 
     const pageIds = bodyPageIds ?? [];
@@ -505,7 +507,7 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
         const phoneInfoRes = await fetch(`${WA_GRAPH}/${phoneNumberId}?fields=platform_type,is_on_biz_app&access_token=${accessToken}`);
         const phoneInfo = await phoneInfoRes.json() as { platform_type?: string; is_on_biz_app?: boolean };
         fastify.log.info({ status: phoneInfoRes.status, phoneInfo }, "[WA-CONNECT] 13b. phone platform check");
-        const needsRegistration = phoneInfo.platform_type !== "CLOUD_API" || phoneInfo.is_on_biz_app === true;
+        const needsRegistration = forceRegister || phoneInfo.platform_type !== "CLOUD_API" || phoneInfo.is_on_biz_app === true;
         if (needsRegistration) {
           fastify.log.info({ phoneNumberId, platform_type: phoneInfo.platform_type }, "[WA-CONNECT] 13c. registering phone number");
           const regRes = await fetch(`${WA_GRAPH}/${phoneNumberId}/register`, {
