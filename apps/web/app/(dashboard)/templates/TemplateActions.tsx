@@ -29,6 +29,7 @@ export function TemplateActions({
   templateId,
   templateName,
   headerFormat,
+  headerExampleUrl,
   imageCardCount = 0,
   status,
   onRefresh,
@@ -36,6 +37,7 @@ export function TemplateActions({
   templateId: string;
   templateName: string;
   headerFormat?: string;
+  headerExampleUrl?: string;
   imageCardCount?: number;
   status?: string;
   onRefresh?: () => void;
@@ -47,11 +49,13 @@ export function TemplateActions({
   const [showExamplePrompt, setShowExamplePrompt] = useState(false);
   const [exampleImageUrl, setExampleImageUrl] = useState("");
 
-  const needsExampleImage = ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat?.toUpperCase() ?? "");
+  const isMediaHeader = ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat?.toUpperCase() ?? "");
+  // Only prompt if media header has no example URL already stored in components
+  const needsExamplePrompt = isMediaHeader && !headerExampleUrl;
 
   function handleSubmitClick(): void {
     setActionError(null);
-    if (needsExampleImage) {
+    if (needsExamplePrompt) {
       setShowExamplePrompt(true);
     } else {
       void handleSubmitToMeta();

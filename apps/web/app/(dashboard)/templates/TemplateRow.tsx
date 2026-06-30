@@ -140,6 +140,16 @@ export function TemplateRow({ template: t, onRefresh }: { template: TemplateData
                   ["IMAGE", "VIDEO", "DOCUMENT"].includes((c.format ?? "").toUpperCase())
               )?.format?.toUpperCase()
             }
+            headerExampleUrl={
+              (() => {
+                const h = (t.components ?? []).find(
+                  (c) =>
+                    c.type?.toUpperCase() === "HEADER" &&
+                    ["IMAGE", "VIDEO", "DOCUMENT"].includes((c.format ?? "").toUpperCase())
+                ) as { example?: { header_handle?: string[] } } | undefined;
+                return h?.example?.header_handle?.[0];
+              })()
+            }
             imageCardCount={imageCardCount}
           />
           {hasDetail && (

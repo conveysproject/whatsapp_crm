@@ -110,22 +110,36 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: { code: "NO_TOKEN", message: "No WhatsApp access token configured for this organization" } });
     }
 
-    // If IMAGE/VIDEO/DOCUMENT header and an example URL provided, upload and attach handle
+    // For IMAGE/VIDEO/DOCUMENT headers: if header_handle contains a URL (not a real handle),
+    // upload it to Meta and replace with the actual handle. Also accepts exampleImageUrl in body.
     type ComponentJson = { type?: string; format?: string; example?: { header_handle?: string[] } };
     let components = template.components as ComponentJson[];
     const exampleImageUrl = request.body?.exampleImageUrl;
-    if (exampleImageUrl) {
-      const appId = vsMap["facebook_app_id"];
+
+    const appId = vsMap["facebook_app_id"];
+    const mediaComponents = ["IMAGE", "VIDEO", "DOCUMENT"];
+
+    for (let i = 0; i < components.length; i++) {
+      const c = components[i];
+      if (!c || c.type?.toUpperCase() !== "HEADER") continue;
+      if (!mediaComponents.includes(c.format?.toUpperCase() ?? "")) continue;
+
+      // Determine the example URL: body param takes priority, then stored header_handle if it looks like a URL
+      const storedHandle = c.example?.header_handle?.[0] ?? "";
+      const urlToUpload = exampleImageUrl ?? (storedHandle.startsWith("http") ? storedHandle : "");
+
+      if (!urlToUpload) {
+        return reply.status(400).send({
+          error: { code: "MISSING_EXAMPLE", message: `An example image URL is required for ${c.format} header templates. Edit the template and add an image URL in the Header section.` },
+        });
+      }
+
       if (!appId) {
         return reply.status(400).send({ error: { code: "NO_APP_ID", message: "facebook_app_id not configured" } });
       }
-      const handle = await uploadMediaHandle(appId, accessToken, exampleImageUrl);
-      components = components.map((c) => {
-        if (c.type?.toUpperCase() === "HEADER" && ["IMAGE", "VIDEO", "DOCUMENT"].includes(c.format?.toUpperCase() ?? "")) {
-          return { ...c, example: { header_handle: [handle] } };
-        }
-        return c;
-      });
+
+      const handle = await uploadMediaHandle(appId, accessToken, urlToUpload);
+      components = components.map((comp, idx) => idx === i ? { ...comp, example: { header_handle: [handle] } } : comp);
     }
 
     const { metaTemplateId } = await submitTemplateToMeta({
