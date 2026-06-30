@@ -350,7 +350,7 @@ function Step3({ state, onChange, errors }: {
 
 // ─── Root ────────────────────────────────────────────────────────────────────
 
-export function TemplateForm({ initialState = INITIAL_STATE }: { initialState?: TemplateFormState }): JSX.Element {
+export function TemplateForm({ initialState = INITIAL_STATE, templateId }: { initialState?: TemplateFormState; templateId?: string }): JSX.Element {
   const { getToken } = useAuth();
   const router = useRouter();
   const [state, setState] = useState<TemplateFormState>(initialState);
@@ -404,24 +404,39 @@ export function TemplateForm({ initialState = INITIAL_STATE }: { initialState?: 
     try {
       const token = await getToken();
       const apiUrl = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000';
-      const res = await fetch(`${apiUrl}/v1/templates`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token ?? ''}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: state.name,
-          category: state.category,
-          language: state.language,
-          components,
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json() as { error?: { message?: string } };
-        setErrors([body.error?.message ?? 'Failed to create template']);
-        return;
+
+      let id: string;
+      if (templateId) {
+        // Edit mode — PATCH existing template
+        const res = await fetch(`${apiUrl}/v1/templates/${templateId}`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token ?? ''}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: state.name, category: state.category, language: state.language, components }),
+        });
+        if (!res.ok) {
+          const body = await res.json() as { error?: { message?: string } };
+          setErrors([body.error?.message ?? 'Failed to save template']);
+          return;
+        }
+        id = templateId;
+      } else {
+        // Create mode — POST new template
+        const res = await fetch(`${apiUrl}/v1/templates`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token ?? ''}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: state.name, category: state.category, language: state.language, components }),
+        });
+        if (!res.ok) {
+          const body = await res.json() as { error?: { message?: string } };
+          setErrors([body.error?.message ?? 'Failed to create template']);
+          return;
+        }
+        const { data } = await res.json() as { data: { id: string } };
+        id = data.id;
       }
-      const { data } = await res.json() as { data: { id: string } };
+
       if (submitToMeta) {
-        const submitRes = await fetch(`${apiUrl}/v1/templates/${data.id}/submit`, {
+        const submitRes = await fetch(`${apiUrl}/v1/templates/${id}/submit`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token ?? ''}` },
         });

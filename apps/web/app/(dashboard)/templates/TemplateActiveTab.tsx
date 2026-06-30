@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useMemo, useEffect, type JSX } from "react";
+import { useState, useMemo, useEffect, useCallback, type JSX } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { TemplateRow, type TemplateData } from "./TemplateRow";
 
-const STATUSES = ["all", "approved", "pending", "rejected"] as const;
+const STATUSES = ["all", "draft", "approved", "pending", "rejected"] as const;
 const CATEGORIES = ["all", "marketing", "utility", "authentication"] as const;
 
 type StatusFilter = (typeof STATUSES)[number];
@@ -62,10 +63,12 @@ function Chevron(): JSX.Element {
 }
 
 export function TemplateActiveTab({ templates }: { templates: TemplateData[] }): JSX.Element {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [showModal, setShowModal] = useState(false);
+  const handleRefresh = useCallback(() => { router.refresh(); }, [router]);
 
   const filtered = useMemo(() => {
     return templates.filter((t) => {
@@ -108,6 +111,7 @@ export function TemplateActiveTab({ templates }: { templates: TemplateData[] }):
               className="appearance-none pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer"
             >
               <option value="all">Status</option>
+              <option value="draft">Draft</option>
               <option value="approved">Approved</option>
               <option value="pending">Pending</option>
               <option value="rejected">Rejected</option>
@@ -172,7 +176,7 @@ export function TemplateActiveTab({ templates }: { templates: TemplateData[] }):
               {templates.length === 0 ? "No templates yet." : "No templates match your filters."}
             </p>
           ) : (
-            filtered.map((t) => <TemplateRow key={t.id} template={t} />)
+            filtered.map((t) => <TemplateRow key={t.id} template={t} onRefresh={handleRefresh} />)
           )}
         </div>
       </div>

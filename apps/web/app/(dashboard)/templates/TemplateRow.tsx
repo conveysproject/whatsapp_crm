@@ -8,7 +8,7 @@ export interface TemplateData {
   name: string;
   category: string;
   language: string;
-  status: "pending" | "approved" | "rejected";
+  status: "draft" | "pending" | "approved" | "rejected";
   components: Array<{
     type?: string;
     format?: string;
@@ -36,7 +36,8 @@ export interface TemplateData {
   updatedAt: string;
 }
 
-const statusVariant: Record<string, "yellow" | "green" | "red"> = {
+const statusVariant: Record<string, "yellow" | "green" | "red" | "gray"> = {
+  draft: "gray",
   pending: "yellow",
   approved: "green",
   rejected: "red",
@@ -63,7 +64,7 @@ function DetailField({ label, value }: { label: string; value: React.ReactNode }
   );
 }
 
-export function TemplateRow({ template: t }: { template: TemplateData }): JSX.Element {
+export function TemplateRow({ template: t, onRefresh }: { template: TemplateData; onRefresh?: () => void }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
 
   const qualityDotClass = t.qualityScore ? (qualityColor[t.qualityScore] ?? null) : null;
@@ -130,6 +131,8 @@ export function TemplateRow({ template: t }: { template: TemplateData }): JSX.El
           <TemplateActions
             templateId={t.id}
             templateName={t.name}
+            status={t.status}
+            onRefresh={onRefresh}
             headerFormat={
               (t.components ?? []).find(
                 (c) =>

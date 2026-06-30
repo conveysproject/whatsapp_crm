@@ -25,24 +25,105 @@ type ModalStep = "pick" | "media" | "confirm" | "sending" | "result";
 
 const MAX_SELECT = 20;
 
-export function TemplateActions({ templateId, templateName, headerFormat, imageCardCount = 0 }: { templateId: string; templateName: string; headerFormat?: string; imageCardCount?: number }): JSX.Element {
+export function TemplateActions({
+  templateId,
+  templateName,
+  headerFormat,
+  imageCardCount = 0,
+  status,
+  onRefresh,
+}: {
+  templateId: string;
+  templateName: string;
+  headerFormat?: string;
+  imageCardCount?: number;
+  status?: string;
+  onRefresh?: () => void;
+}): JSX.Element {
   const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  function openModal(): void { setOpen(true); }
-  function closeModal(): void { setOpen(false); }
+  async function handleSubmitToMeta(): Promise<void> {
+    setSubmitting(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/v1/templates/${templateId}/submit`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        setActionError(body.error?.message ?? "Submit failed");
+        return;
+      }
+      onRefresh?.();
+    } catch {
+      setActionError("Network error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDelete(): Promise<void> {
+    if (!confirm(`Delete "${templateName}"? This cannot be undone.`)) return;
+    setDeleting(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/v1/templates/${templateId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        setActionError(body.error?.message ?? "Delete failed");
+        return;
+      }
+      onRefresh?.();
+    } catch {
+      setActionError("Network error");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const isDraft = status === "draft";
 
   return (
     <>
-      <Link href={`/templates/${templateId}/analytics`} className="text-xs text-blue-600 hover:underline">
-        Analytics
-      </Link>
-      <button
-        onClick={openModal}
-        className="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 border rounded"
-      >
-        Send to Contact
-      </button>
-      {open && <SendModal templateId={templateId} templateName={templateName} headerFormat={headerFormat} imageCardCount={imageCardCount} onClose={closeModal} />}
+      {actionError && <span className="text-xs text-red-500 mr-1">{actionError}</span>}
+      {isDraft ? (
+        <>
+          <Link
+            href={`/templates/${templateId}/edit`}
+            className="text-xs text-blue-600 hover:underline"
+          >
+            Edit
+          </Link>
+          <button
+            onClick={() => { void handleSubmitToMeta(); }}
+            disabled={submitting}
+            className="text-xs text-green-700 hover:text-green-900 px-2 py-1 border border-green-300 rounded disabled:opacity-40 font-medium"
+          >
+            {submitting ? "Submitting…" : "Submit to Meta"}
+          </button>
+          <button
+            onClick={() => { void handleDelete(); }}
+            disabled={deleting}
+            className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40"
+          >
+            {deleting ? "…" : "Delete"}
+          </button>
+        </>
+      ) : (
+        <>
+          <Link href={`/templates/${templateId}/analytics`} className="text-xs text-blue-600 hover:underline">
+            Analytics
+          </Link>
+          <button
+            onClick={() => setOpen(true)}
+            className="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 border rounded"
+          >
+            Send to Contact
+          </button>
+        </>
+      )}
+      {open && <SendModal templateId={templateId} templateName={templateName} headerFormat={headerFormat} imageCardCount={imageCardCount} onClose={() => setOpen(false)} />}
     </>
   );
 }
