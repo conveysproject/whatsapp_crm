@@ -1,5 +1,4 @@
 import type { FastifyPluginAsync } from "fastify";
-import { createHash } from "node:crypto";
 import { canAccess, canAccessSub } from "../lib/permissions.js";
 import { uploadToR2 } from "../lib/r2.js";
 import {
@@ -35,6 +34,14 @@ const WA_SUBSCRIBED_FIELDS = [
 ] as const;
 
 const WA_GRAPH = "https://graph.facebook.com/v25.0";
+
+function getApiPublicUrl(): string {
+  const explicit = process.env["API_PUBLIC_URL"];
+  if (explicit) return explicit.replace(/\/$/, "");
+  const railwayDomain = process.env["RAILWAY_PUBLIC_DOMAIN"];
+  if (railwayDomain) return `https://${railwayDomain.replace(/\/$/, "")}`;
+  return "";
+}
 
 export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
   // Section gate (Phase 2 / D15): all WhatsApp account routes require settings_access.
@@ -196,8 +203,8 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       select: { whatsappBusinessAccountId: true, wabaAccessToken: true },
     });
     if (org?.whatsappBusinessAccountId && org.wabaAccessToken) {
-      const callbackUrl = `${(process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/v1/webhooks/whatsapp`;
-      const verifyToken = createHash("sha1").update(organizationId).digest("hex");
+      const callbackUrl = `${getApiPublicUrl()}/v1/webhooks/whatsapp`;
+      const verifyToken = process.env["WA_VERIFY_TOKEN"] ?? "";
       await fetch(`${WA_GRAPH}/${org.whatsappBusinessAccountId}/subscribed_apps`, {
         method: "POST",
         headers: { Authorization: `Bearer ${org.wabaAccessToken}`, "Content-Type": "application/json" },
@@ -543,8 +550,8 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     }
 
     // Step 5: subscribe webhooks
-    const callbackUrl = `${(process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/v1/webhooks/whatsapp`;
-    const verifyToken = createHash("sha1").update(organizationId).digest("hex");
+    const callbackUrl = `${getApiPublicUrl()}/v1/webhooks/whatsapp`;
+    const verifyToken = process.env["WA_VERIFY_TOKEN"] ?? "";
     const webhookBody = { override_callback_uri: callbackUrl, verify_token: verifyToken, subscribed_fields: WA_SUBSCRIBED_FIELDS };
     fastify.log.info({ url: `${WA_GRAPH}/${wabaId}/subscribed_apps`, body: webhookBody }, "[WA-CONNECT] 14. webhook subscribe request");
     const webhookRes = await fetch(`${WA_GRAPH}/${wabaId}/subscribed_apps`, {
@@ -701,8 +708,8 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     }
 
     // Subscribe webhooks
-    const callbackUrl = `${(process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/v1/webhooks/whatsapp`;
-    const verifyToken = createHash("sha1").update(organizationId).digest("hex");
+    const callbackUrl = `${getApiPublicUrl()}/v1/webhooks/whatsapp`;
+    const verifyToken = process.env["WA_VERIFY_TOKEN"] ?? "";
     await fetch(`${WA_GRAPH}/${wabaId}/subscribed_apps`, {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -788,7 +795,7 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(500).send({ error: { code: "NOT_CONFIGURED", message: "Meta app credentials not configured" } });
     }
     const { accessToken } = await getAppAccessToken(appId, appSecret);
-    const callbackUrl = `${(process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/v1/webhooks/whatsapp`;
+    const callbackUrl = `${getApiPublicUrl()}/v1/webhooks/whatsapp`;
     const res = await fetch(`${WA_GRAPH}/${appId}/subscriptions?access_token=${appId}|${appSecret}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -796,7 +803,7 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
         object: "whatsapp_business_account",
         fields: WA_SUBSCRIBED_FIELDS.join(","),
         callback_url: callbackUrl,
-        verify_token: createHash("sha1").update(organizationId).digest("hex"),
+        verify_token: process.env["WA_VERIFY_TOKEN"] ?? "",
         access_token: accessToken,
       }),
     });
