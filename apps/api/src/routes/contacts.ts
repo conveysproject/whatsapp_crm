@@ -728,18 +728,30 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
   // ── Contact block / unblock ──────────────────────────────────────────────
   fastify.post<{ Params: { id: string } }>("/contacts/:id/block", async (request, reply) => {
     const { organizationId } = request.auth;
-    const contact = await fastify.prisma.contact.findFirst({ where: { id: request.params.id, organizationId } });
-    if (!contact) return reply.status(404).send({ error: "Not found" });
-    const data = await fastify.prisma.contact.update({ where: { id: request.params.id }, data: { waBlockedAt: new Date() } });
-    return reply.send({ data });
+    const contact = await fastify.prisma.contact.findFirst({
+      where: { id: request.params.id, organizationId, deletedAt: null },
+      select: { id: true, phoneNumber: true },
+    });
+    if (!contact) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
+    const [, data] = await Promise.allSettled([
+      blockContact(organizationId, contact.phoneNumber),
+      fastify.prisma.contact.update({ where: { id: contact.id }, data: { waBlockedAt: new Date() } }),
+    ]);
+    return reply.send({ data: data.status === "fulfilled" ? data.value : null });
   });
 
   fastify.post<{ Params: { id: string } }>("/contacts/:id/unblock", async (request, reply) => {
     const { organizationId } = request.auth;
-    const contact = await fastify.prisma.contact.findFirst({ where: { id: request.params.id, organizationId } });
-    if (!contact) return reply.status(404).send({ error: "Not found" });
-    const data = await fastify.prisma.contact.update({ where: { id: request.params.id }, data: { waBlockedAt: null } });
-    return reply.send({ data });
+    const contact = await fastify.prisma.contact.findFirst({
+      where: { id: request.params.id, organizationId, deletedAt: null },
+      select: { id: true, phoneNumber: true },
+    });
+    if (!contact) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
+    const [, data] = await Promise.allSettled([
+      unblockContact(organizationId, contact.phoneNumber),
+      fastify.prisma.contact.update({ where: { id: contact.id }, data: { waBlockedAt: null } }),
+    ]);
+    return reply.send({ data: data.status === "fulfilled" ? data.value : null });
   });
 
   // ── AI bot toggle ────────────────────────────────────────────────────────
@@ -810,30 +822,5 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     return reply.status(204).send();
   });
 
-  // ── Block / Unblock contacts on Meta ─────────────────────────────────────
-  fastify.post<{ Params: { id: ContactId } }>("/contacts/:id/block", async (request, reply) => {
-    const { organizationId } = request.auth;
-    const contact = await fastify.prisma.contact.findFirst({
-      where: { id: request.params.id, organizationId, deletedAt: null },
-      select: { id: true, phoneNumber: true },
-    });
-    if (!contact) {
-      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
-    }
-    const result = await blockContact(organizationId, contact.phoneNumber);
-    return reply.send({ data: result });
-  });
 
-  fastify.delete<{ Params: { id: ContactId } }>("/contacts/:id/block", async (request, reply) => {
-    const { organizationId } = request.auth;
-    const contact = await fastify.prisma.contact.findFirst({
-      where: { id: request.params.id, organizationId, deletedAt: null },
-      select: { id: true, phoneNumber: true },
-    });
-    if (!contact) {
-      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
-    }
-    const result = await unblockContact(organizationId, contact.phoneNumber);
-    return reply.send({ data: result });
-  });
 };
