@@ -293,8 +293,9 @@ export async function uploadMediaHandle(
   if (!sessionRes.ok) throw new Error(`Upload session failed: ${await sessionRes.text()}`);
   const { id: uploadId } = await sessionRes.json() as { id: string };
 
+  // Step 2: POST binary data directly to the upload session ID as the path
   const uploadRes = await fetch(
-    `https://graph.facebook.com/graphql/upload?upload_id=${uploadId}&file_offset=0`,
+    `https://graph.facebook.com/${uploadId}`,
     {
       method: "POST",
       headers: { Authorization: `OAuth ${accessToken}`, file_offset: "0", "Content-Type": contentType },
@@ -338,9 +339,9 @@ export async function uploadProfilePicture(
   }
   const { id: uploadId } = await sessionRes.json() as { id: string };
 
-  // Step 2: upload file bytes
+  // Step 2: POST binary data directly to the upload session ID as the path
   const uploadRes = await fetch(
-    `https://graph.facebook.com/graphql/upload?upload_id=${uploadId}&file_offset=0`,
+    `https://graph.facebook.com/${uploadId}`,
     {
       method: "POST",
       headers: {
