@@ -176,32 +176,137 @@ export function verifyWebhookSignature(
 // ── Account management helpers ────────────────────────────────────────────
 
 export async function getBusinessProfile(organizationId: string): Promise<Record<string, unknown>> {
-  // Credentials fetched per-request from DB in real flow; here we return a stub shape
-  // Real implementation: GET /{phone-number-id}/whatsapp_business_profile
-  void organizationId;
-  return { about: "", address: "", email: "", websites: [], vertical: "" };
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const phoneNumberId = map["current_phone_number_id"];
+  const accessToken = map["whatsapp_access_token"];
+
+  // If we have credentials, fetch fresh and update cache
+  if (phoneNumberId && accessToken) {
+    try {
+      const res = await fetch(
+        `${WA_BASE}/${phoneNumberId}/whatsapp_business_profile?fields=about,address,description,email,profile_picture_url,websites,vertical`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      if (res.ok) {
+        const d = await res.json() as { data?: Array<Record<string, unknown>> };
+        const bp = d.data?.[0] ?? {};
+        const now = new Date().toISOString();
+        // Update cache
+        const cacheKeys = [
+          { key: "business_profile_about", value: String(bp["about"] ?? "") },
+          { key: "business_profile_address", value: String(bp["address"] ?? "") },
+          { key: "business_profile_email", value: String(bp["email"] ?? "") },
+          { key: "business_profile_description", value: String(bp["description"] ?? "") },
+          { key: "business_profile_picture_url", value: String(bp["profile_picture_url"] ?? "") },
+          { key: "business_profile_vertical", value: String(bp["vertical"] ?? "") },
+          { key: "business_profile_synced_at", value: now },
+        ];
+        await Promise.all(cacheKeys.map((s) =>
+          prisma.vendorSetting.upsert({
+            where: { organizationId_key: { organizationId, key: s.key } },
+            create: { organizationId, key: s.key, value: s.value, dataType: "string" },
+            update: { value: s.value },
+          })
+        ));
+        return bp;
+      }
+    } catch { /* fall through to cached */ }
+  }
+
+  // Return from cache
+  return {
+    about: map["business_profile_about"] ?? "",
+    address: map["business_profile_address"] ?? "",
+    email: map["business_profile_email"] ?? "",
+    description: map["business_profile_description"] ?? "",
+    profile_picture_url: map["business_profile_picture_url"] ?? "",
+    vertical: map["business_profile_vertical"] ?? "",
+  };
 }
 
 export async function updateBusinessProfile(
   organizationId: string,
   profile: { about?: string; address?: string; email?: string; websites?: string[] }
 ): Promise<{ success: boolean }> {
-  void organizationId;
-  void profile;
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const phoneNumberId = map["current_phone_number_id"];
+  const accessToken = map["whatsapp_access_token"];
+
+  if (phoneNumberId && accessToken) {
+    const res = await fetch(`${WA_BASE}/${phoneNumberId}/whatsapp_business_profile`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", ...profile }),
+    });
+    if (!res.ok) {
+      const err = await res.json() as unknown;
+      throw new Error(`updateBusinessProfile failed: ${JSON.stringify(err)}`);
+    }
+  }
+
+  // Update cache with new values
+  const cacheUpdates: Array<{ key: string; value: string }> = [];
+  if (profile.about !== undefined) cacheUpdates.push({ key: "business_profile_about", value: profile.about });
+  if (profile.address !== undefined) cacheUpdates.push({ key: "business_profile_address", value: profile.address });
+  if (profile.email !== undefined) cacheUpdates.push({ key: "business_profile_email", value: profile.email });
+  await Promise.all(cacheUpdates.map((s) =>
+    prisma.vendorSetting.upsert({
+      where: { organizationId_key: { organizationId, key: s.key } },
+      create: { organizationId, key: s.key, value: s.value, dataType: "string" },
+      update: { value: s.value },
+    })
+  ));
+
   return { success: true };
 }
 
 export async function getDisplayName(organizationId: string): Promise<{ display_name: string }> {
-  void organizationId;
-  return { display_name: "" };
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  return { display_name: map["display_name"] ?? "" };
 }
 
 export async function updateDisplayName(
   organizationId: string,
   displayName: string
 ): Promise<{ success: boolean }> {
-  void organizationId;
-  void displayName;
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const phoneNumberId = map["current_phone_number_id"];
+  const accessToken = map["whatsapp_access_token"];
+
+  if (phoneNumberId && accessToken) {
+    const res = await fetch(`${WA_BASE}/${phoneNumberId}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", new_display_name: displayName }),
+    });
+    if (!res.ok) {
+      const err = await res.json() as unknown;
+      throw new Error(`updateDisplayName failed: ${JSON.stringify(err)}`);
+    }
+  }
+
+  await prisma.vendorSetting.upsert({
+    where: { organizationId_key: { organizationId, key: "new_display_name" } },
+    create: { organizationId, key: "new_display_name", value: displayName, dataType: "string" },
+    update: { value: displayName },
+  });
+
   return { success: true };
 }
 
@@ -213,17 +318,13 @@ export async function syncPhoneNumbers(organizationId: string): Promise<Array<{ 
   if (!org?.whatsappBusinessAccountId || !org.wabaAccessToken) return [];
 
   const res = await fetch(
-    `${WA_BASE}/${org.whatsappBusinessAccountId}/phone_numbers?fields=id,display_phone_number,verified_name,code_verification_status`,
+    `${WA_BASE}/${org.whatsappBusinessAccountId}/phone_numbers?fields=id,display_phone_number,verified_name,code_verification_status,webhook_configuration`,
     { headers: { Authorization: `Bearer ${org.wabaAccessToken}` } }
   );
   if (!res.ok) return [];
-  const data = await res.json() as { data?: Array<{ id: string; display_phone_number: string; verified_name: string }> };
+  const data = await res.json() as { data?: Array<{ id: string; display_phone_number: string; verified_name: string; webhook_configuration?: { phone_number?: string } }> };
   const phones = data.data ?? [];
 
-  // Persist first phone number back to org if not already set
-  if (phones[0] && !org.wabaAccessToken) {
-    // access token already set; update phoneNumberId only if absent
-  }
   if (phones[0]) {
     const existing = await prisma.organization.findUnique({ where: { id: organizationId }, select: { phoneNumberId: true } });
     if (!existing?.phoneNumberId) {
@@ -244,6 +345,19 @@ export async function syncPhoneNumbers(organizationId: string): Promise<Array<{ 
         update: { value: s.value },
       })
     ));
+
+    // Auto-clear phone-level webhook overrides (WhatsJet pattern)
+    await Promise.allSettled(
+      phones
+        .filter((p) => p.webhook_configuration?.phone_number)
+        .map((p) =>
+          fetch(`${WA_BASE}/${p.id}`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${org.wabaAccessToken!}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ webhook_configuration: { override_callback_uri: "" } }),
+          })
+        )
+    );
   }
 
   return phones.map((p) => ({ id: p.id, displayPhoneNumber: p.display_phone_number, verifiedName: p.verified_name }));
@@ -260,7 +374,13 @@ const HEALTH_KEYS = [
 
 export async function getHealthStatus(
   organizationId: string
-): Promise<{ status: "healthy" | "degraded" | "disconnected"; conditions: Record<string, boolean> }> {
+): Promise<{
+  status: "healthy" | "degraded" | "disconnected";
+  conditions: Record<string, boolean>;
+  metaHealthStatus: string | null;
+  metaHealthCheckedAt: string | null;
+  metaHealthStale: boolean;
+}> {
   const settings = await prisma.vendorSetting.findMany({
     where: { organizationId },
     select: { key: true, value: true },
@@ -273,7 +393,14 @@ export async function getHealthStatus(
   conditions["token_not_expired"] = Boolean(map["whatsapp_access_token"]) && map["whatsapp_access_token_expired"] !== "1";
   const values = Object.values(conditions);
   const status = values.every(Boolean) ? "healthy" : values.every((v) => !v) ? "disconnected" : "degraded";
-  return { status, conditions };
+
+  const metaHealthStatus = map["meta_health_status"] ?? null;
+  const metaHealthCheckedAt = map["meta_health_checked_at"] ?? null;
+  const metaHealthStale = metaHealthCheckedAt
+    ? Date.now() - new Date(metaHealthCheckedAt).getTime() > 60 * 60 * 1000 // >1hr old
+    : true;
+
+  return { status, conditions, metaHealthStatus, metaHealthCheckedAt, metaHealthStale };
 }
 
 export async function registerPhoneNumber(
@@ -334,6 +461,229 @@ export async function getPhoneInfo(
     isPinEnabled: d.is_pin_enabled ?? false,
     lastOnboardedTime: d.last_onboarded_time ?? null,
   };
+}
+
+// ── Cache-first Meta data sync ────────────────────────────────────────────────
+
+/**
+ * Fetches all Meta data in parallel and stores it in vendorSettings.
+ * Call after connect, after sync-all, never on page load.
+ */
+export async function syncAllMetaData(organizationId: string): Promise<void> {
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const phoneNumberId = map["current_phone_number_id"];
+  const wabaId = map["whatsapp_business_account_id"];
+  const accessToken = map["whatsapp_access_token"];
+  if (!phoneNumberId || !accessToken || !wabaId) return;
+
+  const now = new Date().toISOString();
+
+  const [phoneInfoResult, businessProfileResult, healthResult, displayNameResult, marketingResult] =
+    await Promise.allSettled([
+      // 1. Phone info
+      fetch(`${WA_BASE}/${phoneNumberId}?fields=messaging_limit_tier,status,is_on_biz_app,is_pin_enabled,last_onboarded_time`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }).then((r) => r.ok ? r.json() as Promise<{ messaging_limit_tier?: string; status?: string; is_on_biz_app?: boolean; is_pin_enabled?: boolean; last_onboarded_time?: string }> : Promise.reject(new Error("phone_info fetch failed"))),
+
+      // 2. Business profile
+      fetch(`${WA_BASE}/${phoneNumberId}/whatsapp_business_profile?fields=about,address,description,email,profile_picture_url,websites,vertical`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }).then((r) => r.ok ? r.json() as Promise<{ data?: Array<{ about?: string; address?: string; description?: string; email?: string; profile_picture_url?: string; websites?: string[]; vertical?: string }> }> : Promise.reject(new Error("business_profile fetch failed"))),
+
+      // 3. Health status
+      fetch(`${WA_BASE}/${wabaId}?fields=health_status`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }).then((r) => r.ok ? r.json() as Promise<{ health_status?: { entities?: Array<{ can_send_message?: string }> } }> : Promise.reject(new Error("health_status fetch failed"))),
+
+      // 4. Display name
+      fetch(`${WA_BASE}/${phoneNumberId}?fields=verified_name,name_status,new_display_name,new_name_status`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }).then((r) => r.ok ? r.json() as Promise<{ verified_name?: string; name_status?: string; new_display_name?: string; new_name_status?: string }> : Promise.reject(new Error("display_name fetch failed"))),
+
+      // 5. Marketing messages onboarding status
+      fetch(`${WA_BASE}/${wabaId}?fields=marketing_messages_onboarding_status`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }).then((r) => r.ok ? r.json() as Promise<{ marketing_messages_onboarding_status?: string }> : Promise.reject(new Error("marketing_status fetch failed"))),
+    ]);
+
+  const upserts: Array<{ key: string; value: string }> = [];
+
+  if (phoneInfoResult.status === "fulfilled") {
+    const d = phoneInfoResult.value;
+    upserts.push(
+      { key: "phone_info_messaging_limit_tier", value: d.messaging_limit_tier ?? "" },
+      { key: "phone_info_status", value: d.status ?? "" },
+      { key: "phone_info_is_on_biz_app", value: String(d.is_on_biz_app ?? false) },
+      { key: "phone_info_is_pin_enabled", value: String(d.is_pin_enabled ?? false) },
+      { key: "phone_info_last_onboarded_time", value: d.last_onboarded_time ?? "" },
+      { key: "phone_info_synced_at", value: now },
+    );
+  }
+
+  if (businessProfileResult.status === "fulfilled") {
+    const bp = businessProfileResult.value.data?.[0] ?? {};
+    upserts.push(
+      { key: "business_profile_about", value: bp.about ?? "" },
+      { key: "business_profile_address", value: bp.address ?? "" },
+      { key: "business_profile_email", value: bp.email ?? "" },
+      { key: "business_profile_description", value: bp.description ?? "" },
+      { key: "business_profile_picture_url", value: bp.profile_picture_url ?? "" },
+      { key: "business_profile_vertical", value: bp.vertical ?? "" },
+      { key: "business_profile_synced_at", value: now },
+    );
+  }
+
+  if (healthResult.status === "fulfilled") {
+    const entity = healthResult.value.health_status?.entities?.[0];
+    upserts.push(
+      { key: "meta_health_status", value: entity?.can_send_message ?? "" },
+      { key: "meta_health_checked_at", value: now },
+    );
+  }
+
+  if (displayNameResult.status === "fulfilled") {
+    const d = displayNameResult.value;
+    upserts.push(
+      { key: "display_name", value: d.verified_name ?? "" },
+      { key: "display_name_status", value: d.name_status ?? "" },
+      { key: "new_display_name", value: d.new_display_name ?? "" },
+      { key: "new_display_name_status", value: d.new_name_status ?? "" },
+    );
+  }
+
+  if (marketingResult.status === "fulfilled") {
+    const d = marketingResult.value;
+    upserts.push(
+      { key: "marketing_messages_onboarding_status", value: d.marketing_messages_onboarding_status ?? "" },
+    );
+  }
+
+  if (upserts.length > 0) {
+    await Promise.all(
+      upserts.map((s) =>
+        prisma.vendorSetting.upsert({
+          where: { organizationId_key: { organizationId, key: s.key } },
+          create: { organizationId, key: s.key, value: s.value, dataType: "string" },
+          update: { value: s.value },
+        })
+      )
+    );
+  }
+}
+
+// ── Block / Unblock contacts ──────────────────────────────────────────────────
+
+export async function blockContact(
+  organizationId: string,
+  phoneNumber: string
+): Promise<{ success: boolean }> {
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const phoneNumberId = map["current_phone_number_id"];
+  const accessToken = map["whatsapp_access_token"];
+  if (!phoneNumberId || !accessToken) throw new Error("WhatsApp not configured");
+  const res = await fetch(`${WA_BASE}/${phoneNumberId}/block_users`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ block_users: [{ user: phoneNumber }] }),
+  });
+  if (!res.ok) {
+    const err = await res.json() as unknown;
+    throw new Error(`blockContact failed: ${JSON.stringify(err)}`);
+  }
+  return { success: true };
+}
+
+export async function unblockContact(
+  organizationId: string,
+  phoneNumber: string
+): Promise<{ success: boolean }> {
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const phoneNumberId = map["current_phone_number_id"];
+  const accessToken = map["whatsapp_access_token"];
+  if (!phoneNumberId || !accessToken) throw new Error("WhatsApp not configured");
+  const res = await fetch(`${WA_BASE}/${phoneNumberId}/block_users`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ messaging_product: "whatsapp", block_users: [{ user: phoneNumber }] }),
+  });
+  if (!res.ok) {
+    const err = await res.json() as unknown;
+    throw new Error(`unblockContact failed: ${JSON.stringify(err)}`);
+  }
+  return { success: true };
+}
+
+// ── Meta Template Analytics ───────────────────────────────────────────────────
+
+export async function getMetaTemplateAnalytics(
+  organizationId: string,
+  params: { templateId: string; startDate: string; endDate: string }
+): Promise<unknown> {
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const wabaId = map["whatsapp_business_account_id"];
+  const accessToken = map["whatsapp_access_token"];
+  if (!wabaId || !accessToken) throw new Error("WhatsApp not configured");
+  const url = `${WA_BASE}/${wabaId}/template_analytics?start=${encodeURIComponent(params.startDate)}&end=${encodeURIComponent(params.endDate)}&granularity=daily&template_ids[]=${encodeURIComponent(params.templateId)}&product_type=CONVERSATION&waba_timezone=true`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    const err = await res.json() as unknown;
+    throw new Error(`getMetaTemplateAnalytics failed: ${JSON.stringify(err)}`);
+  }
+  return res.json();
+}
+
+// ── Marketing template messages ───────────────────────────────────────────────
+
+export async function sendMarketingTemplateMessage(
+  phoneNumberId: string,
+  to: string,
+  templateName: string,
+  languageCode: string,
+  components: WaTemplateComponent[],
+  accessToken: string
+): Promise<WaSendResult> {
+  const res = await fetch(`${WA_BASE}/${phoneNumberId}/marketing_messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "template",
+      template: {
+        name: templateName,
+        language: { code: languageCode },
+        ...(components.length > 0 && { components }),
+      },
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json() as unknown;
+    throw new Error(`WA marketing template send failed: ${JSON.stringify(err)}`);
+  }
+  const data = await res.json() as WaMessageResponse;
+  return { messageId: data.messages[0]!.id };
 }
 
 export async function getNewDisplayName(

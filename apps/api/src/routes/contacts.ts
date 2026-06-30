@@ -8,6 +8,7 @@ import { maskPhone, maskEmail, canAccess, canAccessSub, shouldHidePhone, shouldH
 import { checkPlanLimit } from "../lib/plan-limits.js";
 import { normalizeFullPhone } from "../lib/phone-normalize.js";
 import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
+import { blockContact, unblockContact } from "../lib/whatsapp.js";
 import { computeClosureDeadline } from "../lib/closure-deadline.js";
 import { applyAssignmentRules } from "../lib/assignment-engine.js";
 import { buildVisibilityWhere, type VisibilityAuth } from "../lib/visibility.js";
@@ -807,5 +808,32 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
     const key = `saved_contact_filter_${userId}`;
     await fastify.prisma.vendorSetting.deleteMany({ where: { organizationId, key } });
     return reply.status(204).send();
+  });
+
+  // ── Block / Unblock contacts on Meta ─────────────────────────────────────
+  fastify.post<{ Params: { id: ContactId } }>("/contacts/:id/block", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const contact = await fastify.prisma.contact.findFirst({
+      where: { id: request.params.id, organizationId, deletedAt: null },
+      select: { id: true, phoneNumber: true },
+    });
+    if (!contact) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
+    }
+    const result = await blockContact(organizationId, contact.phoneNumber);
+    return reply.send({ data: result });
+  });
+
+  fastify.delete<{ Params: { id: ContactId } }>("/contacts/:id/block", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const contact = await fastify.prisma.contact.findFirst({
+      where: { id: request.params.id, organizationId, deletedAt: null },
+      select: { id: true, phoneNumber: true },
+    });
+    if (!contact) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Contact not found" } });
+    }
+    const result = await unblockContact(organizationId, contact.phoneNumber);
+    return reply.send({ data: result });
   });
 };

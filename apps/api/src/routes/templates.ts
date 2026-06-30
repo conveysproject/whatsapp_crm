@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { TemplateCategory, TemplateStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { submitTemplateToMeta } from "../lib/meta-templates.js";
-import { sendTemplateMessage } from "../lib/whatsapp.js";
+import { sendTemplateMessage, getMetaTemplateAnalytics } from "../lib/whatsapp.js";
 import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
 import type { TemplateId, ContactId } from "@WBMSG/shared";
 import { canAccess, canAccessSub } from "../lib/permissions.js";
@@ -175,6 +175,33 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       },
     });
   });
+
+  fastify.get<{ Params: { id: TemplateId }; Querystring: { startDate?: string; endDate?: string } }>(
+    "/templates/:id/meta-analytics",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const template = await fastify.prisma.template.findFirst({
+        where: { id: request.params.id, organizationId },
+      });
+      if (!template) {
+        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Template not found" } });
+      }
+      if (!template.metaTemplateId) {
+        return reply.status(400).send({ error: { code: "NOT_SUBMITTED", message: "Template not submitted to Meta" } });
+      }
+      const startDate = request.query.startDate ?? "";
+      const endDate = request.query.endDate ?? "";
+      if (!startDate || !endDate) {
+        return reply.status(400).send({ error: { code: "MISSING_PARAMS", message: "startDate and endDate are required (YYYY-MM-DD)" } });
+      }
+      const data = await getMetaTemplateAnalytics(organizationId, {
+        templateId: template.metaTemplateId,
+        startDate,
+        endDate,
+      });
+      return reply.send({ data });
+    }
+  );
 
   fastify.delete<{ Params: { id: TemplateId } }>("/templates/:id", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;

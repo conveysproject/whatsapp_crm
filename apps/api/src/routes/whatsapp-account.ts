@@ -16,6 +16,10 @@ import {
   clearPhoneWebhookConfig,
   getAppAccessToken,
   uploadResumableMedia,
+  syncAllMetaData,
+  blockContact,
+  unblockContact,
+  sendMarketingTemplateMessage,
 } from "../lib/whatsapp.js";
 
 // GAP-S65: 7 WhatsApp webhook event types to subscribe to
@@ -42,8 +46,57 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.get("/whatsapp-account/health-status", async (request, reply) => {
     const { organizationId } = request.auth;
-    const data = await getHealthStatus(organizationId);
-    return reply.send({ data });
+    const { status, conditions, metaHealthStatus, metaHealthCheckedAt, metaHealthStale } = await getHealthStatus(organizationId);
+    return reply.send({ data: { status, conditions, metaHealthStatus, metaHealthCheckedAt, metaHealthStale } });
+  });
+
+  // ── Sync all Meta data at once (cache-first architecture) ───────────────────
+  fastify.post("/whatsapp-account/sync-all", async (request, reply) => {
+    const { organizationId } = request.auth;
+    await syncAllMetaData(organizationId);
+
+    // Read all cached keys and return structured response
+    const settings = await fastify.prisma.vendorSetting.findMany({
+      where: { organizationId },
+      select: { key: true, value: true },
+    });
+    const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+
+    return reply.send({
+      data: {
+        phoneInfo: {
+          messagingLimitTier: map["phone_info_messaging_limit_tier"] ?? null,
+          status: map["phone_info_status"] ?? null,
+          isOnBizApp: map["phone_info_is_on_biz_app"] === "true",
+          isPinEnabled: map["phone_info_is_pin_enabled"] === "true",
+          lastOnboardedTime: map["phone_info_last_onboarded_time"] ?? null,
+          syncedAt: map["phone_info_synced_at"] ?? null,
+        },
+        businessProfile: {
+          about: map["business_profile_about"] ?? null,
+          address: map["business_profile_address"] ?? null,
+          email: map["business_profile_email"] ?? null,
+          description: map["business_profile_description"] ?? null,
+          pictureUrl: map["business_profile_picture_url"] ?? null,
+          vertical: map["business_profile_vertical"] ?? null,
+          syncedAt: map["business_profile_synced_at"] ?? null,
+        },
+        healthStatus: {
+          canSendMessage: map["meta_health_status"] ?? null,
+          checkedAt: map["meta_health_checked_at"] ?? null,
+        },
+        displayName: {
+          name: map["display_name"] ?? null,
+          nameStatus: map["display_name_status"] ?? null,
+          newName: map["new_display_name"] ?? null,
+          newNameStatus: map["new_display_name_status"] ?? null,
+        },
+        marketingMessages: {
+          onboardingStatus: map["marketing_messages_onboarding_status"] ?? null,
+        },
+        syncedAt: map["phone_info_synced_at"] ?? null,
+      },
+    });
   });
 
   fastify.get("/whatsapp-account/business-profile", async (request, reply) => {
@@ -143,6 +196,10 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       create: { organizationId, key: "webhook_verified_at", value: new Date().toISOString(), dataType: "string" },
       update: { value: new Date().toISOString() },
     });
+
+    // Non-blocking: refresh all Meta data after webhook subscription update
+    void syncAllMetaData(organizationId).catch(() => undefined);
+
     return reply.send({ success: true });
   });
 
@@ -578,6 +635,10 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       instagramAccountIds,
     };
     fastify.log.info({ responseData }, "[WA-CONNECT] 18. SUCCESS — sending response");
+
+    // Non-blocking: cache all Meta data so it's ready when the user sees the success screen
+    void syncAllMetaData(organizationId).catch((e) => fastify.log.warn({ e }, "[WA-CONNECT] syncAllMetaData after connect failed (non-fatal)"));
+
     return reply.send({ data: responseData });
   });
 
@@ -654,6 +715,9 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
         })
       )
     );
+
+    // Non-blocking: cache all Meta data so it's ready when the user sees the success screen
+    void syncAllMetaData(organizationId).catch(() => undefined);
 
     return reply.send({ data: { wabaId, wabaName, phoneNumberId: phoneNumberId || null, displayPhoneNumber } });
   });
@@ -768,12 +832,12 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     // Capture what's being cleared before wiping
     const [prevSettings, prevOrg] = await Promise.all([
       fastify.prisma.vendorSetting.findMany({
-        where: { organizationId, key: { in: ["whatsapp_business_account_id", "current_phone_number_number", "current_phone_number_id", "webhook_verified_at"] } },
+        where: { organizationId, key: { in: ["whatsapp_business_account_id", "current_phone_number_number", "current_phone_number_id", "webhook_verified_at", "whatsapp_access_token"] } },
         select: { key: true, value: true },
       }),
       fastify.prisma.organization.findUnique({
         where: { id: organizationId },
-        select: { whatsappBusinessAccountId: true, phoneNumberId: true },
+        select: { whatsappBusinessAccountId: true, phoneNumberId: true, wabaAccessToken: true },
       }),
     ]);
 
@@ -782,6 +846,15 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     const clearedPhoneNumberId = settingsMap["current_phone_number_id"] || prevOrg?.phoneNumberId || null;
     const clearedWabaId = settingsMap["whatsapp_business_account_id"] || prevOrg?.whatsappBusinessAccountId || null;
     const webhookWasConnected = Boolean(settingsMap["webhook_verified_at"]);
+    const accessTokenForDisconnect = settingsMap["whatsapp_access_token"] || prevOrg?.wabaAccessToken || null;
+
+    // Remove Meta webhook subscription before wiping DB
+    if (clearedWabaId && accessTokenForDisconnect) {
+      await fetch(`${WA_GRAPH}/${clearedWabaId}/subscribed_apps`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accessTokenForDisconnect}` },
+      }).catch(() => undefined); // non-blocking; don't fail disconnect if Meta call fails
+    }
 
     const waKeys = [
       "whatsapp_access_token",

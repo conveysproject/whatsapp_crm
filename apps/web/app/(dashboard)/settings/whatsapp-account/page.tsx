@@ -18,6 +18,51 @@ interface DisconnectResult {
   webhookDisconnected: boolean;
 }
 
+type VendorSettings = {
+  data?: {
+    // Connection
+    whatsapp_business_account_id?: string;
+    current_phone_number_number?: string;
+    facebook_page_id?: string;
+    instagram_account_id?: string;
+    meta_business_id?: string;
+    // Phone info (cached from Meta)
+    phone_info_messaging_limit_tier?: string;
+    phone_info_status?: string;
+    phone_info_is_on_biz_app?: string;
+    phone_info_is_pin_enabled?: string;
+    phone_info_last_onboarded_time?: string;
+    phone_info_synced_at?: string;
+    // Business profile (cached from Meta)
+    business_profile_about?: string;
+    business_profile_address?: string;
+    business_profile_email?: string;
+    business_profile_description?: string;
+    business_profile_picture_url?: string;
+    business_profile_vertical?: string;
+    business_profile_synced_at?: string;
+    // Health
+    meta_health_status?: string;
+    meta_health_checked_at?: string;
+    // Display name
+    display_name?: string;
+    display_name_status?: string;
+    new_display_name?: string;
+    new_display_name_status?: string;
+  };
+};
+
+function formatRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export default function WhatsAppAccountPage(): JSX.Element {
   const qc = useQueryClient();
   const router = useRouter();
@@ -28,21 +73,43 @@ export default function WhatsAppAccountPage(): JSX.Element {
 
   useEffect(() => {
     if (searchParams.get("connected") === "1") {
-      void qc.invalidateQueries({ queryKey: ["wa-health"] });
-      void qc.invalidateQueries({ queryKey: ["wa-profile"] });
+      void qc.invalidateQueries({ queryKey: ["vendor-settings"] });
       setJustConnected(true);
       router.replace("/settings/whatsapp-account");
     }
   }, [searchParams, qc, router]);
 
+  // Single source of truth: vendor-settings cache
+  const { data: vsRaw } = useQuery({
+    queryKey: ["vendor-settings"],
+    queryFn: () => fetchJson("/api/v1/vendor-settings"),
+  });
+  const vs = vsRaw as VendorSettings | undefined;
+  const s = vs?.data;
+
+  // Separate health-status query (checks DB config keys)
   const { data: health } = useQuery({
     queryKey: ["wa-health"],
     queryFn: () => fetchJson("/api/v1/whatsapp-account/health-status"),
   });
+  const healthData = health as {
+    data?: {
+      status?: "healthy" | "degraded" | "disconnected";
+      conditions?: Record<string, boolean>;
+      metaHealthStatus?: string | null;
+      metaHealthCheckedAt?: string | null;
+      metaHealthStale?: boolean;
+    };
+  } | undefined;
 
-  const { data: profile, isLoading } = useQuery({
-    queryKey: ["wa-profile"],
-    queryFn: () => fetchJson("/api/v1/whatsapp-account/business-profile"),
+  // "Sync from Meta" — the single refresh button
+  const syncAll = useMutation({
+    mutationFn: () =>
+      fetch("/api/v1/whatsapp-account/sync-all", { method: "POST" }).then((r) => r.json()),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["vendor-settings"] });
+      void qc.invalidateQueries({ queryKey: ["wa-health"] });
+    },
   });
 
   const [about, setAbout] = useState("");
@@ -55,7 +122,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       }).then((r) => r.json()),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["wa-profile"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor-settings"] }),
   });
 
   const syncPhones = useMutation({
@@ -69,13 +136,13 @@ export default function WhatsAppAccountPage(): JSX.Element {
       fetch("/api/v1/whatsapp-account/disconnect-account", { method: "POST" }).then((r) => r.json()),
     onSuccess: (res: unknown) => {
       void qc.invalidateQueries({ queryKey: ["wa-health"] });
+      void qc.invalidateQueries({ queryKey: ["vendor-settings"] });
       const result = (res as { data?: { cleared?: DisconnectResult } })?.data?.cleared;
       if (result) setDisconnectResult(result);
     },
   });
 
-  const healthData = health as { data?: { status?: "healthy" | "degraded" | "disconnected"; conditions?: Record<string, boolean> } } | undefined;
-  const profileData = profile as { data?: { about?: string; address?: string } } | undefined;
+  const neverSynced = !s?.phone_info_synced_at;
 
   return (
     <PermissionGate permission="settings_access" sub="settings_whatsapp">
@@ -102,7 +169,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
               <span className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center text-red-600 text-lg font-bold">!</span>
               <h2 className="text-lg font-semibold">WhatsApp Account Disconnected</h2>
             </div>
-            <p className="text-sm text-gray-500">The following data has been cleared from TrustCRM:</p>
+            <p className="text-sm text-gray-500">The following data has been cleared from WBMSG:</p>
             <ul className="text-sm space-y-2">
               {disconnectResult.phoneNumber && (
                 <li className="flex justify-between border-b pb-1">
@@ -172,8 +239,8 @@ export default function WhatsAppAccountPage(): JSX.Element {
         <ConnectWhatsAppModal
           flow="reconnect"
           onSuccess={() => {
+            void qc.invalidateQueries({ queryKey: ["vendor-settings"] });
             void qc.invalidateQueries({ queryKey: ["wa-health"] });
-            void qc.invalidateQueries({ queryKey: ["wa-profile"] });
             setShowConnectModal(false);
           }}
           onClose={() => setShowConnectModal(false)}
@@ -182,8 +249,8 @@ export default function WhatsAppAccountPage(): JSX.Element {
 
       {/* Manual Connect */}
       <ManualConnectSection onSuccess={() => {
+        void qc.invalidateQueries({ queryKey: ["vendor-settings"] });
         void qc.invalidateQueries({ queryKey: ["wa-health"] });
-        void qc.invalidateQueries({ queryKey: ["wa-profile"] });
         setJustConnected(true);
       }} />
 
@@ -199,13 +266,60 @@ export default function WhatsAppAccountPage(): JSX.Element {
           />
           <span className="text-sm capitalize">{healthData?.data?.status ?? "checking..."}</span>
         </div>
+        {healthData?.data?.metaHealthStatus && (
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span>Meta API:</span>
+            <span className={`font-medium ${healthData.data.metaHealthStatus === "ENABLED" ? "text-green-600" : "text-yellow-600"}`}>
+              {healthData.data.metaHealthStatus}
+            </span>
+            {healthData.data.metaHealthCheckedAt && (
+              <span className="text-gray-400">checked {formatRelativeTime(healthData.data.metaHealthCheckedAt)}</span>
+            )}
+            {healthData.data.metaHealthStale && (
+              <span className="text-orange-500">(stale)</span>
+            )}
+          </div>
+        )}
       </section>
 
-      {/* Business Profile */}
+      {/* Sync from Meta — single refresh button */}
+      <section className="border rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-medium">Sync from Meta</h2>
+            <p className="text-sm text-gray-500">
+              Fetch all account data from the Meta API and update the cache.
+              {s?.phone_info_synced_at && (
+                <span className="ml-1 text-gray-400">Last synced {formatRelativeTime(s.phone_info_synced_at)}.</span>
+              )}
+            </p>
+          </div>
+          <button
+            onClick={() => syncAll.mutate()}
+            disabled={syncAll.isPending}
+            className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 shrink-0"
+          >
+            {syncAll.isPending ? "Syncing..." : "Sync from Meta"}
+          </button>
+        </div>
+        {neverSynced && !syncAll.isPending && (
+          <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+            Data has never been synced from Meta. Click "Sync from Meta" to load your account details.
+          </div>
+        )}
+        {syncAll.isError && (
+          <p className="text-xs text-red-500">Sync failed. Ensure your WhatsApp account is connected.</p>
+        )}
+        {syncAll.isSuccess && (
+          <p className="text-xs text-green-600">Sync complete. Data updated from Meta.</p>
+        )}
+      </section>
+
+      {/* Business Profile — reads from vendorSettings cache */}
       <section className="border rounded-lg p-4 space-y-4">
         <h2 className="font-medium">Business Profile</h2>
-        {isLoading ? (
-          <p className="text-sm text-gray-400">Loading...</p>
+        {neverSynced ? (
+          <p className="text-sm text-gray-400">Sync from Meta to load your business profile.</p>
         ) : (
           <>
             <div>
@@ -214,7 +328,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
                 id="wa-about"
                 className="w-full border rounded px-3 py-2 text-sm"
                 rows={3}
-                defaultValue={profileData?.data?.about ?? ""}
+                defaultValue={s?.business_profile_about ?? ""}
                 onChange={(e) => setAbout(e.target.value)}
               />
             </div>
@@ -223,7 +337,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
               <input
                 id="wa-address"
                 className="w-full border rounded px-3 py-2 text-sm"
-                defaultValue={profileData?.data?.address ?? ""}
+                defaultValue={s?.business_profile_address ?? ""}
                 onChange={(e) => setAddress(e.target.value)}
               />
             </div>
@@ -275,8 +389,8 @@ export default function WhatsAppAccountPage(): JSX.Element {
         )}
       </section>
 
-      {/* Phone Status (from Meta) */}
-      <PhoneStatusSection />
+      {/* Phone Status — reads from vendorSettings cache */}
+      <PhoneStatusSection settings={s} />
 
       {/* Webhook Management */}
       <WebhookManagementSection />
@@ -285,7 +399,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
       <MarketingMessagesSection />
 
       {/* Connected Channels */}
-      <ConnectedChannelsSection />
+      <ConnectedChannelsSection settings={s} />
 
       {/* QR Code */}
       <QrCodeSection />
@@ -293,7 +407,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
       {/* Danger Zone */}
       <section className="border border-red-200 rounded-lg p-4 space-y-2">
         <h2 className="font-medium text-red-600">Danger Zone</h2>
-        <p className="text-sm text-gray-500">Disconnect your WhatsApp account from TrustCRM.</p>
+        <p className="text-sm text-gray-500">Disconnect your WhatsApp account from WBMSG.</p>
         <button
           onClick={() => {
             if (confirm("Disconnect WhatsApp account? You will stop receiving messages.")) {
@@ -310,24 +424,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
   );
 }
 
-function PhoneStatusSection(): JSX.Element {
-  const { data, isFetching, refetch, isError } = useQuery({
-    queryKey: ["wa-phone-info"],
-    queryFn: () => fetchJson("/api/v1/whatsapp-account/phone-info"),
-    enabled: false,
-  });
-
-  const { data: nameData, isFetching: nameFetching, refetch: refetchName } = useQuery({
-    queryKey: ["wa-new-display-name"],
-    queryFn: () => fetchJson("/api/v1/whatsapp-account/new-display-name"),
-    enabled: false,
-  });
-
-  const phoneInfo = data as { data?: { messagingLimitTier?: string; status?: string; isOnBizApp?: boolean; isPinEnabled?: boolean; lastOnboardedTime?: string } } | undefined;
-  const nameInfo = nameData as { data?: { newDisplayName?: string | null; nameStatus?: string | null } } | undefined;
-  const info = phoneInfo?.data;
-  const nameResult = nameInfo?.data;
-
+function PhoneStatusSection({ settings }: { settings: VendorSettings["data"] | undefined }): JSX.Element {
   const tierLabel: Record<string, string> = {
     TIER_50: "50 conversations/day",
     TIER_250: "250 conversations/day",
@@ -337,61 +434,68 @@ function PhoneStatusSection(): JSX.Element {
     TIER_UNLIMITED: "Unlimited",
   };
 
+  const status = settings?.phone_info_status;
+  const tier = settings?.phone_info_messaging_limit_tier;
+  const isPinEnabled = settings?.phone_info_is_pin_enabled === "true";
+  const isOnBizApp = settings?.phone_info_is_on_biz_app === "true";
+  const lastOnboardedTime = settings?.phone_info_last_onboarded_time;
+  const syncedAt = settings?.phone_info_synced_at;
+
+  const newDisplayName = settings?.new_display_name;
+  const newDisplayNameStatus = settings?.new_display_name_status;
+
+  const hasData = Boolean(status || tier);
+
   return (
     <section className="border rounded-lg p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-medium">Phone Status (Meta)</h2>
-          <p className="text-sm text-gray-500">Live status from the Meta Graph API for this phone number.</p>
-        </div>
-        <button
-          onClick={() => { void refetch(); void refetchName(); }}
-          disabled={isFetching || nameFetching}
-          className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded hover:bg-gray-200 disabled:opacity-50"
-        >
-          {isFetching || nameFetching ? "Loading…" : "Refresh"}
-        </button>
+      <div>
+        <h2 className="font-medium">Phone Status (Meta)</h2>
+        <p className="text-sm text-gray-500">
+          Status from the Meta Graph API for this phone number.
+          {syncedAt && <span className="ml-1 text-gray-400">Last synced {formatRelativeTime(syncedAt)}.</span>}
+        </p>
       </div>
-      {isError && <p className="text-xs text-red-500">Failed to load phone status. Ensure WhatsApp is connected.</p>}
-      {info && (
+      {!hasData ? (
+        <p className="text-sm text-gray-400">Use "Sync from Meta" above to load phone status.</p>
+      ) : (
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
           <dt className="text-gray-500">Meta Status</dt>
           <dd>
             <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-              info.status === "CONNECTED" ? "bg-green-100 text-green-700" :
-              info.status === "FLAGGED" ? "bg-red-100 text-red-700" :
+              status === "CONNECTED" ? "bg-green-100 text-green-700" :
+              status === "FLAGGED" ? "bg-red-100 text-red-700" :
               "bg-yellow-100 text-yellow-700"
             }`}>
-              {info.status ?? "—"}
+              {status ?? "—"}
             </span>
           </dd>
           <dt className="text-gray-500">Messaging Limit</dt>
-          <dd className="font-medium">{info.messagingLimitTier ? (tierLabel[info.messagingLimitTier] ?? info.messagingLimitTier) : "—"}</dd>
+          <dd className="font-medium">{tier ? (tierLabel[tier] ?? tier) : "—"}</dd>
           <dt className="text-gray-500">Two-Step PIN</dt>
-          <dd className={`font-medium ${info.isPinEnabled ? "text-green-600" : "text-red-500"}`}>{info.isPinEnabled ? "Enabled" : "Not enabled"}</dd>
+          <dd className={`font-medium ${isPinEnabled ? "text-green-600" : "text-red-500"}`}>{isPinEnabled ? "Enabled" : "Not enabled"}</dd>
           <dt className="text-gray-500">On Biz App</dt>
-          <dd className={`font-medium ${info.isOnBizApp ? "text-yellow-600" : "text-gray-700"}`}>{info.isOnBizApp ? "Yes (needs migration)" : "No"}</dd>
-          {info.lastOnboardedTime && (
+          <dd className={`font-medium ${isOnBizApp ? "text-yellow-600" : "text-gray-700"}`}>{isOnBizApp ? "Yes (needs migration)" : "No"}</dd>
+          {lastOnboardedTime && (
             <>
               <dt className="text-gray-500">Last Onboarded</dt>
-              <dd className="font-medium text-xs">{new Date(info.lastOnboardedTime).toLocaleString()}</dd>
+              <dd className="font-medium text-xs">{new Date(lastOnboardedTime).toLocaleString()}</dd>
             </>
           )}
         </dl>
       )}
-      {nameResult && (nameResult.newDisplayName || nameResult.nameStatus) && (
+      {(newDisplayName || newDisplayNameStatus) && (
         <div className="border-t pt-3 space-y-1">
           <p className="text-xs font-medium text-gray-600">Display Name Request</p>
-          {nameResult.newDisplayName && (
-            <p className="text-sm">Requested: <span className="font-medium">{nameResult.newDisplayName}</span></p>
+          {newDisplayName && (
+            <p className="text-sm">Requested: <span className="font-medium">{newDisplayName}</span></p>
           )}
-          {nameResult.nameStatus && (
+          {newDisplayNameStatus && (
             <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-              nameResult.nameStatus === "APPROVED" ? "bg-green-100 text-green-700" :
-              nameResult.nameStatus === "REJECTED" ? "bg-red-100 text-red-700" :
+              newDisplayNameStatus === "APPROVED" ? "bg-green-100 text-green-700" :
+              newDisplayNameStatus === "REJECTED" ? "bg-red-100 text-red-700" :
               "bg-yellow-100 text-yellow-700"
             }`}>
-              {nameResult.nameStatus}
+              {newDisplayNameStatus}
             </span>
           )}
         </div>
@@ -587,26 +691,12 @@ function MarketingMessagesSection(): JSX.Element {
   );
 }
 
-function ConnectedChannelsSection(): JSX.Element {
-  const { data: settings } = useQuery({
-    queryKey: ["vendor-settings"],
-    queryFn: () => fetchJson("/api/v1/vendor-settings"),
-  });
-  const s = settings as {
-    data?: {
-      whatsapp_business_account_id?: string;
-      current_phone_number_number?: string;
-      facebook_page_id?: string;
-      instagram_account_id?: string;
-      meta_business_id?: string;
-    };
-  } | undefined;
-
-  const wabaId = s?.data?.whatsapp_business_account_id;
-  const phoneNumber = s?.data?.current_phone_number_number;
-  const pageId = s?.data?.facebook_page_id;
-  const igId = s?.data?.instagram_account_id;
-  const businessId = s?.data?.meta_business_id;
+function ConnectedChannelsSection({ settings }: { settings: VendorSettings["data"] | undefined }): JSX.Element {
+  const wabaId = settings?.whatsapp_business_account_id;
+  const phoneNumber = settings?.current_phone_number_number;
+  const pageId = settings?.facebook_page_id;
+  const igId = settings?.instagram_account_id;
+  const businessId = settings?.meta_business_id;
 
   return (
     <section className="border rounded-lg p-4 space-y-4">
