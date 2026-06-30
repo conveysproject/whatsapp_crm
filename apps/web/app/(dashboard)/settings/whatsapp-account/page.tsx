@@ -275,6 +275,12 @@ export default function WhatsAppAccountPage(): JSX.Element {
         )}
       </section>
 
+      {/* Phone Status (from Meta) */}
+      <PhoneStatusSection />
+
+      {/* Webhook Management */}
+      <WebhookManagementSection />
+
       {/* Marketing Messages */}
       <MarketingMessagesSection />
 
@@ -301,6 +307,200 @@ export default function WhatsAppAccountPage(): JSX.Element {
       </section>
     </div>
     </PermissionGate>
+  );
+}
+
+function PhoneStatusSection(): JSX.Element {
+  const { data, isFetching, refetch, isError } = useQuery({
+    queryKey: ["wa-phone-info"],
+    queryFn: () => fetchJson("/api/v1/whatsapp-account/phone-info"),
+    enabled: false,
+  });
+
+  const { data: nameData, isFetching: nameFetching, refetch: refetchName } = useQuery({
+    queryKey: ["wa-new-display-name"],
+    queryFn: () => fetchJson("/api/v1/whatsapp-account/new-display-name"),
+    enabled: false,
+  });
+
+  const phoneInfo = data as { data?: { messagingLimitTier?: string; status?: string; isOnBizApp?: boolean; isPinEnabled?: boolean; lastOnboardedTime?: string } } | undefined;
+  const nameInfo = nameData as { data?: { newDisplayName?: string | null; nameStatus?: string | null } } | undefined;
+  const info = phoneInfo?.data;
+  const nameResult = nameInfo?.data;
+
+  const tierLabel: Record<string, string> = {
+    TIER_50: "50 conversations/day",
+    TIER_250: "250 conversations/day",
+    TIER_1K: "1,000 conversations/day",
+    TIER_10K: "10,000 conversations/day",
+    TIER_100K: "100,000 conversations/day",
+    TIER_UNLIMITED: "Unlimited",
+  };
+
+  return (
+    <section className="border rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-medium">Phone Status (Meta)</h2>
+          <p className="text-sm text-gray-500">Live status from the Meta Graph API for this phone number.</p>
+        </div>
+        <button
+          onClick={() => { void refetch(); void refetchName(); }}
+          disabled={isFetching || nameFetching}
+          className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded hover:bg-gray-200 disabled:opacity-50"
+        >
+          {isFetching || nameFetching ? "Loading…" : "Refresh"}
+        </button>
+      </div>
+      {isError && <p className="text-xs text-red-500">Failed to load phone status. Ensure WhatsApp is connected.</p>}
+      {info && (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <dt className="text-gray-500">Meta Status</dt>
+          <dd>
+            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+              info.status === "CONNECTED" ? "bg-green-100 text-green-700" :
+              info.status === "FLAGGED" ? "bg-red-100 text-red-700" :
+              "bg-yellow-100 text-yellow-700"
+            }`}>
+              {info.status ?? "—"}
+            </span>
+          </dd>
+          <dt className="text-gray-500">Messaging Limit</dt>
+          <dd className="font-medium">{info.messagingLimitTier ? (tierLabel[info.messagingLimitTier] ?? info.messagingLimitTier) : "—"}</dd>
+          <dt className="text-gray-500">Two-Step PIN</dt>
+          <dd className={`font-medium ${info.isPinEnabled ? "text-green-600" : "text-red-500"}`}>{info.isPinEnabled ? "Enabled" : "Not enabled"}</dd>
+          <dt className="text-gray-500">On Biz App</dt>
+          <dd className={`font-medium ${info.isOnBizApp ? "text-yellow-600" : "text-gray-700"}`}>{info.isOnBizApp ? "Yes (needs migration)" : "No"}</dd>
+          {info.lastOnboardedTime && (
+            <>
+              <dt className="text-gray-500">Last Onboarded</dt>
+              <dd className="font-medium text-xs">{new Date(info.lastOnboardedTime).toLocaleString()}</dd>
+            </>
+          )}
+        </dl>
+      )}
+      {nameResult && (nameResult.newDisplayName || nameResult.nameStatus) && (
+        <div className="border-t pt-3 space-y-1">
+          <p className="text-xs font-medium text-gray-600">Display Name Request</p>
+          {nameResult.newDisplayName && (
+            <p className="text-sm">Requested: <span className="font-medium">{nameResult.newDisplayName}</span></p>
+          )}
+          {nameResult.nameStatus && (
+            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+              nameResult.nameStatus === "APPROVED" ? "bg-green-100 text-green-700" :
+              nameResult.nameStatus === "REJECTED" ? "bg-red-100 text-red-700" :
+              "bg-yellow-100 text-yellow-700"
+            }`}>
+              {nameResult.nameStatus}
+            </span>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function WebhookManagementSection(): JSX.Element {
+  const { data: subData, isFetching: subFetching, refetch: refetchSubs } = useQuery({
+    queryKey: ["wa-subscriptions"],
+    queryFn: () => fetchJson("/api/v1/whatsapp-account/subscriptions"),
+    enabled: false,
+  });
+
+  const clearWebhook = useMutation({
+    mutationFn: () =>
+      fetch("/api/v1/whatsapp-account/clear-phone-webhook", { method: "POST" }).then((r) => r.json()),
+  });
+
+  const setupAppWebhook = useMutation({
+    mutationFn: () =>
+      fetch("/api/v1/whatsapp-account/app-webhook", { method: "POST" }).then((r) => r.json()),
+  });
+
+  const removeAppWebhook = useMutation({
+    mutationFn: () =>
+      fetch("/api/v1/whatsapp-account/app-webhook", { method: "DELETE" }).then((r) => r.json()),
+  });
+
+  const subs = subData as { data?: { data?: Array<{ id: string; name?: string }> } } | undefined;
+  const subscriptions = subs?.data?.data ?? [];
+
+  return (
+    <section className="border rounded-lg p-4 space-y-4">
+      <div>
+        <h2 className="font-medium">Webhook Management</h2>
+        <p className="text-sm text-gray-500">Manage Meta webhook subscriptions for this account.</p>
+      </div>
+
+      {/* WABA subscriptions check */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">WABA Subscriptions</p>
+          <button
+            onClick={() => void refetchSubs()}
+            disabled={subFetching}
+            className="px-3 py-1 text-xs border rounded hover:bg-gray-50 disabled:opacity-50"
+          >
+            {subFetching ? "Loading…" : "Check"}
+          </button>
+        </div>
+        {subscriptions.length > 0 ? (
+          <ul className="text-xs text-gray-600 space-y-1">
+            {subscriptions.map((s) => (
+              <li key={s.id} className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                {s.name ?? s.id}
+              </li>
+            ))}
+          </ul>
+        ) : subData !== undefined ? (
+          <p className="text-xs text-gray-400">No active subscriptions found.</p>
+        ) : null}
+      </div>
+
+      {/* App-level webhook */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setupAppWebhook.mutate()}
+          disabled={setupAppWebhook.isPending}
+          className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+        >
+          {setupAppWebhook.isPending ? "Setting up…" : "Setup App Webhook"}
+        </button>
+        <button
+          onClick={() => removeAppWebhook.mutate()}
+          disabled={removeAppWebhook.isPending}
+          className="px-3 py-1.5 text-xs border border-red-300 text-red-600 rounded hover:bg-red-50 disabled:opacity-50"
+        >
+          {removeAppWebhook.isPending ? "Removing…" : "Remove App Webhook"}
+        </button>
+      </div>
+      {(setupAppWebhook.isSuccess || removeAppWebhook.isSuccess) && (
+        <p className="text-xs text-green-600">Done.</p>
+      )}
+      {(setupAppWebhook.isError || removeAppWebhook.isError) && (
+        <p className="text-xs text-red-500">Operation failed. Check server logs.</p>
+      )}
+
+      {/* Clear phone-level webhook override */}
+      <div className="border-t pt-3 space-y-2">
+        <p className="text-sm font-medium">Phone Webhook Override</p>
+        <p className="text-xs text-gray-500">Clear any phone-number-level webhook URI override set during onboarding.</p>
+        <button
+          onClick={() => {
+            if (confirm("Clear the phone-level webhook override? The app-level webhook will take over.")) {
+              clearWebhook.mutate();
+            }
+          }}
+          disabled={clearWebhook.isPending}
+          className="px-3 py-1.5 text-xs border rounded hover:bg-gray-50 disabled:opacity-50"
+        >
+          {clearWebhook.isPending ? "Clearing…" : "Clear Phone Webhook Override"}
+        </button>
+        {clearWebhook.isSuccess && <p className="text-xs text-green-600">Phone webhook override cleared.</p>}
+        {clearWebhook.isError && <p className="text-xs text-red-500">Failed to clear. Check connection.</p>}
+      </div>
+    </section>
   );
 }
 
