@@ -310,6 +310,81 @@ export async function registerPhoneNumber(
   return { success: true };
 }
 
+export async function getPhoneInfo(
+  organizationId: string
+): Promise<{ messagingLimitTier: string | null; status: string | null; isOnBizApp: boolean; isPinEnabled: boolean; lastOnboardedTime: string | null }> {
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const phoneNumberId = map["current_phone_number_id"];
+  const accessToken = map["whatsapp_access_token"];
+  if (!phoneNumberId || !accessToken) throw new Error("WhatsApp not configured");
+  const res = await fetch(
+    `${WA_BASE}/${phoneNumberId}?fields=messaging_limit_tier,status,is_on_biz_app,is_pin_enabled,last_onboarded_time`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) throw new Error(`getPhoneInfo failed: ${await res.text()}`);
+  const d = await res.json() as { messaging_limit_tier?: string; status?: string; is_on_biz_app?: boolean; is_pin_enabled?: boolean; last_onboarded_time?: string };
+  return {
+    messagingLimitTier: d.messaging_limit_tier ?? null,
+    status: d.status ?? null,
+    isOnBizApp: d.is_on_biz_app ?? false,
+    isPinEnabled: d.is_pin_enabled ?? false,
+    lastOnboardedTime: d.last_onboarded_time ?? null,
+  };
+}
+
+export async function getNewDisplayName(
+  organizationId: string
+): Promise<{ newDisplayName: string | null; nameStatus: string | null }> {
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const phoneNumberId = map["current_phone_number_id"];
+  const accessToken = map["whatsapp_access_token"];
+  if (!phoneNumberId || !accessToken) throw new Error("WhatsApp not configured");
+  const res = await fetch(
+    `${WA_BASE}/${phoneNumberId}?fields=new_display_name,name_status`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) throw new Error(`getNewDisplayName failed: ${await res.text()}`);
+  const d = await res.json() as { new_display_name?: string; name_status?: string };
+  return { newDisplayName: d.new_display_name ?? null, nameStatus: d.name_status ?? null };
+}
+
+export async function clearPhoneWebhookConfig(
+  organizationId: string
+): Promise<{ success: boolean }> {
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const phoneNumberId = map["current_phone_number_id"];
+  const accessToken = map["whatsapp_access_token"];
+  if (!phoneNumberId || !accessToken) throw new Error("WhatsApp not configured");
+  const res = await fetch(`${WA_BASE}/${phoneNumberId}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ webhook_configuration: { override_callback_uri: "" } }),
+  });
+  if (!res.ok) throw new Error(`clearPhoneWebhookConfig failed: ${await res.text()}`);
+  return { success: true };
+}
+
+export async function getAppAccessToken(appId: string, appSecret: string): Promise<{ accessToken: string }> {
+  const res = await fetch(
+    `${WA_BASE}/oauth/access_token?client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&grant_type=client_credentials`
+  );
+  if (!res.ok) throw new Error(`getAppAccessToken failed: ${await res.text()}`);
+  const d = await res.json() as { access_token: string };
+  return { accessToken: d.access_token };
+}
+
 export async function setTwoStepVerification(
   organizationId: string,
   pinCode: string

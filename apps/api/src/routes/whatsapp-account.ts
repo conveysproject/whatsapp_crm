@@ -11,6 +11,11 @@ import {
   getHealthStatus,
   registerPhoneNumber,
   setTwoStepVerification,
+  getPhoneInfo,
+  getNewDisplayName,
+  clearPhoneWebhookConfig,
+  getAppAccessToken,
+  uploadResumableMedia,
 } from "../lib/whatsapp.js";
 
 // GAP-S65: 7 WhatsApp webhook event types to subscribe to
@@ -651,6 +656,107 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     );
 
     return reply.send({ data: { wabaId, wabaName, phoneNumberId: phoneNumberId || null, displayPhoneNumber } });
+  });
+
+  // ── Phone info (messaging_limit_tier, status, is_pin_enabled) ────────────────
+  fastify.get("/whatsapp-account/phone-info", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const data = await getPhoneInfo(organizationId);
+    return reply.send({ data });
+  });
+
+  // ── New display name + name_status ────────────────────────────────────────
+  fastify.get("/whatsapp-account/new-display-name", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const data = await getNewDisplayName(organizationId);
+    return reply.send({ data });
+  });
+
+  // ── Clear phone-level webhook override ────────────────────────────────────
+  fastify.post("/whatsapp-account/clear-phone-webhook", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const data = await clearPhoneWebhookConfig(organizationId);
+    return reply.send({ data });
+  });
+
+  // ── WABA subscribed apps (check current subscriptions) ───────────────────
+  fastify.get("/whatsapp-account/subscriptions", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const org = await fastify.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { whatsappBusinessAccountId: true, wabaAccessToken: true },
+    });
+    if (!org?.whatsappBusinessAccountId || !org.wabaAccessToken) {
+      return reply.status(400).send({ error: { code: "NOT_CONNECTED", message: "WhatsApp not connected" } });
+    }
+    const res = await fetch(`${WA_GRAPH}/${org.whatsappBusinessAccountId}/subscribed_apps`, {
+      headers: { Authorization: `Bearer ${org.wabaAccessToken}` },
+    });
+    const data = await res.json() as unknown;
+    return reply.send({ data });
+  });
+
+  // ── App-level webhook: setup ──────────────────────────────────────────────
+  fastify.post("/whatsapp-account/app-webhook", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const appId = process.env["META_APP_ID"] ?? "";
+    const appSecret = process.env["META_APP_SECRET"] ?? "";
+    if (!appId || !appSecret) {
+      return reply.status(500).send({ error: { code: "NOT_CONFIGURED", message: "Meta app credentials not configured" } });
+    }
+    const { accessToken } = await getAppAccessToken(appId, appSecret);
+    const callbackUrl = `${(process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/v1/webhooks/whatsapp`;
+    const res = await fetch(`${WA_GRAPH}/${appId}/subscriptions?access_token=${appId}|${appSecret}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        object: "whatsapp_business_account",
+        fields: WA_SUBSCRIBED_FIELDS.join(","),
+        callback_url: callbackUrl,
+        verify_token: createHash("sha1").update(organizationId).digest("hex"),
+        access_token: accessToken,
+      }),
+    });
+    const data = await res.json() as unknown;
+    return reply.send({ data });
+  });
+
+  // ── App-level webhook: remove ─────────────────────────────────────────────
+  fastify.delete("/whatsapp-account/app-webhook", async (request, reply) => {
+    const appId = process.env["META_APP_ID"] ?? "";
+    const appSecret = process.env["META_APP_SECRET"] ?? "";
+    if (!appId || !appSecret) {
+      return reply.status(500).send({ error: { code: "NOT_CONFIGURED", message: "Meta app credentials not configured" } });
+    }
+    const res = await fetch(
+      `${WA_GRAPH}/${appId}/subscriptions?access_token=${appId}|${appSecret}&object=whatsapp_business_account&fields=${WA_SUBSCRIBED_FIELDS.join(",")}`,
+      { method: "DELETE" }
+    );
+    const data = await res.json() as unknown;
+    return reply.send({ data });
+  });
+
+  // ── Resumable media upload (large files) ─────────────────────────────────
+  fastify.post("/whatsapp-account/resumable-upload", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const data = await request.file({ limits: { fileSize: 500 * 1024 * 1024 } }); // 500 MB max
+    if (!data) return reply.status(400).send({ error: { code: "NO_FILE", message: "No file provided" } });
+    const settings = await fastify.prisma.vendorSetting.findMany({
+      where: { organizationId, key: { in: ["current_phone_number_id", "whatsapp_access_token"] } },
+      select: { key: true, value: true },
+    });
+    const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+    if (!map["current_phone_number_id"] || !map["whatsapp_access_token"]) {
+      return reply.status(400).send({ error: { code: "NOT_CONNECTED", message: "WhatsApp not connected" } });
+    }
+    const buf = await data.toBuffer();
+    const result = await uploadResumableMedia(
+      map["current_phone_number_id"]!,
+      buf,
+      data.mimetype,
+      map["whatsapp_access_token"]!
+    );
+    return reply.send({ data: result });
   });
 
   fastify.post("/whatsapp-account/disconnect-account", async (request, reply) => {
