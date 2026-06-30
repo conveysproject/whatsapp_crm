@@ -271,6 +271,72 @@ export async function updateBusinessProfile(
   return { success: true };
 }
 
+export async function uploadProfilePicture(
+  organizationId: string,
+  base64Data: string,
+  mimeType: string
+): Promise<void> {
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const phoneNumberId = map["current_phone_number_id"];
+  const accessToken = map["whatsapp_access_token"];
+  const appId = map["facebook_app_id"];
+
+  if (!phoneNumberId || !accessToken || !appId) {
+    throw new Error("Organization not fully connected to WhatsApp");
+  }
+
+  const buffer = Buffer.from(base64Data, "base64");
+  const fileName = mimeType === "image/png" ? "profile.png" : "profile.jpg";
+
+  // Step 1: create app-level upload session
+  const sessionRes = await fetch(
+    `${WA_BASE}/${appId}/uploads?file_name=${encodeURIComponent(fileName)}&file_length=${buffer.length}&file_type=${encodeURIComponent(mimeType)}&access_token=${accessToken}`,
+    { method: "POST" }
+  );
+  if (!sessionRes.ok) {
+    const err = await sessionRes.text();
+    throw new Error(`Upload session failed: ${err}`);
+  }
+  const { id: uploadId } = await sessionRes.json() as { id: string };
+
+  // Step 2: upload file bytes
+  const uploadRes = await fetch(
+    `https://graph.facebook.com/graphql/upload?upload_id=${uploadId}&file_offset=0`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `OAuth ${accessToken}`,
+        file_offset: "0",
+        "Content-Type": mimeType,
+      },
+      body: new Uint8Array(buffer),
+    }
+  );
+  if (!uploadRes.ok) {
+    const err = await uploadRes.text();
+    throw new Error(`File upload failed: ${err}`);
+  }
+  const { h: handle } = await uploadRes.json() as { h: string };
+
+  // Step 3: set as profile picture
+  const updateRes = await fetch(
+    `${WA_BASE}/${phoneNumberId}/whatsapp_business_profile`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", profile_picture_handle: handle }),
+    }
+  );
+  if (!updateRes.ok) {
+    const err = await updateRes.text();
+    throw new Error(`Profile picture update failed: ${err}`);
+  }
+}
+
 export async function getDisplayName(organizationId: string): Promise<{ display_name: string }> {
   const settings = await prisma.vendorSetting.findMany({
     where: { organizationId },

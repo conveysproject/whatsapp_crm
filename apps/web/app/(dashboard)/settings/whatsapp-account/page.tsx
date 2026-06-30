@@ -142,8 +142,9 @@ export default function WhatsAppAccountPage(): JSX.Element {
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [justConnected, setJustConnected] = useState(false);
   const [disconnectResult, setDisconnectResult] = useState<DisconnectResult | null>(null);
-  const [editingProfile, setEditingProfile] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [picFile, setPicFile] = useState<File | null>(null);
+  const [picPreview, setPicPreview] = useState<string | null>(null);
   const [about, setAbout] = useState("");
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
@@ -185,9 +186,48 @@ export default function WhatsAppAccountPage(): JSX.Element {
       }).then((r) => r.json()),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["vendor-settings"] });
-      setEditingProfile(false);
+      syncAll.mutate();
+      setShowEditModal(false);
     },
   });
+
+  const uploadPicture = useMutation({
+    mutationFn: async (file: File) => {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      return fetch("/api/v1/whatsapp-account/business-profile/picture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base64, mimeType: file.type }),
+      }).then((r) => r.json());
+    },
+  });
+
+  const openEditModal = () => {
+    setAbout(s?.business_profile_about ?? "");
+    setAddress(s?.business_profile_address ?? "");
+    setDescription(s?.business_profile_description ?? "");
+    setEmail(s?.business_profile_email ?? "");
+    setVertical(s?.business_profile_vertical ?? "");
+    const ws = (() => { try { return JSON.parse(s?.business_profile_websites ?? "[]") as string[]; } catch { return []; } })();
+    setWebsites([ws[0] ?? "", ws[1] ?? ""]);
+    setPicFile(null);
+    setPicPreview(null);
+    setShowEditModal(true);
+  };
+
+  const handleSave = () => {
+    const doUpdate = () => updateProfile.mutate({ about, address, description, email, vertical, websites });
+    if (picFile) {
+      uploadPicture.mutate(picFile, { onSuccess: doUpdate, onError: doUpdate });
+    } else {
+      doUpdate();
+    }
+  };
 
   const disconnect = useMutation({
     mutationFn: () =>
@@ -387,224 +427,38 @@ export default function WhatsAppAccountPage(): JSX.Element {
           {/* Left column (wider) */}
           <div className="lg:col-span-3 space-y-5">
 
-            {/* Business Profile card */}
+            {/* Business Profile card — always shows phone preview */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                 <h2 className="text-sm font-semibold text-gray-900">Business Profile</h2>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setShowPreview(!showPreview)}
-                    className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
-                      showPreview
-                        ? "bg-gray-900 text-white border-gray-900"
-                        : "text-gray-500 border-gray-200 hover:border-gray-400"
-                    }`}
-                  >
-                    {showPreview ? "Hide preview" : "Preview"}
-                  </button>
-                {!editingProfile && (
-                  <button
-                    onClick={() => {
-                      setAbout(s?.business_profile_about ?? "");
-                      setAddress(s?.business_profile_address ?? "");
-                      setDescription(s?.business_profile_description ?? "");
-                      setEmail(s?.business_profile_email ?? "");
-                      setVertical(s?.business_profile_vertical ?? "");
-                      const ws = (() => { try { return JSON.parse(s?.business_profile_websites ?? "[]") as string[]; } catch { return []; } })();
-                      setWebsites([ws[0] ?? "", ws[1] ?? ""]);
-                      setEditingProfile(true);
-                    }}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                  >
-                    Edit
-                  </button>
-                )}
-                </div>
+                <button
+                  onClick={openEditModal}
+                  className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit
+                </button>
               </div>
 
-              <div className={showPreview ? "flex" : ""}>
-              <div className={showPreview ? "flex-1 min-w-0" : ""}>
-              {/* Profile header */}
-              <div className="flex items-center gap-4 px-5 py-4 border-b border-gray-100">
-                {s?.business_profile_picture_url ? (
-                  <img src={s.business_profile_picture_url} alt="Profile" className="w-14 h-14 rounded-full object-cover border border-gray-200" />
-                ) : (
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shrink-0">
-                    <span className="text-white text-xl font-bold">
-                      {(s?.display_name ?? "W").charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                )}
-                <div>
-                  <p className="font-semibold text-gray-900">{s?.display_name ?? "—"}</p>
-                  {s?.business_profile_vertical && (
-                    <p className="text-sm text-gray-500">
-                      {VERTICAL_LABEL[s.business_profile_vertical] ?? s.business_profile_vertical}
-                    </p>
-                  )}
-                  {s?.display_name_status && (s.display_name_status === "REJECTED" || s.display_name_status === "PENDING_REVIEW") && (
-                    <span className={`mt-1 inline-flex text-xs px-2 py-0.5 rounded-full ${
-                      s.display_name_status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"
-                    }`}>
-                      Name: {s.display_name_status}
-                    </span>
-                  )}
-                </div>
+              {/* Phone preview — always visible */}
+              <div className="flex flex-col items-center py-8 px-4" style={{ background: "#F0F2F5" }}>
+                <WhatsAppPhonePreview
+                  name={s?.display_name ?? "Business Name"}
+                  phone={s?.current_phone_number_number ?? ""}
+                  about={s?.business_profile_about ?? ""}
+                  pictureUrl={s?.business_profile_picture_url}
+                  website={(() => { try { const ws = JSON.parse(s?.business_profile_websites ?? "[]") as string[]; return ws[0] ?? ""; } catch { return ""; } })()}
+                />
+                <p className="text-xs text-gray-400 mt-4 text-center">
+                  This experience may look different across devices.
+                </p>
               </div>
-
-              {editingProfile ? (
-                <div className="px-5 py-4 space-y-4">
-                  {/* Category */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Category</label>
-                    <select
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                      value={vertical}
-                      onChange={(e) => setVertical(e.target.value)}
-                    >
-                      <option value="">Select a category</option>
-                      <option value="ALCOHOL">Alcoholic Beverages</option>
-                      <option value="APPAREL">Clothing and Apparel</option>
-                      <option value="AUTO">Automotive</option>
-                      <option value="BEAUTY">Beauty, Spa and Salon</option>
-                      <option value="EDU">Education</option>
-                      <option value="ENTERTAIN">Entertainment</option>
-                      <option value="EVENT_PLAN">Event Planning and Service</option>
-                      <option value="FINANCE">Finance and Banking</option>
-                      <option value="GOVT">Public Service</option>
-                      <option value="GROCERY">Food and Grocery</option>
-                      <option value="HEALTH">Medical and Health</option>
-                      <option value="HOTEL">Hotel and Lodging</option>
-                      <option value="NONPROFIT">Non-profit</option>
-                      <option value="ONLINE_GAMBLING">Online Gambling &amp; Gaming</option>
-                      <option value="OTC_DRUGS">Over-the-Counter Drugs</option>
-                      <option value="OTHER">Other</option>
-                      <option value="PHYSICAL_GAMBLING">Non-Online Gambling &amp; Gaming</option>
-                      <option value="PROF_SERVICES">Professional Services</option>
-                      <option value="RESTAURANT">Restaurant</option>
-                      <option value="RETAIL">Shopping and Retail</option>
-                      <option value="TRAVEL">Travel and Transportation</option>
-                    </select>
-                  </div>
-                  {/* About */}
-                  <div>
-                    <div className="flex justify-between mb-1.5">
-                      <label className="text-xs font-medium text-gray-700">About</label>
-                      <span className="text-xs text-gray-400">{about.length}/139</span>
-                    </div>
-                    <textarea
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                      rows={2}
-                      maxLength={139}
-                      value={about}
-                      onChange={(e) => setAbout(e.target.value)}
-                      placeholder="Appears beneath your profile image"
-                    />
-                  </div>
-                  {/* Description */}
-                  <div>
-                    <div className="flex justify-between mb-1.5">
-                      <label className="text-xs font-medium text-gray-700">Description</label>
-                      <span className="text-xs text-gray-400">{description.length}/512</span>
-                    </div>
-                    <textarea
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                      rows={3}
-                      maxLength={512}
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Description of your business"
-                    />
-                  </div>
-                  {/* Address */}
-                  <div>
-                    <div className="flex justify-between mb-1.5">
-                      <label className="text-xs font-medium text-gray-700">Address</label>
-                      <span className="text-xs text-gray-400">{address.length}/256</span>
-                    </div>
-                    <input
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      maxLength={256}
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      placeholder="Business address"
-                    />
-                  </div>
-                  {/* Email */}
-                  <div>
-                    <div className="flex justify-between mb-1.5">
-                      <label className="text-xs font-medium text-gray-700">Email</label>
-                      <span className="text-xs text-gray-400">{email.length}/128</span>
-                    </div>
-                    <input
-                      type="email"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      maxLength={128}
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="contact@yourbusiness.com"
-                    />
-                  </div>
-                  {/* Websites */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Websites (max 2)</label>
-                    {[0, 1].map((i) => (
-                      <input
-                        key={i}
-                        type="url"
-                        className={`w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${i === 1 ? "mt-2" : ""}`}
-                        maxLength={256}
-                        value={websites[i] ?? ""}
-                        onChange={(e) => { const w = [...websites]; w[i] = e.target.value; setWebsites(w); }}
-                        placeholder={`https://www.example.com${i === 1 ? " (optional)" : ""}`}
-                      />
-                    ))}
-                    <p className="text-xs text-gray-400 mt-1">Must start with https://</p>
-                  </div>
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      onClick={() => updateProfile.mutate({ about, address, description, email, vertical, websites })}
-                      disabled={updateProfile.isPending}
-                      className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {updateProfile.isPending ? "Saving…" : "Save changes"}
-                    </button>
-                    <button
-                      onClick={() => setEditingProfile(false)}
-                      className="px-4 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="px-5 py-1 divide-y divide-gray-100">
-                  <InfoRow label="About" value={s?.business_profile_about} />
-                  <InfoRow label="Description" value={s?.business_profile_description} />
-                  <InfoRow label="Address" value={s?.business_profile_address} />
-                  <InfoRow label="Email" value={s?.business_profile_email} />
-                  {(() => {
-                    try {
-                      const ws = JSON.parse(s?.business_profile_websites ?? "[]") as string[];
-                      return ws.filter(Boolean).map((url, i) => (
-                        <div key={i} className="flex items-start justify-between gap-4 py-2.5 border-b border-gray-100 last:border-0">
-                          <span className="text-sm text-gray-500 shrink-0">Website {ws.filter(Boolean).length > 1 ? i + 1 : ""}</span>
-                          <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline text-right break-all">{url}</a>
-                        </div>
-                      ));
-                    } catch { return null; }
-                  })()}
-                  {!s?.business_profile_about && !s?.business_profile_address && !s?.business_profile_email && !s?.business_profile_description && (
-                    <p className="py-4 text-sm text-gray-400 text-center">
-                      {neverSynced ? "Sync from Meta to load profile data." : "No profile information set."}
-                    </p>
-                  )}
-                </div>
-              )}
 
               {/* Pending display name change */}
               {s?.new_display_name && (
-                <div className="flex items-center gap-3 mx-5 mb-4 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+                <div className="flex items-center gap-3 mx-5 my-3 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm">
                   <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -616,22 +470,6 @@ export default function WhatsAppAccountPage(): JSX.Element {
                   }`}>{s.new_display_name_status ?? "PENDING"}</span>
                 </div>
               )}
-              </div>{/* end left pane */}
-
-              {/* Phone preview panel */}
-              {showPreview && (
-                <div className="w-56 shrink-0 border-l border-gray-100 bg-gray-50 flex flex-col items-center justify-start py-6 px-3">
-                  <p className="text-xs text-gray-400 mb-4 font-medium">Customer view</p>
-                  <WhatsAppPhonePreview
-                    name={s?.display_name ?? "Business Name"}
-                    phone={s?.current_phone_number_number ?? ""}
-                    about={s?.business_profile_about ?? ""}
-                    pictureUrl={s?.business_profile_picture_url}
-                    website={(() => { try { const ws = JSON.parse(s?.business_profile_websites ?? "[]") as string[]; return ws[0] ?? ""; } catch { return ""; } })()}
-                  />
-                </div>
-              )}
-              </div>{/* end preview flex row */}
             </div>
 
             {/* Phone numbers card */}
@@ -808,6 +646,202 @@ export default function WhatsAppAccountPage(): JSX.Element {
         </div>
 
         {/* Modals */}
+
+        {/* Edit Business Profile modal */}
+        {showEditModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowEditModal(false); }}
+          >
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col" style={{ maxHeight: "90vh" }}>
+              {/* Modal header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+                <h2 className="text-base font-semibold text-gray-900">Edit Business Profile</h2>
+                <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+
+              {/* Scrollable form */}
+              <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+
+                {/* Profile Picture */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Profile Picture</label>
+                  <p className="text-xs text-gray-400 mb-3">This will be visible on your business profile</p>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-200 shrink-0">
+                      {picPreview ? (
+                        <img src={picPreview} alt="" className="w-full h-full object-cover" />
+                      ) : s?.business_profile_picture_url ? (
+                        <img src={s.business_profile_picture_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+                          <span className="text-white text-xl font-bold">{(s?.display_name ?? "B").charAt(0).toUpperCase()}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        Choose file
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setPicFile(file);
+                            setPicPreview(URL.createObjectURL(file));
+                          }}
+                        />
+                      </label>
+                      <p className="text-xs text-gray-400 mt-1.5">JPEG or PNG · Max 5 MB · 640×640px recommended</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Display Name (read-only) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+                  <p className="text-sm text-gray-900 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">{s?.display_name ?? "—"}</p>
+                  <p className="text-xs text-gray-400 mt-1">To change display name, edit in Meta WhatsApp Manager</p>
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
+                  <select
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    value={vertical}
+                    onChange={(e) => setVertical(e.target.value)}
+                  >
+                    <option value="">Select a category</option>
+                    <option value="ALCOHOL">Alcoholic Beverages</option>
+                    <option value="APPAREL">Clothing and Apparel</option>
+                    <option value="AUTO">Automotive</option>
+                    <option value="BEAUTY">Beauty, Spa and Salon</option>
+                    <option value="EDU">Education</option>
+                    <option value="ENTERTAIN">Entertainment</option>
+                    <option value="EVENT_PLAN">Event Planning and Service</option>
+                    <option value="FINANCE">Finance and Banking</option>
+                    <option value="GOVT">Public Service</option>
+                    <option value="GROCERY">Food and Grocery</option>
+                    <option value="HEALTH">Medical and Health</option>
+                    <option value="HOTEL">Hotel and Lodging</option>
+                    <option value="NONPROFIT">Non-profit</option>
+                    <option value="ONLINE_GAMBLING">Online Gambling &amp; Gaming</option>
+                    <option value="OTC_DRUGS">Over-the-Counter Drugs</option>
+                    <option value="OTHER">Other</option>
+                    <option value="PHYSICAL_GAMBLING">Non-Online Gambling &amp; Gaming</option>
+                    <option value="PROF_SERVICES">Professional Services</option>
+                    <option value="RESTAURANT">Restaurant</option>
+                    <option value="RETAIL">Shopping and Retail</option>
+                    <option value="TRAVEL">Travel and Transportation</option>
+                  </select>
+                </div>
+
+                {/* About */}
+                <div>
+                  <div className="flex justify-between mb-1.5">
+                    <label className="text-sm font-medium text-gray-700">About <span className="text-gray-400 font-normal">· Optional</span></label>
+                    <span className="text-xs text-gray-400">{about.length}/139</span>
+                  </div>
+                  <textarea
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    rows={2}
+                    maxLength={139}
+                    value={about}
+                    onChange={(e) => setAbout(e.target.value)}
+                    placeholder="Appears beneath your profile image"
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <div className="flex justify-between mb-1.5">
+                    <label className="text-sm font-medium text-gray-700">Description <span className="text-gray-400 font-normal">· Optional</span></label>
+                    <span className="text-xs text-gray-400">{description.length}/512</span>
+                  </div>
+                  <textarea
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    rows={4}
+                    maxLength={512}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Description of your business"
+                  />
+                </div>
+
+                {/* Address */}
+                <div>
+                  <div className="flex justify-between mb-1.5">
+                    <label className="text-sm font-medium text-gray-700">Address <span className="text-gray-400 font-normal">· Optional</span></label>
+                    <span className="text-xs text-gray-400">{address.length}/256</span>
+                  </div>
+                  <input
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    maxLength={256}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Business address"
+                  />
+                </div>
+
+                {/* Email */}
+                <div>
+                  <div className="flex justify-between mb-1.5">
+                    <label className="text-sm font-medium text-gray-700">Email <span className="text-gray-400 font-normal">· Optional</span></label>
+                    <span className="text-xs text-gray-400">{email.length}/128</span>
+                  </div>
+                  <input
+                    type="email"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    maxLength={128}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="contact@yourbusiness.com"
+                  />
+                </div>
+
+                {/* Websites */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Website <span className="text-gray-400 font-normal">· Optional</span></label>
+                  {[0, 1].map((i) => (
+                    <input
+                      key={i}
+                      type="url"
+                      className={`w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${i === 1 ? "mt-2" : ""}`}
+                      maxLength={256}
+                      value={websites[i] ?? ""}
+                      onChange={(e) => { const w = [...websites]; w[i] = e.target.value; setWebsites(w); }}
+                      placeholder={i === 0 ? "https://www.example.com" : "https://www.example2.com (optional)"}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Modal footer */}
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 shrink-0 bg-gray-50 rounded-b-2xl">
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={updateProfile.isPending || uploadPicture.isPending}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {(updateProfile.isPending || uploadPicture.isPending) ? "Saving…" : "Save changes"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showConnectModal && (
           <ConnectWhatsAppModal
             flow="reconnect"

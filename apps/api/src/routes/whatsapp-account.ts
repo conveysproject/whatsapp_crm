@@ -20,6 +20,7 @@ import {
   blockContact,
   unblockContact,
   sendMarketingTemplateMessage,
+  uploadProfilePicture,
 } from "../lib/whatsapp.js";
 
 // GAP-S65: 7 WhatsApp webhook event types to subscribe to
@@ -111,6 +112,22 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       const { organizationId } = request.auth;
       const data = await updateBusinessProfile(organizationId, request.body);
       return reply.send({ data });
+    }
+  );
+
+  fastify.post<{ Body: { base64: string; mimeType: string } }>(
+    "/whatsapp-account/business-profile/picture",
+    async (request, reply) => {
+      const { organizationId } = request.auth;
+      const { base64, mimeType } = request.body;
+      if (!["image/jpeg", "image/png"].includes(mimeType)) {
+        return reply.status(400).send({ error: "Only JPEG and PNG images are supported" });
+      }
+      if (Buffer.byteLength(base64, "base64") > 5 * 1024 * 1024) {
+        return reply.status(400).send({ error: "Image must be under 5 MB" });
+      }
+      await uploadProfilePicture(organizationId, base64, mimeType);
+      return reply.send({ success: true });
     }
   );
 
