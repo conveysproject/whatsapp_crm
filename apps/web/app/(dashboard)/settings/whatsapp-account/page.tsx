@@ -145,6 +145,8 @@ export default function WhatsAppAccountPage(): JSX.Element {
   const [showEditModal, setShowEditModal] = useState(false);
   const [picFile, setPicFile] = useState<File | null>(null);
   const [picPreview, setPicPreview] = useState<string | null>(null);
+  const [picError, setPicError] = useState<string | null>(null);
+  const [optimisticPicUrl, setOptimisticPicUrl] = useState<string | null>(null);
   const [about, setAbout] = useState("");
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
@@ -155,7 +157,10 @@ export default function WhatsAppAccountPage(): JSX.Element {
   const syncAll = useMutation({
     mutationFn: () =>
       fetch("/api/v1/whatsapp-account/sync-all", { method: "POST" }).then((r) => r.json()),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["vendor-settings"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["vendor-settings"] });
+      setOptimisticPicUrl(null);
+    },
   });
 
   useEffect(() => {
@@ -217,13 +222,24 @@ export default function WhatsAppAccountPage(): JSX.Element {
     setWebsites([ws[0] ?? "", ws[1] ?? ""]);
     setPicFile(null);
     setPicPreview(null);
+    setPicError(null);
     setShowEditModal(true);
   };
 
   const handleSave = () => {
+    setPicError(null);
     const doUpdate = () => updateProfile.mutate({ about, address, description, email, vertical, websites });
     if (picFile) {
-      uploadPicture.mutate(picFile, { onSuccess: doUpdate, onError: doUpdate });
+      uploadPicture.mutate(picFile, {
+        onSuccess: () => {
+          if (picPreview) setOptimisticPicUrl(picPreview);
+          doUpdate();
+        },
+        onError: (err: unknown) => {
+          const msg = err instanceof Error ? err.message : "Picture upload failed";
+          setPicError(msg);
+        },
+      });
     } else {
       doUpdate();
     }
@@ -451,7 +467,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
                 address={s?.business_profile_address}
                 email={s?.business_profile_email}
                 websites={(() => { try { return (JSON.parse(s?.business_profile_websites ?? "[]") as string[]).filter(Boolean); } catch { return []; } })()}
-                pictureUrl={s?.business_profile_picture_url}
+                pictureUrl={optimisticPicUrl ?? s?.business_profile_picture_url}
               />
 
               {/* Pending display name change */}
@@ -819,6 +835,14 @@ export default function WhatsAppAccountPage(): JSX.Element {
                   ))}
                 </div>
               </div>
+
+              {/* Upload error */}
+              {picError && (
+                <div className="mx-6 mb-1 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 shrink-0">
+                  <svg className="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <p className="text-xs text-red-700">{picError}</p>
+                </div>
+              )}
 
               {/* Modal footer */}
               <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 shrink-0 bg-gray-50 rounded-b-2xl">
