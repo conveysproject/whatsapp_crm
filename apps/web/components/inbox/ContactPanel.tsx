@@ -15,7 +15,6 @@ interface Props {
   conversationStatus: string;
   lastMessageAt: string | null;
   onCreateDeal: () => void;
-  onClose: () => void;
 }
 
 function formatDate(iso: string | null | undefined): string {
@@ -23,7 +22,7 @@ function formatDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
-export function ContactPanel({ contactId, contactName, conversationStatus, lastMessageAt, onCreateDeal, onClose }: Props): JSX.Element {
+export function ContactPanel({ contactId, contactName, conversationStatus, lastMessageAt, onCreateDeal }: Props): JSX.Element {
   const { data: contact, isLoading } = useContactDetail(contactId);
   const { getToken } = useAuth();
   const [notes, setNotes] = useState<string>("");
@@ -76,13 +75,8 @@ export function ContactPanel({ contactId, contactName, conversationStatus, lastM
   return (
     <div className="w-80 border-l border-gray-200 bg-white flex flex-col overflow-y-auto shrink-0">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
+      <div className="px-4 py-3 border-b border-gray-200 shrink-0">
         <h3 className="text-sm font-semibold text-gray-900">Contact Details</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
       </div>
 
       {isLoading ? (

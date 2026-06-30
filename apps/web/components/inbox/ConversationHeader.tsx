@@ -23,7 +23,6 @@ interface Props {
   contact: { id: string; firstName: string | null; lastName: string | null; phoneNumber: string; tags: string[] } | null;
   contactName: string;
   agents: Agent[];
-  onToggleContactPanel: () => void;
   onStatusChange: (status: string) => Promise<void>;
   onLabelChange: (name: string | null) => Promise<void>;
   onAssign: (userId: string | null) => Promise<void>;
@@ -34,7 +33,6 @@ export function ConversationHeader({
   contact,
   contactName,
   agents,
-  onToggleContactPanel,
   onStatusChange,
   onLabelChange,
   onAssign,
@@ -300,15 +298,6 @@ export function ConversationHeader({
             </div>
           )}
         </div>
-        <button
-          onClick={onToggleContactPanel}
-          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-          title="Contact details"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </button>
       </div>
     </div>
   );

@@ -154,7 +154,6 @@ export default function InboxPage(): JSX.Element {
             contact={contact}
             contactName={contactName}
             agents={agents}
-            onToggleContactPanel={() => setContactPanelOpen((v) => !v)}
             onStatusChange={handleStatusChange}
             onLabelChange={handleLabelChange}
             onAssign={handleAssign}
@@ -195,7 +194,6 @@ export default function InboxPage(): JSX.Element {
           conversationStatus={selectedConversation.status}
           lastMessageAt={selectedConversation.lastMessageAt}
           onCreateDeal={() => setShowOffer(true)}
-          onClose={() => setContactPanelOpen(false)}
         />
       )}
 
