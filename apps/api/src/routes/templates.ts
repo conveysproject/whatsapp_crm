@@ -101,9 +101,17 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: { code: "NO_WABA", message: "Organization has no WhatsApp Business Account configured" } });
     }
 
+    const vsRows = await fastify.prisma.vendorSetting.findMany({
+      where: { organizationId, key: { in: ["whatsapp_access_token"] } },
+    });
+    const accessToken = vsRows.find((r) => r.key === "whatsapp_access_token")?.value ?? process.env["WA_ACCESS_TOKEN"] ?? "";
+    if (!accessToken) {
+      return reply.status(400).send({ error: { code: "NO_TOKEN", message: "No WhatsApp access token configured for this organization" } });
+    }
+
     const { metaTemplateId } = await submitTemplateToMeta({
       wabaId: org.whatsappBusinessAccountId,
-      accessToken: process.env["WA_ACCESS_TOKEN"] ?? "",
+      accessToken,
       name: template.name,
       category: template.category,
       language: template.language,
