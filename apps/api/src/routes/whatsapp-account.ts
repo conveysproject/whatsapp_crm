@@ -105,7 +105,7 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data });
   });
 
-  fastify.put<{ Body: { about?: string; address?: string; email?: string; websites?: string[] } }>(
+  fastify.put<{ Body: { about?: string; address?: string; description?: string; email?: string; vertical?: string; websites?: string[] } }>(
     "/whatsapp-account/business-profile",
     async (request, reply) => {
       const { organizationId } = request.auth;
@@ -871,7 +871,7 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       "business_profile_about", "business_profile_address",
       "business_profile_email", "business_profile_description",
       "business_profile_picture_url", "business_profile_vertical",
-      "business_profile_synced_at",
+      "business_profile_websites", "business_profile_synced_at",
       // health cache
       "meta_health_status", "meta_health_checked_at",
       // display name cache

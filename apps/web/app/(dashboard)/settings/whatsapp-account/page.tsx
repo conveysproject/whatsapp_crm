@@ -43,6 +43,7 @@ type VendorSettings = {
     business_profile_description?: string;
     business_profile_picture_url?: string;
     business_profile_vertical?: string;
+    business_profile_websites?: string;
     business_profile_synced_at?: string;
     meta_health_status?: string;
     meta_health_checked_at?: string;
@@ -120,6 +121,10 @@ export default function WhatsAppAccountPage(): JSX.Element {
   const [editingProfile, setEditingProfile] = useState(false);
   const [about, setAbout] = useState("");
   const [address, setAddress] = useState("");
+  const [description, setDescription] = useState("");
+  const [email, setEmail] = useState("");
+  const [vertical, setVertical] = useState("");
+  const [websites, setWebsites] = useState<string[]>(["", ""]);
 
   const syncAll = useMutation({
     mutationFn: () =>
@@ -147,11 +152,11 @@ export default function WhatsAppAccountPage(): JSX.Element {
   const neverSynced = !s?.phone_info_synced_at;
 
   const updateProfile = useMutation({
-    mutationFn: (body: { about: string; address: string }) =>
+    mutationFn: (body: { about: string; address: string; description: string; email: string; vertical: string; websites: string[] }) =>
       fetch("/api/v1/whatsapp-account/business-profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, websites: body.websites.filter(Boolean) }),
       }).then((r) => r.json()),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["vendor-settings"] });
@@ -365,6 +370,11 @@ export default function WhatsAppAccountPage(): JSX.Element {
                     onClick={() => {
                       setAbout(s?.business_profile_about ?? "");
                       setAddress(s?.business_profile_address ?? "");
+                      setDescription(s?.business_profile_description ?? "");
+                      setEmail(s?.business_profile_email ?? "");
+                      setVertical(s?.business_profile_vertical ?? "");
+                      const ws = (() => { try { return JSON.parse(s?.business_profile_websites ?? "[]") as string[]; } catch { return []; } })();
+                      setWebsites([ws[0] ?? "", ws[1] ?? ""]);
                       setEditingProfile(true);
                     }}
                     className="text-xs text-blue-600 hover:text-blue-800 font-medium"
@@ -400,28 +410,116 @@ export default function WhatsAppAccountPage(): JSX.Element {
 
               {editingProfile ? (
                 <div className="px-5 py-4 space-y-4">
+                  {/* Category */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">About</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Category</label>
+                    <select
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      value={vertical}
+                      onChange={(e) => setVertical(e.target.value)}
+                    >
+                      <option value="">Select a category</option>
+                      <option value="ALCOHOL">Alcoholic Beverages</option>
+                      <option value="APPAREL">Clothing and Apparel</option>
+                      <option value="AUTO">Automotive</option>
+                      <option value="BEAUTY">Beauty, Spa and Salon</option>
+                      <option value="EDU">Education</option>
+                      <option value="ENTERTAIN">Entertainment</option>
+                      <option value="EVENT_PLAN">Event Planning and Service</option>
+                      <option value="FINANCE">Finance and Banking</option>
+                      <option value="GOVT">Public Service</option>
+                      <option value="GROCERY">Food and Grocery</option>
+                      <option value="HEALTH">Medical and Health</option>
+                      <option value="HOTEL">Hotel and Lodging</option>
+                      <option value="NONPROFIT">Non-profit</option>
+                      <option value="ONLINE_GAMBLING">Online Gambling &amp; Gaming</option>
+                      <option value="OTC_DRUGS">Over-the-Counter Drugs</option>
+                      <option value="OTHER">Other</option>
+                      <option value="PHYSICAL_GAMBLING">Non-Online Gambling &amp; Gaming</option>
+                      <option value="PROF_SERVICES">Professional Services</option>
+                      <option value="RESTAURANT">Restaurant</option>
+                      <option value="RETAIL">Shopping and Retail</option>
+                      <option value="TRAVEL">Travel and Transportation</option>
+                    </select>
+                  </div>
+                  {/* About */}
+                  <div>
+                    <div className="flex justify-between mb-1.5">
+                      <label className="text-xs font-medium text-gray-700">About</label>
+                      <span className="text-xs text-gray-400">{about.length}/139</span>
+                    </div>
+                    <textarea
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      rows={2}
+                      maxLength={139}
+                      value={about}
+                      onChange={(e) => setAbout(e.target.value)}
+                      placeholder="Appears beneath your profile image"
+                    />
+                  </div>
+                  {/* Description */}
+                  <div>
+                    <div className="flex justify-between mb-1.5">
+                      <label className="text-xs font-medium text-gray-700">Description</label>
+                      <span className="text-xs text-gray-400">{description.length}/512</span>
+                    </div>
                     <textarea
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                       rows={3}
-                      value={about}
-                      onChange={(e) => setAbout(e.target.value)}
-                      placeholder="Brief description of your business"
+                      maxLength={512}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Description of your business"
                     />
                   </div>
+                  {/* Address */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Address</label>
+                    <div className="flex justify-between mb-1.5">
+                      <label className="text-xs font-medium text-gray-700">Address</label>
+                      <span className="text-xs text-gray-400">{address.length}/256</span>
+                    </div>
                     <input
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      maxLength={256}
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
                       placeholder="Business address"
                     />
                   </div>
-                  <div className="flex gap-2">
+                  {/* Email */}
+                  <div>
+                    <div className="flex justify-between mb-1.5">
+                      <label className="text-xs font-medium text-gray-700">Email</label>
+                      <span className="text-xs text-gray-400">{email.length}/128</span>
+                    </div>
+                    <input
+                      type="email"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      maxLength={128}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="contact@yourbusiness.com"
+                    />
+                  </div>
+                  {/* Websites */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Websites (max 2)</label>
+                    {[0, 1].map((i) => (
+                      <input
+                        key={i}
+                        type="url"
+                        className={`w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${i === 1 ? "mt-2" : ""}`}
+                        maxLength={256}
+                        value={websites[i] ?? ""}
+                        onChange={(e) => { const w = [...websites]; w[i] = e.target.value; setWebsites(w); }}
+                        placeholder={`https://www.example.com${i === 1 ? " (optional)" : ""}`}
+                      />
+                    ))}
+                    <p className="text-xs text-gray-400 mt-1">Must start with https://</p>
+                  </div>
+                  <div className="flex gap-2 pt-1">
                     <button
-                      onClick={() => updateProfile.mutate({ about, address })}
+                      onClick={() => updateProfile.mutate({ about, address, description, email, vertical, websites })}
                       disabled={updateProfile.isPending}
                       className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
                     >
@@ -438,9 +536,21 @@ export default function WhatsAppAccountPage(): JSX.Element {
               ) : (
                 <div className="px-5 py-1 divide-y divide-gray-100">
                   <InfoRow label="About" value={s?.business_profile_about} />
+                  <InfoRow label="Description" value={s?.business_profile_description} />
                   <InfoRow label="Address" value={s?.business_profile_address} />
                   <InfoRow label="Email" value={s?.business_profile_email} />
-                  {!s?.business_profile_about && !s?.business_profile_address && !s?.business_profile_email && (
+                  {(() => {
+                    try {
+                      const ws = JSON.parse(s?.business_profile_websites ?? "[]") as string[];
+                      return ws.filter(Boolean).map((url, i) => (
+                        <div key={i} className="flex items-start justify-between gap-4 py-2.5 border-b border-gray-100 last:border-0">
+                          <span className="text-sm text-gray-500 shrink-0">Website {ws.filter(Boolean).length > 1 ? i + 1 : ""}</span>
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline text-right break-all">{url}</a>
+                        </div>
+                      ));
+                    } catch { return null; }
+                  })()}
+                  {!s?.business_profile_about && !s?.business_profile_address && !s?.business_profile_email && !s?.business_profile_description && (
                     <p className="py-4 text-sm text-gray-400 text-center">
                       {neverSynced ? "Sync from Meta to load profile data." : "No profile information set."}
                     </p>

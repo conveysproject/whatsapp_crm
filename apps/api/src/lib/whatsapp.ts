@@ -230,7 +230,7 @@ export async function getBusinessProfile(organizationId: string): Promise<Record
 
 export async function updateBusinessProfile(
   organizationId: string,
-  profile: { about?: string; address?: string; email?: string; websites?: string[] }
+  profile: { about?: string; address?: string; description?: string; email?: string; vertical?: string; websites?: string[] }
 ): Promise<{ success: boolean }> {
   const settings = await prisma.vendorSetting.findMany({
     where: { organizationId },
@@ -254,9 +254,12 @@ export async function updateBusinessProfile(
 
   // Update cache with new values
   const cacheUpdates: Array<{ key: string; value: string }> = [];
-  if (profile.about !== undefined) cacheUpdates.push({ key: "business_profile_about", value: profile.about });
-  if (profile.address !== undefined) cacheUpdates.push({ key: "business_profile_address", value: profile.address });
-  if (profile.email !== undefined) cacheUpdates.push({ key: "business_profile_email", value: profile.email });
+  if (profile.about !== undefined)       cacheUpdates.push({ key: "business_profile_about", value: profile.about });
+  if (profile.address !== undefined)     cacheUpdates.push({ key: "business_profile_address", value: profile.address });
+  if (profile.description !== undefined) cacheUpdates.push({ key: "business_profile_description", value: profile.description });
+  if (profile.email !== undefined)       cacheUpdates.push({ key: "business_profile_email", value: profile.email });
+  if (profile.vertical !== undefined)    cacheUpdates.push({ key: "business_profile_vertical", value: profile.vertical });
+  if (profile.websites !== undefined)    cacheUpdates.push({ key: "business_profile_websites", value: JSON.stringify(profile.websites) });
   await Promise.all(cacheUpdates.map((s) =>
     prisma.vendorSetting.upsert({
       where: { organizationId_key: { organizationId, key: s.key } },
@@ -534,6 +537,7 @@ export async function syncAllMetaData(organizationId: string): Promise<void> {
       { key: "business_profile_description", value: bp.description ?? "" },
       { key: "business_profile_picture_url", value: bp.profile_picture_url ?? "" },
       { key: "business_profile_vertical", value: bp.vertical ?? "" },
+      { key: "business_profile_websites", value: JSON.stringify(bp.websites ?? []) },
       { key: "business_profile_synced_at", value: now },
     );
   }
