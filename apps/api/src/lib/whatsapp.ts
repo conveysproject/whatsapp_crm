@@ -271,6 +271,41 @@ export async function updateBusinessProfile(
   return { success: true };
 }
 
+/**
+ * Downloads an image from a public URL and uploads it to Meta's resumable
+ * upload API, returning the media handle for use in template examples.
+ */
+export async function uploadMediaHandle(
+  appId: string,
+  accessToken: string,
+  imageUrl: string
+): Promise<string> {
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok) throw new Error(`Could not fetch image from URL: ${imageUrl}`);
+  const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
+  const buffer = Buffer.from(await imgRes.arrayBuffer());
+  const ext = contentType.includes("png") ? "example.png" : "example.jpg";
+
+  const sessionRes = await fetch(
+    `${WA_BASE}/${appId}/uploads?file_name=${encodeURIComponent(ext)}&file_length=${buffer.length}&file_type=${encodeURIComponent(contentType)}&access_token=${accessToken}`,
+    { method: "POST" }
+  );
+  if (!sessionRes.ok) throw new Error(`Upload session failed: ${await sessionRes.text()}`);
+  const { id: uploadId } = await sessionRes.json() as { id: string };
+
+  const uploadRes = await fetch(
+    `https://graph.facebook.com/graphql/upload?upload_id=${uploadId}&file_offset=0`,
+    {
+      method: "POST",
+      headers: { Authorization: `OAuth ${accessToken}`, file_offset: "0", "Content-Type": contentType },
+      body: new Uint8Array(buffer),
+    }
+  );
+  if (!uploadRes.ok) throw new Error(`File upload failed: ${await uploadRes.text()}`);
+  const { h: handle } = await uploadRes.json() as { h: string };
+  return handle;
+}
+
 export async function uploadProfilePicture(
   organizationId: string,
   base64Data: string,

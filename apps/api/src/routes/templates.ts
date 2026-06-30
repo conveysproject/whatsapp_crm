@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { TemplateCategory, TemplateStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { submitTemplateToMeta } from "../lib/meta-templates.js";
-import { sendTemplateMessage, getMetaTemplateAnalytics } from "../lib/whatsapp.js";
+import { sendTemplateMessage, getMetaTemplateAnalytics, uploadMediaHandle } from "../lib/whatsapp.js";
 import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
 import type { TemplateId, ContactId } from "@WBMSG/shared";
 import { canAccess, canAccessSub } from "../lib/permissions.js";
@@ -87,7 +87,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
     return reply.status(201).send({ data: template });
   });
 
-  fastify.post<{ Params: { id: TemplateId } }>("/templates/:id/submit", async (request, reply) => {
+  fastify.post<{ Params: { id: TemplateId }; Body: { exampleImageUrl?: string } }>("/templates/:id/submit", async (request, reply) => {
     const { organizationId } = request.auth;
     const template = await fastify.prisma.template.findFirst({
       where: { id: request.params.id, organizationId },
@@ -102,11 +102,30 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
     }
 
     const vsRows = await fastify.prisma.vendorSetting.findMany({
-      where: { organizationId, key: { in: ["whatsapp_access_token"] } },
+      where: { organizationId, key: { in: ["whatsapp_access_token", "facebook_app_id"] } },
     });
-    const accessToken = vsRows.find((r) => r.key === "whatsapp_access_token")?.value ?? process.env["WA_ACCESS_TOKEN"] ?? "";
+    const vsMap = Object.fromEntries(vsRows.map((r) => [r.key, r.value]));
+    const accessToken = vsMap["whatsapp_access_token"] ?? process.env["WA_ACCESS_TOKEN"] ?? "";
     if (!accessToken) {
       return reply.status(400).send({ error: { code: "NO_TOKEN", message: "No WhatsApp access token configured for this organization" } });
+    }
+
+    // If IMAGE/VIDEO/DOCUMENT header and an example URL provided, upload and attach handle
+    type ComponentJson = { type?: string; format?: string; example?: { header_handle?: string[] } };
+    let components = template.components as ComponentJson[];
+    const exampleImageUrl = request.body?.exampleImageUrl;
+    if (exampleImageUrl) {
+      const appId = vsMap["facebook_app_id"];
+      if (!appId) {
+        return reply.status(400).send({ error: { code: "NO_APP_ID", message: "facebook_app_id not configured" } });
+      }
+      const handle = await uploadMediaHandle(appId, accessToken, exampleImageUrl);
+      components = components.map((c) => {
+        if (c.type?.toUpperCase() === "HEADER" && ["IMAGE", "VIDEO", "DOCUMENT"].includes(c.format?.toUpperCase() ?? "")) {
+          return { ...c, example: { header_handle: [handle] } };
+        }
+        return c;
+      });
     }
 
     const { metaTemplateId } = await submitTemplateToMeta({
@@ -115,7 +134,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       name: template.name,
       category: template.category,
       language: template.language,
-      components: template.components as unknown as Parameters<typeof submitTemplateToMeta>[0]["components"],
+      components: components as unknown as Parameters<typeof submitTemplateToMeta>[0]["components"],
     });
 
     const updated = await fastify.prisma.template.update({

@@ -44,17 +44,36 @@ export function TemplateActions({
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showExamplePrompt, setShowExamplePrompt] = useState(false);
+  const [exampleImageUrl, setExampleImageUrl] = useState("");
 
-  async function handleSubmitToMeta(): Promise<void> {
+  const needsExampleImage = ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat?.toUpperCase() ?? "");
+
+  function handleSubmitClick(): void {
+    setActionError(null);
+    if (needsExampleImage) {
+      setShowExamplePrompt(true);
+    } else {
+      void handleSubmitToMeta();
+    }
+  }
+
+  async function handleSubmitToMeta(imageUrl?: string): Promise<void> {
     setSubmitting(true);
     setActionError(null);
     try {
-      const res = await fetch(`/api/v1/templates/${templateId}/submit`, { method: "POST" });
+      const body = imageUrl ? JSON.stringify({ exampleImageUrl: imageUrl }) : undefined;
+      const res = await fetch(`/api/v1/templates/${templateId}/submit`, {
+        method: "POST",
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body,
+      });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: { message?: string } };
-        setActionError(body.error?.message ?? "Submit failed");
+        const resBody = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        setActionError(resBody.error?.message ?? "Submit failed");
         return;
       }
+      setShowExamplePrompt(false);
       onRefresh?.();
     } catch {
       setActionError("Network error");
@@ -87,6 +106,38 @@ export function TemplateActions({
   return (
     <>
       {actionError && <span className="text-xs text-red-500 mr-1">{actionError}</span>}
+
+      {/* Example image prompt for IMAGE/VIDEO/DOCUMENT header templates */}
+      {showExamplePrompt && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowExamplePrompt(false)}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-gray-900">Example {headerFormat} for Meta Review</h3>
+            <p className="text-xs text-gray-500">
+              Meta requires a sample image so reviewers can see how the template will look. Provide a publicly accessible image URL.
+            </p>
+            <input
+              autoFocus
+              type="url"
+              placeholder="https://example.com/image.jpg"
+              value={exampleImageUrl}
+              onChange={(e) => setExampleImageUrl(e.target.value)}
+              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+            />
+            {actionError && <p className="text-xs text-red-500">{actionError}</p>}
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowExamplePrompt(false)} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">Cancel</button>
+              <button
+                disabled={!exampleImageUrl.trim() || submitting}
+                onClick={() => { void handleSubmitToMeta(exampleImageUrl.trim()); }}
+                className="px-4 py-2 text-sm bg-green-600 text-white rounded disabled:opacity-40 hover:bg-green-700"
+              >
+                {submitting ? "Submitting…" : "Submit to Meta"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isDraft ? (
         <>
           <Link
@@ -96,7 +147,7 @@ export function TemplateActions({
             Edit
           </Link>
           <button
-            onClick={() => { void handleSubmitToMeta(); }}
+            onClick={handleSubmitClick}
             disabled={submitting}
             className="text-xs text-green-700 hover:text-green-900 px-2 py-1 border border-green-300 rounded disabled:opacity-40 font-medium"
           >
