@@ -859,20 +859,35 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     }
 
     const waKeys = [
-      "whatsapp_access_token",
-      "whatsapp_business_account_id",
-      "current_phone_number_id",
-      "current_phone_number_number",
-      "webhook_verified_at",
+      // credentials
+      "whatsapp_access_token", "whatsapp_business_account_id",
+      "current_phone_number_id", "current_phone_number_number",
+      "webhook_verified_at", "whatsapp_access_token_expired",
+      // phone cache
+      "phone_info_messaging_limit_tier", "phone_info_status",
+      "phone_info_is_on_biz_app", "phone_info_is_pin_enabled",
+      "phone_info_last_onboarded_time", "phone_info_synced_at",
+      // business profile cache
+      "business_profile_about", "business_profile_address",
+      "business_profile_email", "business_profile_description",
+      "business_profile_picture_url", "business_profile_vertical",
+      "business_profile_synced_at",
+      // health cache
+      "meta_health_status", "meta_health_checked_at",
+      // display name cache
+      "display_name", "display_name_status",
+      "new_display_name", "new_display_name_status",
+      // marketing
+      "marketing_messages_onboarding_status",
+      // channel IDs
+      "facebook_app_id", "facebook_page_id", "facebook_page_ids",
+      "instagram_account_id", "instagram_account_ids",
+      "meta_business_id",
     ];
     await Promise.all([
-      ...waKeys.map((key) =>
-        fastify.prisma.vendorSetting.upsert({
-          where: { organizationId_key: { organizationId, key } },
-          create: { organizationId, key, value: "", dataType: "string" },
-          update: { value: "" },
-        })
-      ),
+      fastify.prisma.vendorSetting.deleteMany({
+        where: { organizationId, key: { in: waKeys } },
+      }),
       fastify.prisma.organization.update({
         where: { id: organizationId },
         data: { wabaAccessToken: null, whatsappBusinessAccountId: null, phoneNumberId: null },
