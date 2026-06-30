@@ -281,9 +281,32 @@ export async function registerPhoneNumber(
   phoneNumber: string,
   pinCode: string
 ): Promise<{ success: boolean }> {
-  void organizationId;
   void phoneNumber;
-  void pinCode;
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const phoneNumberId = map["current_phone_number_id"];
+  const accessToken = map["whatsapp_access_token"];
+  if (!phoneNumberId || !accessToken) {
+    throw new Error("WhatsApp phone number ID or access token not configured");
+  }
+  const res = await fetch(`${WA_BASE}/${phoneNumberId}/register`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      pin: pinCode,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json() as unknown;
+    throw new Error(`Phone registration failed: ${JSON.stringify(err)}`);
+  }
   return { success: true };
 }
 
@@ -291,8 +314,28 @@ export async function setTwoStepVerification(
   organizationId: string,
   pinCode: string
 ): Promise<{ success: boolean }> {
-  void organizationId;
-  void pinCode;
+  const settings = await prisma.vendorSetting.findMany({
+    where: { organizationId },
+    select: { key: true, value: true },
+  });
+  const map = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+  const phoneNumberId = map["current_phone_number_id"];
+  const accessToken = map["whatsapp_access_token"];
+  if (!phoneNumberId || !accessToken) {
+    throw new Error("WhatsApp phone number ID or access token not configured");
+  }
+  const res = await fetch(`${WA_BASE}/${phoneNumberId}/enable_two_step`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ pin: pinCode }),
+  });
+  if (!res.ok) {
+    const err = await res.json() as unknown;
+    throw new Error(`Two-step verification failed: ${JSON.stringify(err)}`);
+  }
   return { success: true };
 }
 

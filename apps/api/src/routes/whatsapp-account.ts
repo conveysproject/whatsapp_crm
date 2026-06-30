@@ -437,6 +437,30 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
     }
     fastify.log.info({ phoneNumberId, displayPhoneNumber }, "[WA-CONNECT] 13. resolved phone number");
 
+    // Step 4b: register phone number if not already on Cloud API
+    if (phoneNumberId && !isSMB) {
+      try {
+        const phoneInfoRes = await fetch(`${WA_GRAPH}/${phoneNumberId}?fields=platform_type,is_on_biz_app&access_token=${accessToken}`);
+        const phoneInfo = await phoneInfoRes.json() as { platform_type?: string; is_on_biz_app?: boolean };
+        fastify.log.info({ status: phoneInfoRes.status, phoneInfo }, "[WA-CONNECT] 13b. phone platform check");
+        const needsRegistration = phoneInfo.platform_type !== "CLOUD_API" || phoneInfo.is_on_biz_app === true;
+        if (needsRegistration) {
+          fastify.log.info({ phoneNumberId, platform_type: phoneInfo.platform_type }, "[WA-CONNECT] 13c. registering phone number");
+          const regRes = await fetch(`${WA_GRAPH}/${phoneNumberId}/register`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ messaging_product: "whatsapp", pin: "123456" }),
+          });
+          const regBody = await regRes.text();
+          fastify.log.info({ status: regRes.status, body: regBody }, "[WA-CONNECT] 13d. phone registration response");
+        } else {
+          fastify.log.info("[WA-CONNECT] 13c. phone already on Cloud API — registration skipped");
+        }
+      } catch (e) {
+        fastify.log.warn({ e }, "[WA-CONNECT] 13b. phone registration check failed (non-fatal)");
+      }
+    }
+
     // Step 5: subscribe webhooks
     const callbackUrl = `${(process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/v1/webhooks/whatsapp`;
     const verifyToken = createHash("sha1").update(organizationId).digest("hex");
