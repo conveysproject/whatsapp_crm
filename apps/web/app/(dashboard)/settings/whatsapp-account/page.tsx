@@ -118,13 +118,20 @@ export default function WhatsAppAccountPage(): JSX.Element {
   const [about, setAbout] = useState("");
   const [address, setAddress] = useState("");
 
+  const syncAll = useMutation({
+    mutationFn: () =>
+      fetch("/api/v1/whatsapp-account/sync-all", { method: "POST" }).then((r) => r.json()),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["vendor-settings"] }),
+  });
+
   useEffect(() => {
     if (searchParams.get("connected") === "1") {
-      void qc.invalidateQueries({ queryKey: ["vendor-settings"] });
       setJustConnected(true);
       router.replace("/settings/whatsapp-account");
+      syncAll.mutate();
     }
-  }, [searchParams, qc, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const { data: vsRaw, isLoading: vsLoading } = useQuery({
     queryKey: ["vendor-settings"],
@@ -135,12 +142,6 @@ export default function WhatsAppAccountPage(): JSX.Element {
 
   const isConnected = Boolean(s?.whatsapp_business_account_id);
   const neverSynced = !s?.phone_info_synced_at;
-
-  const syncAll = useMutation({
-    mutationFn: () =>
-      fetch("/api/v1/whatsapp-account/sync-all", { method: "POST" }).then((r) => r.json()),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["vendor-settings"] }),
-  });
 
   const updateProfile = useMutation({
     mutationFn: (body: { about: string; address: string }) =>
@@ -181,7 +182,10 @@ export default function WhatsAppAccountPage(): JSX.Element {
             <svg className="w-5 h-5 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-            <p className="text-sm text-green-800 font-medium">WhatsApp account connected. Data is being synced from Meta.</p>
+            <p className="text-sm text-green-800 font-medium">
+              WhatsApp account connected.{" "}
+              {syncAll.isPending ? "Syncing latest data from Meta…" : "Data synced."}
+            </p>
             <button type="button" onClick={() => setJustConnected(false)} className="ml-auto text-green-500 hover:text-green-700">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
@@ -582,9 +586,9 @@ export default function WhatsAppAccountPage(): JSX.Element {
           <ConnectWhatsAppModal
             flow="reconnect"
             onSuccess={(_result: ConnectResult) => {
-              void qc.invalidateQueries({ queryKey: ["vendor-settings"] });
               setShowConnectModal(false);
               setJustConnected(true);
+              syncAll.mutate();
             }}
             onClose={() => setShowConnectModal(false)}
           />
