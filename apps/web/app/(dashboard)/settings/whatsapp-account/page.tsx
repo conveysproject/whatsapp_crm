@@ -281,21 +281,27 @@ export default function WhatsAppAccountPage(): JSX.Element {
           </div>
 
           {/* API Health */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-1.5">
+          <div className={`rounded-xl border shadow-sm p-4 space-y-1.5 ${
+            s?.meta_health_status === "BLOCKED" || s?.meta_health_status === "UNAVAILABLE"
+              ? "bg-red-50 border-red-200"
+              : "bg-white border-gray-200"
+          }`}>
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">API Health</p>
             {s?.meta_health_status ? (
               <>
-                <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${
-                  s.meta_health_status === "ENABLED" ? "text-green-700" :
-                  s.meta_health_status === "AVAILABLE" ? "text-green-700" :
-                  "text-yellow-700"
-                }`}>
-                  <span className={`w-2 h-2 rounded-full ${
-                    s.meta_health_status === "ENABLED" || s.meta_health_status === "AVAILABLE"
-                      ? "bg-green-500" : "bg-yellow-400"
-                  }`} />
-                  {s.meta_health_status}
-                </span>
+                {(() => {
+                  const h = s.meta_health_status;
+                  const isGood = h === "ENABLED" || h === "AVAILABLE";
+                  const isBad  = h === "BLOCKED" || h === "UNAVAILABLE";
+                  const dotCls = isGood ? "bg-green-500" : isBad ? "bg-red-500" : "bg-yellow-400";
+                  const txtCls = isGood ? "text-green-700" : isBad ? "text-red-700 font-bold" : "text-yellow-700";
+                  return (
+                    <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${txtCls}`}>
+                      <span className={`w-2 h-2 rounded-full ${dotCls}`} />
+                      {h}
+                    </span>
+                  );
+                })()}
                 {s.meta_health_checked_at && (
                   <p className="text-xs text-gray-400">Checked {formatRelativeTime(s.meta_health_checked_at)}</p>
                 )}
