@@ -183,15 +183,21 @@ export const campaignWorker = new Worker<CampaignJob>(
 
       let body: string;
       if (isTemplateCampaign && metaTemplate) {
-        const comps = metaTemplate.components as Array<{ type?: string; text?: string; format?: string; buttons?: Array<{ type?: string; text?: string }> }>;
+        const comps = metaTemplate.components as Array<{ type?: string; text?: string; format?: string; buttons?: Array<{ type?: string; text?: string }>; example?: { header_handle?: string[] } }>;
         const headerComp = comps.find((c) => c.type?.toUpperCase() === "HEADER");
         const bodyComp = comps.find((c) => c.type?.toUpperCase() === "BODY");
         const footerComp = comps.find((c) => c.type?.toUpperCase() === "FOOTER");
         const btns = comps.find((c) => c.type?.toUpperCase() === "BUTTONS");
         const rawText = bodyComp?.text ?? metaTemplate.name;
         const resolvedText = contact ? resolveTemplateVars(rawText, contact) : rawText;
+        const headerFmt = (headerComp?.format ?? "TEXT").toUpperCase();
+        const isMediaHeader = ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFmt);
+        // Prefer campaign.mediaUrl (R2, permanent) over template example handle (WhatsApp CDN, expires)
+        const mediaUrl = isMediaHeader
+          ? (campaign.mediaUrl ?? headerComp?.example?.header_handle?.[0] ?? undefined)
+          : undefined;
         body = JSON.stringify({
-          header: headerComp ? { format: headerComp.format ?? "TEXT", text: headerComp.text } : undefined,
+          header: headerComp ? { format: headerFmt, text: headerComp.text, mediaUrl } : undefined,
           body: resolvedText,
           footer: footerComp?.text,
           buttons: (btns as { type?: string; buttons?: Array<{ type?: string; text?: string }> } | undefined)?.buttons ?? [],

@@ -84,7 +84,8 @@ function TemplateMessageBubble({ body }: { body: string }): JSX.Element {
         <p className="font-semibold text-gray-900 leading-snug">{headerText}</p>
       )}
       {bodyText
-        ? <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{bodyText}</p>
+        ? <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap"
+             dangerouslySetInnerHTML={{ __html: formatWhatsAppText(bodyText.replace(/\{\{\d+\}\}/g, "")) }} />
         : !headerText && !headerMediaUrl && <p className="text-xs text-gray-400 italic">Template message</p>
       }
       {footerText && (
