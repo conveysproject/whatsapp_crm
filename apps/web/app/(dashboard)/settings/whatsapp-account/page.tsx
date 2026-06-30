@@ -30,10 +30,13 @@ type VendorSettings = {
     webhook_verified_at?: string;
     phone_info_messaging_limit_tier?: string;
     phone_info_status?: string;
+    phone_info_quality_rating?: string;
     phone_info_is_on_biz_app?: string;
     phone_info_is_pin_enabled?: string;
     phone_info_last_onboarded_time?: string;
     phone_info_synced_at?: string;
+    waba_business_verification_status?: string;
+    waba_account_review_status?: string;
     business_profile_about?: string;
     business_profile_address?: string;
     business_profile_email?: string;
@@ -265,7 +268,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
         )}
 
         {/* ── Stat cards row ──────────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Phone Status */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-1.5">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Phone Status</p>
@@ -282,6 +285,37 @@ export default function WhatsAppAccountPage(): JSX.Element {
                 : "—"}
             </p>
             <p className="text-xs text-gray-400">Conversations per day</p>
+          </div>
+
+          {/* Quality Rating */}
+          <div className={`rounded-xl border shadow-sm p-4 space-y-1.5 ${
+            s?.phone_info_quality_rating === "RED" ? "bg-red-50 border-red-200" :
+            s?.phone_info_quality_rating === "YELLOW" ? "bg-amber-50 border-amber-200" :
+            "bg-white border-gray-200"
+          }`}>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Quality Rating</p>
+            {s?.phone_info_quality_rating ? (
+              <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${
+                s.phone_info_quality_rating === "GREEN" ? "text-green-700" :
+                s.phone_info_quality_rating === "RED"   ? "text-red-700" :
+                s.phone_info_quality_rating === "YELLOW" ? "text-amber-700" :
+                "text-gray-600"
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${
+                  s.phone_info_quality_rating === "GREEN"  ? "bg-green-500" :
+                  s.phone_info_quality_rating === "RED"    ? "bg-red-500" :
+                  s.phone_info_quality_rating === "YELLOW" ? "bg-amber-400" :
+                  "bg-gray-400"
+                }`} />
+                {s.phone_info_quality_rating === "GREEN" ? "High" :
+                 s.phone_info_quality_rating === "YELLOW" ? "Medium" :
+                 s.phone_info_quality_rating === "RED" ? "Low" :
+                 s.phone_info_quality_rating}
+              </span>
+            ) : (
+              <p className="text-sm text-gray-400">—</p>
+            )}
+            <p className="text-xs text-gray-400">User feedback score</p>
           </div>
 
           {/* Messaging Health */}
@@ -523,6 +557,28 @@ export default function WhatsAppAccountPage(): JSX.Element {
                   <div className="py-2.5 flex items-center justify-between">
                     <span className="text-sm text-gray-500">Onboarded</span>
                     <span className="text-xs text-gray-700">{new Date(s.phone_info_last_onboarded_time).toLocaleDateString()}</span>
+                  </div>
+                )}
+                {s?.waba_business_verification_status && (
+                  <div className="py-2.5 flex items-center justify-between">
+                    <span className="text-sm text-gray-500">Business Verified</span>
+                    <span className={`text-xs font-medium ${
+                      s.waba_business_verification_status === "verified" ? "text-green-700" :
+                      s.waba_business_verification_status === "not_verified" ? "text-red-600" :
+                      "text-amber-600"
+                    }`}>
+                      {s.waba_business_verification_status === "verified" ? "Verified" :
+                       s.waba_business_verification_status === "not_verified" ? "Not verified" :
+                       s.waba_business_verification_status}
+                    </span>
+                  </div>
+                )}
+                {s?.waba_account_review_status && s.waba_account_review_status !== "APPROVED" && (
+                  <div className="py-2.5 flex items-center justify-between">
+                    <span className="text-sm text-gray-500">Account Review</span>
+                    <span className={`text-xs font-medium ${
+                      s.waba_account_review_status === "PENDING" ? "text-amber-600" : "text-red-600"
+                    }`}>{s.waba_account_review_status}</span>
                   </div>
                 )}
                 {s?.phone_info_is_on_biz_app === "true" && (

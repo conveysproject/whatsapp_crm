@@ -482,29 +482,29 @@ export async function syncAllMetaData(organizationId: string): Promise<void> {
 
   const now = new Date().toISOString();
 
-  const [phoneInfoResult, businessProfileResult, healthResult, displayNameResult, marketingResult] =
+  const [phoneInfoResult, businessProfileResult, wabaInfoResult, displayNameResult, marketingResult] =
     await Promise.allSettled([
-      // 1. Phone info
-      fetch(`${WA_BASE}/${phoneNumberId}?fields=messaging_limit_tier,status,is_on_biz_app,is_pin_enabled,last_onboarded_time`, {
+      // 1. Phone info + quality rating
+      fetch(`${WA_BASE}/${phoneNumberId}?fields=messaging_limit_tier,status,is_on_biz_app,is_pin_enabled,last_onboarded_time,quality_rating`, {
         headers: { Authorization: `Bearer ${accessToken}` },
-      }).then((r) => r.ok ? r.json() as Promise<{ messaging_limit_tier?: string; status?: string; is_on_biz_app?: boolean; is_pin_enabled?: boolean; last_onboarded_time?: string }> : Promise.reject(new Error("phone_info fetch failed"))),
+      }).then((r) => r.ok ? r.json() as Promise<{ messaging_limit_tier?: string; status?: string; is_on_biz_app?: boolean; is_pin_enabled?: boolean; last_onboarded_time?: string; quality_rating?: string }> : Promise.reject(new Error("phone_info fetch failed"))),
 
       // 2. Business profile
       fetch(`${WA_BASE}/${phoneNumberId}/whatsapp_business_profile?fields=about,address,description,email,profile_picture_url,websites,vertical`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       }).then((r) => r.ok ? r.json() as Promise<{ data?: Array<{ about?: string; address?: string; description?: string; email?: string; profile_picture_url?: string; websites?: string[]; vertical?: string }> }> : Promise.reject(new Error("business_profile fetch failed"))),
 
-      // 3. Health status
-      fetch(`${WA_BASE}/${wabaId}?fields=health_status`, {
+      // 3. WABA info: health + business verification + account review
+      fetch(`${WA_BASE}/${wabaId}?fields=health_status,business_verification_status,account_review_status,marketing_messages_onboarding_status`, {
         headers: { Authorization: `Bearer ${accessToken}` },
-      }).then((r) => r.ok ? r.json() as Promise<{ health_status?: { entities?: Array<{ can_send_message?: string }> } }> : Promise.reject(new Error("health_status fetch failed"))),
+      }).then((r) => r.ok ? r.json() as Promise<{ health_status?: { entities?: Array<{ can_send_message?: string }> }; business_verification_status?: string; account_review_status?: string; marketing_messages_onboarding_status?: string }> : Promise.reject(new Error("waba_info fetch failed"))),
 
       // 4. Display name
       fetch(`${WA_BASE}/${phoneNumberId}?fields=verified_name,name_status,new_display_name,new_name_status`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       }).then((r) => r.ok ? r.json() as Promise<{ verified_name?: string; name_status?: string; new_display_name?: string; new_name_status?: string }> : Promise.reject(new Error("display_name fetch failed"))),
 
-      // 5. Marketing messages onboarding status
+      // 5. Marketing messages onboarding status (fallback separate call if WABA call fails)
       fetch(`${WA_BASE}/${wabaId}?fields=marketing_messages_onboarding_status`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       }).then((r) => r.ok ? r.json() as Promise<{ marketing_messages_onboarding_status?: string }> : Promise.reject(new Error("marketing_status fetch failed"))),
@@ -520,6 +520,7 @@ export async function syncAllMetaData(organizationId: string): Promise<void> {
       { key: "phone_info_is_on_biz_app", value: String(d.is_on_biz_app ?? false) },
       { key: "phone_info_is_pin_enabled", value: String(d.is_pin_enabled ?? false) },
       { key: "phone_info_last_onboarded_time", value: d.last_onboarded_time ?? "" },
+      { key: "phone_info_quality_rating", value: d.quality_rating ?? "" },
       { key: "phone_info_synced_at", value: now },
     );
   }
@@ -537,12 +538,18 @@ export async function syncAllMetaData(organizationId: string): Promise<void> {
     );
   }
 
-  if (healthResult.status === "fulfilled") {
-    const entity = healthResult.value.health_status?.entities?.[0];
+  if (wabaInfoResult.status === "fulfilled") {
+    const w = wabaInfoResult.value;
+    const entity = w.health_status?.entities?.[0];
     upserts.push(
       { key: "meta_health_status", value: entity?.can_send_message ?? "" },
       { key: "meta_health_checked_at", value: now },
+      { key: "waba_business_verification_status", value: w.business_verification_status ?? "" },
+      { key: "waba_account_review_status", value: w.account_review_status ?? "" },
     );
+    if (w.marketing_messages_onboarding_status) {
+      upserts.push({ key: "marketing_messages_onboarding_status", value: w.marketing_messages_onboarding_status });
+    }
   }
 
   if (displayNameResult.status === "fulfilled") {
@@ -557,9 +564,9 @@ export async function syncAllMetaData(organizationId: string): Promise<void> {
 
   if (marketingResult.status === "fulfilled") {
     const d = marketingResult.value;
-    upserts.push(
-      { key: "marketing_messages_onboarding_status", value: d.marketing_messages_onboarding_status ?? "" },
-    );
+    if (d.marketing_messages_onboarding_status) {
+      upserts.push({ key: "marketing_messages_onboarding_status", value: d.marketing_messages_onboarding_status });
+    }
   }
 
   if (upserts.length > 0) {

@@ -879,6 +879,10 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
       "new_display_name", "new_display_name_status",
       // marketing
       "marketing_messages_onboarding_status",
+      // phone quality
+      "phone_info_quality_rating",
+      // waba status
+      "waba_business_verification_status", "waba_account_review_status",
       // channel IDs
       "facebook_app_id", "facebook_page_id", "facebook_page_ids",
       "instagram_account_id", "instagram_account_ids",
