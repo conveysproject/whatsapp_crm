@@ -74,7 +74,7 @@ function TemplateMessageBubble({ body }: { body: string }): JSX.Element {
   const isMediaHeader = ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat);
 
   return (
-    <div className="flex flex-col w-full min-w-[220px]">
+    <div className="flex flex-col w-full">
       {/* Media header — full-width, flush to bubble edges */}
       {headerMediaUrl && isMediaHeader && (
         <div className="w-full overflow-hidden">
@@ -325,8 +325,7 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
             <div className={`flex ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}>
               <div
                 className={[
-                  "max-w-xs lg:max-w-md rounded-2xl text-sm",
-                  msg.contentType === "template" ? "overflow-hidden p-0" : "px-4 py-2",
+                  msg.contentType === "template" ? "w-full max-w-[336px] overflow-hidden p-0 rounded-2xl text-sm" : "max-w-xs lg:max-w-md px-4 py-2 rounded-2xl text-sm",
                   msg.direction === "outbound"
                     ? "bg-wa-light text-gray-900 rounded-br-none"
                     : "bg-white border border-gray-200 text-gray-900 rounded-bl-none shadow-card",
