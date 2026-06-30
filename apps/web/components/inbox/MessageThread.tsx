@@ -59,12 +59,13 @@ interface TemplateParsed {
 
 function TemplateMessageBubble({ body }: { body: string }): JSX.Element {
   let parsed: TemplateParsed = {};
-  try { parsed = JSON.parse(body) as TemplateParsed; } catch { /* raw fallback */ }
+  let isJson = false;
+  try { parsed = JSON.parse(body) as TemplateParsed; isJson = true; } catch { /* raw fallback */ }
 
   const headerFormat = (parsed.header?.format ?? "TEXT").toUpperCase();
   const headerText = parsed.header?.text;
   const headerMediaUrl = parsed.header?.mediaUrl;
-  const bodyText = parsed.body;
+  const bodyText = parsed.body ?? (!isJson ? body : undefined);
   const footerText = parsed.footer;
   const buttons = parsed.buttons ?? [];
   const carousel = parsed.carousel ?? [];

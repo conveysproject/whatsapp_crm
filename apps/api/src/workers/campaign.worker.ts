@@ -181,7 +181,25 @@ export const campaignWorker = new Worker<CampaignJob>(
         recipient = { ...recipient, contactId: contact.id, fullName };
       }
 
-      const body = contact ? resolveTemplateVars(templateBody, contact) : templateBody;
+      let body: string;
+      if (isTemplateCampaign && metaTemplate) {
+        const comps = metaTemplate.components as Array<{ type?: string; text?: string; format?: string; buttons?: Array<{ type?: string; text?: string }> }>;
+        const headerComp = comps.find((c) => c.type?.toUpperCase() === "HEADER");
+        const bodyComp = comps.find((c) => c.type?.toUpperCase() === "BODY");
+        const footerComp = comps.find((c) => c.type?.toUpperCase() === "FOOTER");
+        const btns = comps.find((c) => c.type?.toUpperCase() === "BUTTONS");
+        const rawText = bodyComp?.text ?? metaTemplate.name;
+        const resolvedText = contact ? resolveTemplateVars(rawText, contact) : rawText;
+        body = JSON.stringify({
+          header: headerComp ? { format: headerComp.format ?? "TEXT", text: headerComp.text } : undefined,
+          body: resolvedText,
+          footer: footerComp?.text,
+          buttons: (btns as { type?: string; buttons?: Array<{ type?: string; text?: string }> } | undefined)?.buttons ?? [],
+        });
+      } else {
+        const rawBodyText = templateBody;
+        body = contact ? resolveTemplateVars(rawBodyText, contact) : rawBodyText;
+      }
 
       try {
         let messageId: string;
