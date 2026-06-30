@@ -65,7 +65,9 @@ function TemplateMessageBubble({ body }: { body: string }): JSX.Element {
   const headerFormat = (parsed.header?.format ?? "TEXT").toUpperCase();
   const headerText = parsed.header?.text;
   const headerMediaUrl = parsed.header?.mediaUrl;
-  const bodyText = parsed.body ?? (!isJson ? body : undefined);
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const rawFallback = !isJson && !UUID_RE.test(body.trim()) ? body : undefined;
+  const bodyText = parsed.body ?? rawFallback;
   const footerText = parsed.footer;
   const buttons = parsed.buttons ?? [];
   const carousel = parsed.carousel ?? [];
@@ -81,9 +83,10 @@ function TemplateMessageBubble({ body }: { body: string }): JSX.Element {
       {headerText && (
         <p className="font-semibold text-gray-900 leading-snug">{headerText}</p>
       )}
-      {bodyText && (
-        <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{bodyText}</p>
-      )}
+      {bodyText
+        ? <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{bodyText}</p>
+        : !headerText && !headerMediaUrl && <p className="text-xs text-gray-400 italic">Template message</p>
+      }
       {footerText && (
         <p className="text-xs text-gray-400 mt-0.5">{footerText}</p>
       )}
