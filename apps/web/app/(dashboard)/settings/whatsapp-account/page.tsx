@@ -75,6 +75,30 @@ const TIER_LABEL: Record<string, string> = {
   TIER_UNLIMITED: "Unlimited",
 };
 
+const VERTICAL_LABEL: Record<string, string> = {
+  ALCOHOL: "Alcoholic Beverages",
+  APPAREL: "Clothing and Apparel",
+  AUTO: "Automotive",
+  BEAUTY: "Beauty, Spa and Salon",
+  EDU: "Education",
+  ENTERTAIN: "Entertainment",
+  EVENT_PLAN: "Event Planning and Service",
+  FINANCE: "Finance and Banking",
+  GOVT: "Public Service",
+  GROCERY: "Food and Grocery",
+  HEALTH: "Medical and Health",
+  HOTEL: "Hotel and Lodging",
+  NONPROFIT: "Non-profit",
+  ONLINE_GAMBLING: "Online Gambling & Gaming",
+  OTC_DRUGS: "Over-the-Counter Drugs",
+  OTHER: "Other",
+  PHYSICAL_GAMBLING: "Non-Online Gambling & Gaming",
+  PROF_SERVICES: "Professional Services",
+  RESTAURANT: "Restaurant",
+  RETAIL: "Shopping and Retail",
+  TRAVEL: "Travel and Transportation",
+};
+
 function StatusBadge({ status }: { status: string | undefined }) {
   const map: Record<string, { dot: string; text: string; label: string }> = {
     CONNECTED: { dot: "bg-green-500", text: "text-green-700", label: "Active" },
@@ -295,12 +319,13 @@ export default function WhatsAppAccountPage(): JSX.Element {
 
           {/* Quality Rating */}
           <div className={`rounded-xl border shadow-sm p-4 space-y-1.5 ${
-            s?.phone_info_quality_rating === "RED" ? "bg-red-50 border-red-200" :
+            s?.phone_info_quality_rating === "RED"    ? "bg-red-50 border-red-200" :
             s?.phone_info_quality_rating === "YELLOW" ? "bg-amber-50 border-amber-200" :
+            s?.phone_info_quality_rating === "GREEN"  ? "bg-green-50 border-green-200" :
             "bg-white border-gray-200"
           }`}>
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Quality Rating</p>
-            {s?.phone_info_quality_rating ? (
+            {s?.phone_info_quality_rating && s.phone_info_quality_rating !== "UNKNOWN" ? (
               <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${
                 s.phone_info_quality_rating === "GREEN" ? "text-green-700" :
                 s.phone_info_quality_rating === "RED"   ? "text-red-700" :
@@ -412,8 +437,12 @@ export default function WhatsAppAccountPage(): JSX.Element {
                 )}
                 <div>
                   <p className="font-semibold text-gray-900">{s?.display_name ?? "—"}</p>
-                  <p className="text-sm text-gray-500">{s?.business_profile_vertical ?? "Business"}</p>
-                  {s?.display_name_status && s.display_name_status !== "APPROVED" && (
+                  {s?.business_profile_vertical && (
+                    <p className="text-sm text-gray-500">
+                      {VERTICAL_LABEL[s.business_profile_vertical] ?? s.business_profile_vertical}
+                    </p>
+                  )}
+                  {s?.display_name_status && (s.display_name_status === "REJECTED" || s.display_name_status === "PENDING_REVIEW") && (
                     <span className={`mt-1 inline-flex text-xs px-2 py-0.5 rounded-full ${
                       s.display_name_status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"
                     }`}>
