@@ -214,6 +214,7 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
             const mediaId = msg.image?.id ?? msg.video?.id ?? msg.audio?.id
               ?? msg.document?.id ?? msg.sticker?.id ?? msg.voice?.id ?? null;
             let body: string | null = null;
+            let richContent: object | null = null;
             if (msg.text?.body) {
               body = msg.text.body;
             } else if (msg.location) {
@@ -227,11 +228,16 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
             } else if (msg.document?.caption) {
               body = msg.document.caption;
             } else if (msg.interactive?.button_reply) {
-              body = JSON.stringify({ button_reply: msg.interactive.button_reply });
+              // body stays the human-readable reply title (AI/search/flow-trigger read this);
+              // richContent keeps the structured reply for the inbox bubble renderer.
+              body = msg.interactive.button_reply.title ?? null;
+              richContent = { button_reply: msg.interactive.button_reply };
             } else if (msg.interactive?.list_reply) {
-              body = JSON.stringify({ list_reply: msg.interactive.list_reply });
+              body = msg.interactive.list_reply.title ?? null;
+              richContent = { list_reply: msg.interactive.list_reply };
             } else if (msg.interactive) {
-              body = JSON.stringify(msg.interactive);
+              body = null;
+              richContent = msg.interactive;
             }
 
             const queued = !!org;
@@ -260,6 +266,7 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
               whatsappMessageId: msg.id,
               contentType: msg.type,
               body,
+              richContent,
               mediaId,
               timestamp: parseInt(msg.timestamp, 10),
             }, { jobId: `wamsg-${msg.id}` });

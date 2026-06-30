@@ -32,6 +32,19 @@ function resolveTemplateVars(
     .replace(/\{\{email\}\}/gi, contact.email ?? "");
 }
 
+// Meta templates use positional {{1}}, {{2}}… placeholders — resolve the *displayed* body
+// the same way contactBodyVars resolves the values actually sent to Meta (name/phone/email),
+// so the stored text always matches what the customer received.
+function resolvePositionalVars(
+  template: string,
+  contact: { firstName: string | null; lastName: string | null; phoneNumber: string; email: string | null }
+): string {
+  const indices = [...template.matchAll(/\{\{(\d+)\}\}/g)].map((m) => parseInt(m[1]!, 10));
+  if (indices.length === 0) return template;
+  const values = contactBodyVars(contact, Math.max(...indices));
+  return template.replace(/\{\{(\d+)\}\}/g, (_match, n: string) => values[parseInt(n, 10) - 1] ?? "");
+}
+
 async function resolveTargetPhones(
   campaignId: string,
   organizationId: string,
@@ -182,6 +195,7 @@ export const campaignWorker = new Worker<CampaignJob>(
       }
 
       let body: string;
+      let richContent: object | null = null;
       if (isTemplateCampaign && metaTemplate) {
         const comps = metaTemplate.components as Array<{ type?: string; text?: string; format?: string; buttons?: Array<{ type?: string; text?: string }>; example?: { header_handle?: string[] } }>;
         const headerComp = comps.find((c) => c.type?.toUpperCase() === "HEADER");
@@ -189,19 +203,21 @@ export const campaignWorker = new Worker<CampaignJob>(
         const footerComp = comps.find((c) => c.type?.toUpperCase() === "FOOTER");
         const btns = comps.find((c) => c.type?.toUpperCase() === "BUTTONS");
         const rawText = bodyComp?.text ?? metaTemplate.name;
-        const resolvedText = contact ? resolveTemplateVars(rawText, contact) : rawText;
+        const resolvedText = contact ? resolvePositionalVars(rawText, contact) : rawText;
         const headerFmt = (headerComp?.format ?? "TEXT").toUpperCase();
         const isMediaHeader = ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFmt);
         // Prefer campaign.mediaUrl (R2, permanent) over template example handle (WhatsApp CDN, expires)
         const mediaUrl = isMediaHeader
           ? (campaign.mediaUrl ?? headerComp?.example?.header_handle?.[0] ?? undefined)
           : undefined;
-        body = JSON.stringify({
+        // body stays plain text (AI/search/flow-trigger consumers read this); presentation
+        // structure (header/footer/buttons) goes in richContent for the bubble renderer only.
+        body = resolvedText;
+        richContent = {
           header: headerComp ? { format: headerFmt, text: headerComp.text, mediaUrl } : undefined,
-          body: resolvedText,
           footer: footerComp?.text,
           buttons: (btns as { type?: string; buttons?: Array<{ type?: string; text?: string }> } | undefined)?.buttons ?? [],
-        });
+        };
       } else {
         const rawBodyText = templateBody;
         body = contact ? resolveTemplateVars(rawBodyText, contact) : rawBodyText;
@@ -282,6 +298,7 @@ export const campaignWorker = new Worker<CampaignJob>(
           organizationId,
           contentType,
           body,
+          richContent,
           whatsappMessageId: messageId,
         });
 

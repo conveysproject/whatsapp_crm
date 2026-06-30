@@ -57,16 +57,21 @@ interface TemplateParsed {
   carousel?: CarouselCard[] | null;
 }
 
-function TemplateMessageBubble({ body }: { body: string }): JSX.Element {
+function TemplateMessageBubble({ body, richContent }: { body: string | null; richContent?: Record<string, unknown> | null }): JSX.Element {
   let parsed: TemplateParsed = {};
-  let isJson = false;
-  try { parsed = JSON.parse(body) as TemplateParsed; isJson = true; } catch { /* raw fallback */ }
+  if (richContent) {
+    // Current format: structure lives in richContent, body is plain resolved text.
+    parsed = { ...richContent, body } as TemplateParsed;
+  } else if (body) {
+    // Legacy rows (pre rich_content column): structure was JSON-encoded into body.
+    try { parsed = JSON.parse(body) as TemplateParsed; } catch { parsed = {}; }
+  }
 
   const headerFormat = (parsed.header?.format ?? "TEXT").toUpperCase();
   const headerText = parsed.header?.text;
   const headerMediaUrl = parsed.header?.mediaUrl;
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const rawFallback = !isJson && !UUID_RE.test(body.trim()) ? body : undefined;
+  const rawFallback = !richContent && body && !UUID_RE.test(body.trim()) && parsed.body === undefined ? body : undefined;
   const bodyText = parsed.body ?? rawFallback;
   const footerText = parsed.footer;
   const buttons = parsed.buttons ?? [];
@@ -156,12 +161,17 @@ interface InteractiveParsed {
   list_reply?: { id?: string; title?: string };
 }
 
-function InteractiveMessageBubble({ body }: { body: string }): JSX.Element {
+function InteractiveMessageBubble({ body, richContent }: { body: string | null; richContent?: Record<string, unknown> | null }): JSX.Element {
   let parsed: InteractiveParsed = {};
-  try { parsed = JSON.parse(body) as InteractiveParsed; } catch { /* raw fallback */ }
+  if (richContent) {
+    parsed = richContent as InteractiveParsed;
+  } else if (body) {
+    // Legacy rows (pre rich_content column): structure was JSON-encoded into body.
+    try { parsed = JSON.parse(body) as InteractiveParsed; } catch { parsed = {}; }
+  }
 
-  // Inbound button/list reply from contact
-  const replyTitle = parsed.button_reply?.title ?? parsed.list_reply?.title;
+  // Inbound button/list reply from contact — current rows: title lives in plain `body`.
+  const replyTitle = (richContent ? body : undefined) ?? parsed.button_reply?.title ?? parsed.list_reply?.title;
   if (replyTitle) {
     return (
       <div className="flex items-center gap-1.5 text-sm text-gray-800">
@@ -333,11 +343,11 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
               >
                 {msg.contentType === "audio" && msg.mediaUrl ? (
                   <VoicePlayer mediaUrl={msg.mediaUrl} messageId={msg.id} />
-                ) : msg.contentType === "template" && msg.body ? (
-                  <TemplateMessageBubble body={msg.body} />
+                ) : msg.contentType === "template" && (msg.body || msg.richContent) ? (
+                  <TemplateMessageBubble body={msg.body} richContent={msg.richContent} />
                 ) : msg.contentType === "interactive" ? (
-                  msg.body
-                    ? <InteractiveMessageBubble body={msg.body} />
+                  msg.body || msg.richContent
+                    ? <InteractiveMessageBubble body={msg.body} richContent={msg.richContent} />
                     : <span className="text-xs text-gray-400 italic">Interactive message</span>
                 ) : msg.mediaUrl != null && msg.contentType !== "text" ? (
                   <MediaMessage mediaUrl={msg.mediaUrl} contentType={msg.contentType ?? "document"} />

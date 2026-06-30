@@ -270,6 +270,7 @@ model Message {
   direction         MessageDirection
   contentType       String           @default("text") @map("content_type")
   body              String?          @db.Text
+  richContent       Json?            @map("rich_content") // structured presentation data (template/interactive); body stays plain text
   mediaUrl          String?          @map("media_url")
   whatsappMessageId String?          @unique @map("whatsapp_message_id")
   wabPhoneNumberId  String?          @map("wab_phone_number_id") // which business number sent/received

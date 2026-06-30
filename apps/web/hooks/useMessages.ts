@@ -11,6 +11,7 @@ export interface Message {
   direction: "inbound" | "outbound";
   contentType?: string | null;
   body: string | null;
+  richContent?: Record<string, unknown> | null;
   sentAt: string;
   mediaUrl?: string | null;
   status?: string | null;

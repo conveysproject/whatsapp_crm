@@ -77,6 +77,7 @@ export interface InboundMessageJob {
   whatsappMessageId: string;
   contentType: string;
   body: string | null;
+  richContent?: object | null;
   mediaId: string | null;
   timestamp: number;
 }
@@ -84,7 +85,7 @@ export interface InboundMessageJob {
 export const inboundWorker = new Worker<InboundMessageJob>(
   "inbound-messages",
   async (job) => {
-    const { organizationId, whatsappContactPhone, whatsappMessageId, contentType, body, mediaId, timestamp } = job.data;
+    const { organizationId, whatsappContactPhone, whatsappMessageId, contentType, body, richContent, mediaId, timestamp } = job.data;
     console.log(`[worker:inbound] START wamid=${whatsappMessageId} from=${whatsappContactPhone} type=${contentType} body=${JSON.stringify(body)}`);
 
     try {
@@ -202,6 +203,7 @@ export const inboundWorker = new Worker<InboundMessageJob>(
         direction: "inbound",
         contentType,
         body,
+        richContent: richContent ?? undefined,
         whatsappMessageId,
         status: "delivered",
         sentAt: messageDate,
