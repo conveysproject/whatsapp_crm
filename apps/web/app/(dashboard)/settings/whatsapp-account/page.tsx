@@ -119,6 +119,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
   const [justConnected, setJustConnected] = useState(false);
   const [disconnectResult, setDisconnectResult] = useState<DisconnectResult | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [about, setAbout] = useState("");
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
@@ -365,6 +366,17 @@ export default function WhatsAppAccountPage(): JSX.Element {
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                 <h2 className="text-sm font-semibold text-gray-900">Business Profile</h2>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setShowPreview(!showPreview)}
+                    className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
+                      showPreview
+                        ? "bg-gray-900 text-white border-gray-900"
+                        : "text-gray-500 border-gray-200 hover:border-gray-400"
+                    }`}
+                  >
+                    {showPreview ? "Hide preview" : "Preview"}
+                  </button>
                 {!editingProfile && (
                   <button
                     onClick={() => {
@@ -382,8 +394,11 @@ export default function WhatsAppAccountPage(): JSX.Element {
                     Edit
                   </button>
                 )}
+                </div>
               </div>
 
+              <div className={showPreview ? "flex" : ""}>
+              <div className={showPreview ? "flex-1 min-w-0" : ""}>
               {/* Profile header */}
               <div className="flex items-center gap-4 px-5 py-4 border-b border-gray-100">
                 {s?.business_profile_picture_url ? (
@@ -572,6 +587,22 @@ export default function WhatsAppAccountPage(): JSX.Element {
                   }`}>{s.new_display_name_status ?? "PENDING"}</span>
                 </div>
               )}
+              </div>{/* end left pane */}
+
+              {/* Phone preview panel */}
+              {showPreview && (
+                <div className="w-56 shrink-0 border-l border-gray-100 bg-gray-50 flex flex-col items-center justify-start py-6 px-3">
+                  <p className="text-xs text-gray-400 mb-4 font-medium">Customer view</p>
+                  <WhatsAppPhonePreview
+                    name={s?.display_name ?? "Business Name"}
+                    phone={s?.current_phone_number_number ?? ""}
+                    about={s?.business_profile_about ?? ""}
+                    pictureUrl={s?.business_profile_picture_url}
+                    website={(() => { try { const ws = JSON.parse(s?.business_profile_websites ?? "[]") as string[]; return ws[0] ?? ""; } catch { return ""; } })()}
+                  />
+                </div>
+              )}
+              </div>{/* end preview flex row */}
             </div>
 
             {/* Phone numbers card */}
@@ -806,6 +837,84 @@ export default function WhatsAppAccountPage(): JSX.Element {
         )}
       </div>
     </PermissionGate>
+  );
+}
+
+// ── Phone preview ──────────────────────────────────────────────────────────────
+
+function WhatsAppPhonePreview({ name, phone, about, pictureUrl, website }: {
+  name: string; phone: string; about: string; pictureUrl?: string; website?: string;
+}) {
+  const initial = (name || "B").charAt(0).toUpperCase();
+  return (
+    /* Phone frame */
+    <div className="relative w-44 rounded-[2rem] border-4 border-gray-800 bg-gray-800 shadow-2xl overflow-hidden" style={{ minHeight: 340 }}>
+      {/* Status bar */}
+      <div className="bg-gray-800 flex items-center justify-between px-4 pt-2 pb-1">
+        <span className="text-white text-[9px] font-semibold">9:41</span>
+        <div className="flex gap-1 items-center">
+          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M1.5 8.5C5 5 10.5 3 12 3s7 2 10.5 5.5" /><path d="M5 12c1.9-1.9 4.4-3 7-3s5.1 1.1 7 3" /><path d="M8.5 15.5c.9-.9 2.2-1.5 3.5-1.5s2.6.6 3.5 1.5" /><circle cx="12" cy="19" r="1" /></svg>
+          <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="11" rx="2" /><path d="M22 11h1a1 1 0 010 2h-1" /></svg>
+        </div>
+      </div>
+
+      {/* WhatsApp header */}
+      <div className="bg-[#075E54] px-3 py-2 flex items-center gap-2">
+        <svg className="w-4 h-4 text-white shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+        </svg>
+        {pictureUrl ? (
+          <img src={pictureUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
+        ) : (
+          <div className="w-7 h-7 rounded-full bg-[#25D366] flex items-center justify-center shrink-0">
+            <span className="text-white text-xs font-bold">{initial}</span>
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="text-white text-[11px] font-semibold leading-tight truncate">{name || "Business Name"}</p>
+          <p className="text-[#b2dfdb] text-[9px] leading-tight">Business account</p>
+        </div>
+        <div className="ml-auto flex gap-2">
+          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+        </div>
+      </div>
+
+      {/* Profile body */}
+      <div className="bg-[#ECE5DD] flex-1">
+        {/* Avatar + name block */}
+        <div className="bg-white pt-5 pb-3 flex flex-col items-center gap-2 border-b border-gray-200">
+          {pictureUrl ? (
+            <img src={pictureUrl} alt="" className="w-16 h-16 rounded-full object-cover border-2 border-white shadow" />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shadow">
+              <span className="text-white text-2xl font-bold">{initial}</span>
+            </div>
+          )}
+          <div className="text-center px-2">
+            <p className="text-[12px] font-semibold text-gray-900 leading-tight">{name || "Business Name"}</p>
+            {phone && <p className="text-[10px] text-gray-500 mt-0.5">{phone}</p>}
+          </div>
+        </div>
+
+        {/* Info rows */}
+        <div className="bg-white mt-2 divide-y divide-gray-100">
+          {about && (
+            <div className="px-3 py-2">
+              <p className="text-[9px] text-[#075E54] font-medium mb-0.5">About</p>
+              <p className="text-[10px] text-gray-700 leading-snug line-clamp-3">{about}</p>
+            </div>
+          )}
+          {website && (
+            <div className="px-3 py-2 flex items-center gap-2">
+              <svg className="w-3 h-3 text-[#075E54] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              <p className="text-[10px] text-[#128C7E] truncate">{website.replace(/^https?:\/\//, "")}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
