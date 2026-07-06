@@ -1234,7 +1234,7 @@ export const SERVICES: ServiceData[] = [
       { name: "Postman", category: "Testing" },
     ],
     faqs: [
-      { q: "Which payment gateways do you integrate?", a: "Razorpay and Stripe most commonly — Razorpay for India-first products (UPI, net banking, EMI), Stripe for international. We also integrate PayU, CCAvenue, PayTM, and PhonePe for specific requirements. All integrations include webhook handling for payment events." },
+      { q: "Which payment gateways do you integrate?", a: "Razorpay and Stripe most commonly — Razorpay for products (UPI, net banking, EMI), Stripe for international. We also integrate PayU, CCAvenue, PayTM, and PhonePe for specific requirements. All integrations include webhook handling for payment events." },
       { q: "Can you integrate with legacy SOAP or XML APIs?", a: "Yes. We wrap SOAP or XML APIs in a modern REST adapter so your application talks to a clean JSON interface while we handle the SOAP envelope transformation internally. Common for ERP and banking integrations in India." },
       { q: "How do you handle API errors and failures?", a: "Outbound calls use exponential backoff with jitter and a maximum retry count. Persistent failures trigger a dead-letter queue for manual review. Inbound webhooks are acknowledged immediately and processed asynchronously — so a slow processor does not cause the sender to time out and retry." },
       { q: "How do you handle API versioning?", a: "URL prefix versioning (/v1/, /v2/) for APIs with external consumers. We maintain old versions for a documented deprecation period (minimum 6 months) before sunset. Breaking changes always get a new version number." },

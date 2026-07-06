@@ -248,7 +248,7 @@ export default function LandingPage(): JSX.Element {
       <section className="hero">
         <div className="hero-in">
           <div>
-            <div className="pill"><span className="pill-dot" /> Meta Tech Provider · India-First</div>
+            <div className="pill"><span className="pill-dot" /> Meta Tech Provider</div>
             <h1 className="h1">
               Turn Every <span className="h1-acc">WhatsApp</span>{" "}
               Message Into Revenue
@@ -456,7 +456,7 @@ export default function LandingPage(): JSX.Element {
             <span style={{color:"#6EE7B7"}}>Let&rsquo;s fix that.</span>
           </h2>
           <p style={{fontSize:"1.02rem",color:"rgba(255,255,255,.55)",marginBottom:"2rem",maxWidth:"460px",margin:"1rem auto 2rem",lineHeight:1.7}}>
-            India-first WhatsApp CRM. Zero message markup. Your team, your conversations, your growth.
+            WhatsApp CRM. Zero message markup. Your team, your conversations, your growth.
           </p>
           <div style={{display:"flex",flexWrap:"wrap",justifyContent:"center",gap:"12px"}}>
             <Link href="/sign-up" className="btn-wh">Start Free — 14 Days</Link>
