@@ -39,7 +39,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
     const pageNum = Math.max(1, parseInt(page ?? "1", 10));
     const pageSize = 50;
 
-    const where: Record<string, unknown> = { organizationId, contact: { deletedAt: null } };
+    const where: Record<string, unknown> = { organizationId, conversation: { contact: { deletedAt: null } } };
     if (from || to) {
       where.createdAt = {
         ...(from ? { gte: new Date(from) } : {}),
@@ -48,7 +48,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
       };
     }
     if (direction) where.direction = direction;
-    if (contactId) where.conversation = { contactId };
+    if (contactId) where.conversation = { contact: { deletedAt: null }, contactId };
 
     const [data, total] = await Promise.all([
       fastify.prisma.message.findMany({
