@@ -50,7 +50,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     const { status, assignedTo, teamId, page, contactId, labelId } = request.query;
     const pageNum = Math.max(1, parseInt(page ?? "1", 10));
 
-    const where: Record<string, unknown> = { organizationId };
+    const where: Record<string, unknown> = { organizationId, contact: { deletedAt: null } };
     if (status) where.status = status;
     if (assignedTo) where.assignedTo = assignedTo;
     if (teamId) where.teamId = teamId;
@@ -97,7 +97,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     const q = request.query.q?.trim() ?? "";
     if (q.length < 2) return reply.send({ data: [] });
 
-    const where: Record<string, unknown> = { organizationId };
+    const where: Record<string, unknown> = { organizationId, contact: { deletedAt: null } };
     // agents with assigned_chats_only permission see only their own conversations
     if (permissions["assigned_chats_only"] === "allow") where.assignedTo = userId;
 
