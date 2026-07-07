@@ -39,7 +39,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
     const pageNum = Math.max(1, parseInt(page ?? "1", 10));
     const pageSize = 50;
 
-    const where: Record<string, unknown> = { organizationId };
+    const where: Record<string, unknown> = { organizationId, contact: { deletedAt: null } };
     if (from || to) {
       where.createdAt = {
         ...(from ? { gte: new Date(from) } : {}),
