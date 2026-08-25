@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import type { JSX } from "react";
 import { ClerkProvider } from "@clerk/nextjs";
 import { QueryProvider } from "@/components/providers/QueryProvider";
@@ -56,7 +57,50 @@ export default function RootLayout({
             type="application/ld+json"
             dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema()) }}
           />
+          <Script id="tawk-to" strategy="afterInteractive">
+            {`
+              var Tawk_API = Tawk_API || {}, Tawk_LoadStart = new Date();
+              (function () {
+                var s1 = document.createElement("script"), s0 = document.getElementsByTagName("script")[0];
+                s1.async = true;
+                s1.src = "https://embed.tawk.to/6a8d9f787f08c0344498a708/1k0sjdsk2";
+                s1.charset = "UTF-8";
+                s1.setAttribute("crossorigin", "*");
+                s0.parentNode.insertBefore(s1, s0);
+              })();
+            `}
+          </Script>
           <QueryProvider>{children}</QueryProvider>
+          {/* Google Analytics 4 */}
+                <Script
+                  src="https://www.googletagmanager.com/gtag/js?id=G-4Q09E6BQC1"
+                  strategy="afterInteractive"
+                />
+                <Script id="gtag-init" strategy="afterInteractive">
+                  {`
+                    window.dataLayer = window.dataLayer || [];
+                    function gtag(){dataLayer.push(arguments);}
+                    gtag('js', new Date());
+                    gtag('config', 'G-4Q09E6BQC1', {
+                      send_page_view: true,
+                      allow_google_signals: true,
+                      allow_ad_personalization_signals: false
+                    });
+                  `}
+                </Script>
+          
+                {/* Microsoft Clarity — sign up free at clarity.microsoft.com, add NEXT_PUBLIC_CLARITY_ID to Vercel env vars */}
+                {process.env.NEXT_PUBLIC_CLARITY_ID && (
+                  <Script id="clarity-init" strategy="afterInteractive">
+                    {`
+                      (function(c,l,a,r,i,t,y){
+                        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+                      })(window,document,"clarity","script","${process.env.NEXT_PUBLIC_CLARITY_ID}");
+                    `}
+                  </Script>
+                )}
         </body>
       </html>
     </ClerkProvider>
