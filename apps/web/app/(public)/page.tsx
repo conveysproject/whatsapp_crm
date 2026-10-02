@@ -4,6 +4,7 @@ import Image from "next/image";
 import type { JSX } from "react";
 import type { Metadata } from "next";
 import PricingSection from "./pricing-section";
+import TawkChat from "./tawk-chat";
 
 const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-br", weight: ["500", "600", "700", "800"] });
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm", weight: ["400", "500"] });
@@ -25,6 +26,7 @@ const FEATURES = [
 export default function LandingPage(): JSX.Element {
   return (
     <div className={`${bricolage.variable} ${dmSans.variable} tr`}>
+      <TawkChat />
       <style>{`
         .tr {
           --g: #0BBF77; --g7: #089058; --g9: #08452E;

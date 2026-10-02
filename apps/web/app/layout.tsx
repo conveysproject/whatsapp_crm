@@ -57,23 +57,6 @@ export default function RootLayout({
             type="application/ld+json"
             dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema()) }}
           />
-          <Script id="tawk-to" strategy="afterInteractive">
-            {`
-              window.Tawk_API = window.Tawk_API || {};
-              if (!window.__tawkLoaded) {
-                window.__tawkLoaded = true;
-                window.Tawk_LoadStart = new Date();
-                (function () {
-                  var s1 = document.createElement("script"), s0 = document.getElementsByTagName("script")[0];
-                  s1.async = true;
-                  s1.src = "https://embed.tawk.to/6a8d9f787f08c0344498a708/1k0sjdsk2";
-                  s1.charset = "UTF-8";
-                  s1.setAttribute("crossorigin", "*");
-                  s0.parentNode.insertBefore(s1, s0);
-                })();
-              }
-            `}
-          </Script>
           <QueryProvider>{children}</QueryProvider>
           {/* Google Analytics 4 */}
                 <Script
