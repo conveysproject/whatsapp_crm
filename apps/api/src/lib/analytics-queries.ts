@@ -1,5 +1,13 @@
 import type { PrismaClient, CampaignRecipientStatus } from "@prisma/client";
 
+// Match the inbox/contacts lists: soft-deleted contacts (and their conversations/messages) are excluded.
+const LIVE_CONTACT = { contact: { deletedAt: null } } as const;
+const LIVE_CONV_MSG = { conversation: LIVE_CONTACT } as const;
+
+function displayName(c: { name?: string | null; firstName?: string | null; lastName?: string | null; phoneNumber?: string | null }): string {
+  return c.name || [c.firstName, c.lastName].filter(Boolean).join(" ") || c.phoneNumber || "Unknown";
+}
+
 export interface OverviewMetrics {
   openConversations: number;
   totalContacts: number;
@@ -40,23 +48,23 @@ export async function getOverviewMetrics(
     outboundMsgs,
     convs30d,
   ] = await Promise.all([
-    prisma.conversation.count({ where: { organizationId, status: "open" } }),
-    prisma.contact.count({ where: { organizationId } }),
-    prisma.message.count({ where: { organizationId, createdAt: { gte: startOfDay }, isSystemMessage: false } }),
+    prisma.conversation.count({ where: { organizationId, status: "open", ...LIVE_CONTACT } }),
+    prisma.contact.count({ where: { organizationId, deletedAt: null } }),
+    prisma.message.count({ where: { organizationId, createdAt: { gte: startOfDay }, isSystemMessage: false, ...LIVE_CONV_MSG } }),
     prisma.invitation.count({ where: { organizationId, status: "pending" } }),
     prisma.campaign.count({
       where: { organizationId, status: "completed", sentAt: { gte: startOfMonth } },
     }),
     prisma.conversation.count({
-      where: { organizationId, status: "bot" },
+      where: { organizationId, status: "bot", ...LIVE_CONTACT },
     }),
     prisma.message.findMany({
-      where: { organizationId, direction: "outbound", isSystemMessage: false, createdAt: { gte: since30d } },
+      where: { organizationId, direction: "outbound", isSystemMessage: false, createdAt: { gte: since30d }, ...LIVE_CONV_MSG },
       select: { conversationId: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     }),
     prisma.conversation.findMany({
-      where: { organizationId, createdAt: { gte: since30d } },
+      where: { organizationId, createdAt: { gte: since30d }, ...LIVE_CONTACT },
       select: { id: true, createdAt: true },
     }),
   ]);
@@ -99,7 +107,7 @@ export async function getConversationVolume(
   since.setHours(0, 0, 0, 0);
 
   const messages = await prisma.message.findMany({
-    where: { organizationId, createdAt: { gte: since } },
+    where: { organizationId, createdAt: { gte: since }, isSystemMessage: false, ...LIVE_CONV_MSG },
     select: { direction: true, createdAt: true },
   });
 
@@ -154,7 +162,7 @@ export async function getMyWork(
 
   const [assignedConvs, assignedContacts, resolvedToday] = await Promise.all([
     prisma.conversation.findMany({
-      where: { organizationId, assignedTo: userId, status: { in: ["open", "pending"] } },
+      where: { organizationId, assignedTo: userId, status: { in: ["open", "pending"] }, ...LIVE_CONTACT },
       select: {
         id: true,
         unreadCount: true,
@@ -162,11 +170,11 @@ export async function getMyWork(
         createdAt: true,
         slaId: true,
         sla: { select: { firstResponseSecs: true } },
-        contact: { select: { name: true, firstName: true, lastName: true } },
+        contact: { select: { name: true, firstName: true, lastName: true, phoneNumber: true } },
       },
       orderBy: { lastMessageAt: "desc" },
     }),
-    prisma.contact.count({ where: { organizationId, assignedUserId: userId } }),
+    prisma.contact.count({ where: { organizationId, assignedUserId: userId, deletedAt: null } }),
     prisma.conversation.count({
       where: {
         organizationId,
@@ -230,10 +238,7 @@ export async function getMyWork(
 
   const topConversations: ConversationPreview[] = assignedConvs.slice(0, 3).map((c) => {
     const contact = c.contact;
-    const contactName =
-      contact?.name ??
-      [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") ??
-      "Unknown";
+    const contactName = contact ? displayName(contact) : "Unknown";
     const lastMsg = lastMsgByConv.get(c.id);
     let preview = "[Media]";
     if (lastMsg?.body) preview = lastMsg.body.slice(0, 60);
@@ -286,7 +291,7 @@ export async function getTeamStats(
 
   const [openConvs, resolvedConvs, convs30d] = await Promise.all([
     prisma.conversation.findMany({
-      where: { organizationId, assignedTo: { in: userIds }, status: { in: ["open", "pending"] } },
+      where: { organizationId, assignedTo: { in: userIds }, status: { in: ["open", "pending"] }, ...LIVE_CONTACT },
       select: {
         id: true,
         assignedTo: true,
@@ -402,7 +407,7 @@ export async function getAgentDetail(
       where: { organizationId, assignedTo: userId, status: "resolved", closedAt: { gte: startOfDay } },
     }),
     prisma.conversation.findMany({
-      where: { organizationId, assignedTo: userId, status: { in: ["open", "pending"] } },
+      where: { organizationId, assignedTo: userId, status: { in: ["open", "pending"] }, ...LIVE_CONTACT },
       select: {
         id: true,
         createdAt: true,
@@ -410,7 +415,7 @@ export async function getAgentDetail(
         sla: { select: { firstResponseSecs: true } },
         status: true,
         lastMessageAt: true,
-        contact: { select: { name: true, firstName: true, lastName: true } },
+        contact: { select: { name: true, firstName: true, lastName: true, phoneNumber: true } },
       },
       orderBy: { lastMessageAt: "desc" },
       take: 10,
@@ -469,10 +474,7 @@ export async function getAgentDetail(
 
   const topConversations = openConvs.map((c) => {
     const contact = c.contact;
-    const contactName =
-      contact?.name ??
-      [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") ??
-      "Unknown";
+    const contactName = contact ? displayName(contact) : "Unknown";
     const lastMsg = lastMsgMap.get(c.id);
     let preview = "[Media]";
     if (lastMsg?.body) preview = lastMsg.body.slice(0, 60);
@@ -574,7 +576,7 @@ export async function getConversationStatusBreakdown(
 
   const groups = await prisma.conversation.groupBy({
     by: ["status"],
-    where: { organizationId, lastMessageAt: { gte: since } },
+    where: { organizationId, lastMessageAt: { gte: since }, ...LIVE_CONTACT },
     _count: { _all: true },
   });
 
@@ -687,8 +689,8 @@ export async function getActivityFeed(
 
   const [recentContacts, recentCampaigns, recentClosedConvs, recentMembers] = await Promise.all([
     prisma.contact.findMany({
-      where: { organizationId, createdAt: { gte: since } },
-      select: { name: true, firstName: true, lastName: true, createdAt: true },
+      where: { organizationId, deletedAt: null, createdAt: { gte: since } },
+      select: { name: true, firstName: true, lastName: true, phoneNumber: true, createdAt: true },
       orderBy: { createdAt: "desc" },
       take: 5,
     }),
@@ -699,8 +701,8 @@ export async function getActivityFeed(
       take: 5,
     }),
     prisma.conversation.findMany({
-      where: { organizationId, status: "resolved", closedAt: { gte: since } },
-      select: { contact: { select: { name: true, firstName: true } }, closedAt: true },
+      where: { organizationId, status: "resolved", closedAt: { gte: since }, ...LIVE_CONTACT },
+      select: { contact: { select: { name: true, firstName: true, lastName: true, phoneNumber: true } }, closedAt: true },
       orderBy: { closedAt: "desc" },
       take: 5,
     }),
@@ -715,14 +717,14 @@ export async function getActivityFeed(
   const events: ActivityEvent[] = [];
 
   for (const c of recentContacts) {
-    const name = c.name ?? [c.firstName, c.lastName].filter(Boolean).join(" ") ?? "Unknown";
+    const name = displayName(c);
     events.push({ type: "contact_created", label: `New contact: ${name}`, timestamp: c.createdAt.toISOString() });
   }
   for (const c of recentCampaigns) {
     events.push({ type: "campaign_sent", label: `Campaign "${c.name}" sent`, timestamp: c.sentAt?.toISOString() ?? "" });
   }
   for (const c of recentClosedConvs) {
-    const name = c.contact?.name ?? c.contact?.firstName ?? "Unknown";
+    const name = c.contact ? displayName(c.contact) : "Unknown";
     events.push({ type: "conversation_closed", label: `Conversation with ${name} resolved`, timestamp: c.closedAt?.toISOString() ?? "" });
   }
   for (const u of recentMembers) {
