@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, type JSX } from "react";
 import Link from "next/link";
+import { MediaUrlField } from "@/components/media-url-field";
 
 interface Contact {
   id: string;
@@ -49,6 +50,7 @@ export function TemplateActions({
   const [showExamplePrompt, setShowExamplePrompt] = useState(false);
   const [exampleImageUrl, setExampleImageUrl] = useState("");
 
+  const mediaFilter = headerFormat?.toLowerCase() === "video" ? "video" : headerFormat?.toLowerCase() === "document" ? "document" : "image";
   const isMediaHeader = ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat?.toUpperCase() ?? "");
   // Only prompt if media header has no example URL already stored in components
   const needsExamplePrompt = isMediaHeader && !headerExampleUrl;
@@ -117,15 +119,13 @@ export function TemplateActions({
           <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold text-gray-900">Example {headerFormat} for Meta Review</h3>
             <p className="text-xs text-gray-500">
-              Meta requires a sample image so reviewers can see how the template will look. Provide a publicly accessible image URL.
+              Meta requires a sample image so reviewers can see how the template will look. Choose an image from your library or paste a public URL.
             </p>
-            <input
+            <MediaUrlField
               autoFocus
-              type="url"
-              placeholder="https://example.com/image.jpg"
+              filterType={mediaFilter}
               value={exampleImageUrl}
-              onChange={(e) => setExampleImageUrl(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+              onChange={setExampleImageUrl}
             />
             {actionError && <p className="text-xs text-red-500">{actionError}</p>}
             <div className="flex gap-2 justify-end">
@@ -184,6 +184,7 @@ export function TemplateActions({
 }
 
 function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0, onClose }: { templateId: string; templateName: string; headerFormat?: string; imageCardCount?: number; onClose: () => void }): JSX.Element {
+  const mediaFilter = headerFormat?.toLowerCase() === "video" ? "video" : headerFormat?.toLowerCase() === "document" ? "document" : "image";
   const [step, setStep] = useState<ModalStep>("pick");
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState("");
@@ -398,23 +399,21 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
             {imageCardCount > 0 ? (
               <>
                 <p className="text-sm text-gray-700">
-                  This carousel has <span className="font-semibold">{imageCardCount}</span> image card{imageCardCount !== 1 ? "s" : ""}. Provide a publicly accessible image URL for each:
+                  This carousel has <span className="font-semibold">{imageCardCount}</span> image card{imageCardCount !== 1 ? "s" : ""}. Choose an image from your library (or paste a URL) for each:
                 </p>
                 <div className="space-y-2 max-h-52 overflow-y-auto">
                   {Array.from({ length: imageCardCount }, (_, i) => (
                     <div key={i}>
                       <label className="block text-xs text-gray-500 mb-1">Card {i + 1} image URL</label>
-                      <input
+                      <MediaUrlField
                         autoFocus={i === 0}
-                        type="url"
-                        placeholder="https://example.com/image.jpg"
+                        filterType="image"
                         value={cardMediaUrls[i] ?? ""}
-                        onChange={(e) => {
+                        onChange={(url) => {
                           const next = [...cardMediaUrls];
-                          next[i] = e.target.value;
+                          next[i] = url;
                           setCardMediaUrls(next);
                         }}
-                        className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
                       />
                     </div>
                   ))}
@@ -423,15 +422,13 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
             ) : (
               <>
                 <p className="text-sm text-gray-700">
-                  This template has a <span className="font-semibold">{headerFormat}</span> header. Provide a publicly accessible URL:
+                  This template has a <span className="font-semibold">{headerFormat}</span> header. Choose from your library or paste a public URL:
                 </p>
-                <input
+                <MediaUrlField
                   autoFocus
-                  type="url"
-                  placeholder="https://example.com/image.jpg"
+                  filterType={mediaFilter}
                   value={mediaUrl}
-                  onChange={(e) => setMediaUrl(e.target.value)}
-                  className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                  onChange={setMediaUrl}
                 />
               </>
             )}

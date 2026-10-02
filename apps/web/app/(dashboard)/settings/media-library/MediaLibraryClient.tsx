@@ -42,6 +42,7 @@ export function MediaLibraryClient(): JSX.Element {
   const [addTab, setAddTab] = useState<"upload" | "url">("upload");
   const [editAsset, setEditAsset] = useState<MediaAsset | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -127,6 +128,17 @@ export function MediaLibraryClient(): JSX.Element {
     void queryClient.invalidateQueries({ queryKey: ["media-assets"] });
   }
 
+  async function handleCopy(asset: MediaAsset): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(asset.fileUrl);
+    } catch {
+      window.prompt("Copy this link:", asset.fileUrl);
+      return;
+    }
+    setCopiedId(asset.id);
+    setTimeout(() => setCopiedId((id) => (id === asset.id ? null : id)), 1500);
+  }
+
   async function handleDelete(id: string) {
     if (!confirm("Delete this media asset? This cannot be undone.")) return;
     setDeleteId(id);
@@ -140,7 +152,7 @@ export function MediaLibraryClient(): JSX.Element {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="w-full max-w-4xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -180,7 +192,7 @@ export function MediaLibraryClient(): JSX.Element {
           <p>No media assets yet. Click &quot;+ Add Media&quot; to get started.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {assets.map((asset) => (
             <div key={asset.id} className="border rounded-xl bg-white shadow-sm overflow-hidden group">
               <div className="h-32 bg-gray-50 flex items-center justify-center overflow-hidden">
@@ -205,7 +217,14 @@ export function MediaLibraryClient(): JSX.Element {
                   <p className="text-xs text-gray-400 line-clamp-1">{asset.description}</p>
                 )}
               </div>
-              <div className="px-3 pb-3 flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="px-3 pb-3 flex items-center justify-between gap-2">
+                <button
+                  onClick={() => { void handleCopy(asset); }}
+                  className="text-xs px-3 py-1.5 border border-brand-200 rounded-lg bg-brand-50 text-brand-700 hover:bg-brand-100"
+                >
+                  {copiedId === asset.id ? "✓ Copied" : "Copy link"}
+                </button>
+                <div className="flex gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                 <button
                   onClick={() => {
                     setEditAsset(asset);
@@ -222,6 +241,7 @@ export function MediaLibraryClient(): JSX.Element {
                 >
                   {deleteId === asset.id ? "Deleting…" : "Delete"}
                 </button>
+                </div>
               </div>
             </div>
           ))}

@@ -4,6 +4,7 @@ import { JSX, useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import { clientFetch } from "@/lib/client-fetch";
+import { MediaUrlField } from "@/components/media-url-field";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -214,13 +215,13 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
                 return (
                   <div key={`${pendingTemplate.id}-${i}`} className="space-y-1">
                     <label className="text-xs text-amber-700 font-medium">Card {i + 1} {fmt} URL</label>
-                    <input
+                    <MediaUrlField
                       autoFocus={i === 0}
-                      type="url"
+                      filterType={fmt === "video" || fmt === "document" ? fmt : "image"}
                       value={carouselUrls[i] ?? ""}
-                      onChange={(e) => {
+                      onChange={(url) => {
                         const next = [...carouselUrls];
-                        next[i] = e.target.value;
+                        next[i] = url;
                         setCarouselUrls(next);
                       }}
                       placeholder={`https://example.com/${fmt}.jpg`}
@@ -245,14 +246,16 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
           ) : (
             <>
               <p className="text-xs font-medium text-amber-800">
-                This template has an {pendingTemplate.components.find((c) => c.type?.toUpperCase() === "HEADER")?.format?.toLowerCase()} header — paste a public URL:
+                This template has an {pendingTemplate.components.find((c) => c.type?.toUpperCase() === "HEADER")?.format?.toLowerCase()} header — choose from your library or paste a URL:
               </p>
-              <input
+              <MediaUrlField
                 autoFocus
-                type="url"
+                filterType={(() => {
+                  const f = pendingTemplate.components.find((c) => c.type?.toUpperCase() === "HEADER")?.format?.toLowerCase();
+                  return f === "video" || f === "document" ? f : "image";
+                })()}
                 value={mediaUrl}
-                onChange={(e) => setMediaUrl(e.target.value)}
-                placeholder="https://example.com/image.jpg"
+                onChange={setMediaUrl}
                 className="w-full text-sm border border-amber-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
                 onKeyDown={(e) => { if (e.key === "Enter" && mediaUrl.trim()) void sendTemplate(pendingTemplate.id, mediaUrl.trim(), []); if (e.key === "Escape") setPendingTemplate(null); }}
               />
