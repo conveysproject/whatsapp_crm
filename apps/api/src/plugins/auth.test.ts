@@ -313,6 +313,38 @@ describe("auth plugin — user impersonation", () => {
     await app.close();
   });
 
+  it("keeps demo tokens (isDemo:true) working as org-scoped superAdmin without impersonation context", async () => {
+    await mockToken({ organizationId: "demo-org", orgName: "Demo Account", isDemo: true });
+    const app = await buildImpApp();
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    expect(res.statusCode).toBe(200);
+    const auth = res.json<{ auth: { role: string; organizationId: string; impersonation?: unknown } }>().auth;
+    expect(auth.role).toBe("superAdmin");
+    expect(auth.organizationId).toBe("demo-org");
+    expect(auth.impersonation).toBeUndefined();
+    await app.close();
+  });
+
+  it("rejects old org-level payloads that are not isDemo", async () => {
+    await mockToken({ organizationId: "org-1", orgName: "Acme", issuedBy: "sa-1", isDemo: false });
+    const app = await buildImpApp();
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("treats an invalid mode as readonly", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    await mockToken({ organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", mode: "root" });
+    vi.mocked(prisma.user.findFirst).mockResolvedValueOnce({ role: "agent", organizationId: "org-1", teamId: null, teamRole: null } as never);
+    vi.mocked(prisma.organizationMember.findFirst).mockResolvedValueOnce(null);
+    vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValueOnce(null);
+    const app = await buildImpApp();
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    expect(res.json<{ auth: { impersonation: { mode: string } } }>().auth.impersonation.mode).toBe("readonly");
+    await app.close();
+  });
+
   it("rejects unknown tokens with 401", async () => {
     await mockToken(null);
     const app = await buildImpApp();

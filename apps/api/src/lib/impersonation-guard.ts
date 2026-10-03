@@ -53,6 +53,21 @@ export const BLOCKED_PREFIXES: readonly string[] = [
   "/v1/register",
 ];
 
+/**
+ * Families whose GETs are also blocked for impersonated sessions (defense in depth):
+ *  - /v1/admin, /v1/super-admins: platform-only data, never tenant-facing.
+ *  - /v1/vendor-settings: GET returns every VendorSetting row, including whatsapp_access_token.
+ *  - /v1/webhook-actions: GET returns full rows (may include outbound auth headers/secrets).
+ * GET /v1/webhook-endpoints (secret not selected) and /v1/whatsapp-account/* GETs
+ * (profile data only, no tokens) were reviewed and stay readable.
+ */
+export const BLOCKED_GET_PREFIXES: readonly string[] = [
+  "/v1/admin",
+  "/v1/super-admins",
+  "/v1/vendor-settings",
+  "/v1/webhook-actions",
+];
+
 /** Individual routes that are blocked (stealth: read receipts, assignment, status, typing). */
 export const BLOCKED_ROUTES: ReadonlySet<string> = new Set([
   "POST /v1/conversations/:id/read",
@@ -145,14 +160,17 @@ export type RouteClass = "read-like" | "blocked" | "edit" | "unclassified";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+function matchesPrefix(prefixes: readonly string[], pattern: string): boolean {
+  return prefixes.some((p) => pattern === p || pattern.startsWith(`${p}/`));
+}
 function isBlockedPrefix(pattern: string): boolean {
-  return BLOCKED_PREFIXES.some((p) => pattern === p || pattern.startsWith(`${p}/`));
+  return matchesPrefix(BLOCKED_PREFIXES, pattern);
 }
 
 /** Classify a registered route (method + full pattern). Safe methods are "read-like". */
 export function classifyRoute(method: string, pattern: string): RouteClass {
   const m = method.toUpperCase();
-  if (SAFE_METHODS.has(m)) return "read-like";
+  if (SAFE_METHODS.has(m)) return matchesPrefix(BLOCKED_GET_PREFIXES, pattern) ? "blocked" : "read-like";
   const key = `${m} ${pattern}`;
   // Blocked wins over everything: all DELETEs, blocked families and routes.
   if (m === "DELETE" || isBlockedPrefix(pattern) || BLOCKED_ROUTES.has(key)) return "blocked";
@@ -171,6 +189,9 @@ const impersonationGuardPlugin: FastifyPluginAsync = async (fastify) => {
 
     const cls = classifyRoute(request.method, pattern);
     if (cls === "read-like") return;
+    if (cls === "unclassified") {
+      request.log.warn({ method: request.method, pattern }, "impersonation: unclassified route denied");
+    }
     if (cls === "blocked" || cls === "unclassified") {
       return reply.status(403).send({
         error: { code: "IMPERSONATION_BLOCKED", message: "This action is not allowed during impersonation" },

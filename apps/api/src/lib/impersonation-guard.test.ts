@@ -39,6 +39,15 @@ describe("impersonation route classification", () => {
     expect(classifyRoute("POST", "/v1/webhook-endpoints/:id/rotate-secret")).toBe("blocked");
   });
 
+  it("blocks GETs of platform and secret-bearing families", () => {
+    expect(classifyRoute("GET", "/v1/admin/organizations")).toBe("blocked");
+    expect(classifyRoute("GET", "/v1/admin/super-admins")).toBe("blocked");
+    expect(classifyRoute("GET", "/v1/super-admins")).toBe("blocked");
+    expect(classifyRoute("GET", "/v1/vendor-settings")).toBe("blocked");
+    expect(classifyRoute("GET", "/v1/webhook-actions")).toBe("blocked");
+    expect(classifyRoute("GET", "/v1/contacts")).toBe("read-like");
+  });
+
   it("treats unknown writes as unclassified and GET as read-like", () => {
     expect(classifyRoute("POST", "/v1/brand-new")).toBe("unclassified");
     expect(classifyRoute("GET", "/v1/anything")).toBe("read-like");
@@ -58,6 +67,7 @@ describe("impersonation guard hook", () => {
     await app.register(guard);
     const ok = async () => ({ ok: true });
     app.get("/v1/contacts", ok);
+    app.get("/v1/admin/organizations", ok);
     app.post("/v1/conversations/:id/summarize", ok);
     app.post("/v1/conversations/:id/messages", ok);
     app.post("/v1/campaigns", ok);
@@ -75,6 +85,14 @@ describe("impersonation guard hook", () => {
     const res = await app.inject({ method: "POST", url: "/v1/conversations/1/messages" });
     expect(res.statusCode).toBe(403);
     expect(code(res)).toBe("IMPERSONATION_READ_ONLY");
+    await app.close();
+  });
+
+  it("GET under /v1/admin is IMPERSONATION_BLOCKED for impersonated sessions", async () => {
+    const app = await build("edit");
+    const res = await app.inject({ method: "GET", url: "/v1/admin/organizations" });
+    expect(res.statusCode).toBe(403);
+    expect(code(res)).toBe("IMPERSONATION_BLOCKED");
     await app.close();
   });
 

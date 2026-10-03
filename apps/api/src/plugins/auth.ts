@@ -93,7 +93,14 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       if (!raw) {
         return reply.status(401).send({ error: { code: "INVALID_IMPERSONATION_TOKEN", message: "Invalid or expired impersonation token" } });
       }
-      const payload = JSON.parse(raw) as { organizationId?: string; targetUserId?: string; issuedBy?: string; mode?: string };
+      const payload = JSON.parse(raw) as { organizationId?: string; targetUserId?: string; issuedBy?: string; mode?: string; isDemo?: boolean };
+      // Demo login (POST /demo/login) issues org-scoped tokens with isDemo:true. Preserve that
+      // behavior only for such payloads: superAdmin scoped to the demo org, no impersonation
+      // context. Every other payload without targetUserId is rejected below.
+      if (payload.isDemo === true && !payload.targetUserId && payload.organizationId && payload.issuedBy === undefined) {
+        request.auth = { userId: "demo", organizationId: payload.organizationId, role: "superAdmin", permissions: {}, teamId: null, teamRole: null };
+        return;
+      }
       // Old org-level tokens (no targetUserId) are no longer valid.
       if (!payload.targetUserId || !payload.organizationId || !payload.issuedBy) {
         return reply.status(401).send({ error: { code: "INVALID_IMPERSONATION_TOKEN", message: "Invalid or expired impersonation token" } });
