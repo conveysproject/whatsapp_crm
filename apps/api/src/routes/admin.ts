@@ -323,13 +323,13 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       const ttlMs = await redis.pttl(key);
       if (ttlMs <= 0) return notFound();
 
-      // PX with the remaining TTL: no extension.
-      await redis.set(key, JSON.stringify({ ...payload, mode: "edit" }), "PX", ttlMs);
-
       await fastify.prisma.impersonationLog.updateMany({
         where: { token, actorId: adminId, endedAt: null },
         data: { mode: "edit", elevationReason: reason },
       });
+
+      // PX with the remaining TTL: no extension. Log first so a log failure never leaves an unlogged edit session.
+      await redis.set(key, JSON.stringify({ ...payload, mode: "edit" }), "PX", ttlMs);
 
       writeAdminAudit({
         prisma: fastify.prisma,
@@ -389,9 +389,9 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       // Only the issuing admin may revoke their own token. Idempotent for expired tokens.
       const raw = await redis.get(`impersonate:${token}`);
       if (raw) {
-        let issuedBy: string | undefined;
-        try { issuedBy = (JSON.parse(raw) as { issuedBy?: string }).issuedBy; } catch { issuedBy = undefined; }
-        if (issuedBy !== adminId) {
+        let parsed: { issuedBy?: string; organizationId?: string } = {};
+        try { parsed = JSON.parse(raw) as typeof parsed; } catch { parsed = {}; }
+        if (parsed.issuedBy !== adminId || (parsed.organizationId && parsed.organizationId !== request.params.id)) {
           return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only the issuing admin can end this session" } });
         }
         await redis.del(`impersonate:${token}`);

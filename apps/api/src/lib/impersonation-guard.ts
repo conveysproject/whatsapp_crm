@@ -1,6 +1,5 @@
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync } from "fastify";
-import { writeAdminAudit } from "./audit.js";
 
 /**
  * Route classification for super-admin impersonation sessions.
@@ -75,6 +74,13 @@ export const BLOCKED_GET_PREFIXES: readonly string[] = [
  * Mark-as-read and typing are EDIT_ROUTES whose handlers are explicit no-ops while impersonating.
  */
 export const BLOCKED_ROUTES: ReadonlySet<string> = new Set([
+  // Automations / customer sends beyond the single-reply limit.
+  "POST /v1/templates/:id/send-to-contact",
+  "POST /v1/contacts/import/start", // bulk contact creation job (may fire automations)
+  "PATCH /v1/flows/:id", // can activate a flow (isActive)
+  "POST /v1/flows/:id/test", // runs a flow against a real contact
+  "PATCH /v1/chatbots/:id", // can activate a chatbot (isActive)
+  "POST /v1/chatbots/:id/activate",
   "POST /v1/conversations/:id/assign",
   "POST /v1/conversations/:id/status",
   "PATCH /v1/conversations/:id/assign",
@@ -87,7 +93,6 @@ export const EDIT_ROUTES: ReadonlySet<string> = new Set([
   "POST /v1/conversations/:id/read",
   "POST /v1/conversations/:id/typing",
   "POST /v1/conversations/:id/messages",
-  "POST /v1/templates/:id/send-to-contact",
   "POST /v1/chatbots/:id/quick-send/:contactId",
   "POST /v1/contacts",
   "PATCH /v1/contacts/:id",
@@ -102,7 +107,6 @@ export const EDIT_ROUTES: ReadonlySet<string> = new Set([
   "PUT /v1/contacts/saved-filter",
   "POST /v1/contacts/import/upload",
   "POST /v1/contacts/import/analyze",
-  "POST /v1/contacts/import/start",
   "POST /v1/contacts/custom-fields",
   "PATCH /v1/contacts/custom-fields/:id",
   "POST /v1/segments",
@@ -120,12 +124,8 @@ export const EDIT_ROUTES: ReadonlySet<string> = new Set([
   "PATCH /v1/routing-rules/:id",
   "POST /v1/messages/:id/transcribe",
   "POST /v1/flows",
-  "PATCH /v1/flows/:id",
   "POST /v1/flows/:id/duplicate",
-  "POST /v1/flows/:id/test",
   "POST /v1/chatbots",
-  "PATCH /v1/chatbots/:id",
-  "POST /v1/chatbots/:id/activate",
   "POST /v1/canned-responses",
   "PUT /v1/canned-responses/:id",
   "POST /v1/nt-campaign-presets",
@@ -160,6 +160,12 @@ export const EDIT_ROUTES: ReadonlySet<string> = new Set([
   "PUT /v1/automation/settings/welcome",
   "PUT /v1/automation/settings/delayed",
   "PUT /v1/automation/settings/intent-matching",
+]);
+
+/** Handlers are explicit no-ops while impersonating; read-only sessions get the same 204 so the inbox does not error. */
+export const SILENT_NOOP_ROUTES: ReadonlySet<string> = new Set([
+  "POST /v1/conversations/:id/read",
+  "POST /v1/conversations/:id/typing",
 ]);
 
 export type RouteClass = "read-like" | "blocked" | "edit" | "unclassified";
@@ -205,20 +211,30 @@ const impersonationGuardPlugin: FastifyPluginAsync = async (fastify) => {
     }
     // cls === "edit"
     if (imp.mode !== "edit") {
+      if (SILENT_NOOP_ROUTES.has(`${request.method.toUpperCase()} ${pattern}`)) return reply.status(204).send();
       return reply.status(403).send({
         error: { code: "IMPERSONATION_READ_ONLY", message: "Impersonation session is read-only" },
       });
     }
-    // Edit-mode write passed the guard: platform audit (route pattern only, never bodies/secrets).
-    if (fastify.prisma) {
-      writeAdminAudit({
-        prisma: fastify.prisma,
-        actorId: imp.adminId,
-        action: "impersonation.request",
-        targetType: "user",
-        targetId: request.auth.userId,
-        metadata: { method: request.method, route: pattern, organizationId: request.auth.organizationId },
-        request,
+    // Edit-mode write: platform audit is FAIL-CLOSED. The insert is awaited before the handler runs;
+    // if it cannot be written the request is refused (route pattern only, never bodies/secrets).
+    try {
+      if (!fastify.prisma) throw new Error("prisma unavailable");
+      await fastify.prisma.adminAuditLog.create({
+        data: {
+          actorId: imp.adminId,
+          action: "impersonation.request",
+          targetType: "user",
+          targetId: request.auth.userId,
+          metadata: { method: request.method, route: pattern, organizationId: request.auth.organizationId },
+          ipAddress: request.ip ?? null,
+          userAgent: request.headers["user-agent"] ?? null,
+        },
+      });
+    } catch (err) {
+      request.log.error({ err }, "impersonation: audit write failed, request refused");
+      return reply.status(503).send({
+        error: { code: "AUDIT_UNAVAILABLE", message: "Audit log unavailable; action refused" },
       });
     }
   });

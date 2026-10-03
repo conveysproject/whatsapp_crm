@@ -265,6 +265,13 @@ describe("DELETE /v1/admin/organizations/:id/impersonate (revoke)", () => {
     expect(mockPrisma.impersonationLog.updateMany).not.toHaveBeenCalled();
   });
 
+  it("403 when the :id org does not match the token's organization", async () => {
+    mockRedis.get.mockResolvedValue(JSON.stringify({ organizationId: "org-OTHER", targetUserId: "u1", issuedBy: "sa-1", mode: "readonly" }));
+    const res = await call();
+    expect(res.statusCode).toBe(403);
+    expect(mockRedis.del).not.toHaveBeenCalled();
+  });
+
   it("is idempotent for an already expired token (only closes the caller's own log rows)", async () => {
     mockRedis.get.mockResolvedValue(null);
     mockPrisma.impersonationLog.updateMany.mockResolvedValue({ count: 0 });
@@ -315,6 +322,14 @@ describe("POST /v1/admin/impersonation/elevate", () => {
       where: expect.objectContaining({ role: "superAdmin", id: { not: "sa-1" }, isActive: true, deletedAt: null }),
     }));
     expect(mockMail.sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: ["other@wbmsg.test"] }));
+  });
+
+  it("updates the log BEFORE the Redis set (log failure leaves the session read-only)", async () => {
+    happy();
+    mockPrisma.impersonationLog.updateMany.mockRejectedValue(new Error("db down"));
+    const res = await post({ token: "tok", reason });
+    expect(res.statusCode).toBe(500);
+    expect(mockRedis.set).not.toHaveBeenCalled();
   });
 
   it("validates reason length (10-500) and presence of token", async () => {

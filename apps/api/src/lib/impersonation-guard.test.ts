@@ -58,6 +58,7 @@ describe("impersonation guard hook", () => {
   async function build(mode: "readonly" | "edit" | null) {
     const guard = (await import("./impersonation-guard.js")).default;
     const app = Fastify({ logger: false });
+    app.decorate("prisma", { adminAuditLog: { create: vi.fn().mockResolvedValue({}) } } as never);
     app.addHook("preHandler", async (req) => {
       req.auth = {
         userId: "u", organizationId: "o", role: "agent", permissions: {}, teamId: null, teamRole: null,
@@ -128,12 +129,12 @@ describe("impersonation guard hook", () => {
     await app.close();
   });
 
-  it("side-effect routes: read/typing are edit-only (handlers no-op), assign/status always blocked", async () => {
+  it("side-effect routes: read/typing are silent no-ops (204 read-only; handlers no-op in edit), assign/status always blocked", async () => {
     const ro = await build("readonly");
     for (const a of ["read", "typing"]) {
-      const res = await ro.inject({ method: "POST", url: `/v1/conversations/1/${a}` });
-      expect(res.statusCode).toBe(403);
-      expect(code(res)).toBe("IMPERSONATION_READ_ONLY");
+      // 204 no-op in read-only too, so the inbox does not error; handler never runs.
+      const res = await ro.inject({ method: "POST", url: `/v1/conversations/${a === "read" ? "1" : "1"}/${a}` });
+      expect(res.statusCode).toBe(204);
     }
     await ro.close();
     const ed = await build("edit");
@@ -171,5 +172,35 @@ describe("impersonation guard hook", () => {
     expect(data.metadata).toEqual({ method: "POST", route: "/v1/conversations/:id/messages", organizationId: "o" });
     expect(JSON.stringify(data)).not.toContain("secret body");
     await app.close();
+  });
+
+  it("edit mode: audit is fail-closed (503 AUDIT_UNAVAILABLE, handler never runs)", async () => {
+    const guard = (await import("./impersonation-guard.js")).default;
+    const create = vi.fn().mockRejectedValue(new Error("db down"));
+    const handler = vi.fn(async () => ({ ok: true }));
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", { adminAuditLog: { create } } as never);
+    app.addHook("preHandler", async (req) => {
+      req.auth = { userId: "t", organizationId: "o", role: "agent", permissions: {}, teamId: null, teamRole: null, impersonation: { adminId: "sa", mode: "edit" } };
+    });
+    await app.register(guard);
+    app.post("/v1/conversations/:id/messages", handler);
+    await app.ready();
+    const res = await app.inject({ method: "POST", url: "/v1/conversations/1/messages" });
+    expect(res.statusCode).toBe(503);
+    expect(code(res)).toBe("AUDIT_UNAVAILABLE");
+    expect(handler).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("automation / bulk-send adjacent routes are blocked in every mode", () => {
+    for (const [m, u] of [
+      ["POST", "/v1/flows/:id/test"], ["PATCH", "/v1/flows/:id"], ["POST", "/v1/chatbots/:id/activate"],
+      ["PATCH", "/v1/chatbots/:id"], ["POST", "/v1/templates/:id/send-to-contact"], ["POST", "/v1/contacts/import/start"],
+    ] as const) {
+      expect(classifyRoute(m, u)).toBe("blocked");
+    }
+    // harmless data edit, intentionally left edit-class
+    expect(classifyRoute("POST", "/v1/contact-groups/build")).toBe("edit");
   });
 });

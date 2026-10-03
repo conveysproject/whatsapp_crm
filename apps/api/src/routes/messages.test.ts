@@ -243,7 +243,7 @@ describe("POST /v1/conversations/:id/messages â€” interactive isSystemMessage gu
   });
 });
 
-describe("POST /v1/conversations/:id/messages — impersonated reply is tagged in platform audit", () => {
+describe("POST /v1/conversations/:id/messages - impersonated reply is tagged in platform audit", () => {
   let app: FastifyInstance;
   beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks();
