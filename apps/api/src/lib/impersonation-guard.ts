@@ -1,5 +1,6 @@
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync } from "fastify";
+import { writeAdminAudit } from "./audit.js";
 
 /**
  * Route classification for super-admin impersonation sessions.
@@ -68,10 +69,12 @@ export const BLOCKED_GET_PREFIXES: readonly string[] = [
   "/v1/webhook-actions",
 ];
 
-/** Individual routes that are blocked (stealth: read receipts, assignment, status, typing). */
+/**
+ * Individual routes that are blocked (stealth: assignment and status are tenant-visible state
+ * changes with notifications/flow triggers, so they are blocked in every mode).
+ * Mark-as-read and typing are EDIT_ROUTES whose handlers are explicit no-ops while impersonating.
+ */
 export const BLOCKED_ROUTES: ReadonlySet<string> = new Set([
-  "POST /v1/conversations/:id/read",
-  "POST /v1/conversations/:id/typing",
   "POST /v1/conversations/:id/assign",
   "POST /v1/conversations/:id/status",
   "PATCH /v1/conversations/:id/assign",
@@ -80,6 +83,9 @@ export const BLOCKED_ROUTES: ReadonlySet<string> = new Set([
 
 /** Writes allowed in edit mode only. */
 export const EDIT_ROUTES: ReadonlySet<string> = new Set([
+  // Handlers return the normal success shape WITHOUT writing or emitting while impersonating.
+  "POST /v1/conversations/:id/read",
+  "POST /v1/conversations/:id/typing",
   "POST /v1/conversations/:id/messages",
   "POST /v1/templates/:id/send-to-contact",
   "POST /v1/chatbots/:id/quick-send/:contactId",
@@ -201,6 +207,18 @@ const impersonationGuardPlugin: FastifyPluginAsync = async (fastify) => {
     if (imp.mode !== "edit") {
       return reply.status(403).send({
         error: { code: "IMPERSONATION_READ_ONLY", message: "Impersonation session is read-only" },
+      });
+    }
+    // Edit-mode write passed the guard: platform audit (route pattern only, never bodies/secrets).
+    if (fastify.prisma) {
+      writeAdminAudit({
+        prisma: fastify.prisma,
+        actorId: imp.adminId,
+        action: "impersonation.request",
+        targetType: "user",
+        targetId: request.auth.userId,
+        metadata: { method: request.method, route: pattern, organizationId: request.auth.organizationId },
+        request,
       });
     }
   });

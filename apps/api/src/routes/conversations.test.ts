@@ -392,3 +392,46 @@ describe("GET /v1/conversations — team visibility scoping", () => {
     await app.close();
   });
 });
+
+describe("impersonated (edit mode) side-effect suppression", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (request) => {
+      request.auth = { ...mockAuth, impersonation: { adminId: "sa-1", mode: "edit" as const } };
+    });
+    const { conversationsRouter } = await import("./conversations.js");
+    await app.register(conversationsRouter, { prefix: "/v1" });
+  });
+  afterEach(async () => { await app.close(); });
+
+  it("mark-as-read returns 204 without resetting unreadCount", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1", unreadCount: 5 });
+    const res = await app.inject({ method: "POST", url: "/v1/conversations/conv-1/read" });
+    expect(res.statusCode).toBe(204);
+    expect(mockPrisma.conversation.update).not.toHaveBeenCalled();
+  });
+
+  it("typing returns 204 without emitting a socket event", async () => {
+    const { getIo } = await import("../lib/io-ref.js");
+    const res = await app.inject({
+      method: "POST", url: "/v1/conversations/conv-1/typing",
+      headers: { "content-type": "application/json" },
+      payload: { isTyping: true },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(getIo).not.toHaveBeenCalled();
+  });
+
+  it("GET messages and conversation list do not write anything", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1" });
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    mockPrisma.conversation.findMany.mockResolvedValue([]);
+    expect((await app.inject({ method: "GET", url: "/v1/conversations/conv-1/messages" })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/v1/conversations" })).statusCode).toBe(200);
+    expect(mockPrisma.conversation.update).not.toHaveBeenCalled();
+  });
+});

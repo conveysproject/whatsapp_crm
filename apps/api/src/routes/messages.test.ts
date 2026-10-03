@@ -13,6 +13,7 @@ const mockPrisma = {
     create: vi.fn(),
     update: vi.fn(),
   },
+  adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
 };
 
 const mockAuth = {
@@ -239,5 +240,42 @@ describe("POST /v1/conversations/:id/messages â€” interactive isSystemMessage gu
         data: expect.objectContaining({ isSystemMessage: false }),
       })
     );
+  });
+});
+
+describe("POST /v1/conversations/:id/messages — impersonated reply is tagged in platform audit", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    vi.resetModules(); vi.clearAllMocks();
+    mockPrisma.adminAuditLog.create.mockResolvedValue({});
+    app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (request) => {
+      request.auth = { ...mockAuth, impersonation: { adminId: "sa-1", mode: "edit" as const } };
+    });
+    const { messagesRouter } = await import("./messages.js");
+    await app.register(messagesRouter, { prefix: "/v1" });
+  });
+  afterEach(async () => { await app.close(); });
+
+  it("records admin id + message id in the admin audit, without adding tenant-visible fields", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(baseConversation);
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-1", status: "sending" });
+    mockPrisma.message.update.mockResolvedValue({ id: "msg-1", contentType: "text", body: "Hi", direction: "outbound", status: "sent", sentAt: new Date() });
+    mockPrisma.conversation.update.mockResolvedValue({});
+    const res = await app.inject({
+      method: "POST", url: "/v1/conversations/conv-1/messages",
+      headers: { "content-type": "application/json" }, payload: { text: "Hi" },
+    });
+    expect(res.statusCode).toBe(201);
+    await new Promise((r) => setImmediate(r));
+    expect(mockPrisma.adminAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorId: "sa-1", action: "impersonation.message_sent", targetType: "message", targetId: "msg-1",
+        metadata: { conversationId: "conv-1", organizationId: "org-1", asUserId: "user-1" },
+      }),
+    });
+    const createArg = mockPrisma.message.create.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(JSON.stringify(createArg.data)).not.toContain("sa-1");
   });
 });

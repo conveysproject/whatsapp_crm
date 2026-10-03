@@ -286,6 +286,8 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       if (!conversation) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
       }
+      // Impersonated session: no read receipt / unreadCount reset (stealth). Normal success shape.
+      if (request.auth.impersonation) return reply.status(204).send();
       await fastify.prisma.conversation.update({
         where: { id: conversation.id },
         data: { unreadCount: 0 },
@@ -299,6 +301,8 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     "/conversations/:id/typing",
     async (request, reply) => {
       const { organizationId, userId } = request.auth;
+      // Impersonated session: never show a typing indicator to the tenant.
+      if (request.auth.impersonation) return reply.status(204).send();
       getIo()?.to(`org:${organizationId}`).emit("typing", {
         conversationId: request.params.id,
         userId,

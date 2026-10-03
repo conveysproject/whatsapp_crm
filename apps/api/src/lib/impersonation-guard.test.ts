@@ -70,6 +70,10 @@ describe("impersonation guard hook", () => {
     app.get("/v1/admin/organizations", ok);
     app.post("/v1/conversations/:id/summarize", ok);
     app.post("/v1/conversations/:id/messages", ok);
+    app.post("/v1/conversations/:id/read", ok);
+    app.post("/v1/conversations/:id/typing", ok);
+    app.post("/v1/conversations/:id/assign", ok);
+    app.post("/v1/conversations/:id/status", ok);
     app.post("/v1/campaigns", ok);
     app.delete("/v1/contacts/:id", ok);
     app.post("/v1/brand-new", ok);
@@ -121,6 +125,51 @@ describe("impersonation guard hook", () => {
     const app = await build(null);
     expect((await app.inject({ method: "DELETE", url: "/v1/contacts/1" })).statusCode).toBe(200);
     expect((await app.inject({ method: "POST", url: "/v1/campaigns" })).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("side-effect routes: read/typing are edit-only (handlers no-op), assign/status always blocked", async () => {
+    const ro = await build("readonly");
+    for (const a of ["read", "typing"]) {
+      const res = await ro.inject({ method: "POST", url: `/v1/conversations/1/${a}` });
+      expect(res.statusCode).toBe(403);
+      expect(code(res)).toBe("IMPERSONATION_READ_ONLY");
+    }
+    await ro.close();
+    const ed = await build("edit");
+    for (const a of ["read", "typing"]) {
+      expect((await ed.inject({ method: "POST", url: `/v1/conversations/1/${a}` })).statusCode).toBe(200);
+    }
+    for (const a of ["assign", "status"]) {
+      const res = await ed.inject({ method: "POST", url: `/v1/conversations/1/${a}` });
+      expect(res.statusCode).toBe(403);
+      expect(code(res)).toBe("IMPERSONATION_BLOCKED");
+    }
+    await ed.close();
+  });
+
+  it("edit mode: a write that passes the guard is audited (actor admin, target user, method+route)", async () => {
+    const guard = (await import("./impersonation-guard.js")).default;
+    const create = vi.fn().mockResolvedValue({});
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", { adminAuditLog: { create } } as never);
+    app.addHook("preHandler", async (req) => {
+      req.auth = { userId: "target-1", organizationId: "o", role: "agent", permissions: {}, teamId: null, teamRole: null, impersonation: { adminId: "sa", mode: "edit" } };
+    });
+    await app.register(guard);
+    app.post("/v1/conversations/:id/messages", async () => ({ ok: true }));
+    app.post("/v1/campaigns", async () => ({ ok: true }));
+    app.get("/v1/contacts", async () => ({ ok: true }));
+    await app.ready();
+    await app.inject({ method: "POST", url: "/v1/conversations/abc/messages", payload: { text: "secret body" } });
+    await app.inject({ method: "POST", url: "/v1/campaigns" }); // blocked: not audited here
+    await app.inject({ method: "GET", url: "/v1/contacts" }); // reads: not audited
+    await new Promise((r) => setImmediate(r));
+    expect(create).toHaveBeenCalledTimes(1);
+    const data = create.mock.calls[0][0].data;
+    expect(data).toMatchObject({ actorId: "sa", action: "impersonation.request", targetType: "user", targetId: "target-1" });
+    expect(data.metadata).toEqual({ method: "POST", route: "/v1/conversations/:id/messages", organizationId: "o" });
+    expect(JSON.stringify(data)).not.toContain("secret body");
     await app.close();
   });
 });

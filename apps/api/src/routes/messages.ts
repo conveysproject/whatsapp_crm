@@ -7,6 +7,7 @@ import { canAccess } from "../lib/permissions.js";
 import { cancelNoReplyJobs } from "../lib/trigger-dispatcher.js";
 import { cancelDelayedResponseJob } from "../lib/automation-trigger.js";
 import { getIo } from "../lib/io-ref.js";
+import { writeAdminAudit } from "../lib/audit.js";
 import { inboundMessageQueue } from "../lib/queue.js";
 
 type SendMessageBody =
@@ -452,6 +453,19 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
         where: { id: conversation.id },
         data: { lastMessageAt: new Date() },
       });
+
+      // Impersonated reply: tag the sending admin in the platform audit only (no tenant-visible field).
+      if (request.auth.impersonation) {
+        writeAdminAudit({
+          prisma: fastify.prisma,
+          actorId: request.auth.impersonation.adminId,
+          action: "impersonation.message_sent",
+          targetType: "message",
+          targetId: message.id,
+          metadata: { conversationId: conversation.id, organizationId, asUserId: request.auth.userId },
+          request,
+        });
+      }
 
       getIo()?.to(`org:${organizationId}`).emit("new-message", { conversationId: conversation.id, organizationId, direction: "outbound", body: storedBody, sentAt: message.sentAt.toISOString() });
 
