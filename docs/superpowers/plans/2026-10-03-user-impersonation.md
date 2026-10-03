@@ -1,6 +1,6 @@
 # User impersonation: implementation plan
 
-Spec: `docs/prd-user-impersonation.md` (v2). Status: awaiting user approval. No code written.
+Spec: `docs/prd-user-impersonation.md` (v2). Status: implemented on branch `feat/user-impersonation`; final review fixes applied. Not yet merged or released.
 
 ## Findings that resolve the PRD unknowns
 
@@ -44,6 +44,14 @@ Task 3 (read-only enforcement) must ship **before or with** Task 2 (user-level i
 
 ## Decisions (made)
 
-1. Web approach: **fetch interceptor + sessionStorage**. Chosen as the most secure option that actually works: an httpOnly cookie cannot reach the cross-origin API, and migrating ~114 call sites is high-risk. Compensating controls: 15-minute TTL, read-only default, revocation, per-tab, API-origin only, full audit.
+1. Web approach (updated): **fetch interceptor + sessionStorage + httpOnly cookies**. The original sessionStorage-only decision was insufficient because server-rendered pages cannot read it. `imp_token` (httpOnly, SameSite=Strict, <= 900 s) and `imp_meta` cookies carry the session for server components and the proxy, the cookie is the cross-tab source of truth, and only impersonated sessions run the sync (the layout passes `impersonating`). The API also requires the Clerk bearer to match `issuedBy`. Compensating controls: 15-minute TTL, read-only default, revocation, issuer-bearer check, full fail-closed audit.
 2. Org-level "Login As" is **replaced** by the user picker.
 3. Rate limit stays at **10 tokens/hour/admin**. It caps damage if a super-admin account is compromised and stops bulk walking through many tenants. Each token is a 15-minute session, so 10 per hour is ample for support work.
+4. Demo token: kept for the public demo (isDemo payloads only) but rejected on `/v1/admin/*`. Costs: the demo user cannot use admin pages.
+5. `GET /organizations/me` uses an explicit select without `wabaAccessToken` and `stripeId` (no web code reads them).
+6. Automation-rule routes (auto-replies create/update, automation settings ooo/welcome/delayed) are blocked in every mode; contacts POST/PATCH skip automations while impersonating.
+7. Stale impersonation cookie: the layout redirects to `GET /api/impersonation/end` (clears cookies, goes to `/admin/organizations`).
+
+## Operational checklist before release
+
+See the same section in `docs/prd-user-impersonation.md`: `IS_DEMO_MODE` unset on the prod API; Terms of Service clause; migration `20261003000000_impersonation_user_target` via normal `prisma migrate deploy` (`migrate resolve --applied` only if applied by hand); manual test script in `.superpowers/sdd/2026-10-03-user-impersonation/task-6-report.md`.

@@ -1,6 +1,6 @@
 # PRD: Super-admin impersonation of a specific user
 
-Status: DRAFT v2 (risk-reduced design chosen by the user), awaiting final sign-off. No code has been written for this.
+Status: IMPLEMENTED on branch `feat/user-impersonation` (not yet merged or released). See "Operational checklist before release" below.
 
 ## Problem (evidence)
 
@@ -29,13 +29,23 @@ Non-goals: hiding anything from platform audit logs; changing normal sign-in; or
 
 1. **API token.** `POST /admin/organizations/:orgId/users/:userId/impersonate`. Verifies the user belongs to `:orgId` and is active and not deleted. Redis payload: `{ organizationId, targetUserId, issuedBy }`, TTL 900 s. Same 10/hour per-actor rate limit.
 2. **Auth plugin.** On `X-Impersonate-Token`, load the target user (role, team, permissions, via the same resolution as the normal path) and set `request.auth` to that user, plus an `impersonatedBy: <adminId>` field on the auth context. Reuse the existing cache/permission logic. Do not duplicate it.
-3. **Read-only enforcement.** In the auth plugin impersonation branch, set `request.auth.impersonation = { adminId, mode: "readonly" | "edit" }`. A single `preHandler` rejects every non-GET/HEAD request with 403 `IMPERSONATION_READ_ONLY` unless mode is `edit`, and rejects block-listed routes with 403 `IMPERSONATION_BLOCKED` even in edit mode. The block list is an explicit route allow/deny table in one file, with a test that fails if a new route is not classified.
+3. **Read-only enforcement.** In the auth plugin impersonation branch, set `request.auth.impersonation = { adminId, mode: "readonly" | "edit" }`. A single `preHandler` rejects every non-GET/HEAD request with 403 `IMPERSONATION_READ_ONLY` unless mode is `edit`, and rejects block-listed routes with 403 `IMPERSONATION_BLOCKED` even in edit mode. Exception: mark-as-read (`POST /conversations/:id/read`) and typing (`/typing`) return 204 as no-ops in read-only mode (and write/emit nothing in edit mode), so the inbox does not error. The block list is an explicit route allow/deny table in one file, with a test that fails if a new route is not classified.
 3a. **Elevation.** `POST /admin/impersonation/elevate` takes `{ token, reason }` (reason required, 10-500 chars), sets mode `edit` in the Redis payload without extending its TTL, and writes the reason to the audit log.
 3b. **Stealth.** Skip the `lastSignInAt` stamp and any presence/availability update in the impersonation branch. Suppress read-receipt, mark-as-read, assignment and status side effects when `request.auth.impersonation` is set. Audit every request that passes in edit mode (actor = admin, subject = target user).
 3c. **Admin alert.** When an edit session starts, notify the other super admins (platform-side only, never the tenant).
-4. **Web credential injection.** The browser calls the API directly on a different origin (about 114 call sites), so an httpOnly cookie on the web domain would never reach the API. Chosen design: the token lives in `sessionStorage` (per tab, cleared on exit or tab close) and one `ImpersonationProvider` adds `X-Impersonate-Token` only to requests whose URL starts with the API base. The `/api/v1` proxy forwards the header. See the implementation plan for the trade-off analysis. Residual risk: script injection (XSS) in the tab could read the token. Mitigated by 15-minute TTL, read-only default, revocation, per-tab scope, and the audit trail.
+4. **Web credential injection (cookie + sessionStorage + imp_meta).** Server-rendered pages cannot read `sessionStorage`, so the session is held in three places. (a) `sessionStorage` (per tab): the token and session record, read by the `ImpersonationProvider` fetch interceptor, which adds `X-Impersonate-Token` to browser calls to the API base and the same-origin `/api/v1` proxy. (b) `imp_token`, an httpOnly SameSite=Strict cookie (maxAge <= 900 s) set by `POST /api/impersonation`: server components and the `/api/v1` proxy add the header from it via `serverApiHeaders`. (c) `imp_meta`, a second httpOnly cookie with the non-secret session record (org, user, mode, expiry), updated on elevate. The cookie is the cross-tab source of truth: on mount, focus and visibility change an impersonated tab calls `GET /api/impersonation` and reconciles its `sessionStorage` and banner. Normal users (no cookie) run none of this. A forged cookie is not a bypass because the API validates the token. The API additionally requires the caller's own Clerk bearer to belong to the admin who issued the token (`issuedBy`), so a leaked token is useless on its own. A stale or revoked cookie sends the layout to `GET /api/impersonation/end`, which clears both cookies and returns to `/admin/organizations`. Residual risk: XSS in the tab can read the token; mitigated by the 15-minute TTL, read-only default, revocation, the issuer-bearer check and the audit trail.
 5. **UI.** Org Details page gets a user list with "Login As" per user. The list view's "Login As" opens the same picker. The existing `ImpersonationBanner` is shown only to the admin, with an Exit button that revokes the token and clears the cookie.
 6. **Schema.** Add `target_user_id` (nullable) to `impersonation_logs`. Hand-authored migration SQL (local DB is drifted, `prisma migrate dev` fails). Apply on prod via migration deploy. Rollback is dropping the column.
+
+## Blocked while impersonating (any mode), and audit
+
+- Whole families (any method): campaigns, billing, users, roles, teams, invitations, super-admins, admin, whatsapp-account, webhook-endpoints, webhook-actions, vendor-settings, organizations, onboarding, notifications, register. GETs of admin, super-admins, vendor-settings and webhook-actions are blocked too (secrets).
+- Every DELETE.
+- Individual routes: templates send-to-contact, contacts import start, flow PATCH and test, chatbot PATCH and activate, conversation assign and status, messages gaps requeue, auto-replies create and update, automation settings ooo/welcome/delayed.
+- Contacts POST/PATCH stay edit-mode routes but do not fire flow triggers or assignment rules while impersonating.
+- Unclassified routes are denied by default; a test fails when a route is not classified.
+- Audit is fail-closed: in edit mode each passing write first inserts an admin audit row (route pattern only, never bodies); if the insert fails the request gets 503 `AUDIT_UNAVAILABLE`. Issuing a token creates the `ImpersonationLog` row first; elevation refuses (404) when no open log row matches.
+- Demo tokens (`isDemo`) are exempt from the impersonation checks but can never reach `/v1/admin/*`.
 
 ## Security
 
@@ -67,3 +77,11 @@ Non-goals: hiding anything from platform audit logs; changing normal sign-in; or
 ## Rollout / rollback
 
 Ship behind the existing super-admin gate only. Rollback: revert the commit and drop the nullable column. No tenant data is modified by the migration.
+
+## Operational checklist before release
+
+- Confirm `IS_DEMO_MODE` is unset on the production API (the demo token yields an org-scoped superAdmin; it is blocked from `/v1/admin/*` but must not exist on prod).
+- Add the Terms of Service clause that platform support may access accounts to provide service (release blocker, legal/product).
+- Migration `20261003000000_impersonation_user_target` must be applied via the normal `prisma migrate deploy`. Only if it was applied by hand, run `prisma migrate resolve --applied 20261003000000_impersonation_user_target`.
+- Run the manual test script in `.superpowers/sdd/2026-10-03-user-impersonation/task-6-report.md` against a non-production environment.
+- Confirm the elevation email transport is configured (otherwise a warning is logged and other super admins are not emailed).
