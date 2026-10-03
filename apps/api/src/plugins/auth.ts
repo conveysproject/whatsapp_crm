@@ -98,11 +98,23 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       // behavior only for such payloads: superAdmin scoped to the demo org, no impersonation
       // context. Every other payload without targetUserId is rejected below.
       if (payload.isDemo === true && !payload.targetUserId && payload.organizationId && payload.issuedBy === undefined) {
+        // The demo session is a public, anonymous superAdmin: it must never reach platform admin routes.
+        if ((request.url.split("?")[0] ?? "").startsWith("/v1/admin")) {
+          return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Not available in demo mode" } });
+        }
         request.auth = { userId: "demo", organizationId: payload.organizationId, role: "superAdmin", permissions: {}, teamId: null, teamRole: null };
         return;
       }
       // Old org-level tokens (no targetUserId) are no longer valid.
       if (!payload.targetUserId || !payload.organizationId || !payload.issuedBy) {
+        return reply.status(401).send({ error: { code: "INVALID_IMPERSONATION_TOKEN", message: "Invalid or expired impersonation token" } });
+      }
+      // The bearer must belong to the super admin who issued the token: a leaked token is useless
+      // without that admin's live Clerk session.
+      try {
+        const { userId: bearerUserId } = await verifyClerkToken(request.headers.authorization);
+        if (bearerUserId !== payload.issuedBy) throw new Error("bearer/issuer mismatch");
+      } catch {
         return reply.status(401).send({ error: { code: "INVALID_IMPERSONATION_TOKEN", message: "Invalid or expired impersonation token" } });
       }
       // Stealth: no lastSignInAt stamp, no presence change on the impersonation path.

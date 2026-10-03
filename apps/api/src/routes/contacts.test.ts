@@ -2,6 +2,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
+const mockDispatchFlowTrigger = vi.fn().mockResolvedValue(undefined);
+const mockApplyAssignmentRules = vi.fn().mockResolvedValue(undefined);
+vi.mock("../lib/trigger-dispatcher.js", () => ({ dispatchFlowTrigger: mockDispatchFlowTrigger }));
+vi.mock("../lib/assignment-engine.js", () => ({ applyAssignmentRules: mockApplyAssignmentRules }));
+
 const mockEvaluateSegment = vi.fn();
 vi.mock("../lib/segment-evaluator.js", () => ({
   evaluateSegment: mockEvaluateSegment,
@@ -1067,5 +1072,59 @@ describe("POST /v1/contacts/bulk/assign-tags", () => {
     });
     expect(res.statusCode).toBe(403);
     await restricted.close();
+  });
+});
+
+describe("contacts side effects while impersonating", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    mockApplyAssignmentRules.mockResolvedValue(undefined);
+    mockPrisma.contact.create.mockResolvedValue({ id: "c-9", organizationId: "org-1", phoneNumber: "919000000009", name: "Z" });
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c-9", organizationId: "org-1", phoneNumber: "919000000009", tags: [], leadStatusId: null });
+    mockPrisma.contact.update.mockResolvedValue({ id: "c-9", phoneNumber: "919000000009", tags: ["new"] });
+    mockPrisma.leadStatus.findFirst.mockResolvedValue({ id: "ls-1", organizationId: "org-1" });
+  });
+  afterEach(async () => { await app.close(); });
+
+  async function build(imp: boolean): Promise<FastifyInstance> {
+    const a = Fastify({ logger: false });
+    a.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    a.addHook("onRequest", async (request) => {
+      request.auth = { ...mockAuth, ...(imp ? { impersonation: { adminId: "sa", mode: "edit" as const } } : {}) };
+    });
+    const { contactsRouter } = await import("./contacts.js");
+    await a.register(contactsRouter, { prefix: "/v1" });
+    return a;
+  }
+
+  it("POST does not dispatch flow triggers or assignment rules when impersonating", async () => {
+    app = await build(true);
+    const res = await app.inject({ method: "POST", url: "/v1/contacts", payload: { phoneNumber: "919000000009", name: "Z" } });
+    expect(res.statusCode).toBe(201);
+    expect(mockDispatchFlowTrigger).not.toHaveBeenCalled();
+    expect(mockApplyAssignmentRules).not.toHaveBeenCalled();
+  });
+
+  it("POST still dispatches for normal sessions", async () => {
+    app = await build(false);
+    await app.inject({ method: "POST", url: "/v1/contacts", payload: { phoneNumber: "919000000009", name: "Z" } });
+    expect(mockDispatchFlowTrigger).toHaveBeenCalledTimes(1);
+    expect(mockApplyAssignmentRules).toHaveBeenCalledTimes(1);
+  });
+
+  it("PATCH does not dispatch when impersonating, but does for normal sessions", async () => {
+    app = await build(true);
+    const payload = { tags: ["new"], leadStatusId: "ls-1" };
+    const res = await app.inject({ method: "PATCH", url: "/v1/contacts/c-9", payload });
+    expect(res.statusCode).toBe(200);
+    expect(mockDispatchFlowTrigger).not.toHaveBeenCalled();
+    expect(mockApplyAssignmentRules).not.toHaveBeenCalled();
+    await app.close();
+    app = await build(false);
+    await app.inject({ method: "PATCH", url: "/v1/contacts/c-9", payload });
+    expect(mockDispatchFlowTrigger).toHaveBeenCalled();
+    expect(mockApplyAssignmentRules).toHaveBeenCalled();
   });
 });

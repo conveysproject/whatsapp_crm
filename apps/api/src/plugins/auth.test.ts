@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 import Fastify from "fastify";
 
 vi.mock("../lib/clerk.js", () => ({
@@ -231,6 +231,57 @@ describe("auth plugin — permission merge", () => {
 });
 
 describe("auth plugin — user impersonation", () => {
+  beforeEach(async () => {
+    const { verifyClerkToken } = await import("../lib/clerk.js");
+    vi.mocked(verifyClerkToken).mockResolvedValue({ userId: "sa-1", organizationId: "org_123" } as never);
+  });
+  afterAll(async () => {
+    const { verifyClerkToken } = await import("../lib/clerk.js");
+    vi.mocked(verifyClerkToken).mockResolvedValue({ userId: "user_123", organizationId: "org_123" } as never);
+  });
+
+  it("rejects with 401 when the Clerk bearer user differs from issuedBy", async () => {
+    const { verifyClerkToken } = await import("../lib/clerk.js");
+    vi.mocked(verifyClerkToken).mockResolvedValueOnce({ userId: "someone-else", organizationId: "x" } as never);
+    await mockToken({ organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", mode: "readonly" });
+    const app = await buildImpApp();
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok", authorization: "Bearer x" } });
+    expect(res.statusCode).toBe(401);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_IMPERSONATION_TOKEN");
+    await app.close();
+  });
+
+  it("rejects with 401 when the Clerk bearer is missing/invalid", async () => {
+    const { verifyClerkToken } = await import("../lib/clerk.js");
+    vi.mocked(verifyClerkToken).mockRejectedValueOnce(new Error("Missing Authorization header"));
+    await mockToken({ organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", mode: "readonly" });
+    const app = await buildImpApp();
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    expect(res.statusCode).toBe(401);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_IMPERSONATION_TOKEN");
+    await app.close();
+  });
+
+  it("demo tokens are exempt from the bearer check but cannot reach /v1/admin", async () => {
+    const { verifyClerkToken } = await import("../lib/clerk.js");
+    vi.mocked(verifyClerkToken).mockRejectedValue(new Error("no bearer"));
+    await mockToken({ organizationId: "demo-org", orgName: "Demo Account", isDemo: true });
+    const prismaPlugin = (await import("./prisma.js")).default;
+    const authPlugin = (await import("./auth.js")).default;
+    const app = Fastify({ logger: false });
+    await app.register(prismaPlugin);
+    await app.register(authPlugin);
+    app.get("/v1/admin/organizations", async () => ({ ok: true }));
+    app.post("/v1/admin/organizations/:id/impersonate", async () => ({ ok: true }));
+    app.get("/v1/contacts", async (req) => ({ org: req.auth.organizationId }));
+    await app.ready();
+    const h = { "x-impersonate-token": "tok" };
+    expect((await app.inject({ method: "GET", url: "/v1/contacts", headers: h })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/v1/admin/organizations?x=1", headers: h })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: "/v1/admin/organizations/o/impersonate", headers: h })).statusCode).toBe(403);
+    await app.close();
+  });
+
   async function buildImpApp() {
     const prismaPlugin = (await import("./prisma.js")).default;
     const authPlugin = (await import("./auth.js")).default;

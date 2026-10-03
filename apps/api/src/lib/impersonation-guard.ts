@@ -85,6 +85,12 @@ export const BLOCKED_ROUTES: ReadonlySet<string> = new Set([
   "POST /v1/conversations/:id/status",
   "PATCH /v1/conversations/:id/assign",
   "POST /v1/messages/gaps/requeue",
+  // Automation rules that fire customer-facing replies.
+  "POST /v1/auto-replies",
+  "PATCH /v1/auto-replies/:id",
+  "PUT /v1/automation/settings/ooo",
+  "PUT /v1/automation/settings/welcome",
+  "PUT /v1/automation/settings/delayed",
 ]);
 
 /** Writes allowed in edit mode only. */
@@ -138,8 +144,6 @@ export const EDIT_ROUTES: ReadonlySet<string> = new Set([
   "POST /v1/contact-groups/build",
   "POST /v1/saved-filters",
   "PUT /v1/saved-filters/:id",
-  "POST /v1/auto-replies",
-  "PATCH /v1/auto-replies/:id",
   "POST /v1/auto-replies/:id/duplicate",
   "PATCH /v1/tags/:tag",
   "PUT /v1/conversations/:id/label",
@@ -156,9 +160,6 @@ export const EDIT_ROUTES: ReadonlySet<string> = new Set([
   "POST /v1/contact-assignment-rules",
   "PATCH /v1/contact-assignment-rules/:id",
   "PUT /v1/automation/business-hours",
-  "PUT /v1/automation/settings/ooo",
-  "PUT /v1/automation/settings/welcome",
-  "PUT /v1/automation/settings/delayed",
   "PUT /v1/automation/settings/intent-matching",
 ]);
 

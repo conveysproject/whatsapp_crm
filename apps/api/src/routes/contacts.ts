@@ -500,13 +500,16 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       }
       throw err;
     }
-    void dispatchFlowTrigger(fastify.prisma, organizationId, "contact_created", {
-      organizationId,
-      contactPhone: contact.phoneNumber,
-      contactId: contact.id,
-    });
-    void applyAssignmentRules(fastify.prisma, organizationId, contact.id, "contact_created")
-      .catch((err: unknown) => request.log.error({ err }, "assignment contact_created failed"));
+    // Impersonated sessions must not fire automations (flows / assignment rules) for the tenant.
+    if (!request.auth.impersonation) {
+      void dispatchFlowTrigger(fastify.prisma, organizationId, "contact_created", {
+        organizationId,
+        contactPhone: contact.phoneNumber,
+        contactId: contact.id,
+      });
+      void applyAssignmentRules(fastify.prisma, organizationId, contact.id, "contact_created")
+        .catch((err: unknown) => request.log.error({ err }, "assignment contact_created failed"));
+    }
     return reply.status(201).send({ data: contact });
   });
 
@@ -586,20 +589,21 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       }
 
       const dispatchBase = { organizationId, contactPhone: contact.phoneNumber, contactId: contact.id };
-      if (request.body.tags !== undefined) {
+      const impersonating = Boolean(request.auth.impersonation);
+      if (!impersonating && request.body.tags !== undefined) {
         const addedTags = contact.tags.filter((t) => !existing.tags.includes(t));
         if (addedTags.length > 0) {
           void dispatchFlowTrigger(fastify.prisma, organizationId, "tag_added", dispatchBase);
         }
       }
-      if (request.body.leadStatusId !== undefined && request.body.leadStatusId !== existing.leadStatusId) {
+      if (!impersonating && request.body.leadStatusId !== undefined && request.body.leadStatusId !== existing.leadStatusId) {
         void dispatchFlowTrigger(fastify.prisma, organizationId, "lifecycle_change", dispatchBase);
       }
 
       // Account-owner auto-assignment on trait/tag changes (best-effort).
       const traitChanged = ["tags", "leadStatusId", "email", "name", "firstName", "lastName", "countryId", "languageCode"]
         .some((k) => (request.body as Record<string, unknown>)[k] !== undefined);
-      if (traitChanged) {
+      if (traitChanged && !impersonating) {
         void applyAssignmentRules(fastify.prisma, organizationId, contact.id, "trait_tag_updated")
           .catch((err: unknown) => request.log.error({ err }, "assignment trait_tag_updated failed"));
       }

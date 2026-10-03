@@ -9,10 +9,47 @@ const PROTECTED_SETTINGS_KEYS = new Set([
   "whatsappBusinessAccountId",
 ]);
 
+// Explicit select: never return wabaAccessToken or stripeId to the browser.
+export const ORG_PUBLIC_SELECT = {
+  id: true,
+  name: true,
+  planTier: true,
+  whatsappBusinessAccountId: true,
+  phoneNumberId: true,
+  onboardingStep: true,
+  phone: true,
+  website: true,
+  location: true,
+  industry: true,
+  subCategory: true,
+  revenue: true,
+  whatsappUpdates: true,
+  facebookPageId: true,
+  instagramAccountId: true,
+  metaBusinessId: true,
+  registeredAt: true,
+  settings: true,
+  createdAt: true,
+  updatedAt: true,
+  slug: true,
+  domain: true,
+  logoImage: true,
+  smallLogoImage: true,
+  favicon: true,
+  darkLogoImage: true,
+  darkSmallLogoImage: true,
+  darkFavicon: true,
+  orgType: true,
+  status: true,
+  banReason: true,
+  trialEndsAt: true,
+} as const;
+
 export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/organizations/me", async (request) => {
     const org = await prisma.organization.findUniqueOrThrow({
       where: { id: request.auth.organizationId },
+      select: ORG_PUBLIC_SELECT,
     });
     return { data: org };
   });

@@ -261,6 +261,17 @@ describe("POST /v1/admin/organizations/:orgId/users/:userId/impersonate", () => 
     });
   });
 
+  it("creates the log row BEFORE the Redis token; a log failure creates no token", async () => {
+    mockPrisma.impersonationLog.create.mockRejectedValue(new Error("db down"));
+    const res = await app.inject({ method: "POST", url });
+    expect(res.statusCode).toBe(500);
+    expect(mockRedis.set).not.toHaveBeenCalled();
+    mockPrisma.impersonationLog.create.mockResolvedValue({});
+    await app.inject({ method: "POST", url });
+    expect(mockPrisma.impersonationLog.create.mock.invocationCallOrder[1]!)
+      .toBeLessThan(mockRedis.set.mock.invocationCallOrder[0]!);
+  });
+
   it("old org-level issue route is gone", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/admin/organizations/org-1/impersonate" });
     expect(res.statusCode).toBe(404);
@@ -362,6 +373,25 @@ describe("POST /v1/admin/impersonation/elevate", () => {
     const res = await post({ token: "tok", reason });
     expect(res.statusCode).toBe(500);
     expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it("404 and no Redis set when no open log row matched (count 0)", async () => {
+    happy();
+    mockPrisma.impersonationLog.updateMany.mockResolvedValue({ count: 0 });
+    const res = await post({ token: "tok", reason });
+    expect(res.statusCode).toBe(404);
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it("logs a warning when the elevation email is skipped because email is not configured", async () => {
+    happy();
+    mockMail.isEmailConfigured.mockReturnValueOnce(false);
+    const warn = vi.spyOn(app.log, "warn");
+    const res = await post({ token: "tok", reason });
+    expect(res.statusCode).toBe(200);
+    await new Promise((r) => setImmediate(r));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("email is not configured"));
+    expect(mockMail.sendMail).not.toHaveBeenCalled();
   });
 
   it("validates reason length (10-500) and presence of token", async () => {

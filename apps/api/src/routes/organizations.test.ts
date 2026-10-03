@@ -44,6 +44,16 @@ describe("organizations routes", () => {
     expect((res.json() as { data: { id: string } }).data.id).toBe("org_123");
   });
 
+  it("GET /v1/organizations/me selects fields without wabaAccessToken or stripeId", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    await app.inject({ method: "GET", url: "/v1/organizations/me" });
+    const call = vi.mocked(prisma.organization.findUniqueOrThrow).mock.calls.at(-1)![0] as { select?: Record<string, boolean> };
+    expect(call.select).toBeDefined();
+    expect(call.select).not.toHaveProperty("wabaAccessToken");
+    expect(call.select).not.toHaveProperty("stripeId");
+    expect(call.select!["id"]).toBe(true);
+  });
+
   it("PATCH /v1/organizations/me updates org name", async () => {
     const res = await app.inject({
       method: "PATCH",

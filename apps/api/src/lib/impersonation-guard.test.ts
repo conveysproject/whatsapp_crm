@@ -48,6 +48,18 @@ describe("impersonation route classification", () => {
     expect(classifyRoute("GET", "/v1/contacts")).toBe("read-like");
   });
 
+  it("blocks automation-rule routes in every mode", () => {
+    for (const k of [
+      ["POST", "/v1/auto-replies"],
+      ["PATCH", "/v1/auto-replies/:id"],
+      ["PUT", "/v1/automation/settings/ooo"],
+      ["PUT", "/v1/automation/settings/welcome"],
+      ["PUT", "/v1/automation/settings/delayed"],
+    ] as const) {
+      expect(classifyRoute(k[0], k[1])).toBe("blocked");
+    }
+  });
+
   it("treats unknown writes as unclassified and GET as read-like", () => {
     expect(classifyRoute("POST", "/v1/brand-new")).toBe("unclassified");
     expect(classifyRoute("GET", "/v1/anything")).toBe("read-like");

@@ -261,13 +261,7 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       }
 
       const token = randomBytes(32).toString("hex");
-      // 15 minutes — enough for a support session, short enough to limit blast radius
-      await redis.set(
-        `impersonate:${token}`,
-        JSON.stringify({ organizationId: org.id, targetUserId: target.id, issuedBy: request.auth.userId, mode: "readonly" }),
-        "EX", 900
-      );
-
+      // Log FIRST: if the log row cannot be written, no token is ever created (no unlogged session).
       await fastify.prisma.impersonationLog.create({
         data: {
           actorId: request.auth.userId,
@@ -280,6 +274,12 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
           userAgent: request.headers["user-agent"] ?? null,
         },
       });
+      // 15 minutes — enough for a support session, short enough to limit blast radius
+      await redis.set(
+        `impersonate:${token}`,
+        JSON.stringify({ organizationId: org.id, targetUserId: target.id, issuedBy: request.auth.userId, mode: "readonly" }),
+        "EX", 900
+      );
 
       writeAdminAudit({
         prisma: fastify.prisma,
@@ -336,10 +336,12 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       const ttlMs = await redis.pttl(key);
       if (ttlMs <= 0) return notFound();
 
-      await fastify.prisma.impersonationLog.updateMany({
+      const logged = await fastify.prisma.impersonationLog.updateMany({
         where: { token, actorId: adminId, endedAt: null },
         data: { mode: "edit", elevationReason: reason },
       });
+      // No matching open log row (ended/unknown): refuse, never create an unlogged edit session.
+      if (logged.count === 0) return notFound();
 
       // PX with the remaining TTL: no extension. Log first so a log failure never leaves an unlogged edit session.
       await redis.set(key, JSON.stringify({ ...payload, mode: "edit" }), "PX", ttlMs);
@@ -363,7 +365,10 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
   // Platform-side only: other super admins are told by email. Never the tenant. Best effort.
   async function notifyOtherSuperAdmins(actorId: string, targetUserId: string, orgId: string, reason: string) {
     try {
-      if (!isEmailConfigured()) return;
+      if (!isEmailConfigured()) {
+        fastify.log.warn("Impersonation elevation email skipped: email is not configured");
+        return;
+      }
       const others = await fastify.prisma.user.findMany({
         where: { role: "superAdmin", id: { not: actorId }, isActive: true, deletedAt: null },
         select: { email: true },
