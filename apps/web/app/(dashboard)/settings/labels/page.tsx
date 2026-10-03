@@ -1,4 +1,5 @@
 import type { JSX } from "react";
+import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import { ManageTagsClient } from "./LabelsClient";
 
@@ -12,7 +13,7 @@ export interface TagStat {
 async function getTags(token: string): Promise<TagStat[]> {
   try {
     const res = await fetch(`${API_URL}/v1/tags`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: await serverApiHeaders(token),
       cache: "no-store",
     });
     return res.ok ? (await res.json() as { data: TagStat[] }).data : [];

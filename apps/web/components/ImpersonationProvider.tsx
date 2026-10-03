@@ -24,8 +24,7 @@ export function ImpersonationProvider(): null {
         try {
           const session = parseImpersonationSession(sessionStorage.getItem(IMPERSONATION_STORAGE_KEY));
           if (!session) {
-            // Expired or malformed: drop it so the UI falls back to the real account.
-            if (sessionStorage.getItem(IMPERSONATION_STORAGE_KEY)) sessionStorage.removeItem(IMPERSONATION_STORAGE_KEY);
+            // Expired or malformed: the banner owns cleanup (storage + cookie); just don't attach.
             return null;
           }
           return session.token;

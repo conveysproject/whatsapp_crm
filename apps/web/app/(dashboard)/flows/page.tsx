@@ -1,4 +1,5 @@
 import { JSX } from "react";
+import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
@@ -16,7 +17,7 @@ interface UserData {
 async function getUserData(token: string): Promise<UserData> {
   try {
     const res = await fetch(`${API_URL}/v1/users/me`, {
-      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+      headers: await serverApiHeaders(token), cache: "no-store",
     });
     if (!res.ok) return { role: "agent" };
     const json = await res.json() as { data?: { role?: string; permissions?: Record<string, string> } };
@@ -37,7 +38,7 @@ async function getFlows(token: string): Promise<Flow[]> {
   try {
     const res = await fetch(
       `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/flows`,
-      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+      { headers: await serverApiHeaders(token), cache: "no-store" }
     );
     return res.ok ? (await res.json() as { data: Flow[] }).data : [];
   } catch {

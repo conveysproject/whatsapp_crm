@@ -1,4 +1,5 @@
 import type { JSX } from "react";
+import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -17,7 +18,7 @@ interface OrgData {
 async function getOrg(token: string): Promise<OrgData | null> {
   try {
     const res = await fetch(`${API_URL}/v1/organizations/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: await serverApiHeaders(token),
       cache: "no-store",
     });
     if (!res.ok) return null;

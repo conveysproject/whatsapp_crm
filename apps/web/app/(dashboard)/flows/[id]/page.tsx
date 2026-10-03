@@ -1,4 +1,5 @@
 import { JSX } from "react";
+import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import { FlowEditor } from "@/components/flows/FlowEditor";
@@ -17,7 +18,7 @@ export default async function FlowEditorPage({
   const token = await getToken();
 
   const res = await fetch(`${API_URL}/v1/flows/${id}`, {
-    headers: { Authorization: `Bearer ${token ?? ""}` },
+    headers: await serverApiHeaders(token),
     cache: "no-store",
   });
 

@@ -1,4 +1,5 @@
 import { JSX } from "react";
+import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -16,7 +17,7 @@ async function getRules(token: string): Promise<RoutingRule[]> {
   try {
     const res = await fetch(
       `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/routing-rules`,
-      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+      { headers: await serverApiHeaders(token), cache: "no-store" }
     );
     if (!res.ok) return [];
     return (await res.json() as { data: RoutingRule[] }).data;

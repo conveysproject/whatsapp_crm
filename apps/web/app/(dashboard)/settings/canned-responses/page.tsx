@@ -1,4 +1,5 @@
 import type { JSX } from "react";
+import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import { CannedResponsesClient } from "./CannedResponsesClient";
 
@@ -15,7 +16,7 @@ export interface CannedResponse {
 async function getCannedResponses(token: string): Promise<CannedResponse[]> {
   try {
     const res = await fetch(`${API_URL}/v1/canned-responses`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: await serverApiHeaders(token),
       cache: "no-store",
     });
     return res.ok ? (await res.json() as { data: CannedResponse[] }).data : [];

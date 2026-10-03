@@ -1,4 +1,5 @@
 import { JSX, ReactNode } from "react";
+import { serverApiHeaders, getImpersonationCookie } from "@/lib/server-api";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { SetupBanner } from "@/components/SetupBanner";
@@ -16,19 +17,21 @@ async function getOrgStatus(token: string): Promise<{
   provisioned: boolean;
   wabaConnected: boolean;
   numberProvisioned: boolean;
+  orgName?: string;
 }> {
   try {
     const [orgRes, statusRes] = await Promise.all([
       fetch(`${API_URL}/v1/organizations/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: await serverApiHeaders(token),
         cache: "no-store",
       }),
       fetch(`${API_URL}/v1/onboarding/status`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: await serverApiHeaders(token),
         cache: "no-store",
       }),
     ]);
     if (!orgRes.ok) return { provisioned: false, wabaConnected: false, numberProvisioned: false };
+    const org = (await orgRes.json().catch(() => null)) as { data?: { name?: string } } | null;
     const status = statusRes.ok
       ? (await statusRes.json() as { wabaConnected: boolean; numberProvisioned: boolean })
       : { wabaConnected: false, numberProvisioned: false };
@@ -36,6 +39,7 @@ async function getOrgStatus(token: string): Promise<{
       provisioned: true,
       wabaConnected: status.wabaConnected,
       numberProvisioned: status.numberProvisioned,
+      orgName: org?.data?.name,
     };
   } catch {
     return { provisioned: false, wabaConnected: false, numberProvisioned: false };
@@ -46,7 +50,12 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const { getToken, orgSlug, userId } = await auth.protect();
   const token = await getToken();
 
-  if (!orgSlug) {
+  // Under impersonation the admin has no Clerk org; the API resolves the target user's org
+  // from the imp_token cookie. A forged/garbage cookie is rejected by the API (401), which
+  // makes getOrgStatus return provisioned=false and falls through to the redirect below,
+  // so the cookie never bypasses a check on its own.
+  const impersonating = (await getImpersonationCookie()) !== null;
+  if (!orgSlug && !impersonating) {
     redirect("/checklist");
   }
 
@@ -64,7 +73,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         <Sidebar />
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           <ImpersonationBanner />
-          <TopBar orgName={orgSlug ?? undefined} userId={userId ?? undefined} />
+          <TopBar orgName={impersonating ? status.orgName : (orgSlug ?? undefined)} userId={userId ?? undefined} />
           <SetupBanner />
           <main className="flex flex-col flex-1 px-4 py-4 overflow-auto min-h-0">
             {/* <BreadcrumbNav /> */}

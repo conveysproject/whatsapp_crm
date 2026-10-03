@@ -1,4 +1,5 @@
 import type { JSX } from "react";
+import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import { InboxLabelsClient, type InboxLabelStat } from "./InboxLabelsClient";
 
@@ -7,7 +8,7 @@ const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 async function getInboxLabels(token: string): Promise<InboxLabelStat[]> {
   try {
     const res = await fetch(`${API_URL}/v1/inbox-labels`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: await serverApiHeaders(token),
       cache: "no-store",
     });
     return res.ok ? (await res.json() as { data: InboxLabelStat[] }).data : [];

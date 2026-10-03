@@ -1,4 +1,5 @@
 import { JSX } from "react";
+import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import { ContactDetailClient, type Contact } from "./ContactDetailClient";
@@ -7,7 +8,7 @@ async function getContact(id: string, token: string): Promise<Contact | null> {
   try {
     const res = await fetch(
       `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/contacts/${id}`,
-      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+      { headers: await serverApiHeaders(token), cache: "no-store" }
     );
     if (!res.ok) return null;
     return (await res.json() as { data: Contact }).data;

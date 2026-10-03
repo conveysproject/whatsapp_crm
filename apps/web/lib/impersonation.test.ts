@@ -45,6 +45,19 @@ describe("createImpersonatingFetch", () => {
     expect(init.method).toBe("POST");
   });
 
+  it("does not set content-type for FormData bodies", async () => {
+    const base = vi.fn().mockResolvedValue(ok());
+    const f = createImpersonatingFetch(base as unknown as typeof fetch, () => "tok", config);
+    const fd = new FormData();
+    fd.append("file", new Blob(["x"]), "a.txt");
+    await f("http://localhost:4000/v1/upload", { method: "POST", body: fd });
+    const [, init] = base.mock.calls[0]!;
+    expect(init.body).toBe(fd);
+    const h = new Headers(init.headers);
+    expect(h.has("content-type")).toBe(false);
+    expect(h.get("x-impersonate-token")).toBe("tok");
+  });
+
   it("preserves Request inputs and their headers", async () => {
     const base = vi.fn().mockResolvedValue(ok());
     const f = createImpersonatingFetch(base as unknown as typeof fetch, () => "tok", config);

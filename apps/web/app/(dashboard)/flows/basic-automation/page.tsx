@@ -1,4 +1,5 @@
 import { JSX } from "react";
+import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import { PermissionGate } from "@/components/PermissionGate";
 import { BusinessHoursCard } from "./business-hours-card";
@@ -17,7 +18,7 @@ interface Flow {
 async function getFlows(token: string): Promise<Flow[]> {
   try {
     const res = await fetch(`${API_URL}/v1/flows`, {
-      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+      headers: await serverApiHeaders(token), cache: "no-store",
     });
     return res.ok ? (await res.json() as { data: Flow[] }).data : [];
   } catch {
@@ -54,7 +55,7 @@ interface AutomationSettings {
 async function getAutomationSettings(token: string): Promise<AutomationSettings | null> {
   try {
     const res = await fetch(`${API_URL}/v1/automation/settings`, {
-      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+      headers: await serverApiHeaders(token), cache: "no-store",
     });
     if (!res.ok) return null;
     return (await res.json() as { data: AutomationSettings }).data;

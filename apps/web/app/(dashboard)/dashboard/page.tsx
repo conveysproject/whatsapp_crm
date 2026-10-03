@@ -1,4 +1,5 @@
 import { JSX } from "react";
+import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import { OrgMetricCards } from "@/components/analytics/OrgMetricCards";
 import { ConversationChart } from "@/components/analytics/ConversationChart";
@@ -47,7 +48,7 @@ const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 async function getOverview(token: string): Promise<OverviewMetrics | null> {
   try {
     const res = await fetch(`${API_BASE}/v1/analytics/overview`, {
-      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+      headers: await serverApiHeaders(token), cache: "no-store",
     });
     return res.ok ? (await res.json() as { data: OverviewMetrics }).data : null;
   } catch { return null; }
@@ -56,7 +57,7 @@ async function getOverview(token: string): Promise<OverviewMetrics | null> {
 async function getUsage(token: string): Promise<UsageData | null> {
   try {
     const res = await fetch(`${API_BASE}/v1/billing/usage`, {
-      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+      headers: await serverApiHeaders(token), cache: "no-store",
     });
     return res.ok ? (await res.json() as { data: UsageData }).data : null;
   } catch { return null; }
@@ -65,7 +66,7 @@ async function getUsage(token: string): Promise<UsageData | null> {
 async function getCurrentUser(token: string): Promise<CurrentUser | null> {
   try {
     const res = await fetch(`${API_BASE}/v1/users/me`, {
-      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+      headers: await serverApiHeaders(token), cache: "no-store",
     });
     return res.ok ? (await res.json() as { data: CurrentUser }).data : null;
   } catch { return null; }
@@ -74,7 +75,7 @@ async function getCurrentUser(token: string): Promise<CurrentUser | null> {
 async function getWabaConnected(token: string): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/v1/onboarding/status`, {
-      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+      headers: await serverApiHeaders(token), cache: "no-store",
     });
     if (!res.ok) return false;
     return ((await res.json()) as { wabaConnected: boolean }).wabaConnected;

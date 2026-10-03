@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import { serverApiHeaders } from "./server-api";
 import type { ApiResponse, ApiError } from "@WBMSG/shared";
 
 const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -18,7 +19,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token ? await serverApiHeaders(token) : {}),
       ...init?.headers,
     },
   });

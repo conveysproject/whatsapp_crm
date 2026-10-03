@@ -6,7 +6,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
-import { IMPERSONATION_STORAGE_KEY, type ImpersonationSession } from "@/lib/impersonation";
+import { IMPERSONATION_STORAGE_KEY, setImpersonationCookie, type ImpersonationSession } from "@/lib/impersonation";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -31,6 +31,12 @@ interface OrgUser {
 
 const PLAN_TIERS = ["starter", "growth", "scale", "enterprise"] as const;
 
+class HttpError extends Error {
+  constructor(public status: number) {
+    super(`HTTP ${status}`);
+  }
+}
+
 function useAdminFetch() {
   const { getToken } = useAuth();
   return async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -43,7 +49,7 @@ function useAdminFetch() {
         ...init?.headers,
       },
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new HttpError(res.status);
     return res.json() as Promise<T>;
   };
 }
@@ -109,10 +115,11 @@ export default function AdminOrgDetailPage(): JSX.Element {
         mode: "readonly",
         expiresAt: Date.now() + res.data.expiresIn * 1000,
       };
+      if (!(await setImpersonationCookie(session))) throw new Error("cookie");
       sessionStorage.setItem(IMPERSONATION_STORAGE_KEY, JSON.stringify(session));
       window.location.href = "/dashboard";
     } catch (e) {
-      toast.error(e instanceof Error && e.message.includes("429") ? "Impersonation limit reached (10/hour)." : "Could not start impersonation.");
+      toast.error(e instanceof HttpError && e.status === 429 ? "Impersonation limit reached (10/hour)." : "Could not start impersonation.");
       setLoggingInAs(null);
     }
   }

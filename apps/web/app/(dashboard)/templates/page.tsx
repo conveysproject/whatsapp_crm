@@ -1,4 +1,5 @@
 import { JSX } from "react";
+import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
@@ -13,7 +14,7 @@ const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 async function getTemplates(token: string): Promise<TemplateData[]> {
   try {
     const res = await fetch(`${API_URL}/v1/templates`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: await serverApiHeaders(token),
       cache: "no-store",
     });
     if (!res.ok) return [];
@@ -24,7 +25,7 @@ async function getTemplates(token: string): Promise<TemplateData[]> {
 async function getUserRole(token: string): Promise<string> {
   try {
     const res = await fetch(`${API_URL}/v1/users/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: await serverApiHeaders(token),
       cache: "no-store",
     });
     if (!res.ok) return "agent";

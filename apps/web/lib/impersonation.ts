@@ -128,3 +128,23 @@ export function createImpersonatingFetch(
     return response;
   };
 }
+
+/** Store the token in the httpOnly cookie used by server-rendered pages. Resolves false on failure. */
+export async function setImpersonationCookie(session: Pick<ImpersonationSession, "token" | "expiresAt">): Promise<boolean> {
+  try {
+    const res = await fetch("/api/impersonation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: session.token, expiresAt: session.expiresAt }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Clear both the cookie and sessionStorage. Never throws. */
+export async function clearImpersonation(): Promise<void> {
+  try { sessionStorage.removeItem(IMPERSONATION_STORAGE_KEY); } catch { /* ignore */ }
+  try { await fetch("/api/impersonation", { method: "DELETE" }); } catch { /* ignore */ }
+}

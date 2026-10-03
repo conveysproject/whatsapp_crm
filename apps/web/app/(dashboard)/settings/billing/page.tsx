@@ -1,4 +1,5 @@
 import type { JSX } from "react";
+import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { BillingClient } from "./BillingClient";
@@ -36,7 +37,7 @@ interface Plan {
 
 async function fetchJson<T>(url: string, token: string): Promise<T | null> {
   try {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+    const res = await fetch(url, { headers: await serverApiHeaders(token), cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json() as { data: T }).data;
   } catch { return null; }
@@ -45,7 +46,7 @@ async function fetchJson<T>(url: string, token: string): Promise<T | null> {
 async function getUserRole(token: string): Promise<string> {
   try {
     const res = await fetch(`${API_URL}/v1/users/me`, {
-      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+      headers: await serverApiHeaders(token), cache: "no-store",
     });
     if (!res.ok) return "agent";
     const json = await res.json() as { data?: { role?: string } };
@@ -65,7 +66,7 @@ export default async function BillingPage(): Promise<JSX.Element> {
   const [usage, subscription, plans, transactions] = await Promise.all([
     fetchJson<UsageData>(`${API_URL}/v1/billing/usage`, token),
     fetchJson<SubscriptionData>(`${API_URL}/v1/billing/subscriptions`, token),
-    fetch(`${API_URL}/v1/billing/plans`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" })
+    fetch(`${API_URL}/v1/billing/plans`, { headers: await serverApiHeaders(token), cache: "no-store" })
       .then((r) => r.ok ? r.json() as Promise<{ data: Plan[] }> : { data: [] })
       .then((j) => j.data)
       .catch(() => [] as Plan[]),

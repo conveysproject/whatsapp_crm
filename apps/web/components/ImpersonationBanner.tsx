@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 import {
   IMPERSONATION_STORAGE_KEY,
+  clearImpersonation,
   parseImpersonationSession,
   type ImpersonationSession,
 } from "@/lib/impersonation";
@@ -20,15 +21,28 @@ export function ImpersonationBanner(): JSX.Element | null {
 
   useEffect(() => {
     const raw = sessionStorage.getItem(IMPERSONATION_STORAGE_KEY);
+    if (!raw) return;
     const session = parseImpersonationSession(raw);
     if (session) {
       setState(session);
-    } else if (raw) {
-      // Malformed or already expired.
-      sessionStorage.removeItem(IMPERSONATION_STORAGE_KEY);
-      toast.info("Impersonation session expired.");
-      window.location.href = "/admin/organizations";
+      return;
     }
+    // Present but unusable: distinguish expired from malformed.
+    let expired = false;
+    try {
+      const parsed = JSON.parse(raw) as { token?: unknown; expiresAt?: unknown };
+      expired = typeof parsed.token === "string" && typeof parsed.expiresAt === "number";
+    } catch {
+      expired = false;
+    }
+    void clearImpersonation().then(() => {
+      if (expired) {
+        toast.info("Impersonation session expired.");
+        window.location.href = "/admin/organizations";
+      } else {
+        toast.error("Invalid impersonation session was cleared.");
+      }
+    });
   }, []);
 
   // Auto-exit when the token expires.
@@ -36,10 +50,9 @@ export function ImpersonationBanner(): JSX.Element | null {
     if (!state) return;
     const ms = state.expiresAt - Date.now();
     const timer = setTimeout(() => {
-      sessionStorage.removeItem(IMPERSONATION_STORAGE_KEY);
       setState(null);
       toast.info("Impersonation session expired.");
-      window.location.href = "/admin/organizations";
+      void clearImpersonation().finally(() => { window.location.href = "/admin/organizations"; });
     }, Math.max(0, Math.min(ms, 2_147_000_000)));
     return () => clearTimeout(timer);
   }, [state]);
@@ -64,7 +77,7 @@ export function ImpersonationBanner(): JSX.Element | null {
     } catch {
       toast.error("Could not revoke the token on the server; it will expire on its own.");
     }
-    sessionStorage.removeItem(IMPERSONATION_STORAGE_KEY);
+    await clearImpersonation();
     setState(null);
     window.location.href = "/admin/organizations";
   }

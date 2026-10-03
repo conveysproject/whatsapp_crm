@@ -1,4 +1,5 @@
 import type { JSX } from "react";
+import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -12,7 +13,7 @@ async function getOrg(token: string): Promise<Org | null> {
   try {
     const res = await fetch(
       `${process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/organizations/me`,
-      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+      { headers: await serverApiHeaders(token), cache: "no-store" }
     );
     return res.ok ? (await res.json() as { data: Org }).data : null;
   } catch { return null; }
