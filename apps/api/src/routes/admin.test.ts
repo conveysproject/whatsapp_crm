@@ -75,6 +75,32 @@ describe("GET /v1/admin/organizations", () => {
   });
 });
 
+describe("GET /v1/admin/organizations/:id/users", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("lists org-scoped, non-deleted, non-superAdmin users with safe fields only", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ id: "org-1" });
+    mockPrisma.user.findMany.mockResolvedValue([
+      { id: "u-1", email: "a@x.com", fullName: "A", role: "agent", isActive: true, lastSignInAt: null },
+    ]);
+    const res = await app.inject({ method: "GET", url: "/v1/admin/organizations/org-1/users" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: unknown[] }>().data).toHaveLength(1);
+    const arg = mockPrisma.user.findMany.mock.calls[0]![0] as { where: Record<string, unknown>; select: Record<string, boolean> };
+    expect(arg.where).toMatchObject({ organizationId: "org-1", deletedAt: null, role: { not: "superAdmin" } });
+    expect(Object.keys(arg.select).sort()).toEqual(["email", "fullName", "id", "isActive", "lastSignInAt", "role"]);
+  });
+
+  it("returns 404 when the org does not exist", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue(null);
+    const res = await app.inject({ method: "GET", url: "/v1/admin/organizations/nope/users" });
+    expect(res.statusCode).toBe(404);
+    expect(mockPrisma.user.findMany).not.toHaveBeenCalled();
+  });
+});
+
 describe("POST /v1/admin/organizations/:id/ban", () => {
   let app: FastifyInstance;
   beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
@@ -129,6 +155,12 @@ describe("SuperAdmin guard", () => {
   it("returns 403 for non-superAdmin", async () => {
     const res = await appAsAdmin.inject({ method: "GET", url: "/v1/admin/organizations" });
     expect(res.statusCode).toBe(403);
+  });
+
+  it("returns 403 for non-superAdmin on org users list", async () => {
+    const res = await appAsAdmin.inject({ method: "GET", url: "/v1/admin/organizations/org-1/users" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.user.findMany).not.toHaveBeenCalled();
   });
 });
 

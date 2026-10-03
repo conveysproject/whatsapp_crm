@@ -175,6 +175,19 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     });
   });
 
+  // ── Organization users (for "Login As" picker) ───────────────────────────
+  fastify.get<{ Params: { id: string } }>("/admin/organizations/:id/users", async (request, reply) => {
+    if (!requireSuperAdmin(request.auth.role, reply)) return;
+    const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
+    if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
+    const data = await fastify.prisma.user.findMany({
+      where: { organizationId: org.id, deletedAt: null, role: { not: "superAdmin" } },
+      select: { id: true, email: true, fullName: true, role: true, isActive: true, lastSignInAt: true },
+      orderBy: { fullName: "asc" },
+    });
+    return reply.send({ data });
+  });
+
   // ── Update plan tier / status ────────────────────────────────────────────
   fastify.patch<{ Params: { id: string }; Body: { planTier?: string; status?: string; banReason?: string } }>(
     "/admin/organizations/:id",
