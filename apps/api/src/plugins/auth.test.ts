@@ -304,6 +304,35 @@ describe("auth plugin — user impersonation", () => {
     await app.close();
   });
 
+  it("a revoked token (key deleted from Redis) gives 401 immediately", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    const { redis } = await import("../lib/redis.js");
+    const payload = JSON.stringify({ organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", mode: "edit" });
+    const store = new Map<string, string>([["impersonate:tok", payload]]);
+    vi.mocked(redis.get).mockImplementation((async (k: string) => store.get(k) ?? null) as never);
+    vi.mocked(prisma.user.findFirst).mockResolvedValue({ role: "agent", organizationId: "org-1", teamId: null, teamRole: null } as never);
+    vi.mocked(prisma.organizationMember.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValue(null);
+    const app = await buildImpApp();
+    try {
+      expect((await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } })).statusCode).toBe(200);
+      store.delete("impersonate:tok"); // what DELETE .../impersonate does
+      const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+      expect(res.statusCode).toBe(401);
+      expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_IMPERSONATION_TOKEN");
+    } finally {
+      vi.mocked(redis.get).mockReset();
+      vi.mocked(redis.get).mockResolvedValue(null);
+      vi.mocked(prisma.user.findFirst).mockReset();
+      vi.mocked(prisma.user.findFirst).mockResolvedValue({ role: "admin", organizationId: "org_123" } as never);
+      vi.mocked(prisma.organizationMember.findFirst).mockReset();
+      vi.mocked(prisma.organizationMember.findFirst).mockResolvedValue({ permissions: {} } as never);
+      vi.mocked(prisma.vendorSetting.findUnique).mockReset();
+      vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValue(null);
+      await app.close();
+    }
+  });
+
   it("rejects old-format tokens without targetUserId with 401", async () => {
     await mockToken({ organizationId: "org-1", orgName: "Acme", issuedBy: "sa-1" });
     const app = await buildImpApp();

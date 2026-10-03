@@ -7,12 +7,17 @@ const mockRedis = vi.hoisted(() => ({
   expire: vi.fn(),
   set: vi.fn(),
   del: vi.fn(),
+  get: vi.fn(),
+  pttl: vi.fn(),
 }));
 vi.mock("../lib/redis.js", () => ({ redis: mockRedis }));
+const mockMail = vi.hoisted(() => ({ sendMail: vi.fn().mockResolvedValue(undefined), isEmailConfigured: vi.fn().mockReturnValue(true) }));
+vi.mock("../lib/mail.js", () => mockMail);
 
 const mockPrisma = {
   user: {
     findFirst: vi.fn(),
+    findMany: vi.fn(),
   },
   impersonationLog: {
     create: vi.fn(),
@@ -234,19 +239,133 @@ describe("DELETE /v1/admin/organizations/:id/impersonate (revoke)", () => {
   let app: FastifyInstance;
   beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
   afterEach(async () => { await app.close(); });
+  const call = () => app.inject({
+    method: "DELETE",
+    url: "/v1/admin/organizations/org-1/impersonate",
+    payload: { token: "tok" },
+  });
 
-  it("revokes the token and closes the log", async () => {
+  it("revokes the issuer's own token and closes the log", async () => {
+    mockRedis.get.mockResolvedValue(JSON.stringify({ organizationId: "org-1", targetUserId: "u1", issuedBy: "sa-1", mode: "readonly" }));
     mockRedis.del.mockResolvedValue(1);
     mockPrisma.impersonationLog.updateMany.mockResolvedValue({ count: 1 });
-    const res = await app.inject({
-      method: "DELETE",
-      url: "/v1/admin/organizations/org-1/impersonate",
-      payload: { token: "tok" },
-    });
+    const res = await call();
     expect(res.statusCode).toBe(204);
     expect(mockRedis.del).toHaveBeenCalledWith("impersonate:tok");
     expect(mockPrisma.impersonationLog.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { token: "tok", endedAt: null } })
+      expect.objectContaining({ where: { token: "tok", actorId: "sa-1", endedAt: null } })
     );
+  });
+
+  it("403 when a different super admin tries to revoke; token is kept", async () => {
+    mockRedis.get.mockResolvedValue(JSON.stringify({ organizationId: "org-1", targetUserId: "u1", issuedBy: "sa-other", mode: "readonly" }));
+    const res = await call();
+    expect(res.statusCode).toBe(403);
+    expect(mockRedis.del).not.toHaveBeenCalled();
+    expect(mockPrisma.impersonationLog.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("is idempotent for an already expired token (only closes the caller's own log rows)", async () => {
+    mockRedis.get.mockResolvedValue(null);
+    mockPrisma.impersonationLog.updateMany.mockResolvedValue({ count: 0 });
+    const res = await call();
+    expect(res.statusCode).toBe(204);
+    expect(mockPrisma.impersonationLog.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { token: "tok", actorId: "sa-1", endedAt: null } })
+    );
+  });
+});
+
+describe("POST /v1/admin/impersonation/elevate", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+  const url = "/v1/admin/impersonation/elevate";
+  const reason = "Customer reported a stuck conversation, replying on their behalf";
+  const payloadOf = (over: object = {}) => JSON.stringify({ organizationId: "org-1", targetUserId: "user-1", issuedBy: "sa-1", mode: "readonly", ...over });
+  const post = (body: object) => app.inject({ method: "POST", url, payload: body });
+
+  function happy() {
+    mockRedis.get.mockResolvedValue(payloadOf());
+    mockRedis.pttl.mockResolvedValue(600000);
+    mockRedis.set.mockResolvedValue("OK");
+    mockPrisma.impersonationLog.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.user.findMany.mockResolvedValue([{ email: "other@wbmsg.test" }]);
+  }
+
+  it("elevates to edit mode keeping the remaining TTL, logs reason, audits, notifies other super admins", async () => {
+    happy();
+    const res = await post({ token: "tok", reason });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ data: { mode: "edit", expiresIn: 600 } });
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      "impersonate:tok",
+      JSON.stringify({ organizationId: "org-1", targetUserId: "user-1", issuedBy: "sa-1", mode: "edit" }),
+      "PX", 600000
+    );
+    expect(mockPrisma.impersonationLog.updateMany).toHaveBeenCalledWith({
+      where: { token: "tok", actorId: "sa-1", endedAt: null },
+      data: { mode: "edit", elevationReason: reason },
+    });
+    await new Promise((r) => setImmediate(r));
+    expect(mockPrisma.adminAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ actorId: "sa-1", action: "user.impersonate.elevate", targetType: "user", targetId: "user-1" }),
+    });
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ role: "superAdmin", id: { not: "sa-1" }, isActive: true, deletedAt: null }),
+    }));
+    expect(mockMail.sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: ["other@wbmsg.test"] }));
+  });
+
+  it("validates reason length (10-500) and presence of token", async () => {
+    expect((await post({ token: "tok", reason: "short" })).statusCode).toBe(400);
+    expect((await post({ token: "tok", reason: "x".repeat(501) })).statusCode).toBe(400);
+    expect((await post({ reason })).statusCode).toBe(400);
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it("403 for a token issued by a different admin", async () => {
+    happy();
+    mockRedis.get.mockResolvedValue(payloadOf({ issuedBy: "sa-other" }));
+    const res = await post({ token: "tok", reason });
+    expect(res.statusCode).toBe(403);
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it("404 for unknown/expired token and for demo-style payloads", async () => {
+    happy();
+    mockRedis.get.mockResolvedValue(null);
+    expect((await post({ token: "tok", reason })).statusCode).toBe(404);
+    mockRedis.get.mockResolvedValue(JSON.stringify({ organizationId: "org-1", isDemo: true }));
+    expect((await post({ token: "tok", reason })).statusCode).toBe(404);
+    mockRedis.get.mockResolvedValue(payloadOf());
+    mockRedis.pttl.mockResolvedValue(-2);
+    expect((await post({ token: "tok", reason })).statusCode).toBe(404);
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it("409 when already elevated", async () => {
+    happy();
+    mockRedis.get.mockResolvedValue(payloadOf({ mode: "edit" }));
+    expect((await post({ token: "tok", reason })).statusCode).toBe(409);
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it("403 for non super admins and for impersonated sessions", async () => {
+    happy();
+    const orig = { ...mockAdminAuth };
+    Object.assign(mockAdminAuth, { role: "admin" });
+    expect((await post({ token: "tok", reason })).statusCode).toBe(403);
+    Object.assign(mockAdminAuth, orig, { impersonation: { adminId: "sa-1", mode: "edit" } });
+    expect((await post({ token: "tok", reason })).statusCode).toBe(403);
+    delete (mockAdminAuth as Record<string, unknown>).impersonation;
+    Object.assign(mockAdminAuth, orig);
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it("still succeeds when the notification email fails", async () => {
+    happy();
+    mockMail.sendMail.mockRejectedValueOnce(new Error("smtp down"));
+    expect((await post({ token: "tok", reason })).statusCode).toBe(200);
   });
 });

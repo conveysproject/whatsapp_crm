@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { redis } from "../lib/redis.js";
 import { writeAdminAudit } from "../lib/audit.js";
 import { getClerkUser } from "../lib/clerk-admin.js";
+import { sendMail, isEmailConfigured } from "../lib/mail.js";
 
 const SENSITIVE_CONFIG_KEYS = new Set([
   "smtp_password", "stripe_secret", "stripe_webhook_secret",
@@ -281,6 +282,93 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // ── Elevate an impersonation session to edit mode ─────────────────────────
+  // Only the issuing real super admin (own Clerk token, never an impersonation session).
+  // The remaining TTL is preserved: elevation never extends the session.
+  fastify.post<{ Body: { token: string; reason: string } }>(
+    "/admin/impersonation/elevate",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["token", "reason"],
+          properties: {
+            token: { type: "string", minLength: 1 },
+            reason: { type: "string", minLength: 10, maxLength: 500 },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!requireSuperAdmin(request.auth.role, reply)) return;
+      if (request.auth.impersonation) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Not available during impersonation" } });
+      }
+      const { token, reason } = request.body;
+      const adminId = request.auth.userId;
+      const key = `impersonate:${token}`;
+      const notFound = () => reply.status(404).send({ error: { code: "NOT_FOUND", message: "Impersonation session not found or expired" } });
+
+      const raw = await redis.get(key);
+      let payload: { organizationId?: string; targetUserId?: string; issuedBy?: string; mode?: string } | null = null;
+      try { payload = raw ? JSON.parse(raw) : null; } catch { payload = null; }
+      if (!payload || !payload.targetUserId || !payload.organizationId) return notFound();
+      if (payload.issuedBy !== adminId) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only the issuing admin can elevate this session" } });
+      }
+      if (payload.mode === "edit") {
+        return reply.status(409).send({ error: { code: "ALREADY_ELEVATED", message: "Session is already in edit mode" } });
+      }
+      const ttlMs = await redis.pttl(key);
+      if (ttlMs <= 0) return notFound();
+
+      // PX with the remaining TTL: no extension.
+      await redis.set(key, JSON.stringify({ ...payload, mode: "edit" }), "PX", ttlMs);
+
+      await fastify.prisma.impersonationLog.updateMany({
+        where: { token, actorId: adminId, endedAt: null },
+        data: { mode: "edit", elevationReason: reason },
+      });
+
+      writeAdminAudit({
+        prisma: fastify.prisma,
+        actorId: adminId,
+        action: "user.impersonate.elevate",
+        targetType: "user",
+        targetId: payload.targetUserId,
+        metadata: { organizationId: payload.organizationId, reason, remainingMs: ttlMs },
+        request,
+      });
+
+      void notifyOtherSuperAdmins(adminId, payload.targetUserId, payload.organizationId, reason);
+
+      return reply.send({ data: { mode: "edit", expiresIn: Math.ceil(ttlMs / 1000) } });
+    }
+  );
+
+  // Platform-side only: other super admins are told by email. Never the tenant. Best effort.
+  async function notifyOtherSuperAdmins(actorId: string, targetUserId: string, orgId: string, reason: string) {
+    try {
+      if (!isEmailConfigured()) return;
+      const others = await fastify.prisma.user.findMany({
+        where: { role: "superAdmin", id: { not: actorId }, isActive: true, deletedAt: null },
+        select: { email: true },
+      });
+      const to = others.map((u) => u.email).filter(Boolean);
+      if (to.length === 0) return;
+      const esc = (v: string) => v.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+      await sendMail({
+        to,
+        subject: "[WBMSG] Impersonation session elevated to edit mode",
+        html: `<p>Super admin <b>${esc(actorId)}</b> elevated an impersonation session to edit mode.</p>` +
+          `<p>Organization: ${esc(orgId)}<br/>Target user: ${esc(targetUserId)}</p><p>Reason: ${esc(reason)}</p>`,
+      });
+    } catch (err) {
+      fastify.log.error(err, "Failed to notify super admins of impersonation elevation");
+    }
+  }
+
   // ── End impersonation ────────────────────────────────────────────────────
   fastify.delete<{ Params: { id: string }; Body: { token: string } }>(
     "/admin/organizations/:id/impersonate",
@@ -297,9 +385,19 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       if (!requireSuperAdmin(request.auth.role, reply)) return;
       const { token } = request.body;
-      await redis.del(`impersonate:${token}`);
+      const adminId = request.auth.userId;
+      // Only the issuing admin may revoke their own token. Idempotent for expired tokens.
+      const raw = await redis.get(`impersonate:${token}`);
+      if (raw) {
+        let issuedBy: string | undefined;
+        try { issuedBy = (JSON.parse(raw) as { issuedBy?: string }).issuedBy; } catch { issuedBy = undefined; }
+        if (issuedBy !== adminId) {
+          return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only the issuing admin can end this session" } });
+        }
+        await redis.del(`impersonate:${token}`);
+      }
       await fastify.prisma.impersonationLog.updateMany({
-        where: { token, endedAt: null },
+        where: { token, actorId: adminId, endedAt: null },
         data: { endedAt: new Date() },
       });
       return reply.status(204).send();
