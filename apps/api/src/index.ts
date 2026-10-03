@@ -6,6 +6,7 @@ import { sentryPlugin } from "./plugins/sentry.js";
 import prismaPlugin from "./plugins/prisma.js";
 import swaggerPlugin from "./plugins/swagger.js";
 import authPlugin from "./plugins/auth.js";
+import impersonationGuardPlugin from "./lib/impersonation-guard.js";
 import { routes } from "./routes/index.js";
 
 import multipart from "@fastify/multipart";
@@ -55,6 +56,7 @@ async function start() {
   await server.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
   await server.register(swaggerPlugin);
   await server.register(authPlugin);
+  await server.register(impersonationGuardPlugin); // must follow auth: reads request.auth.impersonation
   await server.register(rateLimitPlugin);
   await server.register(socketioPlugin);
   await server.register(routes);

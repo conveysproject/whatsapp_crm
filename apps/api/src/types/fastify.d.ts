@@ -5,6 +5,8 @@ export interface AuthContext {
   permissions: Record<string, string>;
   teamId: string | null;
   teamRole: "lead" | "member" | null;
+  /** Set only for super-admin impersonation sessions; auth then describes the target user. */
+  impersonation?: { adminId: string; mode: "readonly" | "edit" };
 }
 
 declare module "fastify" {

@@ -12,6 +12,7 @@ vi.mock("../lib/prisma.js", () => ({
   prisma: {
     user: {
       findFirst: vi.fn().mockResolvedValue({ role: "admin", organizationId: "org_123" }),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     organizationMember: {
       findFirst: vi.fn().mockResolvedValue({ permissions: {} }),
@@ -226,5 +227,108 @@ describe("auth plugin — permission merge", () => {
     expect(capturedAuth["teamId"]).toBe("team-1");
     expect(capturedAuth["teamRole"]).toBe("lead");
     await teamApp.close();
+  });
+});
+
+describe("auth plugin — user impersonation", () => {
+  async function buildImpApp() {
+    const prismaPlugin = (await import("./prisma.js")).default;
+    const authPlugin = (await import("./auth.js")).default;
+    const app = Fastify({ logger: false });
+    await app.register(prismaPlugin);
+    await app.register(authPlugin);
+    app.get("/probe", async (req) => ({ auth: req.auth }));
+    await app.ready();
+    return app;
+  }
+
+  async function mockToken(payload: Record<string, unknown> | null) {
+    const { redis } = await import("../lib/redis.js");
+    vi.mocked(redis.get).mockImplementation((async (key: string) =>
+      key === "impersonate:tok" && payload ? JSON.stringify(payload) : null) as never);
+  }
+
+  it("resolves the target user's role, permissions and team, and sets impersonation", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    await mockToken({ organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", mode: "readonly" });
+    vi.mocked(prisma.user.findFirst).mockResolvedValueOnce({ role: "agent", organizationId: "org-1", teamId: "t-1", teamRole: "member" } as never);
+    vi.mocked(prisma.organizationMember.findFirst).mockResolvedValueOnce({ permissions: { inbox_access: "allow" } } as never);
+    vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValueOnce({ value: JSON.stringify({ contacts_access: "allow" }) } as never);
+
+    const app = await buildImpApp();
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      auth: {
+        userId: "user-9",
+        organizationId: "org-1",
+        role: "agent",
+        permissions: { contacts_access: "allow", inbox_access: "allow" },
+        teamId: "t-1",
+        teamRole: "member",
+        impersonation: { adminId: "sa-1", mode: "readonly" },
+      },
+    });
+    expect(vi.mocked(prisma.user.findFirst)).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "user-9", organizationId: "org-1", isActive: true, deletedAt: null } })
+    );
+    await app.close();
+  });
+
+  it("does not stamp lastSignInAt or touch the sign-in stamp key", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    const { redis } = await import("../lib/redis.js");
+    vi.mocked(prisma.user.updateMany).mockClear();
+    vi.mocked(redis.exists).mockClear();
+    await mockToken({ organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", mode: "readonly" });
+    vi.mocked(prisma.user.findFirst).mockResolvedValueOnce({ role: "agent", organizationId: "org-1", teamId: null, teamRole: null } as never);
+    vi.mocked(prisma.organizationMember.findFirst).mockResolvedValueOnce(null);
+    vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValueOnce(null);
+
+    const app = await buildImpApp();
+    await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    expect(redis.exists).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("propagates edit mode", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    await mockToken({ organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", mode: "edit" });
+    vi.mocked(prisma.user.findFirst).mockResolvedValueOnce({ role: "agent", organizationId: "org-1", teamId: null, teamRole: null } as never);
+    vi.mocked(prisma.organizationMember.findFirst).mockResolvedValueOnce(null);
+    vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValueOnce(null);
+    const app = await buildImpApp();
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    expect(res.json<{ auth: { impersonation: unknown } }>().auth.impersonation).toEqual({ adminId: "sa-1", mode: "edit" });
+    await app.close();
+  });
+
+  it("rejects old-format tokens without targetUserId with 401", async () => {
+    await mockToken({ organizationId: "org-1", orgName: "Acme", issuedBy: "sa-1" });
+    const app = await buildImpApp();
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    expect(res.statusCode).toBe(401);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_IMPERSONATION_TOKEN");
+    await app.close();
+  });
+
+  it("rejects unknown tokens with 401", async () => {
+    await mockToken(null);
+    const app = await buildImpApp();
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "nope" } });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("rejects when the target is no longer active/in the org with 401", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    await mockToken({ organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", mode: "readonly" });
+    vi.mocked(prisma.user.findFirst).mockResolvedValueOnce(null);
+    const app = await buildImpApp();
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    expect(res.statusCode).toBe(401);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_IMPERSONATION_TOKEN");
+    await app.close();
   });
 });
