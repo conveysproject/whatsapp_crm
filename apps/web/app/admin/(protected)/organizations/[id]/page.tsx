@@ -44,7 +44,7 @@ function useAdminFetch() {
     const res = await fetch(`${API_URL}${path}`, {
       ...init,
       headers: {
-        "Content-Type": "application/json",
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
         Authorization: `Bearer ${token ?? ""}`,
         ...init?.headers,
       },
