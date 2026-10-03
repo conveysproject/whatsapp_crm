@@ -85,3 +85,44 @@ Ship behind the existing super-admin gate only. Rollback: revert the commit and 
 - Migration `20261003000000_impersonation_user_target` must be applied via the normal `prisma migrate deploy`. Only if it was applied by hand, run `prisma migrate resolve --applied 20261003000000_impersonation_user_target`.
 - Run the manual test script in `.superpowers/sdd/2026-10-03-user-impersonation/task-6-report.md` against a non-production environment.
 - Confirm the elevation email transport is configured (otherwise a warning is logged and other super admins are not emailed).
+
+---
+
+# Addendum (2026-10-03): support visibility, "View organization" mode
+
+Status: DRAFT, awaiting sign-off. No code written for this addendum.
+
+## Problem (evidence)
+
+Support sessions show blocked or empty data, which can mislead the team:
+
+- `GET /v1/vendor-settings` and `GET /v1/webhook-actions` are blocked for impersonated sessions (`apps/api/src/lib/impersonation-guard.ts:64-69`), but the Settings pages load them (`apps/web/app/(dashboard)/settings/vendor-settings/page.tsx:15`, `webhook-actions/page.tsx:26`), so they render empty or default state.
+- Settings > WhatsApp can fire writes while loading or on click (for example `POST /whatsapp-account/sync-all`, `settings/whatsapp-account/page.tsx:159`). These are rejected by the read-only guard and show the toast "This action is not allowed while impersonating a user", which is noise. Which call fired on load in the reported screenshot is NOT yet confirmed.
+- A user session only shows what that user can see (`apps/api/src/lib/visibility.ts:23-31`: agents see their own or unassigned chats), so it cannot show "all data" of the org.
+
+## Decisions (made with the user)
+
+1. Super admins are the support team. No separate support role.
+2. Two session types: **user view** (as today) and **organization view** (new): read-only, admin-level visibility across the whole org.
+3. Secrets (WhatsApp access token, API keys, webhook secrets) are **visible** to super admins in support sessions.
+
+## Design
+
+1. **Organization view:** `POST /admin/organizations/:orgId/impersonate-org` issues a token with payload `{ organizationId, issuedBy, mode: "readonly", scope: "org" }` (no `targetUserId`). The auth plugin builds an `admin`-role context for that org with `userId = issuedBy` and `impersonation.scope = "org"`. Always read-only: `elevate` is refused for `scope: "org"` sessions. Same 15-minute TTL, rate limit, Clerk bearer == issuer check, fail-closed audit, and the same block list.
+2. **Secrets visible:** remove `/v1/vendor-settings` and `/v1/webhook-actions` from `BLOCKED_GET_PREFIXES`. Every GET that returns a secret in an impersonated session writes a platform audit entry `impersonation.secret_read` (route + org + admin; never the value).
+3. **No misleading blanks:** read-only blocks of reads must not happen for pages the team needs. The client no longer toasts for expected read-only rejections triggered automatically on page load; it shows the banner state "read-only" instead. Identify and fix any page that fires a write on mount in a support session.
+4. **UI:** org details page gets "View organization" next to the users list. The banner shows "Viewing organization <name> - read-only" for org view.
+5. **Out of scope:** a separate Support Console, a read-only platform role, anything that lets support write in org view.
+
+## Security notes
+
+- Visible secrets widen the impact of a compromised super-admin account. Mitigations: audit entry on every secret read, 15-minute sessions, per-hour issue limit, Clerk bearer binding. Consider requiring MFA on super-admin accounts (not part of this change).
+- Org view uses an admin context, so it must never write: the existing guard already rejects every non-GET in `readonly`, and elevation is refused for org scope (test required).
+
+## Acceptance criteria
+
+- Org view shows all conversations, contacts and campaigns of the org regardless of any user's role, and no write succeeds.
+- Settings > WhatsApp, Vendor settings and Webhook actions render the real (non-blank) data with secrets visible, and no error toast appears on load.
+- Each secret-bearing GET writes an audit entry without the value.
+- Elevate on an org-view token returns 403.
+- Tests cover token issue, auth context, guard, elevate refusal and the audit entry.
