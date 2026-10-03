@@ -1454,6 +1454,9 @@ model ImpersonationLog {
   organizationId String    @map("organization_id")
   orgName        String?   @map("org_name")
   token          String    @unique               // Redis key suffix for revocation
+  targetUserId    String?   @map("target_user_id")  // user being impersonated
+  mode            String    @default("readonly")    // "readonly" | "edit"
+  elevationReason String?   @map("elevation_reason") @db.Text
   ipAddress      String?   @map("ip_address")
   userAgent      String?   @map("user_agent") @db.Text
   startedAt      DateTime  @default(now()) @map("started_at")
@@ -1461,6 +1464,7 @@ model ImpersonationLog {
 
   @@index([actorId])
   @@index([organizationId])
+  @@index([targetUserId])
   @@index([startedAt])
   @@map("impersonation_logs")
 }
