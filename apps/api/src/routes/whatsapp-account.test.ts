@@ -11,6 +11,7 @@ vi.mock("../lib/whatsapp.js", () => ({
   getHealthStatus: vi.fn().mockResolvedValue({ status: "connected" }),
   registerPhoneNumber: vi.fn().mockResolvedValue({ success: true }),
   setTwoStepVerification: vi.fn().mockResolvedValue({ success: true }),
+  syncAllMetaData: vi.fn().mockResolvedValue(undefined),
 }));
 
 const mockPrisma = {
