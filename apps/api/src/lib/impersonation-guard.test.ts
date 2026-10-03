@@ -48,6 +48,21 @@ describe("impersonation route classification", () => {
     expect(classifyRoute("GET", "/v1/contacts")).toBe("read-like");
   });
 
+  it("allows Meta cache-refresh syncs under the blocked whatsapp-account family, nothing else there", () => {
+    expect(classifyRoute("POST", "/v1/whatsapp-account/sync-all")).toBe("read-like");
+    expect(classifyRoute("POST", "/v1/whatsapp-account/sync-phone-numbers")).toBe("read-like");
+    // credentials / connection / Meta-side changes stay blocked
+    expect(classifyRoute("POST", "/v1/whatsapp-account/connect")).toBe("blocked");
+    expect(classifyRoute("POST", "/v1/whatsapp-account/connect-manual")).toBe("blocked");
+    expect(classifyRoute("POST", "/v1/whatsapp-account/disconnect-account")).toBe("blocked");
+    expect(classifyRoute("POST", "/v1/whatsapp-account/register-phone")).toBe("blocked");
+    expect(classifyRoute("PUT", "/v1/whatsapp-account/two-step-verification")).toBe("blocked");
+    expect(classifyRoute("PUT", "/v1/whatsapp-account/business-profile")).toBe("blocked");
+    // an exception never makes a DELETE or a different method readable
+    expect(classifyRoute("DELETE", "/v1/whatsapp-account/sync-all")).toBe("blocked");
+    expect(classifyRoute("PUT", "/v1/whatsapp-account/sync-all")).toBe("blocked");
+  });
+
   it("flags secret-bearing GET routes for audit", () => {
     expect(isSecretRead("GET", "/v1/vendor-settings")).toBe(true);
     expect(isSecretRead("GET", "/v1/vendor-settings/marketing-messages/status")).toBe(true);
@@ -93,6 +108,8 @@ describe("impersonation guard hook", () => {
     app.get("/v1/contacts", ok);
     app.get("/v1/admin/organizations", ok);
     app.get("/v1/vendor-settings", async () => ({ data: { whatsapp_access_token: "SECRET" } }));
+    app.post("/v1/whatsapp-account/sync-all", ok);
+    app.post("/v1/whatsapp-account/disconnect-account", ok);
     app.get("/v1/webhook-actions", async () => { handlerSpy(); return { ok: true }; });
     app.post("/v1/conversations/:id/summarize", ok);
     app.post("/v1/conversations/:id/messages", ok);
@@ -151,6 +168,17 @@ describe("impersonation guard hook", () => {
     expect((await normal.inject({ method: "GET", url: "/v1/vendor-settings" })).statusCode).toBe(200);
     await normal.close();
     expect(audit).not.toHaveBeenCalled();
+  });
+
+  it("read-only: sync-all passes (no audit), disconnect-account is still blocked", async () => {
+    const audit = vi.fn().mockResolvedValue({});
+    const app = await build("readonly", audit);
+    expect((await app.inject({ method: "POST", url: "/v1/whatsapp-account/sync-all" })).statusCode).toBe(200);
+    const res = await app.inject({ method: "POST", url: "/v1/whatsapp-account/disconnect-account" });
+    expect(res.statusCode).toBe(403);
+    expect(code(res)).toBe("IMPERSONATION_BLOCKED");
+    expect(audit).not.toHaveBeenCalled();
+    await app.close();
   });
 
   it("GET under /v1/admin is IMPERSONATION_BLOCKED for impersonated sessions", async () => {

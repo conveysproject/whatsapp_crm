@@ -54,6 +54,17 @@ export const BLOCKED_PREFIXES: readonly string[] = [
 ];
 
 /**
+ * Exact routes inside a blocked family that are allowed in read-only mode (product decision):
+ * they only READ from Meta with the tenant token and refresh the tenant's cached copy
+ * (vendor_settings values and "last synced" times). They change nothing at Meta and no credentials.
+ * Everything else under /v1/whatsapp-account (connect, disconnect, register-phone, 2-step, profile edits) stays blocked.
+ */
+export const BLOCKED_PREFIX_EXCEPTIONS: ReadonlySet<string> = new Set([
+  "POST /v1/whatsapp-account/sync-all",
+  "POST /v1/whatsapp-account/sync-phone-numbers",
+]);
+
+/**
  * Families whose GETs are blocked for impersonated sessions (defense in depth):
  * /v1/admin and /v1/super-admins are platform-only data, never tenant-facing.
  * NOTE: /v1/vendor-settings and /v1/webhook-actions appear in BLOCKED_PREFIXES (non-GET writes are
@@ -199,7 +210,9 @@ export function classifyRoute(method: string, pattern: string): RouteClass {
   if (SAFE_METHODS.has(m)) return matchesPrefix(BLOCKED_GET_PREFIXES, pattern) ? "blocked" : "read-like";
   const key = `${m} ${pattern}`;
   // Blocked wins over everything: all DELETEs, blocked families and routes.
-  if (m === "DELETE" || isBlockedPrefix(pattern) || BLOCKED_ROUTES.has(key)) return "blocked";
+  if (m === "DELETE" || BLOCKED_ROUTES.has(key)) return "blocked";
+  if (BLOCKED_PREFIX_EXCEPTIONS.has(key)) return "read-like";
+  if (isBlockedPrefix(pattern)) return "blocked";
   if (READ_LIKE_POST.has(key)) return "read-like";
   if (EDIT_ROUTES.has(key)) return "edit";
   return "unclassified";
