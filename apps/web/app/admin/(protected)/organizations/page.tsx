@@ -37,7 +37,6 @@ export default function AdminOrgsPage(): JSX.Element {
   const qc = useQueryClient();
   const adminFetch = useAdminFetch();
   const [search, setSearch] = useState("");
-  const [impersonating, setImpersonating] = useState<string | null>(null);
   const [cleanupPreview, setCleanupPreview] = useState<CleanupResult | null>(null);
 
   const cleanup = useMutation({
@@ -77,17 +76,6 @@ export default function AdminOrgsPage(): JSX.Element {
       adminFetch(`/v1/admin/organizations/${id}/unban`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-orgs"] }),
   });
-
-  async function loginAs(org: Org) {
-    setImpersonating(org.id);
-    try {
-      const res = await adminFetch<{ data: { token: string } }>(`/v1/admin/organizations/${org.id}/impersonate`, { method: "POST" });
-      sessionStorage.setItem("impersonation", JSON.stringify({ token: res.data.token, orgId: org.id, orgName: org.name }));
-      window.location.href = "/dashboard";
-    } finally {
-      setImpersonating(null);
-    }
-  }
 
   const orgs = (data?.data ?? []).filter((o) => o.name.toLowerCase().includes(search.toLowerCase()));
   const statusColor: Record<string, string> = { active: "text-green-600", banned: "text-red-600", inactive: "text-gray-400" };
@@ -158,13 +146,12 @@ export default function AdminOrgsPage(): JSX.Element {
             </div>
             <div className="flex items-center gap-3">
               <span className={`text-xs font-medium capitalize ${statusColor[org.status] ?? "text-gray-500"}`}>{org.status}</span>
-              <button
-                onClick={() => { void loginAs(org); }}
-                disabled={impersonating === org.id}
-                className="text-xs px-2 py-1 border rounded hover:bg-gray-50 disabled:opacity-50"
+              <a
+                href={`/admin/organizations/${org.id}#users`}
+                className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
               >
-                {impersonating === org.id ? "…" : "Login As"}
-              </button>
+                Login As
+              </a>
               {org.status === "banned" ? (
                 <button onClick={() => unban.mutate(org.id)} className="text-xs px-2 py-1 border border-green-300 text-green-700 rounded hover:bg-green-50">Unban</button>
               ) : (

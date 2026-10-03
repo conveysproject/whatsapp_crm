@@ -15,6 +15,9 @@ async function proxy(request: NextRequest, path: string[]): Promise<NextResponse
   const contentType = request.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
 
+  const impersonateToken = request.headers.get("x-impersonate-token");
+  if (impersonateToken) headers.set("x-impersonate-token", impersonateToken);
+
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   const body = hasBody ? await request.arrayBuffer() : undefined;
 

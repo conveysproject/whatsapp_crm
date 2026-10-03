@@ -2,6 +2,7 @@ import { JSX, ReactNode } from "react";
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { Toaster } from "sonner";
 import { AdminSignOutButton } from "./_components/admin-sign-out";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -55,6 +56,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         </div>
         <AdminSignOutButton email={user.email} />
       </nav>
+      <Toaster richColors position="top-right" />
       <main>{children}</main>
     </div>
   );

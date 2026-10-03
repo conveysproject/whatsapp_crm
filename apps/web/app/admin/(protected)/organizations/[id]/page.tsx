@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { toast } from "sonner";
+import { IMPERSONATION_STORAGE_KEY, type ImpersonationSession } from "@/lib/impersonation";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -16,6 +18,15 @@ interface OrgDetail {
   createdAt: string;
   _count: { members: number; conversations: number };
   usage: { contacts: number; messages: number; campaigns: number };
+}
+
+interface OrgUser {
+  id: string;
+  email: string;
+  fullName: string;
+  role: string;
+  isActive: boolean;
+  lastSignInAt: string | null;
 }
 
 const PLAN_TIERS = ["starter", "growth", "scale", "enterprise"] as const;
@@ -73,11 +84,37 @@ export default function AdminOrgDetailPage(): JSX.Element {
     onSuccess: () => { void refetch(); },
   });
 
-  async function loginAs() {
-    const adminFetchFn = adminFetch;
-    const res = await adminFetchFn<{ data: { token: string } }>(`/v1/admin/organizations/${id}/impersonate`, { method: "POST" });
-    sessionStorage.setItem("impersonation", JSON.stringify({ token: res.data.token, orgId: org?.id, orgName: org?.name }));
-    window.location.href = "/dashboard";
+  const { data: users, isLoading: usersLoading } = useQuery<OrgUser[]>({
+    queryKey: ["admin-org-users", id],
+    queryFn: () =>
+      adminFetch<{ data: OrgUser[] }>(`/v1/admin/organizations/${id}/users`).then((j) => j.data),
+  });
+
+  const [loggingInAs, setLoggingInAs] = useState<string | null>(null);
+
+  async function loginAs(user: OrgUser) {
+    if (!org) return;
+    setLoggingInAs(user.id);
+    try {
+      const res = await adminFetch<{ data: { token: string; expiresIn: number } }>(
+        `/v1/admin/organizations/${org.id}/users/${user.id}/impersonate`,
+        { method: "POST" },
+      );
+      const session: ImpersonationSession = {
+        token: res.data.token,
+        orgId: org.id,
+        orgName: org.name,
+        userId: user.id,
+        userName: user.fullName || user.email,
+        mode: "readonly",
+        expiresAt: Date.now() + res.data.expiresIn * 1000,
+      };
+      sessionStorage.setItem(IMPERSONATION_STORAGE_KEY, JSON.stringify(session));
+      window.location.href = "/dashboard";
+    } catch (e) {
+      toast.error(e instanceof Error && e.message.includes("429") ? "Impersonation limit reached (10/hour)." : "Could not start impersonation.");
+      setLoggingInAs(null);
+    }
   }
 
   if (isLoading) return <div className="p-6 text-sm text-gray-400">Loading…</div>;
@@ -129,15 +166,41 @@ export default function AdminOrgDetailPage(): JSX.Element {
         </div>
       </div>
 
+      <div id="users" className="border rounded-lg p-5 space-y-3">
+        <h2 className="font-medium">Users</h2>
+        {usersLoading ? (
+          <p className="text-sm text-gray-400">Loading…</p>
+        ) : !users || users.length === 0 ? (
+          <p className="text-sm text-gray-500">No users in this organization.</p>
+        ) : (
+          <div className="divide-y">
+            {users.map((u) => (
+              <div key={u.id} className="flex items-center justify-between py-2">
+                <div>
+                  <p className="text-sm font-medium">{u.fullName || u.email}</p>
+                  <p className="text-xs text-gray-500">
+                    {u.email} · <span className="capitalize">{u.role}</span>
+                    {!u.isActive && " · inactive"}
+                    {u.lastSignInAt && ` · last sign-in ${new Date(u.lastSignInAt).toLocaleDateString(undefined, { dateStyle: "medium" })}`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => { void loginAs(u); }}
+                  disabled={!u.isActive || loggingInAs !== null}
+                  title={u.isActive ? "View the app as this user (read-only)" : "Inactive users cannot be impersonated"}
+                  className="text-xs px-2 py-1 border rounded hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {loggingInAs === u.id ? "…" : "Login As"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="border rounded-lg p-5 space-y-3">
         <h2 className="font-medium">Actions</h2>
         <div className="flex gap-3">
-          <button
-            onClick={() => { void loginAs(); }}
-            className="px-4 py-2 text-sm border rounded hover:bg-gray-50"
-          >
-            Login As This Org
-          </button>
           {org.status === "banned" ? (
             <button
               onClick={() => unban.mutate()}

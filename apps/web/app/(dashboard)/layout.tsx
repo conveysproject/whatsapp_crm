@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { SetupBanner } from "@/components/SetupBanner";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
+import { ImpersonationProvider } from "@/components/ImpersonationProvider";
 import { BreadcrumbNav } from "@/components/layout/BreadcrumbNav";
 import { OnboardingProvider } from "@/app/(dashboard)/onboarding-context";
 import { auth } from "@clerk/nextjs/server";
@@ -57,6 +58,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <OnboardingProvider status={status}>
+      <ImpersonationProvider />
       <Toaster richColors position="top-right" />
       <div className="flex h-screen overflow-hidden bg-gray-50">
         <Sidebar />
