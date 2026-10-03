@@ -2,7 +2,22 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
+const mockRedis = vi.hoisted(() => ({
+  incr: vi.fn(),
+  expire: vi.fn(),
+  set: vi.fn(),
+  del: vi.fn(),
+}));
+vi.mock("../lib/redis.js", () => ({ redis: mockRedis }));
+
 const mockPrisma = {
+  user: {
+    findFirst: vi.fn(),
+  },
+  impersonationLog: {
+    create: vi.fn(),
+    updateMany: vi.fn(),
+  },
   organization: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
@@ -124,5 +139,114 @@ describe("GET /v1/admin/platform-config", () => {
     const res = await app.inject({ method: "GET", url: "/v1/admin/platform-config" });
     expect(res.statusCode).toBe(200);
     expect(res.json<{ data: unknown[] }>().data).toHaveLength(1);
+  });
+});
+
+describe("POST /v1/admin/organizations/:orgId/users/:userId/impersonate", () => {
+  let app: FastifyInstance;
+  const url = "/v1/admin/organizations/org-1/users/user-1/impersonate";
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    mockRedis.incr.mockResolvedValue(1);
+    mockRedis.set.mockResolvedValue("OK");
+    mockPrisma.organization.findUnique.mockResolvedValue({ id: "org-1", name: "Acme Corp" });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "user-1", role: "agent", fullName: "Ann" });
+    mockPrisma.impersonationLog.create.mockResolvedValue({});
+    mockAdminAuth.role = "superAdmin";
+    app = await buildApp();
+  });
+  afterEach(async () => { mockAdminAuth.role = "superAdmin"; await app.close(); });
+
+  it("403 for non-superAdmin", async () => {
+    (mockAdminAuth as { role: string }).role = "admin";
+    const res = await app.inject({ method: "POST", url });
+    expect(res.statusCode).toBe(403);
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it("404 when the org does not exist", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue(null);
+    const res = await app.inject({ method: "POST", url });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("404 when the user is not in that org, inactive or deleted (query is scoped)", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "POST", url });
+    expect(res.statusCode).toBe(404);
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "user-1", organizationId: "org-1", isActive: true, deletedAt: null },
+      })
+    );
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it("403 when the target is a superAdmin", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "user-1", role: "superAdmin", fullName: "Root" });
+    const res = await app.inject({ method: "POST", url });
+    expect(res.statusCode).toBe(403);
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it("429 over the per-hour limit", async () => {
+    mockRedis.incr.mockResolvedValue(11);
+    const res = await app.inject({ method: "POST", url });
+    expect(res.statusCode).toBe(429);
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it("200 stores a read-only user-scoped token, logs and audits", async () => {
+    const res = await app.inject({ method: "POST", url });
+    expect(res.statusCode).toBe(200);
+    const { token, expiresIn, mode } = res.json<{ data: { token: string; expiresIn: number; mode: string } }>().data;
+    expect(expiresIn).toBe(900);
+    expect(mode).toBe("readonly");
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      `impersonate:${token}`,
+      JSON.stringify({ organizationId: "org-1", targetUserId: "user-1", issuedBy: "sa-1", mode: "readonly" }),
+      "EX",
+      900
+    );
+    expect(mockPrisma.impersonationLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorId: "sa-1",
+        organizationId: "org-1",
+        targetUserId: "user-1",
+        mode: "readonly",
+        token,
+      }),
+    });
+    await new Promise((r) => setImmediate(r));
+    expect(mockPrisma.adminAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ actorId: "sa-1", action: "user.impersonate", targetType: "user", targetId: "user-1" }),
+    });
+  });
+
+  it("old org-level issue route is gone", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/admin/organizations/org-1/impersonate" });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("DELETE /v1/admin/organizations/:id/impersonate (revoke)", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("revokes the token and closes the log", async () => {
+    mockRedis.del.mockResolvedValue(1);
+    mockPrisma.impersonationLog.updateMany.mockResolvedValue({ count: 1 });
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/v1/admin/organizations/org-1/impersonate",
+      payload: { token: "tok" },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(mockRedis.del).toHaveBeenCalledWith("impersonate:tok");
+    expect(mockPrisma.impersonationLog.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { token: "tok", endedAt: null } })
+    );
   });
 });

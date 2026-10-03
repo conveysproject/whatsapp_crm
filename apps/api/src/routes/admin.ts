@@ -216,53 +216,70 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // ── Impersonation token ──────────────────────────────────────────────────
+  // ── Impersonation token (user-level) ─────────────────────────────────────
   // Token lifetime: 15 min (900s). Rate-limited per actor: 10 tokens/hour.
-  fastify.post<{ Params: { id: string } }>("/admin/organizations/:id/impersonate", async (request, reply) => {
-    if (!requireSuperAdmin(request.auth.role, reply)) return;
+  // Sessions start read-only; the read-only guard enforces it on every request.
+  fastify.post<{ Params: { orgId: string; userId: string } }>(
+    "/admin/organizations/:orgId/users/:userId/impersonate",
+    async (request, reply) => {
+      if (!requireSuperAdmin(request.auth.role, reply)) return;
 
-    // Per-actor rate limit: max 10 impersonation tokens per hour
-    const actorKey = `impersonate:actor:${request.auth.userId}`;
-    const count = await redis.incr(actorKey);
-    if (count === 1) await redis.expire(actorKey, 3600);
-    if (count > 10) {
-      return reply.status(429).send({ error: { code: "RATE_LIMITED", message: "Impersonation limit reached (10/hour)" } });
-    }
+      // Per-actor rate limit: max 10 impersonation tokens per hour
+      const actorKey = `impersonate:actor:${request.auth.userId}`;
+      const count = await redis.incr(actorKey);
+      if (count === 1) await redis.expire(actorKey, 3600);
+      if (count > 10) {
+        return reply.status(429).send({ error: { code: "RATE_LIMITED", message: "Impersonation limit reached (10/hour)" } });
+      }
 
-    const org = await fastify.prisma.organization.findUnique({ where: { id: request.params.id } });
-    if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
+      const { orgId, userId } = request.params;
+      const org = await fastify.prisma.organization.findUnique({ where: { id: orgId } });
+      if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
 
-    const token = randomBytes(32).toString("hex");
-    // 15 minutes — enough for a support session, short enough to limit blast radius
-    await redis.set(
-      `impersonate:${token}`,
-      JSON.stringify({ organizationId: org.id, orgName: org.name, issuedBy: request.auth.userId }),
-      "EX", 900
-    );
+      // Org scoping: the target must belong to :orgId, be active and not soft-deleted.
+      const target = await fastify.prisma.user.findFirst({
+        where: { id: userId, organizationId: org.id, isActive: true, deletedAt: null },
+        select: { id: true, role: true, fullName: true },
+      });
+      if (!target) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "User not found in this organization" } });
+      if (target.role === "superAdmin") {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Super admins cannot be impersonated" } });
+      }
 
-    await fastify.prisma.impersonationLog.create({
-      data: {
+      const token = randomBytes(32).toString("hex");
+      // 15 minutes — enough for a support session, short enough to limit blast radius
+      await redis.set(
+        `impersonate:${token}`,
+        JSON.stringify({ organizationId: org.id, targetUserId: target.id, issuedBy: request.auth.userId, mode: "readonly" }),
+        "EX", 900
+      );
+
+      await fastify.prisma.impersonationLog.create({
+        data: {
+          actorId: request.auth.userId,
+          organizationId: org.id,
+          orgName: org.name,
+          targetUserId: target.id,
+          mode: "readonly",
+          token,
+          ipAddress: request.ip,
+          userAgent: request.headers["user-agent"] ?? null,
+        },
+      });
+
+      writeAdminAudit({
+        prisma: fastify.prisma,
         actorId: request.auth.userId,
-        organizationId: org.id,
-        orgName: org.name,
-        token,
-        ipAddress: request.ip,
-        userAgent: request.headers["user-agent"] ?? null,
-      },
-    });
+        action: "user.impersonate",
+        targetType: "user",
+        targetId: target.id,
+        metadata: { organizationId: org.id, orgName: org.name, targetRole: target.role, mode: "readonly", expiresIn: 900 },
+        request,
+      });
 
-    writeAdminAudit({
-      prisma: fastify.prisma,
-      actorId: request.auth.userId,
-      action: "org.impersonate",
-      targetType: "organization",
-      targetId: org.id,
-      metadata: { orgName: org.name, expiresIn: 900 },
-      request,
-    });
-
-    return reply.send({ data: { token, expiresIn: 900 } });
-  });
+      return reply.send({ data: { token, expiresIn: 900, mode: "readonly" } });
+    }
+  );
 
   // ── End impersonation ────────────────────────────────────────────────────
   fastify.delete<{ Params: { id: string }; Body: { token: string } }>(
