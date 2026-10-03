@@ -54,10 +54,10 @@ export const BLOCKED_PREFIXES: readonly string[] = [
 ];
 
 /**
- * Families whose GETs are also blocked for impersonated sessions (defense in depth):
- *  - /v1/admin, /v1/super-admins: platform-only data, never tenant-facing.
- *  - /v1/vendor-settings: GET returns every VendorSetting row, including whatsapp_access_token.
- *  - /v1/webhook-actions: GET returns full rows (may include outbound auth headers/secrets).
+ * Families whose GETs are blocked for impersonated sessions (defense in depth):
+ * /v1/admin and /v1/super-admins are platform-only data, never tenant-facing.
+ * NOTE: /v1/vendor-settings and /v1/webhook-actions appear in BLOCKED_PREFIXES (non-GET writes are
+ * blocked) but their GETs are readable and audited, see SECRET_READ_PREFIXES below.
  * GET /v1/webhook-endpoints (secret not selected) and /v1/whatsapp-account/* GETs
  * (profile data only, no tokens) were reviewed and stay readable.
  */
