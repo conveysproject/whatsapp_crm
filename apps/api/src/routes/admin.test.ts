@@ -43,13 +43,15 @@ describe("GET /v1/admin/organizations", () => {
 
   it("returns all organizations", async () => {
     mockPrisma.organization.findMany.mockResolvedValue([
-      { id: "org-1", name: "Acme Corp", status: "active" },
-      { id: "org-2", name: "Beta Ltd", status: "active" },
+      { id: "org-1", name: "Acme Corp", status: "active", _count: { users: 3 } },
+      { id: "org-2", name: "Beta Ltd", status: "active", _count: { users: 0 } },
     ]);
     mockPrisma.organization.count.mockResolvedValue(2);
     const res = await app.inject({ method: "GET", url: "/v1/admin/organizations" });
     expect(res.statusCode).toBe(200);
-    expect(res.json<{ data: unknown[] }>().data).toHaveLength(2);
+    const data = res.json<{ data: { _count: { members: number } }[] }>().data;
+    expect(data).toHaveLength(2);
+    expect(data.map((o) => o._count.members)).toEqual([3, 0]);
   });
 });
 

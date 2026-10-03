@@ -26,14 +26,16 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     const [data, total] = await Promise.all([
       fastify.prisma.organization.findMany({
         where,
-        include: { _count: { select: { members: true } } },
+        include: { _count: { select: { users: { where: { isActive: true, deletedAt: null } } } } },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * 50,
         take: 50,
       }),
       fastify.prisma.organization.count({ where }),
     ]);
-    return reply.send({ data, total, page });
+    // Members = active, non-deleted users (OrganizationMember only holds permission overrides)
+    const rows = data.map(({ _count, ...org }) => ({ ...org, _count: { members: _count.users } }));
+    return reply.send({ data: rows, total, page });
   });
 
   // ── Ban ──────────────────────────────────────────────────────────────────
@@ -154,7 +156,7 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     if (!requireSuperAdmin(request.auth.role, reply)) return;
     const org = await fastify.prisma.organization.findUnique({
       where: { id: request.params.id },
-      include: { _count: { select: { members: true, conversations: true } } },
+      include: { _count: { select: { users: { where: { isActive: true, deletedAt: null } }, conversations: true } } },
     });
     if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
     const [contactCount, messageCount, campaignCount] = await Promise.all([
@@ -162,7 +164,14 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       fastify.prisma.message.count({ where: { organizationId: org.id } }),
       fastify.prisma.campaign.count({ where: { organizationId: org.id } }),
     ]);
-    return reply.send({ data: { ...org, usage: { contacts: contactCount, messages: messageCount, campaigns: campaignCount } } });
+    const { _count, ...orgFields } = org;
+    return reply.send({
+      data: {
+        ...orgFields,
+        _count: { members: _count.users, conversations: _count.conversations },
+        usage: { contacts: contactCount, messages: messageCount, campaigns: campaignCount },
+      },
+    });
   });
 
   // ── Update plan tier / status ────────────────────────────────────────────
