@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import {
   IMPERSONATION_STORAGE_KEY,
+  shouldRunImpersonationRuntime,
   syncImpersonation,
   createImpersonatingFetch,
   parseImpersonationSession,
@@ -16,8 +17,10 @@ const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
  * API calls (API base or same-origin /api/v1 only). Renders nothing; mount before children
  * so it patches window.fetch before their effects issue requests.
  */
-export function ImpersonationProvider(): null {
+export function ImpersonationProvider({ impersonating }: { impersonating: boolean }): null {
   useEffect(() => {
+    // Normal users: no fetch patching, no cookie sync request, no ready gate.
+    if (!shouldRunImpersonationRuntime(impersonating)) return undefined;
     const original = window.fetch;
     // Restore the session from the cookie in a new tab; API calls wait for this once.
     const ready = syncImpersonation();
@@ -43,7 +46,7 @@ export function ImpersonationProvider(): null {
     return () => {
       if (window.fetch === patched) window.fetch = original;
     };
-  }, []);
+  }, [impersonating]);
 
   return null;
 }

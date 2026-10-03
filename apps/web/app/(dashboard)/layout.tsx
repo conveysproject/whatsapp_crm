@@ -62,17 +62,19 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const status = await getOrgStatus(token ?? "");
 
   if (!status.provisioned) {
+    // Stale/revoked impersonation cookie: clear it instead of sending the admin to onboarding.
+    if (impersonating) redirect("/api/impersonation/end");
     redirect("/business-details");
   }
 
   return (
     <OnboardingProvider status={status}>
-      <ImpersonationProvider />
+      <ImpersonationProvider impersonating={impersonating} />
       <Toaster richColors position="top-right" />
       <div className="flex h-screen overflow-hidden bg-gray-50">
         <Sidebar />
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
-          <ImpersonationBanner />
+          <ImpersonationBanner impersonating={impersonating} />
           <TopBar orgName={impersonating ? status.orgName : (orgSlug ?? undefined)} userId={userId ?? undefined} />
           <SetupBanner />
           <main className="flex flex-col flex-1 px-4 py-4 overflow-auto min-h-0">

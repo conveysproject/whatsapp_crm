@@ -6,6 +6,8 @@ import {
   parseSessionObject,
   decideResync,
   isImpersonationAdminPath,
+  shouldRunImpersonationRuntime,
+  startResyncListeners,
 } from "./impersonation";
 
 const config = { apiBase: "http://localhost:4000/", origin: "https://app.example.com" };
@@ -167,5 +169,47 @@ describe("ready gate", () => {
     release();
     await p;
     expect(new Headers(base.mock.calls[0]![1].headers).get("x-impersonate-token")).toBe("restored");
+  });
+});
+
+describe("impersonation runtime gating", () => {
+  const mkTargets = () => {
+    const win = { addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    const doc = { addEventListener: vi.fn(), removeEventListener: vi.fn(), visibilityState: "visible" as DocumentVisibilityState };
+    return { win, doc };
+  };
+
+  it("shouldRunImpersonationRuntime is true only when impersonating", () => {
+    expect(shouldRunImpersonationRuntime(false)).toBe(false);
+    expect(shouldRunImpersonationRuntime(true)).toBe(true);
+  });
+
+  it("startResyncListeners does nothing for normal users", () => {
+    const { win, doc } = mkTargets();
+    const resync = vi.fn();
+    const cleanup = startResyncListeners(false, resync, win, doc);
+    expect(resync).not.toHaveBeenCalled();
+    expect(win.addEventListener).not.toHaveBeenCalled();
+    expect(doc.addEventListener).not.toHaveBeenCalled();
+    cleanup();
+    expect(win.removeEventListener).not.toHaveBeenCalled();
+  });
+
+  it("startResyncListeners syncs once and registers/removes listeners when impersonating", () => {
+    const { win, doc } = mkTargets();
+    const resync = vi.fn();
+    const cleanup = startResyncListeners(true, resync, win, doc);
+    expect(resync).toHaveBeenCalledTimes(1);
+    expect(win.addEventListener).toHaveBeenCalledWith("focus", resync);
+    expect(doc.addEventListener).toHaveBeenCalledWith("visibilitychange", expect.any(Function));
+    const onVisible = doc.addEventListener.mock.calls[0]![1] as () => void;
+    onVisible();
+    expect(resync).toHaveBeenCalledTimes(2);
+    doc.visibilityState = "hidden";
+    onVisible();
+    expect(resync).toHaveBeenCalledTimes(2);
+    cleanup();
+    expect(win.removeEventListener).toHaveBeenCalledWith("focus", resync);
+    expect(doc.removeEventListener).toHaveBeenCalledWith("visibilitychange", onVisible);
   });
 });

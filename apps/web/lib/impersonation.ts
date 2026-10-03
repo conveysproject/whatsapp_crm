@@ -235,3 +235,32 @@ export function syncImpersonation(): Promise<SyncResult> {
   })().finally(() => { inFlight = null; });
   return inFlight;
 }
+
+/**
+ * Gate for all impersonation client runtime (cookie sync, ready gate, focus/visibility listeners,
+ * fetch patching). Normal users (no imp_token cookie) must incur no extra requests or listeners.
+ */
+export function shouldRunImpersonationRuntime(impersonating: boolean): boolean {
+  return impersonating === true;
+}
+
+/**
+ * Run `resync` now and on window focus / tab visibility, only when impersonating.
+ * Returns a cleanup function (a no-op when disabled, in which case nothing was registered or called).
+ */
+export function startResyncListeners(
+  impersonating: boolean,
+  resync: () => void,
+  win: Pick<Window, "addEventListener" | "removeEventListener">,
+  doc: Pick<Document, "addEventListener" | "removeEventListener" | "visibilityState">,
+): () => void {
+  if (!shouldRunImpersonationRuntime(impersonating)) return () => undefined;
+  const onVisible = () => { if (doc.visibilityState === "visible") resync(); };
+  resync();
+  win.addEventListener("focus", resync);
+  doc.addEventListener("visibilitychange", onVisible);
+  return () => {
+    win.removeEventListener("focus", resync);
+    doc.removeEventListener("visibilitychange", onVisible);
+  };
+}

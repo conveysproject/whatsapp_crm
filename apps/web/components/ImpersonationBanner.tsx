@@ -7,6 +7,8 @@ import {
   IMPERSONATION_STORAGE_KEY,
   clearImpersonation,
   parseImpersonationSession,
+  shouldRunImpersonationRuntime,
+  startResyncListeners,
   syncImpersonation,
   updateImpersonationCookieMode,
   type ImpersonationSession,
@@ -14,7 +16,7 @@ import {
 
 const API_URL = (process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000").replace(/\/+$/, "");
 
-export function ImpersonationBanner(): JSX.Element | null {
+export function ImpersonationBanner({ impersonating }: { impersonating: boolean }): JSX.Element | null {
   const { getToken } = useAuth();
   const [state, setState] = useState<ImpersonationSession | null>(null);
   const [askingReason, setAskingReason] = useState(false);
@@ -22,6 +24,8 @@ export function ImpersonationBanner(): JSX.Element | null {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    // Normal users: nothing to sync or listen for (no requests, no listeners).
+    if (!shouldRunImpersonationRuntime(impersonating)) return undefined;
     // The cookie is the source of truth; reconcile this tab on mount, focus and visibility.
     function resync() {
       void syncImpersonation().then(({ session, ended }) => {
@@ -36,14 +40,7 @@ export function ImpersonationBanner(): JSX.Element | null {
     const session = raw ? parseImpersonationSession(raw) : null;
     if (!raw || session) {
       if (session) setState(session);
-      resync();
-      const onVisible = () => { if (document.visibilityState === "visible") resync(); };
-      window.addEventListener("focus", resync);
-      document.addEventListener("visibilitychange", onVisible);
-      return () => {
-        window.removeEventListener("focus", resync);
-        document.removeEventListener("visibilitychange", onVisible);
-      };
+      return startResyncListeners(impersonating, resync, window, document);
     }
     // Present but unusable: distinguish expired from malformed.
     let expired = false;
@@ -62,7 +59,7 @@ export function ImpersonationBanner(): JSX.Element | null {
       }
     });
     return undefined;
-  }, []);
+  }, [impersonating]);
 
   // Auto-exit when the token expires.
   useEffect(() => {
@@ -133,7 +130,7 @@ export function ImpersonationBanner(): JSX.Element | null {
     }
   }
 
-  if (!state) return null;
+  if (!impersonating || !state) return null;
 
   const isEdit = state.mode === "edit";
   const who = state.userName || "user";
