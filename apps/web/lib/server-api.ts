@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 
 export const IMPERSONATION_COOKIE = "imp_token";
+export const IMPERSONATION_META_COOKIE = "imp_meta";
 
 /** Impersonation token from the httpOnly cookie (server components / route handlers only). */
 export async function getImpersonationCookie(): Promise<string | null> {

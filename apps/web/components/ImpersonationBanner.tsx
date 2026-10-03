@@ -7,6 +7,8 @@ import {
   IMPERSONATION_STORAGE_KEY,
   clearImpersonation,
   parseImpersonationSession,
+  syncImpersonation,
+  updateImpersonationCookieMode,
   type ImpersonationSession,
 } from "@/lib/impersonation";
 
@@ -20,12 +22,28 @@ export function ImpersonationBanner(): JSX.Element | null {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    // The cookie is the source of truth; reconcile this tab on mount, focus and visibility.
+    function resync() {
+      void syncImpersonation().then(({ session, ended }) => {
+        setState(session);
+        if (ended) {
+          toast.info("Impersonation ended.");
+          window.location.href = "/admin/organizations";
+        }
+      });
+    }
     const raw = sessionStorage.getItem(IMPERSONATION_STORAGE_KEY);
-    if (!raw) return;
-    const session = parseImpersonationSession(raw);
-    if (session) {
-      setState(session);
-      return;
+    const session = raw ? parseImpersonationSession(raw) : null;
+    if (!raw || session) {
+      if (session) setState(session);
+      resync();
+      const onVisible = () => { if (document.visibilityState === "visible") resync(); };
+      window.addEventListener("focus", resync);
+      document.addEventListener("visibilitychange", onVisible);
+      return () => {
+        window.removeEventListener("focus", resync);
+        document.removeEventListener("visibilitychange", onVisible);
+      };
     }
     // Present but unusable: distinguish expired from malformed.
     let expired = false;
@@ -43,6 +61,7 @@ export function ImpersonationBanner(): JSX.Element | null {
         toast.error("Invalid impersonation session was cleared.");
       }
     });
+    return undefined;
   }, []);
 
   // Auto-exit when the token expires.
@@ -96,6 +115,9 @@ export function ImpersonationBanner(): JSX.Element | null {
         // 409 = already in edit mode on the server; sync the UI.
         const next: ImpersonationSession = { ...state, mode: "edit" };
         sessionStorage.setItem(IMPERSONATION_STORAGE_KEY, JSON.stringify(next));
+        if (!(await updateImpersonationCookieMode("edit"))) {
+          toast.error("Edit mode enabled, but other tabs may not reflect it until they refresh.");
+        }
         setState(next);
         setAskingReason(false);
         setReason("");

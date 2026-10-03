@@ -38,10 +38,15 @@ function resolveUrl(input: RequestInfo | URL, origin: string): URL | null {
   }
 }
 
+/** True for calls that must be made as the real admin (elevate/revoke/issue). */
+export function isImpersonationAdminPath(pathname: string): boolean {
+  return ADMIN_IMPERSONATION_PATH.test(pathname);
+}
+
 export function shouldAttachImpersonationToken(input: RequestInfo | URL, config: InterceptorConfig): boolean {
   const url = resolveUrl(input, config.origin);
   if (!url) return false;
-  if (ADMIN_IMPERSONATION_PATH.test(url.pathname)) return false;
+  if (isImpersonationAdminPath(url.pathname)) return false;
 
   let api: URL;
   try {
@@ -55,25 +60,45 @@ export function shouldAttachImpersonationToken(input: RequestInfo | URL, config:
   return isApi || isSameOriginProxy;
 }
 
+/** Validate an untrusted record. Returns null if malformed, tokenless or expired. */
+export function parseSessionObject(value: unknown, now: number = Date.now()): ImpersonationSession | null {
+  if (!value || typeof value !== "object") return null;
+  const s = value as Partial<ImpersonationSession>;
+  if (typeof s.token !== "string" || !s.token) return null;
+  if (typeof s.expiresAt !== "number" || !Number.isFinite(s.expiresAt) || s.expiresAt <= now) return null;
+  return {
+    token: s.token,
+    orgId: String(s.orgId ?? "").slice(0, 200),
+    orgName: String(s.orgName ?? "").slice(0, 200),
+    userId: String(s.userId ?? "").slice(0, 200),
+    userName: String(s.userName ?? "").slice(0, 200),
+    mode: s.mode === "edit" ? "edit" : "readonly",
+    expiresAt: s.expiresAt,
+  };
+}
+
 /** Parse + validate the stored session. Returns null if missing, malformed or expired. */
 export function parseImpersonationSession(raw: string | null, now: number = Date.now()): ImpersonationSession | null {
   if (!raw) return null;
   try {
-    const s = JSON.parse(raw) as Partial<ImpersonationSession>;
-    if (!s || typeof s.token !== "string" || !s.token) return null;
-    if (typeof s.expiresAt !== "number" || s.expiresAt <= now) return null;
-    return {
-      token: s.token,
-      orgId: String(s.orgId ?? ""),
-      orgName: String(s.orgName ?? ""),
-      userId: String(s.userId ?? ""),
-      userName: String(s.userName ?? ""),
-      mode: s.mode === "edit" ? "edit" : "readonly",
-      expiresAt: s.expiresAt,
-    };
+    return parseSessionObject(JSON.parse(raw), now);
   } catch {
     return null;
   }
+}
+
+export type ResyncAction = "none" | "restore" | "clear-local" | "update-local" | "keep";
+
+/**
+ * The cookie (remote) is the source of truth; sessionStorage (local) is per tab.
+ * Decide how to reconcile them.
+ */
+export function decideResync(local: ImpersonationSession | null, remote: ImpersonationSession | null): ResyncAction {
+  if (!local && !remote) return "none";
+  if (!local && remote) return "restore";
+  if (local && !remote) return "clear-local";
+  if (local!.token !== remote!.token || local!.mode !== remote!.mode || local!.expiresAt !== remote!.expiresAt) return "update-local";
+  return "keep";
 }
 
 export const IMPERSONATION_ERROR_MESSAGES: Record<string, string> = {
@@ -93,8 +118,11 @@ export function createImpersonatingFetch(
   getToken: () => string | null,
   config: InterceptorConfig,
   onImpersonationError?: ImpersonationErrorHandler,
+  /** Optional: API calls wait for this (e.g. initial cookie restore) before reading the token. */
+  ready?: Promise<unknown>,
 ): typeof fetch {
   return async function impersonatingFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    if (ready && shouldAttachImpersonationToken(input, config)) await ready.catch(() => undefined);
     const token = getToken();
     let res: Promise<Response>;
     if (token && shouldAttachImpersonationToken(input, config)) {
@@ -129,13 +157,14 @@ export function createImpersonatingFetch(
   };
 }
 
-/** Store the token in the httpOnly cookie used by server-rendered pages. Resolves false on failure. */
-export async function setImpersonationCookie(session: Pick<ImpersonationSession, "token" | "expiresAt">): Promise<boolean> {
+/** Persist the session in the httpOnly cookies used by server-rendered pages and other tabs. */
+export async function setImpersonationCookie(session: ImpersonationSession): Promise<boolean> {
   try {
+    const { token, expiresAt, orgId, orgName, userId, userName, mode } = session;
     const res = await fetch("/api/impersonation", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: session.token, expiresAt: session.expiresAt }),
+      body: JSON.stringify({ token, expiresAt, orgId, orgName, userId, userName, mode }),
     });
     return res.ok;
   } catch {
@@ -143,8 +172,66 @@ export async function setImpersonationCookie(session: Pick<ImpersonationSession,
   }
 }
 
-/** Clear both the cookie and sessionStorage. Never throws. */
+/** Update the mode in the cookies after a successful elevate (expiry is never extended). */
+export async function updateImpersonationCookieMode(mode: "edit"): Promise<boolean> {
+  try {
+    const res = await fetch("/api/impersonation", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Clear both the cookies and sessionStorage. Never throws. */
 export async function clearImpersonation(): Promise<void> {
   try { sessionStorage.removeItem(IMPERSONATION_STORAGE_KEY); } catch { /* ignore */ }
   try { await fetch("/api/impersonation", { method: "DELETE" }); } catch { /* ignore */ }
+}
+
+function readLocal(): ImpersonationSession | null {
+  try { return parseImpersonationSession(sessionStorage.getItem(IMPERSONATION_STORAGE_KEY)); } catch { return null; }
+}
+
+export interface SyncResult {
+  session: ImpersonationSession | null;
+  /** True when this tab had a session that the cookie no longer backs (ended elsewhere or expired). */
+  ended: boolean;
+}
+
+let inFlight: Promise<SyncResult> | null = null;
+
+/** Reconcile this tab's sessionStorage with the cookie (source of truth). Concurrent calls share one request. */
+export function syncImpersonation(): Promise<SyncResult> {
+  if (inFlight) return inFlight;
+  inFlight = (async (): Promise<SyncResult> => {
+    const local = readLocal();
+    let remote: ImpersonationSession | null = null;
+    let known = false;
+    try {
+      const res = await fetch("/api/impersonation", { cache: "no-store" });
+      if (res.status === 200) {
+        remote = parseSessionObject(await res.json());
+        known = true;
+      } else if (res.status === 204) {
+        known = true;
+      }
+    } catch {
+      /* network error: leave the tab as is */
+    }
+    if (!known) return { session: local, ended: false };
+    const action = decideResync(local, remote);
+    try {
+      if (action === "restore" || action === "update-local") {
+        sessionStorage.setItem(IMPERSONATION_STORAGE_KEY, JSON.stringify(remote));
+      } else if (action === "clear-local") {
+        sessionStorage.removeItem(IMPERSONATION_STORAGE_KEY);
+      }
+    } catch { /* ignore */ }
+    return { session: action === "clear-local" ? null : (remote ?? local), ended: action === "clear-local" };
+  })().finally(() => { inFlight = null; });
+  return inFlight;
 }

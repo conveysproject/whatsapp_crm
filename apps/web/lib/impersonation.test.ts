@@ -3,6 +3,9 @@ import {
   shouldAttachImpersonationToken,
   createImpersonatingFetch,
   parseImpersonationSession,
+  parseSessionObject,
+  decideResync,
+  isImpersonationAdminPath,
 } from "./impersonation";
 
 const config = { apiBase: "http://localhost:4000/", origin: "https://app.example.com" };
@@ -116,5 +119,53 @@ describe("parseImpersonationSession", () => {
   it("parses a valid session", () => {
     const s = parseImpersonationSession(JSON.stringify({ token: "t", orgId: "o", orgName: "O", userId: "u", userName: "U", mode: "edit", expiresAt: now + 5 }), now);
     expect(s).toMatchObject({ token: "t", mode: "edit", userName: "U" });
+  });
+});
+
+describe("parseSessionObject", () => {
+  it("rejects non-objects and bad fields, truncates long names", () => {
+    expect(parseSessionObject(null)).toBeNull();
+    expect(parseSessionObject("x")).toBeNull();
+    expect(parseSessionObject({ token: 5, expiresAt: Date.now() + 1000 })).toBeNull();
+    expect(parseSessionObject({ token: "t", expiresAt: Number.NaN })).toBeNull();
+    const s = parseSessionObject({ token: "t", expiresAt: Date.now() + 1000, userName: "x".repeat(500), mode: "bogus" });
+    expect(s?.userName).toHaveLength(200);
+    expect(s?.mode).toBe("readonly");
+  });
+});
+
+describe("decideResync", () => {
+  const mk = (over: Partial<{ token: string; mode: "readonly" | "edit"; expiresAt: number }> = {}) =>
+    ({ token: "t", orgId: "o", orgName: "O", userId: "u", userName: "U", mode: "readonly" as const, expiresAt: 100, ...over });
+  it("covers all cases", () => {
+    expect(decideResync(null, null)).toBe("none");
+    expect(decideResync(null, mk())).toBe("restore");
+    expect(decideResync(mk(), null)).toBe("clear-local");
+    expect(decideResync(mk(), mk())).toBe("keep");
+    expect(decideResync(mk(), mk({ mode: "edit" }))).toBe("update-local");
+    expect(decideResync(mk(), mk({ token: "other" }))).toBe("update-local");
+  });
+});
+
+describe("isImpersonationAdminPath", () => {
+  it("matches admin impersonation paths only", () => {
+    expect(isImpersonationAdminPath("/v1/admin/impersonation/elevate")).toBe(true);
+    expect(isImpersonationAdminPath("/v1/admin/organizations/o/impersonate")).toBe(true);
+    expect(isImpersonationAdminPath("/v1/contacts")).toBe(false);
+  });
+});
+
+describe("ready gate", () => {
+  it("API calls wait for ready before reading the token", async () => {
+    let token: string | null = null;
+    let release!: () => void;
+    const ready = new Promise<void>((r) => { release = r; });
+    const base = vi.fn().mockResolvedValue(new Response("{}"));
+    const f = createImpersonatingFetch(base as unknown as typeof fetch, () => token, config, undefined, ready);
+    const p = f("http://localhost:4000/v1/x");
+    token = "restored";
+    release();
+    await p;
+    expect(new Headers(base.mock.calls[0]![1].headers).get("x-impersonate-token")).toBe("restored");
   });
 });

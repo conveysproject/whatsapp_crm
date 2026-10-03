@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { getImpersonationCookie } from "@/lib/server-api";
+import { isImpersonationAdminPath } from "@/lib/impersonation";
 import { type NextRequest, NextResponse } from "next/server";
 
 const API_URL = (process.env["API_URL"] ?? process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000").replace(/\/$/, "");
@@ -16,7 +17,11 @@ async function proxy(request: NextRequest, path: string[]): Promise<NextResponse
   const contentType = request.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
 
-  const impersonateToken = request.headers.get("x-impersonate-token") ?? (await getImpersonationCookie());
+  // Real-admin calls (issue/elevate/revoke) never carry the impersonation token, even from the cookie.
+  const adminImpersonationCall = isImpersonationAdminPath(`/v1/${path.join("/")}`);
+  const impersonateToken = adminImpersonationCall
+    ? null
+    : (request.headers.get("x-impersonate-token") ?? (await getImpersonationCookie()));
   if (impersonateToken) headers.set("x-impersonate-token", impersonateToken);
 
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
