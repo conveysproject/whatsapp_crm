@@ -31,6 +31,10 @@ export const READ_LIKE_POST: ReadonlySet<string> = new Set([
   "POST /v1/ai/creator/flow/refine",
   "POST /v1/segments/preview",
   "POST /v1/segments/:id/evaluate",
+  // Meta cache refresh (product decision, same as the whatsapp-account syncs below): reads templates
+  // from Meta with the tenant token and upserts the tenant's cached Template rows. Never deletes,
+  // sends or changes anything at Meta.
+  "POST /v1/templates/sync",
 ]);
 
 /** Whole route families that are off-limits while impersonating (any method). */
@@ -139,7 +143,6 @@ export const EDIT_ROUTES: ReadonlySet<string> = new Set([
   "POST /v1/templates",
   "POST /v1/templates/:id/submit",
   "PATCH /v1/templates/:id",
-  "POST /v1/templates/sync",
   "POST /v1/pipelines",
   "PATCH /v1/pipelines/:id",
   "POST /v1/deals",
@@ -186,6 +189,14 @@ export const EDIT_ROUTES: ReadonlySet<string> = new Set([
 export const SILENT_NOOP_ROUTES: ReadonlySet<string> = new Set([
   "POST /v1/conversations/:id/read",
   "POST /v1/conversations/:id/typing",
+]);
+
+/**
+ * Read-like POSTs that still write to the tenant's cached data, so each call is audited fail-closed
+ * (action "impersonation.sync", route pattern only). Must also be listed in READ_LIKE_POST.
+ */
+export const AUDITED_READ_LIKE_POST: ReadonlySet<string> = new Set([
+  "POST /v1/templates/sync",
 ]);
 
 /** True for a safe-method request to a secret-bearing family (audited, see SECRET_READ_PREFIXES). */
@@ -262,6 +273,8 @@ const impersonationGuardPlugin: FastifyPluginAsync = async (fastify) => {
     if (cls === "read-like") {
       if (isSecretRead(request.method, pattern)) {
         if (!(await auditOrRefuse(request, reply, imp.adminId, "impersonation.secret_read", pattern))) return reply;
+      } else if (AUDITED_READ_LIKE_POST.has(`${request.method.toUpperCase()} ${pattern}`)) {
+        if (!(await auditOrRefuse(request, reply, imp.adminId, "impersonation.sync", pattern))) return reply;
       }
       return;
     }

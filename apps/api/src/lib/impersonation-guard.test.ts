@@ -63,6 +63,14 @@ describe("impersonation route classification", () => {
     expect(classifyRoute("PUT", "/v1/whatsapp-account/sync-all")).toBe("blocked");
   });
 
+  it("allows the templates Meta sync in read-only, other template writes keep their class", () => {
+    expect(classifyRoute("POST", "/v1/templates/sync")).toBe("read-like");
+    expect(classifyRoute("POST", "/v1/templates/:id/submit")).toBe("edit");
+    expect(classifyRoute("PATCH", "/v1/templates/:id")).toBe("edit");
+    expect(classifyRoute("POST", "/v1/templates/:id/send-to-contact")).toBe("blocked");
+    expect(classifyRoute("DELETE", "/v1/templates/:id")).toBe("blocked");
+  });
+
   it("flags secret-bearing GET routes for audit", () => {
     expect(isSecretRead("GET", "/v1/vendor-settings")).toBe(true);
     expect(isSecretRead("GET", "/v1/vendor-settings/marketing-messages/status")).toBe(true);
@@ -93,6 +101,7 @@ describe("impersonation route classification", () => {
 
 describe("impersonation guard hook", () => {
   const handlerSpy = vi.fn();
+  const syncSpy = vi.fn();
   async function build(mode: "readonly" | "edit" | null, auditCreate: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue({})) {
     const guard = (await import("./impersonation-guard.js")).default;
     const app = Fastify({ logger: false });
@@ -110,6 +119,7 @@ describe("impersonation guard hook", () => {
     app.get("/v1/vendor-settings", async () => ({ data: { whatsapp_access_token: "SECRET" } }));
     app.post("/v1/whatsapp-account/sync-all", ok);
     app.post("/v1/whatsapp-account/disconnect-account", ok);
+    app.post("/v1/templates/sync", async () => { syncSpy(); return { ok: true }; });
     app.get("/v1/webhook-actions", async () => { handlerSpy(); return { ok: true }; });
     app.post("/v1/conversations/:id/summarize", ok);
     app.post("/v1/conversations/:id/messages", ok);
@@ -177,6 +187,36 @@ describe("impersonation guard hook", () => {
     const res = await app.inject({ method: "POST", url: "/v1/whatsapp-account/disconnect-account" });
     expect(res.statusCode).toBe(403);
     expect(code(res)).toBe("IMPERSONATION_BLOCKED");
+    expect(audit).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("read-only: templates sync passes and writes an impersonation.sync audit entry (route only)", async () => {
+    const audit = vi.fn().mockResolvedValue({});
+    const app = await build("readonly", audit);
+    expect((await app.inject({ method: "POST", url: "/v1/templates/sync" })).statusCode).toBe(200);
+    expect(audit).toHaveBeenCalledTimes(1);
+    const arg = audit.mock.calls[0]![0] as { data: { action: string; actorId: string; metadata: Record<string, unknown> } };
+    expect(arg.data.action).toBe("impersonation.sync");
+    expect(arg.data.actorId).toBe("sa");
+    expect(arg.data.metadata).toMatchObject({ method: "POST", route: "/v1/templates/sync", organizationId: "o" });
+    await app.close();
+  });
+
+  it("templates sync is refused with 503 when the audit write fails, and the handler never runs", async () => {
+    syncSpy.mockClear();
+    const app = await build("readonly", vi.fn().mockRejectedValue(new Error("db down")));
+    const res = await app.inject({ method: "POST", url: "/v1/templates/sync" });
+    expect(res.statusCode).toBe(503);
+    expect(code(res)).toBe("AUDIT_UNAVAILABLE");
+    expect(syncSpy).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("templates sync is not audited for a normal (non-impersonated) session", async () => {
+    const audit = vi.fn().mockResolvedValue({});
+    const app = await build(null, audit);
+    expect((await app.inject({ method: "POST", url: "/v1/templates/sync" })).statusCode).toBe(200);
     expect(audit).not.toHaveBeenCalled();
     await app.close();
   });
