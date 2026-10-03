@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { IMPERSONATION_STORAGE_KEY, setImpersonationCookie, type ImpersonationSession } from "@/lib/impersonation";
+import { sortUsersForSupport, roleHint } from "@/lib/support-users";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -181,12 +182,13 @@ export default function AdminOrgDetailPage(): JSX.Element {
           <p className="text-sm text-gray-500">No users in this organization.</p>
         ) : (
           <div className="divide-y">
-            {users.map((u) => (
+            {sortUsersForSupport(users).map((u) => (
               <div key={u.id} className="flex items-center justify-between py-2">
                 <div>
                   <p className="text-sm font-medium">{u.fullName || u.email}</p>
                   <p className="text-xs text-gray-500">
-                    {u.email} · <span className="capitalize">{u.role}</span>
+                    {u.email} · <span className="capitalize font-medium">{u.role}</span>
+                    {roleHint(u.role) && ` (${roleHint(u.role)})`}
                     {!u.isActive && " · inactive"}
                     {u.lastSignInAt && ` · last sign-in ${new Date(u.lastSignInAt).toLocaleDateString(undefined, { dateStyle: "medium" })}`}
                   </p>

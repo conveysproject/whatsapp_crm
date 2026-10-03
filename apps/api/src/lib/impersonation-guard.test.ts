@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import Fastify from "fastify";
-import { classifyRoute } from "./impersonation-guard.js";
+import { classifyRoute, isSecretRead } from "./impersonation-guard.js";
 
 vi.mock("./redis.js", () => ({
   redis: { get: vi.fn(), set: vi.fn(), del: vi.fn(), incr: vi.fn(), expire: vi.fn(), exists: vi.fn(), setex: vi.fn() },
@@ -39,13 +39,23 @@ describe("impersonation route classification", () => {
     expect(classifyRoute("POST", "/v1/webhook-endpoints/:id/rotate-secret")).toBe("blocked");
   });
 
-  it("blocks GETs of platform and secret-bearing families", () => {
+  it("blocks GETs of platform families; secret-bearing tenant GETs are readable (and audited)", () => {
     expect(classifyRoute("GET", "/v1/admin/organizations")).toBe("blocked");
     expect(classifyRoute("GET", "/v1/admin/super-admins")).toBe("blocked");
     expect(classifyRoute("GET", "/v1/super-admins")).toBe("blocked");
-    expect(classifyRoute("GET", "/v1/vendor-settings")).toBe("blocked");
-    expect(classifyRoute("GET", "/v1/webhook-actions")).toBe("blocked");
+    expect(classifyRoute("GET", "/v1/vendor-settings")).toBe("read-like");
+    expect(classifyRoute("GET", "/v1/webhook-actions")).toBe("read-like");
     expect(classifyRoute("GET", "/v1/contacts")).toBe("read-like");
+  });
+
+  it("flags secret-bearing GET routes for audit", () => {
+    expect(isSecretRead("GET", "/v1/vendor-settings")).toBe(true);
+    expect(isSecretRead("GET", "/v1/vendor-settings/marketing-messages/status")).toBe(true);
+    expect(isSecretRead("GET", "/v1/webhook-actions/:id/logs")).toBe(true);
+    expect(isSecretRead("HEAD", "/v1/vendor-settings")).toBe(true);
+    expect(isSecretRead("PUT", "/v1/vendor-settings")).toBe(false);
+    expect(isSecretRead("GET", "/v1/contacts")).toBe(false);
+    expect(isSecretRead("GET", "/v1/vendor-settingsx")).toBe(false);
   });
 
   it("blocks automation-rule routes in every mode", () => {
@@ -67,10 +77,11 @@ describe("impersonation route classification", () => {
 });
 
 describe("impersonation guard hook", () => {
-  async function build(mode: "readonly" | "edit" | null) {
+  const handlerSpy = vi.fn();
+  async function build(mode: "readonly" | "edit" | null, auditCreate: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue({})) {
     const guard = (await import("./impersonation-guard.js")).default;
     const app = Fastify({ logger: false });
-    app.decorate("prisma", { adminAuditLog: { create: vi.fn().mockResolvedValue({}) } } as never);
+    app.decorate("prisma", { adminAuditLog: { create: auditCreate } } as never);
     app.addHook("preHandler", async (req) => {
       req.auth = {
         userId: "u", organizationId: "o", role: "agent", permissions: {}, teamId: null, teamRole: null,
@@ -81,6 +92,8 @@ describe("impersonation guard hook", () => {
     const ok = async () => ({ ok: true });
     app.get("/v1/contacts", ok);
     app.get("/v1/admin/organizations", ok);
+    app.get("/v1/vendor-settings", async () => ({ data: { whatsapp_access_token: "SECRET" } }));
+    app.get("/v1/webhook-actions", async () => { handlerSpy(); return { ok: true }; });
     app.post("/v1/conversations/:id/summarize", ok);
     app.post("/v1/conversations/:id/messages", ok);
     app.post("/v1/conversations/:id/read", ok);
@@ -103,6 +116,41 @@ describe("impersonation guard hook", () => {
     expect(res.statusCode).toBe(403);
     expect(code(res)).toBe("IMPERSONATION_READ_ONLY");
     await app.close();
+  });
+
+  it("secret-bearing GET is allowed in readonly mode and writes an audit entry without the value", async () => {
+    const audit = vi.fn().mockResolvedValue({});
+    const app = await build("readonly", audit);
+    const res = await app.inject({ method: "GET", url: "/v1/vendor-settings" });
+    expect(res.statusCode).toBe(200);
+    expect(audit).toHaveBeenCalledTimes(1);
+    const arg = audit.mock.calls[0]![0] as { data: { action: string; actorId: string; metadata: Record<string, unknown> } };
+    expect(arg.data.action).toBe("impersonation.secret_read");
+    expect(arg.data.actorId).toBe("sa");
+    expect(arg.data.metadata).toMatchObject({ route: "/v1/vendor-settings", organizationId: "o" });
+    expect(JSON.stringify(arg)).not.toContain("SECRET");
+    await app.close();
+  });
+
+  it("secret-bearing GET is refused with 503 when the audit write fails (fail-closed)", async () => {
+    const audit = vi.fn().mockRejectedValue(new Error("db down"));
+    const app = await build("readonly", audit);
+    const res = await app.inject({ method: "GET", url: "/v1/webhook-actions" });
+    expect(res.statusCode).toBe(503);
+    expect(code(res)).toBe("AUDIT_UNAVAILABLE");
+    expect(handlerSpy).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("ordinary GETs and non-impersonated secret GETs are not audited", async () => {
+    const audit = vi.fn().mockResolvedValue({});
+    const imp = await build("readonly", audit);
+    expect((await imp.inject({ method: "GET", url: "/v1/contacts" })).statusCode).toBe(200);
+    await imp.close();
+    const normal = await build(null, audit);
+    expect((await normal.inject({ method: "GET", url: "/v1/vendor-settings" })).statusCode).toBe(200);
+    await normal.close();
+    expect(audit).not.toHaveBeenCalled();
   });
 
   it("GET under /v1/admin is IMPERSONATION_BLOCKED for impersonated sessions", async () => {

@@ -88,41 +88,35 @@ Ship behind the existing super-admin gate only. Rollback: revert the commit and 
 
 ---
 
-# Addendum (2026-10-03): support visibility, "View organization" mode
+# Addendum (2026-10-03): support visibility (secrets readable, audited)
 
-Status: DRAFT, awaiting sign-off. No code written for this addendum.
+Status: IMPLEMENTED on main (see commit log). Replaces the earlier "View organization" proposal, which was dropped: logging in as an admin user already shows everything an admin sees.
 
 ## Problem (evidence)
 
-Support sessions show blocked or empty data, which can mislead the team:
-
-- `GET /v1/vendor-settings` and `GET /v1/webhook-actions` are blocked for impersonated sessions (`apps/api/src/lib/impersonation-guard.ts:64-69`), but the Settings pages load them (`apps/web/app/(dashboard)/settings/vendor-settings/page.tsx:15`, `webhook-actions/page.tsx:26`), so they render empty or default state.
-- Settings > WhatsApp can fire writes while loading or on click (for example `POST /whatsapp-account/sync-all`, `settings/whatsapp-account/page.tsx:159`). These are rejected by the read-only guard and show the toast "This action is not allowed while impersonating a user", which is noise. Which call fired on load in the reported screenshot is NOT yet confirmed.
-- A user session only shows what that user can see (`apps/api/src/lib/visibility.ts:23-31`: agents see their own or unassigned chats), so it cannot show "all data" of the org.
+- Settings pages load `GET /v1/vendor-settings` and `GET /v1/webhook-actions` (`settings/whatsapp-account/page.tsx:177`, `vendor-settings/page.tsx:15`, `webhook-actions/page.tsx:26`). These were in `BLOCKED_GET_PREFIXES`, so support saw blank/default state ("Not connected", "No phone number") and a red toast "This action is not allowed while impersonating a user." The blank state is misleading: it is hidden data, not missing data.
+- The only on-load write on that page is the post-connect sync (`?connected=1`, line 166-171), which does not apply to a support session.
+- A user session shows only what that user can see (`apps/api/src/lib/visibility.ts:23-31`), so support should log in as an admin user to see everything.
 
 ## Decisions (made with the user)
 
-1. Super admins are the support team. No separate support role.
-2. Two session types: **user view** (as today) and **organization view** (new): read-only, admin-level visibility across the whole org.
-3. Secrets (WhatsApp access token, API keys, webhook secrets) are **visible** to super admins in support sessions.
+1. Super admins are the support team. No separate support role, no "View organization" mode.
+2. Secrets (WhatsApp access token, webhook secrets) are **visible** to super admins in support sessions.
+3. The user picker sorts admins first and shows what each role can see, so support picks the right user.
 
-## Design
+## Implementation
 
-1. **Organization view:** `POST /admin/organizations/:orgId/impersonate-org` issues a token with payload `{ organizationId, issuedBy, mode: "readonly", scope: "org" }` (no `targetUserId`). The auth plugin builds an `admin`-role context for that org with `userId = issuedBy` and `impersonation.scope = "org"`. Always read-only: `elevate` is refused for `scope: "org"` sessions. Same 15-minute TTL, rate limit, Clerk bearer == issuer check, fail-closed audit, and the same block list.
-2. **Secrets visible:** remove `/v1/vendor-settings` and `/v1/webhook-actions` from `BLOCKED_GET_PREFIXES`. Every GET that returns a secret in an impersonated session writes a platform audit entry `impersonation.secret_read` (route + org + admin; never the value).
-3. **No misleading blanks:** read-only blocks of reads must not happen for pages the team needs. The client no longer toasts for expected read-only rejections triggered automatically on page load; it shows the banner state "read-only" instead. Identify and fix any page that fires a write on mount in a support session.
-4. **UI:** org details page gets "View organization" next to the users list. The banner shows "Viewing organization <name> - read-only" for org view.
-5. **Out of scope:** a separate Support Console, a read-only platform role, anything that lets support write in org view.
+1. `GET /v1/vendor-settings*` and `GET /v1/webhook-actions*` are readable in impersonated sessions (removed from `BLOCKED_GET_PREFIXES`). `SECRET_READ_PREFIXES` lists them; each such read writes `adminAuditLog` action `impersonation.secret_read` (route pattern, org, admin; never values), awaited before the handler, **fail-closed** (503 `AUDIT_UNAVAILABLE`). Platform routes (`/v1/admin`, `/v1/super-admins`) stay blocked for GET.
+2. Org details page: users sorted admin, manager, agent, viewer (inactive last) with a role hint (`apps/web/lib/support-users.ts`).
+3. Writes remain read-only by default with the existing block list and edit-mode elevation.
 
-## Security notes
+## Risk
 
-- Visible secrets widen the impact of a compromised super-admin account. Mitigations: audit entry on every secret read, 15-minute sessions, per-hour issue limit, Clerk bearer binding. Consider requiring MFA on super-admin accounts (not part of this change).
-- Org view uses an admin context, so it must never write: the existing guard already rejects every non-GET in `readonly`, and elevation is refused for org scope (test required).
+Visible secrets widen the impact of a compromised super-admin account. Mitigations: audit of every secret read, 15-minute sessions, per-hour issue limit, Clerk bearer binding. Recommended (not part of this change): enforce MFA on super-admin accounts.
 
 ## Acceptance criteria
 
-- Org view shows all conversations, contacts and campaigns of the org regardless of any user's role, and no write succeeds.
-- Settings > WhatsApp, Vendor settings and Webhook actions render the real (non-blank) data with secrets visible, and no error toast appears on load.
-- Each secret-bearing GET writes an audit entry without the value.
-- Elevate on an org-view token returns 403.
-- Tests cover token issue, auth context, guard, elevate refusal and the audit entry.
+- Settings > WhatsApp, Vendor settings, Webhook actions show real data in a support session with no error toast.
+- Each secret-bearing GET writes `impersonation.secret_read` without the value; if the audit write fails the read is refused.
+- Ordinary GETs and non-impersonated requests are not audited.
+- The user list shows admins first with role hints.

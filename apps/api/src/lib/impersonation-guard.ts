@@ -1,5 +1,5 @@
 import fp from "fastify-plugin";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 
 /**
  * Route classification for super-admin impersonation sessions.
@@ -64,6 +64,14 @@ export const BLOCKED_PREFIXES: readonly string[] = [
 export const BLOCKED_GET_PREFIXES: readonly string[] = [
   "/v1/admin",
   "/v1/super-admins",
+];
+
+/**
+ * GET families that return tenant secrets (WhatsApp access token, webhook secrets/headers).
+ * Super admins may read them in support sessions (product decision), but every read is audited
+ * fail-closed. Route pattern only, never the values.
+ */
+export const SECRET_READ_PREFIXES: readonly string[] = [
   "/v1/vendor-settings",
   "/v1/webhook-actions",
 ];
@@ -169,6 +177,11 @@ export const SILENT_NOOP_ROUTES: ReadonlySet<string> = new Set([
   "POST /v1/conversations/:id/typing",
 ]);
 
+/** True for a safe-method request to a secret-bearing family (audited, see SECRET_READ_PREFIXES). */
+export function isSecretRead(method: string, pattern: string): boolean {
+  return SAFE_METHODS.has(method.toUpperCase()) && matchesPrefix(SECRET_READ_PREFIXES, pattern);
+}
+
 export type RouteClass = "read-like" | "blocked" | "edit" | "unclassified";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -193,6 +206,38 @@ export function classifyRoute(method: string, pattern: string): RouteClass {
 }
 
 const impersonationGuardPlugin: FastifyPluginAsync = async (fastify) => {
+  /** Platform audit is FAIL-CLOSED: awaited before the handler; on failure the request is refused with 503. */
+  async function auditOrRefuse(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    adminId: string,
+    action: string,
+    pattern: string,
+  ): Promise<boolean> {
+    try {
+      if (!fastify.prisma) throw new Error("prisma unavailable");
+      // Route pattern only: never bodies, query strings or secret values.
+      await fastify.prisma.adminAuditLog.create({
+        data: {
+          actorId: adminId,
+          action,
+          targetType: "user",
+          targetId: request.auth.userId,
+          metadata: { method: request.method, route: pattern, organizationId: request.auth.organizationId },
+          ipAddress: request.ip ?? null,
+          userAgent: request.headers["user-agent"] ?? null,
+        },
+      });
+      return true;
+    } catch (err) {
+      request.log.error({ err }, "impersonation: audit write failed, request refused");
+      await reply.status(503).send({
+        error: { code: "AUDIT_UNAVAILABLE", message: "Audit log unavailable; action refused" },
+      });
+      return false;
+    }
+  }
+
   // Registered AFTER the auth plugin so request.auth.impersonation is populated.
   fastify.addHook("preHandler", async (request, reply) => {
     const imp = request.auth?.impersonation;
@@ -201,7 +246,12 @@ const impersonationGuardPlugin: FastifyPluginAsync = async (fastify) => {
     if (!pattern) return; // unmatched route: 404 handler, nothing to guard
 
     const cls = classifyRoute(request.method, pattern);
-    if (cls === "read-like") return;
+    if (cls === "read-like") {
+      if (isSecretRead(request.method, pattern)) {
+        if (!(await auditOrRefuse(request, reply, imp.adminId, "impersonation.secret_read", pattern))) return reply;
+      }
+      return;
+    }
     if (cls === "unclassified") {
       request.log.warn({ method: request.method, pattern }, "impersonation: unclassified route denied");
     }
@@ -217,27 +267,8 @@ const impersonationGuardPlugin: FastifyPluginAsync = async (fastify) => {
         error: { code: "IMPERSONATION_READ_ONLY", message: "Impersonation session is read-only" },
       });
     }
-    // Edit-mode write: platform audit is FAIL-CLOSED. The insert is awaited before the handler runs;
-    // if it cannot be written the request is refused (route pattern only, never bodies/secrets).
-    try {
-      if (!fastify.prisma) throw new Error("prisma unavailable");
-      await fastify.prisma.adminAuditLog.create({
-        data: {
-          actorId: imp.adminId,
-          action: "impersonation.request",
-          targetType: "user",
-          targetId: request.auth.userId,
-          metadata: { method: request.method, route: pattern, organizationId: request.auth.organizationId },
-          ipAddress: request.ip ?? null,
-          userAgent: request.headers["user-agent"] ?? null,
-        },
-      });
-    } catch (err) {
-      request.log.error({ err }, "impersonation: audit write failed, request refused");
-      return reply.status(503).send({
-        error: { code: "AUDIT_UNAVAILABLE", message: "Audit log unavailable; action refused" },
-      });
-    }
+    // Edit-mode write: audited before the handler runs.
+    if (!(await auditOrRefuse(request, reply, imp.adminId, "impersonation.request", pattern))) return reply;
   });
 };
 
