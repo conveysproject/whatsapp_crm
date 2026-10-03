@@ -17,28 +17,28 @@ Task 3 (read-only enforcement) must ship **before or with** Task 2 (user-level i
 
 ## Tasks (TDD, small)
 
-**Task 1: Migration.** Add nullable `target_user_id` and `mode` text (default `readonly`) and `elevation_reason` text to `impersonation_logs`. Hand-authored SQL in `apps/api/prisma/migrations/`, update `schema.prisma`. After any out-of-band application on prod, run `prisma migrate resolve --applied <name>`. Rollback: drop the three columns.
+### Task 1: Migration. Add nullable `target_user_id` and `mode` text (default `readonly`) and `elevation_reason` text to `impersonation_logs`. Hand-authored SQL in `apps/api/prisma/migrations/`, update `schema.prisma`. After any out-of-band application on prod, run `prisma migrate resolve --applied <name>`. Rollback: drop the three columns.
 
-**Task 2: Issue endpoint.** Replace the org-level token with `POST /admin/organizations/:orgId/users/:userId/impersonate`. Tests first: 403 non-superAdmin, 404 user not in that org, 404 inactive or deleted user, 403 target is a superAdmin, 429 over the per-hour limit, 200 stores `{ organizationId, targetUserId, issuedBy, mode: "readonly" }` with 900 s TTL and writes `ImpersonationLog` and `writeAdminAudit`.
+### Task 2: Issue endpoint. Replace the org-level token with `POST /admin/organizations/:orgId/users/:userId/impersonate`. Tests first: 403 non-superAdmin, 404 user not in that org, 404 inactive or deleted user, 403 target is a superAdmin, 429 over the per-hour limit, 200 stores `{ organizationId, targetUserId, issuedBy, mode: "readonly" }` with 900 s TTL and writes `ImpersonationLog` and `writeAdminAudit`.
 
-**Task 3: Auth plugin + read-only guard.**
+### Task 3: Auth plugin + read-only guard.
 - In the impersonation branch, load the target user and resolve role, team and permissions via the existing logic. Set `request.auth.impersonation = { adminId, mode }`.
 - Skip the `lastSignInAt` stamp.
 - New `impersonation-guard.ts` preHandler. Non-GET/HEAD is 403 `IMPERSONATION_READ_ONLY` unless mode is `edit` or the route is in a `READ_LIKE_POST` list. Block-listed routes are 403 `IMPERSONATION_BLOCKED` even in edit mode: campaigns and bulk sends, billing and plans, users/roles/permissions, all DELETE, WhatsApp and API credentials.
 - Test that enumerates every registered route and fails if a non-GET route is in neither the allow list nor the block list.
 
-**Task 4: Side-effect suppression.** When `request.auth.impersonation` is set, mark-as-read, typing, assignment and status become no-ops, or are blocked in read-only mode. Tests per route. Verify that presence and availability are not updated.
+### Task 4: Side-effect suppression. When `request.auth.impersonation` is set, mark-as-read, typing, assignment and status become no-ops, or are blocked in read-only mode. Tests per route. Verify that presence and availability are not updated.
 
-**Task 5: Elevation + exit.** `POST /admin/impersonation/elevate` takes `{ reason }` (10-500 chars) with the token. It sets mode `edit` without extending the TTL, writes the reason to the log and audit, and notifies other super admins on the platform side. Keep and update the existing `DELETE .../impersonate` revoke endpoint.
+### Task 5: Elevation + exit. `POST /admin/impersonation/elevate` takes `{ reason }` (10-500 chars) with the token. It sets mode `edit` without extending the TTL, writes the reason to the log and audit, and notifies other super admins on the platform side. Keep and update the existing `DELETE .../impersonate` revoke endpoint.
 
-**Task 6: Web interceptor and UI.**
+### Task 6: Web interceptor and UI.
 - `ImpersonationProvider` in the dashboard layout patches `window.fetch` for API-base URLs.
 - The `/api/v1` proxy forwards `X-Impersonate-Token`.
 - Admin Organization Details gets a user list with "Login As"; the Organizations list "Login As" opens the same picker.
 - Update `ImpersonationBanner` to show the user, the mode, an "Enable edit (reason)" button and Exit (revoke token, clear storage, return to `/admin/organizations`).
 - Update the web tests.
 
-**Task 7: Verify.** Run `/check`, `/test-api`, `/test-web`. Known flaky: 2 API failures (segments/conversations) and Redis-rejection noise. Security audit: every touched route for super-admin gating and org scoping. Manual test on a staging or real org: read-only blocks a send, elevate then a single reply works, bulk send is blocked, target's `lastSignInAt` and unread counts are unchanged, exit revokes the token (401 afterwards).
+### Task 7: Verify. Run `/check`, `/test-api`, `/test-web`. Known flaky: 2 API failures (segments/conversations) and Redis-rejection noise. Security audit: every touched route for super-admin gating and org scoping. Manual test on a staging or real org: read-only blocks a send, elevate then a single reply works, bulk send is blocked, target's `lastSignInAt` and unread counts are unchanged, exit revokes the token (401 afterwards).
 
 **Release blocker (not code):** add the Terms of Service clause about platform support access.
 
