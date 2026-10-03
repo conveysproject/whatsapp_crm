@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "./prisma.js";
+import { onPhoneStatusPending } from "./register-phone-enqueue.js";
 
 const WA_BASE = "https://graph.facebook.com/v25.0";
 
@@ -685,6 +686,11 @@ export async function syncAllMetaData(organizationId: string): Promise<void> {
         })
       )
     );
+  }
+
+  // Unregistered number found by a sync: let the auto-register job look at it (no-op while the flag is off).
+  if (upserts.some((s) => s.key === "phone_info_status" && s.value === "PENDING")) {
+    void onPhoneStatusPending(organizationId);
   }
 }
 

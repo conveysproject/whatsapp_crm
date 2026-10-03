@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { canAccess, canAccessSub } from "../lib/permissions.js";
 import { uploadToR2 } from "../lib/r2.js";
+import { onWhatsappConnected } from "../lib/register-phone-enqueue.js";
 import {
   getBusinessProfile,
   updateBusinessProfile,
@@ -664,6 +665,7 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
 
     // Non-blocking: cache all Meta data so it's ready when the user sees the success screen
     void syncAllMetaData(organizationId).catch((e) => fastify.log.warn({ e }, "[WA-CONNECT] syncAllMetaData after connect failed (non-fatal)"));
+    void onWhatsappConnected(fastify.prisma, organizationId);
 
     return reply.send({ data: responseData });
   });
@@ -744,6 +746,7 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
 
     // Non-blocking: cache all Meta data so it's ready when the user sees the success screen
     void syncAllMetaData(organizationId).catch(() => undefined);
+    void onWhatsappConnected(fastify.prisma, organizationId);
 
     return reply.send({ data: { wabaId, wabaName, phoneNumberId: phoneNumberId || null, displayPhoneNumber } });
   });
