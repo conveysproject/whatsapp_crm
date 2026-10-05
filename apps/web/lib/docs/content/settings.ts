@@ -248,13 +248,13 @@ export const settings: DocCategory = {
     {
       title: "Vendor & API Settings",
       slug: "vendor-settings",
-      description: "Configure bot timeouts, API tokens, webhook retries, and rate limits.",
+      description: "Configure bot timing, automatic message deletion, and API credentials.",
       sections: [
         {
           paragraphs: [
             "Go to Settings > Vendor Settings to access advanced configuration options.",
             "Bot Response Timeout — set how many seconds WBMSG waits before considering the bot unresponsive.",
-            "API Token — your organization's API key. This field is read-only; use the copy button to copy it.",
+            "API Credentials — create, edit, rotate, and revoke the Auth ID and Auth Token used by the Plivo-compatible API. The token is shown only once, when a credential is created or rotated. Requires API access on your plan.",
             "Webhook Retry Count — how many times WBMSG retries a failed webhook delivery.",
             "Rate Limiting Configuration — control how many API requests are allowed per time window.",
           ],

@@ -2,6 +2,7 @@
 import { JSX, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PermissionGate } from "@/components/PermissionGate";
+import { ApiCredentialsSection } from "@/components/settings/ApiCredentialsSection";
 
 interface VendorSettingsResponse {
   data: Record<string, string>;
@@ -21,7 +22,6 @@ export default function VendorSettingsPage(): JSX.Element {
   const [botTimezone, setBotTimezone] = useState("Asia/Kolkata");
   const [autoDelete, setAutoDelete] = useState(false);
   const [deleteDays, setDeleteDays] = useState("90");
-  const [apiAccessToken, setApiAccessToken] = useState("");
 
   useEffect(() => {
     if (!settings?.data) return;
@@ -31,7 +31,6 @@ export default function VendorSettingsPage(): JSX.Element {
     setBotTimezone(settings.data.bot_timing_timezone ?? "Asia/Kolkata");
     setAutoDelete(settings.data.enable_automatic_message_deletion === "true");
     setDeleteDays(settings.data.delete_whatsapp_message_days ?? "90");
-    setApiAccessToken(settings.data.vendor_api_access_token ?? "");
   }, [settings]);
 
   const save = useMutation({
@@ -47,7 +46,6 @@ export default function VendorSettingsPage(): JSX.Element {
             { key: "bot_timing_timezone", value: botTimezone, dataType: "string" },
             { key: "enable_automatic_message_deletion", value: String(autoDelete), dataType: "boolean" },
             { key: "delete_whatsapp_message_days", value: deleteDays, dataType: "integer" },
-            { key: "vendor_api_access_token", value: apiAccessToken, dataType: "string" },
           ],
         }),
       }).then((r) => r.json()),
@@ -120,28 +118,7 @@ export default function VendorSettingsPage(): JSX.Element {
         )}
       </section>
 
-      {/* API Access Token */}
-      <section className="border rounded-lg p-5 space-y-3">
-        <h2 className="font-medium">API Access Token</h2>
-        <p className="text-sm text-gray-500">Use this token to access TrustCRM API programmatically.</p>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            readOnly
-            value={apiAccessToken || "Generate a token to get started"}
-            className="flex-1 border rounded px-3 py-1.5 text-sm bg-gray-50 font-mono text-xs"
-          />
-          <button
-            onClick={() => {
-              const token = crypto.randomUUID().replace(/-/g, "");
-              setApiAccessToken(token);
-            }}
-            className="px-3 py-1.5 border text-sm rounded hover:bg-gray-50"
-          >
-            Regenerate
-          </button>
-        </div>
-      </section>
+      <ApiCredentialsSection />
 
       <button
         onClick={() => save.mutate()}

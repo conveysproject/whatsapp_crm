@@ -55,7 +55,7 @@ export default async function SettingsPage(): Promise<JSX.Element> {
           { href: "/settings/inbox-labels", label: "Conversation Labels", desc: "Labels for inbox queue management" },
           { href: "/settings/contact-settings", label: "Contact Settings", desc: "Fields, statuses, configuration & assignment rules" },
           { href: "/settings/notifications", label: "Notifications", desc: "Sound and alert preferences" },
-          { href: "/settings/vendor-settings", label: "Advanced Settings", desc: "Bot timing, API token" },
+          { href: "/settings/vendor-settings", label: "Advanced Settings", desc: "Bot timing, API credentials" },
           { href: "/settings/webhook-actions", label: "Webhook Actions", desc: "Trigger external webhooks" },
           { href: "/settings/media-library", label: "Media Library", desc: "Reusable images, docs, audio" },
           { href: "/settings/canned-responses", label: "Canned Responses", desc: "Saved reply templates with shortcuts" },
