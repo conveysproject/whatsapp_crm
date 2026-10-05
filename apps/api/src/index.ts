@@ -78,8 +78,13 @@ async function start() {
     scheduleRegisterPhoneSweepCron().catch((err) => server.log.warn({ err }, "Register-phone sweep schedule failed"));
   }
   if (process.env["PUBLIC_API_ENABLED"] === "true") {
-    startPublicApiSendWorker();
-    startPublicApiCallbackWorker();
+    const publicApiWorkers = [startPublicApiSendWorker(), startPublicApiCallbackWorker()];
+    // Let in-flight public-API sends finish on a deploy instead of dying mid-send (a stalled send is reported
+    // failed, never re-run). Capped at 10 s; only registered when the public API is on.
+    process.once("SIGTERM", () => {
+      const cap = new Promise<void>((resolve) => setTimeout(resolve, 10_000).unref());
+      void Promise.race([Promise.allSettled(publicApiWorkers.map((w) => w.close())), cap]).finally(() => process.exit(0));
+    });
   }
 }
 
