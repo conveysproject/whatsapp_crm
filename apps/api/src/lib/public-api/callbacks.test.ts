@@ -3,12 +3,12 @@ import type { PrismaClient } from "@prisma/client";
 
 const add = vi.fn();
 vi.mock("./queues.js", () => ({ publicApiCallbackQueue: { add: (...a: unknown[]) => add(...a) }, publicApiSendQueue: { add: vi.fn() } }));
-import { enqueueStatusCallback, buildStatusFields, forwardMetaStatusToApiClient } from "./callbacks.js";
+import { enqueueStatusCallback, buildStatusFields, forwardMetaStatusToApiClient, forwardInboundToApiClient } from "./callbacks.js";
 
 const prisma = {
   $transaction: vi.fn(),
   apiMessageMeta: { findUnique: vi.fn(), updateMany: vi.fn() },
-  apiKey: { findUnique: vi.fn() },
+  apiKey: { findUnique: vi.fn(), findMany: vi.fn() },
   vendorSetting: { findFirst: vi.fn() },
   message: { findUnique: vi.fn(), update: vi.fn() },
 };
@@ -187,6 +187,33 @@ describe("forwardMetaStatusToApiClient", () => {
     prisma.message.findUnique.mockResolvedValue({ status: "read" });
     await forwardMetaStatusToApiClient(P, "m1", { status: "failed" });
     expect(prisma.message.update).not.toHaveBeenCalled();
+    expect(add).not.toHaveBeenCalled();
+  });
+});
+
+describe("forwardInboundToApiClient", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma.vendorSetting.findFirst.mockResolvedValue({ value: "+1 415-555-2671" });
+  });
+
+  it("queues one inbound callback per active credential with an inbound URL, scoped to the org", async () => {
+    prisma.apiKey.findMany.mockResolvedValue([{ id: "k1", inboundUrl: "https://c.example.com/in" }, { id: "k2", inboundUrl: "https://d.example.com/in" }]);
+    await forwardInboundToApiClient(P, { organizationId: "org-1", messageId: "m9", fromPhone: "14155552672", text: "hello" });
+    expect(prisma.apiKey.findMany.mock.calls[0]![0].where).toMatchObject({ organizationId: "org-1", revokedAt: null, inboundUrl: { not: null } });
+    expect(add).toHaveBeenCalledTimes(2);
+    const [name, data] = add.mock.calls[0]!;
+    expect(name).toBe("inbound");
+    expect(data).toMatchObject({ apiKeyId: "k1", organizationId: "org-1", url: "https://c.example.com/in", method: "POST", fields: { From: "14155552672", To: "14155552671", Text: "hello", Type: "whatsapp", MessageUUID: "m9" } });
+  });
+
+  it("sends an empty Text for non-text messages and does nothing without credentials", async () => {
+    prisma.apiKey.findMany.mockResolvedValue([{ id: "k1", inboundUrl: "https://c.example.com/in" }]);
+    await forwardInboundToApiClient(P, { organizationId: "org-1", messageId: "m9", fromPhone: "1", text: null });
+    expect(add.mock.calls[0]![1].fields.Text).toBe("");
+    add.mockClear();
+    prisma.apiKey.findMany.mockResolvedValue([]);
+    await forwardInboundToApiClient(P, { organizationId: "org-1", messageId: "m9", fromPhone: "1", text: "x" });
     expect(add).not.toHaveBeenCalled();
   });
 });

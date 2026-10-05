@@ -9,6 +9,7 @@ import { handleBotMessage } from "../lib/bot-runner.js";
 import { markAsRead, sendTextMessage } from "../lib/whatsapp.js";
 import { recordOutbound } from "../lib/record-outbound.js";
 import { dispatchWebhook } from "../lib/webhook-dispatch.js";
+import { forwardInboundToApiClient } from "../lib/public-api/callbacks.js";
 import { isFeatureEnabled } from "../lib/plan-limits.js";
 import { dispatchFlowTrigger, cancelNoReplyJobs } from "../lib/trigger-dispatcher.js";
 import { runFlow } from "../lib/flow-runner.js";
@@ -441,6 +442,11 @@ export const inboundWorker = new Worker<InboundMessageJob>(
       contentType,
       sentAt: messageDate.toISOString(),
     });
+    if (process.env["PUBLIC_API_ENABLED"] === "true") {
+      void forwardInboundToApiClient(prisma, {
+        organizationId, messageId: storedMessage.id, fromPhone: whatsappContactPhone, text: body,
+      }).catch(() => console.error(`[worker:inbound] public-api forward failed msgId=${storedMessage.id}`));
+    }
     console.log(`[worker:inbound] DONE wamid=${whatsappMessageId} msgId=${storedMessage.id}`);
 
     } catch (err) {

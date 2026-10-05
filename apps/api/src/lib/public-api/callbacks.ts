@@ -132,3 +132,23 @@ export async function forwardMetaStatusToApiClient(prisma: PrismaClient, message
     await enqueueStatusCallback(prisma, messageId, next, { errorCode: plivoErrorFromMeta(su.errors?.[0]?.code) });
   }
 }
+
+/**
+ * Forward an inbound WhatsApp message to every active credential of the receiving org that has an inbound URL.
+ * PROVISIONAL payload: only documented Plivo inbound fields; media/location/interactive extras await client samples.
+ */
+export async function forwardInboundToApiClient(
+  prisma: PrismaClient,
+  args: { organizationId: string; messageId: string; fromPhone: string; text: string | null }
+): Promise<void> {
+  const keys = await prisma.apiKey.findMany({
+    where: { organizationId: args.organizationId, revokedAt: null, inboundUrl: { not: null } },
+    select: { id: true, inboundUrl: true },
+  });
+  if (keys.length === 0) return;
+  const to = await businessNumberDigits(prisma, args.organizationId);
+  const fields = { From: args.fromPhone, To: to, Text: args.text ?? "", Type: "whatsapp", MessageUUID: args.messageId };
+  await Promise.all(keys.map((k) =>
+    publicApiCallbackQueue.add("inbound", { apiKeyId: k.id, organizationId: args.organizationId, url: k.inboundUrl!, method: "POST", fields })
+  ));
+}
