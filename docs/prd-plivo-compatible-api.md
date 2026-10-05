@@ -1,6 +1,6 @@
 # PRD: Plivo-compatible public WhatsApp API
 
-Status: DRAFT, awaiting approval. Role: backend architect + security reviewer. Classification: architectural (new public subsystem with its own auth).
+Status: APPROVED 2026-10-05; Phase 1 implemented on branch feat/plivo-compatible-api (see docs/superpowers/plans/2026-10-05-plivo-compatible-api-phase1.md).
 
 ## Problem and evidence
 
