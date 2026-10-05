@@ -208,6 +208,72 @@ describe("GET /Message/", () => {
   it("400 for a bad time filter", async () => {
     expect((await app.inject({ method: "GET", url: "/v1/Account/k1/Message/?message_time__gt=garbage" })).statusCode).toBe(400);
   });
+
+  const list = (qs: string) => app.inject({ method: "GET", url: `/v1/Account/k1/Message/?${qs}` });
+  const emptyMocks = (total = 0) => {
+    mockPrisma.apiMessageMeta.findMany.mockResolvedValue([]);
+    mockPrisma.apiMessageMeta.count.mockResolvedValue(total);
+  };
+
+  it("repeated message_state/error_code use the first value (no 500)", async () => {
+    emptyMocks();
+    const res = await list("message_state=a&message_state=b&error_code=1&error_code=2");
+    expect(res.statusCode).toBe(200);
+    const where = mockPrisma.apiMessageMeta.findMany.mock.calls[0]![0].where;
+    expect(where.lastStatus).toBe("a");
+    expect(where.errorCode).toBe("1");
+  });
+
+  it("repeated time filters use the first value; an invalid first value is 400", async () => {
+    emptyMocks();
+    const ok = await list("message_time__gt=2026-10-05%2000:00:00&message_time__gt=garbage");
+    expect(ok.statusCode).toBe(200);
+    expect(mockPrisma.apiMessageMeta.findMany.mock.calls[0]![0].where.queuedAt.gt).toEqual(new Date("2026-10-05T00:00:00Z"));
+    expect((await list("message_time__lt=garbage&message_time__lt=2026-10-05%2000:00:00")).statusCode).toBe(400);
+  });
+
+  it("repeated or non-numeric limit/offset fall back safely", async () => {
+    emptyMocks();
+    expect((await list("limit=5&limit=7&offset=3&offset=9")).statusCode).toBe(200);
+    expect((await list("limit=abc&offset=xyz")).statusCode).toBe(200);
+    const calls = mockPrisma.apiMessageMeta.findMany.mock.calls;
+    expect(calls[0]![0]).toMatchObject({ take: 5, skip: 3 });
+    expect(calls[1]![0]).toMatchObject({ take: 20, skip: 0 });
+  });
+
+  it("clamps a huge offset to an int32-safe value and returns an empty page", async () => {
+    emptyMocks(45);
+    const res = await list("offset=99999999999999999999");
+    expect(res.statusCode).toBe(200);
+    const arg = mockPrisma.apiMessageMeta.findMany.mock.calls[0]![0];
+    expect(arg.skip).toBeLessThanOrEqual(2147483647);
+    expect(res.json<{ meta: { offset: number } }>().meta.offset).toBe(arg.skip);
+  });
+
+  it("next/previous links preserve the caller's filters", async () => {
+    emptyMocks(45);
+    const res = await list("message_state=failed&error_code=380&limit=10&offset=10");
+    const { meta } = res.json<{ meta: { next: string; previous: string } }>();
+    const next = new URL(meta.next, "http://x");
+    expect(next.pathname).toBe("/v1/Account/k1/Message/");
+    expect(next.searchParams.get("message_state")).toBe("failed");
+    expect(next.searchParams.get("error_code")).toBe("380");
+    expect(next.searchParams.get("limit")).toBe("10");
+    expect(next.searchParams.get("offset")).toBe("20");
+    const prev = new URL(meta.previous, "http://x");
+    expect(prev.searchParams.get("message_state")).toBe("failed");
+    expect(prev.searchParams.get("offset")).toBe("0");
+    emptyMocks(45);
+    const end = (await list("message_state=failed&limit=10&offset=40")).json<{ meta: { next: string | null } }>();
+    expect(end.meta.next).toBeNull();
+  });
+
+  it("orders by queuedAt desc with a messageId tiebreaker and scopes count by org", async () => {
+    emptyMocks();
+    await list("limit=5");
+    expect(mockPrisma.apiMessageMeta.findMany.mock.calls[0]![0].orderBy).toEqual([{ queuedAt: "desc" }, { messageId: "desc" }]);
+    expect(mockPrisma.apiMessageMeta.count.mock.calls[0]![0].where).toMatchObject({ organizationId: "org-1" });
+  });
 });
 
 describe("GET /Message/:uuid/", () => {
@@ -232,5 +298,13 @@ describe("GET /Message/:uuid/", () => {
     const res = await app.inject({ method: "GET", url: "/v1/Account/k1/Message/other-org-msg/" });
     expect(res.statusCode).toBe(404);
     expect(res.json()).toMatchObject({ error: expect.any(String), api_id: expect.any(String) });
+  });
+
+  it("unknown-uuid and cross-org 404 bodies are identical except api_id", async () => {
+    mockPrisma.apiMessageMeta.findFirst.mockResolvedValue(null);
+    const a = (await app.inject({ method: "GET", url: "/v1/Account/k1/Message/unknown/" })).json<Record<string, unknown>>();
+    const b = (await app.inject({ method: "GET", url: "/v1/Account/k1/Message/other-org-msg/" })).json<Record<string, unknown>>();
+    delete a["api_id"]; delete b["api_id"];
+    expect(a).toEqual(b);
   });
 });

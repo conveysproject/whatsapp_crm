@@ -22,6 +22,15 @@ function inboxFields(content: SendContentForWorker, templateBody: string | null)
 }
 
 const MAX_LIMIT = 20;
+// Prisma `skip` must fit in int32; anything beyond this simply yields an empty page.
+const MAX_OFFSET = 2_000_000_000;
+
+/** Normalizes a query value: Fastify yields an array for repeated keys; use the first string. */
+function qp(v: unknown): string | undefined {
+  if (typeof v === "string") return v;
+  if (Array.isArray(v) && typeof v[0] === "string") return v[0];
+  return undefined;
+}
 
 function plivoMessageTime(d: Date): string {
   return `${d.toISOString().slice(0, 19).replace("T", " ")}+00:00`;
@@ -158,35 +167,52 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
   }
 
   for (const path of both("/Message/")) {
-    fastify.get<{ Params: { authId: string }; Querystring: Record<string, string | undefined> }>(path, PUBLIC, async (request, reply) => {
+    fastify.get<{ Params: { authId: string }; Querystring: Record<string, unknown> }>(path, PUBLIC, async (request, reply) => {
       const { organizationId } = request.publicApi!;
       const q = request.query;
-      const limit = Math.min(Math.max(parseInt(q["limit"] ?? "", 10) || MAX_LIMIT, 1), MAX_LIMIT);
-      const offset = Math.max(parseInt(q["offset"] ?? "", 10) || 0, 0);
-      const gt = parseTime(q["message_time__gt"]);
-      const lt = parseTime(q["message_time__lt"]);
+      const limit = Math.min(Math.max(parseInt(qp(q["limit"]) ?? "", 10) || MAX_LIMIT, 1), MAX_LIMIT);
+      const offset = Math.min(Math.max(parseInt(qp(q["offset"]) ?? "", 10) || 0, 0), MAX_OFFSET);
+      const direction = qp(q["message_direction"]);
+      const type = qp(q["message_type"]);
+      const state = qp(q["message_state"]);
+      const errorCode = qp(q["error_code"]);
+      const gtRaw = qp(q["message_time__gt"]);
+      const ltRaw = qp(q["message_time__lt"]);
+      const gt = parseTime(gtRaw);
+      const lt = parseTime(ltRaw);
       if (gt === "invalid" || lt === "invalid") return plivoError(reply, 400, "message_time filters must be yyyy-MM-dd HH:mm:ss");
 
       const base = `/v1/Account/${request.params.authId}/Message/`;
+      const link = (newOffset: number) => {
+        const sp = new URLSearchParams();
+        const filters: Array<[string, string | undefined]> = [
+          ["message_direction", direction], ["message_type", type], ["message_state", state], ["error_code", errorCode],
+          ["message_time__gt", gtRaw], ["message_time__lt", ltRaw], ["subaccount", qp(q["subaccount"])],
+        ];
+        for (const [k, v] of filters) if (v) sp.set(k, v);
+        sp.set("limit", String(limit));
+        sp.set("offset", String(newOffset));
+        return `${base}?${sp.toString()}`;
+      };
       const meta = (total: number) => ({
         limit, offset, total_count: total,
-        previous: offset > 0 ? `${base}?limit=${limit}&offset=${Math.max(offset - limit, 0)}` : null,
-        next: offset + limit < total ? `${base}?limit=${limit}&offset=${offset + limit}` : null,
+        previous: offset > 0 ? link(Math.max(offset - limit, 0)) : null,
+        next: offset + limit < total ? link(offset + limit) : null,
       });
 
-      if (q["message_direction"] === "inbound" || (q["message_type"] && q["message_type"] !== "whatsapp")) {
+      if (direction === "inbound" || (type && type !== "whatsapp")) {
         return reply.send({ api_id: newApiId(), meta: meta(0), objects: [] });
       }
 
       const where = {
         organizationId,
-        ...(q["message_state"] ? { lastStatus: q["message_state"] } : {}),
-        ...(q["error_code"] ? { errorCode: q["error_code"] } : {}),
+        ...(state ? { lastStatus: state } : {}),
+        ...(errorCode ? { errorCode } : {}),
         ...(gt || lt ? { queuedAt: { ...(gt ? { gt } : {}), ...(lt ? { lt } : {}) } } : {}),
       };
       const [rows, total, from] = await Promise.all([
         fastify.prisma.apiMessageMeta.findMany({
-          where, orderBy: { queuedAt: "desc" }, skip: offset, take: limit,
+          where, orderBy: [{ queuedAt: "desc" as const }, { messageId: "desc" as const }], skip: offset, take: limit,
           include: { message: { select: { id: true, status: true } } },
         }),
         fastify.prisma.apiMessageMeta.count({ where }),
