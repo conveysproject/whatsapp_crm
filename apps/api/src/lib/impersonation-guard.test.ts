@@ -37,6 +37,8 @@ describe("impersonation route classification", () => {
     expect(classifyRoute("PUT", "/v1/roles/:role/permissions")).toBe("blocked");
     expect(classifyRoute("POST", "/v1/whatsapp-account/connect-manual")).toBe("blocked");
     expect(classifyRoute("POST", "/v1/webhook-endpoints/:id/rotate-secret")).toBe("blocked");
+    expect(classifyRoute("POST", "/v1/api-credentials/:id/rotate")).toBe("blocked");
+    expect(classifyRoute("POST", "/v1/api-credentials")).toBe("blocked");
   });
 
   it("blocks GETs of platform families; secret-bearing tenant GETs are readable (and audited)", () => {

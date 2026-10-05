@@ -49,6 +49,7 @@ export const BLOCKED_PREFIXES: readonly string[] = [
   "/v1/admin", // platform admin routes are for the real super admin only
   "/v1/whatsapp-account", // WhatsApp credentials / connection
   "/v1/webhook-endpoints", // API credentials / signing secrets
+  "/v1/api-credentials", // public API credentials / auth tokens
   "/v1/webhook-actions",
   "/v1/vendor-settings",
   "/v1/organizations", // org settings and branding
