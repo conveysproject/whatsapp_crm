@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import type * as SafeUrlModule from "../../lib/public-api/safe-url.js";
 
 const sendAdd = vi.fn();
 const enqueueCb = vi.fn();
@@ -11,7 +12,7 @@ vi.mock("../../lib/public-api/callbacks.js", () => ({ enqueueStatusCallback: (..
   },
 }));
 vi.mock("../../lib/public-api/safe-url.js", async (orig) => {
-  const real = await orig<typeof import("../../lib/public-api/safe-url.js")>();
+  const real = await orig<typeof SafeUrlModule>();
   return { ...real, assertSafeCallbackUrl: vi.fn(async (u: string) => { if (u.includes("bad")) throw new real.UnsafeUrlError("unsafe"); return new URL(u); }) };
 });
 
@@ -142,6 +143,20 @@ describe("POST /Message/", () => {
     expect(res.statusCode).toBe(500);
     expect(res.json()).toMatchObject({ error: "Failed to queue message", api_id: expect.any(String) });
     expect(sendAdd).not.toHaveBeenCalled();
+  });
+
+  it("S1: the queued callback is enqueued before the send job, so it can never lose the race to the worker's 'sent'", async () => {
+    await post(app, body);
+    expect(enqueueCb).toHaveBeenCalledWith(expect.anything(), "msg-1", "queued");
+    expect(enqueueCb.mock.invocationCallOrder[0]!).toBeLessThan(sendAdd.mock.invocationCallOrder[0]!);
+  });
+
+  it("a send-queue failure after the queued callback marks the message failed and reports it failed", async () => {
+    sendAdd.mockRejectedValueOnce(new Error("redis down"));
+    const res = await post(app, body);
+    expect(res.statusCode).toBe(500);
+    expect(mockPrisma.message.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "msg-1", organizationId: "org-1" }, data: { status: "failed" } }));
+    expect(enqueueCb).toHaveBeenCalledWith(expect.anything(), "msg-1", "failed", { errorCode: null });
   });
 
   it("a rejecting queued-callback enqueue does not fail the request", async () => {

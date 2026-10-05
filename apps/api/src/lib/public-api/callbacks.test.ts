@@ -10,7 +10,7 @@ const prisma = {
   apiMessageMeta: { findUnique: vi.fn(), updateMany: vi.fn() },
   apiKey: { findUnique: vi.fn(), findMany: vi.fn() },
   vendorSetting: { findFirst: vi.fn() },
-  message: { findUnique: vi.fn(), update: vi.fn() },
+  message: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
 };
 const P = prisma as unknown as PrismaClient;
 
@@ -109,6 +109,41 @@ describe("enqueueStatusCallback", () => {
     expect(seqs).toEqual([2, 3]);
   });
 
+  it("S1: retries when a concurrent writer moved the row between read and CAS, and still reports the transition", async () => {
+    // The route's 'queued' lands between the worker's read (lastStatus null) and its CAS: first CAS sees count 0.
+    const row = { ...meta() } as Record<string, unknown>;
+    prisma.apiMessageMeta.findUnique.mockImplementation(async (args: { select?: { sequence?: boolean } }) =>
+      args.select?.sequence ? { sequence: row["sequence"] } : { ...row });
+    let first = true;
+    prisma.apiMessageMeta.updateMany.mockImplementation(async (args: { where: { lastStatus: string | null }; data: { lastStatus: string } }) => {
+      if (first) { first = false; row["lastStatus"] = "queued"; row["sequence"] = 1; return { count: 0 }; }
+      if (row["lastStatus"] !== args.where.lastStatus) return { count: 0 };
+      row["lastStatus"] = args.data.lastStatus; row["sequence"] = (row["sequence"] as number) + 1;
+      return { count: 1 };
+    });
+    await enqueueStatusCallback(P, "m1", "sent");
+    expect(prisma.apiMessageMeta.updateMany).toHaveBeenCalledTimes(2);
+    expect(prisma.apiMessageMeta.updateMany.mock.calls[1]![0].where).toMatchObject({ lastStatus: "queued" });
+    expect(add.mock.calls[0]![1].fields).toMatchObject({ Status: "sent", Sequence: "2" });
+  });
+
+  it("S1: a retry re-checks the ratchet and drops a transition that became stale", async () => {
+    let reads = 0;
+    prisma.apiMessageMeta.findUnique.mockImplementation(async () => (reads++ === 0 ? meta({ lastStatus: "queued" }) : meta({ lastStatus: "delivered" })));
+    prisma.apiMessageMeta.updateMany.mockResolvedValue({ count: 0 });
+    await enqueueStatusCallback(P, "m1", "sent");
+    expect(prisma.apiMessageMeta.updateMany).toHaveBeenCalledTimes(1);
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it("S1: gives up after 3 attempts", async () => {
+    setMeta(meta());
+    prisma.apiMessageMeta.updateMany.mockResolvedValue({ count: 0 });
+    await enqueueStatusCallback(P, "m1", "queued");
+    expect(prisma.apiMessageMeta.updateMany).toHaveBeenCalledTimes(3);
+    expect(add).not.toHaveBeenCalled();
+  });
+
   it("updates state but enqueues nothing when no callback URL is configured", async () => {
     setMeta(meta());
     prisma.apiKey.findUnique.mockResolvedValue({ callbackUrl: null });
@@ -148,6 +183,7 @@ describe("forwardMetaStatusToApiClient", () => {
     prisma.apiMessageMeta.updateMany.mockResolvedValue({ count: 1 });
     prisma.message.findUnique.mockResolvedValue({ status: "sent" });
     prisma.message.update.mockResolvedValue({});
+    prisma.message.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it("ignores messages that were not sent through the API", async () => {
@@ -172,7 +208,10 @@ describe("forwardMetaStatusToApiClient", () => {
   it("failed after sent: marks the message failed, reports 'undelivered' with the mapped error code", async () => {
     setMeta(meta({ lastStatus: "sent" }));
     await forwardMetaStatusToApiClient(P, "m1", { status: "failed", errors: [{ code: 131047 }] });
-    expect(prisma.message.update.mock.calls[0]![0]).toMatchObject({ where: { id: "m1" }, data: { status: "failed" } });
+    // S7: one conditional write, so a concurrent delivered/read can never be overwritten.
+    expect(prisma.message.updateMany).toHaveBeenCalledWith({ where: { id: "m1", status: { notIn: ["delivered", "read"] } }, data: { status: "failed" } });
+    expect(prisma.message.update).not.toHaveBeenCalled();
+    expect(prisma.message.findUnique).not.toHaveBeenCalled();
     expect(add.mock.calls[0]![1].fields).toMatchObject({ Status: "undelivered", ErrorCode: "380" });
   });
 
@@ -187,6 +226,7 @@ describe("forwardMetaStatusToApiClient", () => {
     prisma.message.findUnique.mockResolvedValue({ status: "read" });
     await forwardMetaStatusToApiClient(P, "m1", { status: "failed" });
     expect(prisma.message.update).not.toHaveBeenCalled();
+    expect(prisma.message.updateMany).not.toHaveBeenCalled();
     expect(add).not.toHaveBeenCalled();
   });
 });

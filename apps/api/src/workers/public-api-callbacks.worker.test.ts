@@ -1,15 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type * as SafeUrlModule from "../lib/public-api/safe-url.js";
 
 const { prisma } = vi.hoisted(() => ({ prisma: { apiKey: { findUnique: vi.fn() } } }));
 vi.mock("../lib/prisma.js", () => ({ prisma }));
 vi.mock("../lib/queue.js", () => ({ redisConnection: {} }));
 vi.mock("../lib/public-api/queues.js", () => ({ publicApiCallbackQueue: {}, publicApiSendQueue: {} }));
 vi.mock("../lib/public-api/safe-url.js", async (orig) => {
-  const real = await orig<typeof import("../lib/public-api/safe-url.js")>();
+  const real = await orig<typeof SafeUrlModule>();
   return { ...real, assertSafeCallbackUrl: vi.fn(async (u: string) => { if (u.includes("internal")) throw new real.UnsafeUrlError("private"); return new URL(u); }) };
 });
 
-import { deliverCallback, callbackBackoff } from "./public-api-callbacks.worker.js";
+import { deliverCallback, callbackBackoff, onCallbackJobFailed } from "./public-api-callbacks.worker.js";
 import { encryptToken } from "../lib/public-api/credentials.js";
 import { signV2 } from "../lib/public-api/plivo-signature.js";
 import { UnrecoverableError } from "bullmq";
@@ -70,6 +71,51 @@ describe("deliverCallback", () => {
     const fetchMock = vi.fn();
     await expect(deliverCallback(data(), fetchMock as unknown as typeof fetch)).rejects.toBeInstanceOf(UnrecoverableError);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("deliverCallback hardening", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env["PUBLIC_API_TOKEN_KEY"] = Buffer.alloc(32, 5).toString("base64");
+    prisma.apiKey.findUnique.mockResolvedValue({ tokenEnc: encryptToken("secret-token"), revokedAt: null, organizationId: "org-1" });
+  });
+
+  it("S3: drains (cancels) the response body on success and on failure", async () => {
+    for (const [ok, status] of [[true, 200], [false, 500]] as const) {
+      const cancel = vi.fn().mockResolvedValue(undefined);
+      const fetchMock = vi.fn().mockResolvedValue({ ok, status, body: { cancel } });
+      await deliverCallback(data(), fetchMock as unknown as typeof fetch).catch(() => undefined);
+      expect(cancel).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("S3: a body cancel that rejects does not fail a 2xx delivery", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, body: { cancel: vi.fn().mockRejectedValue(new Error("x")) } });
+    await expect(deliverCallback(data(), fetchMock as unknown as typeof fetch)).resolves.toBeUndefined();
+  });
+
+  it("S3: a token that cannot be decrypted is not retried (UnrecoverableError, no secret in the message) and never fetches", async () => {
+    const fetchMock = vi.fn();
+    prisma.apiKey.findUnique.mockResolvedValue({ tokenEnc: "garbage", revokedAt: null, organizationId: "org-1" });
+    const err = await deliverCallback(data(), fetchMock as unknown as typeof fetch).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(UnrecoverableError);
+    expect((err as Error).message).not.toContain("garbage");
+    delete process.env["PUBLIC_API_TOKEN_KEY"];
+    prisma.apiKey.findUnique.mockResolvedValue({ tokenEnc: "a.b.c", revokedAt: null, organizationId: "org-1" });
+    await expect(deliverCallback(data(), fetchMock as unknown as typeof fetch)).rejects.toBeInstanceOf(UnrecoverableError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("S4: the failed-job log carries no phone number or message text", () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const err = new Error("callback for 14155552672 said: secret body text");
+    onCallbackJobFailed({ id: "j1", attemptsMade: 1 } as never, err);
+    const logged = JSON.stringify(spy.mock.calls);
+    expect(logged).toContain("j1");
+    expect(logged).not.toContain("14155552672");
+    expect(logged).not.toContain("secret");
+    spy.mockRestore();
   });
 });
 

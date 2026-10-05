@@ -48,6 +48,8 @@ export async function businessNumberDigits(prisma: PrismaClient, organizationId:
   return (row?.value ?? "").replace(/\D/g, "");
 }
 
+const CAS_ATTEMPTS = 3;
+
 /** Ratchet the message's API-visible status and queue the callback. Safe to call repeatedly and concurrently. */
 export async function enqueueStatusCallback(
   prisma: PrismaClient,
@@ -55,29 +57,38 @@ export async function enqueueStatusCallback(
   next: PlivoStatus,
   extra: { errorCode?: string | null; conversation?: { id?: string; origin?: string; expiration?: number } } = {}
 ): Promise<void> {
-  const meta = await prisma.apiMessageMeta.findUnique({ where: { messageId } });
-  if (!meta || !canAdvance(meta.lastStatus, next)) return;
-
   const now = new Date();
   const terminal = next === "delivered" || next === "read" || next === "failed" || next === "undelivered";
-  // Conditional update + read-back in one transaction: the winning updateMany holds the row lock until commit,
-  // so the read sees this writer's own incremented sequence (never a stale or duplicate value).
-  const sequence = await prisma.$transaction(async (tx) => {
-    const won = await tx.apiMessageMeta.updateMany({
-      where: { messageId, lastStatus: meta.lastStatus },
-      data: {
-        lastStatus: next,
-        sequence: { increment: 1 },
-        ...(extra.errorCode ? { errorCode: extra.errorCode } : {}),
-        ...(next === "sent" ? { sentAt: now } : {}),
-        ...(terminal ? { deliveryReportAt: now } : {}),
-      },
+
+  // Compare-and-swap on lastStatus. Under READ COMMITTED a writer blocked on the row lock re-checks its WHERE after the
+  // winner commits and gets count 0, even when its own transition is still a valid forward step (e.g. the worker's
+  // `sent` vs Meta's `delivered`). So on count 0 re-read the row and retry; `canAdvance` on the fresh row still drops
+  // stale and duplicate transitions.
+  let meta: Awaited<ReturnType<typeof prisma.apiMessageMeta.findUnique>> = null;
+  let sequence: number | null = null;
+  for (let attempt = 0; attempt < CAS_ATTEMPTS && sequence === null; attempt++) {
+    meta = await prisma.apiMessageMeta.findUnique({ where: { messageId } });
+    if (!meta || !canAdvance(meta.lastStatus, next)) return;
+    const expected = meta.lastStatus;
+    // Conditional update + read-back in one transaction: the winning updateMany holds the row lock until commit,
+    // so the read sees this writer's own incremented sequence (never a stale or duplicate value).
+    sequence = await prisma.$transaction(async (tx) => {
+      const won = await tx.apiMessageMeta.updateMany({
+        where: { messageId, lastStatus: expected },
+        data: {
+          lastStatus: next,
+          sequence: { increment: 1 },
+          ...(extra.errorCode ? { errorCode: extra.errorCode } : {}),
+          ...(next === "sent" ? { sentAt: now } : {}),
+          ...(terminal ? { deliveryReportAt: now } : {}),
+        },
+      });
+      if (won.count === 0) return null;
+      const row = await tx.apiMessageMeta.findUnique({ where: { messageId }, select: { sequence: true } });
+      return row?.sequence ?? null;
     });
-    if (won.count === 0) return null;
-    const row = await tx.apiMessageMeta.findUnique({ where: { messageId }, select: { sequence: true } });
-    return row?.sequence ?? null;
-  });
-  if (sequence === null) return;
+  }
+  if (sequence === null || !meta) return;
 
   const key = await prisma.apiKey.findUnique({ where: { id: meta.apiKeyId }, select: { callbackUrl: true } });
   const url = meta.callbackUrl ?? key?.callbackUrl ?? null;
@@ -124,10 +135,8 @@ export async function forwardMetaStatusToApiClient(prisma: PrismaClient, message
   }
   if (su.status === "failed") {
     if (!canAdvance(meta.lastStatus, "failed")) return;
-    const current = await prisma.message.findUnique({ where: { id: messageId }, select: { status: true } });
-    if (current && current.status !== "delivered" && current.status !== "read") {
-      await prisma.message.update({ where: { id: messageId }, data: { status: "failed" } });
-    }
+    // One conditional write: a delivered/read that lands concurrently can never be overwritten with failed.
+    await prisma.message.updateMany({ where: { id: messageId, status: { notIn: ["delivered", "read"] } }, data: { status: "failed" } });
     const next: PlivoStatus = meta.lastStatus === "sent" ? "undelivered" : "failed";
     await enqueueStatusCallback(prisma, messageId, next, { errorCode: plivoErrorFromMeta(su.errors?.[0]?.code) });
   }

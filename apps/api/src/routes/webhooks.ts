@@ -6,6 +6,7 @@ import { verifyWebhookSignature } from "../lib/whatsapp.js";
 import { inboundMessageQueue } from "../lib/queue.js";
 import { getIo } from "../lib/io-ref.js";
 import { forwardMetaStatusToApiClient } from "../lib/public-api/callbacks.js";
+import { safeErr } from "../lib/public-api/safe-err.js";
 
 interface WaMediaObject {
   id: string;
@@ -147,10 +148,10 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                 where: { whatsappMessageId: su.id },
                 select: { id: true, status: true },
               });
-              if (msg) {
+              if (msg && process.env["PUBLIC_API_ENABLED"] === "true") {
                 // Public API clients: no-op for messages not sent through the API; never blocks the Meta 200.
                 await forwardMetaStatusToApiClient(fastify.prisma, msg.id, su).catch((err: unknown) => {
-                  fastify.log.error({ err }, "public-api status forward failed");
+                  fastify.log.error({ error: safeErr(err) }, "public-api status forward failed");
                 });
               }
               if (msg && !TERMINAL.has(msg.status)) {

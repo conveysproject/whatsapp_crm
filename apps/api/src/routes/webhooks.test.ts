@@ -18,7 +18,8 @@ vi.mock("../lib/whatsapp.js", () => ({
 const mockPrisma = {
   organization: { findFirst: vi.fn() },
   conversation: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
-  message: { create: vi.fn() },
+  message: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+  campaignRecipient: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn() },
   inboundMessageDump: { create: vi.fn().mockResolvedValue(undefined) },
 };
 
@@ -120,5 +121,40 @@ describe("POST /v1/webhooks/whatsapp", () => {
       payload: { object: "unknown", entry: [] },
     });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("POST /v1/webhooks/whatsapp status updates (public API hook)", () => {
+  let app: FastifyInstance;
+  const prev = process.env["PUBLIC_API_ENABLED"];
+  const statusPayload = {
+    object: "whatsapp_business_account",
+    entry: [{ id: "e1", changes: [{ field: "messages", value: { messaging_product: "whatsapp", metadata: { phone_number_id: "12345" }, statuses: [{ id: "wamid.out", status: "read", timestamp: "1714180800", recipient_id: "14155552672" }] } }] }],
+  };
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    app = await buildApp();
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-1" });
+    mockPrisma.message.findFirst.mockResolvedValue({ id: "m1", status: "read" });
+  });
+  afterEach(async () => {
+    await app.close();
+    if (prev === undefined) delete process.env["PUBLIC_API_ENABLED"]; else process.env["PUBLIC_API_ENABLED"] = prev;
+  });
+  const send = () => app.inject({ method: "POST", url: "/v1/webhooks/whatsapp", headers: { "x-hub-signature-256": "sha256=mocked" }, payload: statusPayload });
+
+  it("S2: does not call the public API status hook when PUBLIC_API_ENABLED is off", async () => {
+    delete process.env["PUBLIC_API_ENABLED"];
+    const { forwardMetaStatusToApiClient } = await import("../lib/public-api/callbacks.js");
+    expect((await send()).statusCode).toBe(200);
+    expect(forwardMetaStatusToApiClient).not.toHaveBeenCalled();
+  });
+
+  it("calls the public API status hook when PUBLIC_API_ENABLED is true", async () => {
+    process.env["PUBLIC_API_ENABLED"] = "true";
+    const { forwardMetaStatusToApiClient } = await import("../lib/public-api/callbacks.js");
+    expect((await send()).statusCode).toBe(200);
+    expect(forwardMetaStatusToApiClient).toHaveBeenCalledWith(expect.anything(), "m1", expect.objectContaining({ status: "read" }));
   });
 });

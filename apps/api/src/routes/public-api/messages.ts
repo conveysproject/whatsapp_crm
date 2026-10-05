@@ -146,19 +146,23 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
           await fastify.prisma.apiMessageMeta.create({
             data: { messageId: message.id, apiKeyId, organizationId, dst, callbackUrl, callbackMethod: parsed.callbackMethod },
           });
+          // The queued callback goes BEFORE the send job so the worker's `sent` can never race ahead of it.
+          // Best-effort: a failure here must not fail the accepted message.
+          try { await enqueueStatusCallback(fastify.prisma, message.id, "queued"); }
+          catch (err) { request.log.error({ err, messageId }, "public API queued-callback enqueue failed"); }
           await publicApiSendQueue.add("send", { messageId: message.id, organizationId, to: dst, content }, { jobId: `pubsend-${message.id}` });
         } catch (err) {
           request.log.error({ err, messageId, organizationId }, "public API send failed for a destination");
           if (messageId) {
-            try { await fastify.prisma.message.update({ where: { id: messageId, organizationId }, data: { status: "failed" } }); }
-            catch { /* best-effort cleanup */ }
+            try {
+              await fastify.prisma.message.update({ where: { id: messageId, organizationId }, data: { status: "failed" } });
+              // A queued callback may already have gone out; close it (a no-op when no API metadata row exists).
+              await enqueueStatusCallback(fastify.prisma, messageId, "failed", { errorCode: null });
+            } catch { /* best-effort cleanup */ }
           }
           continue;
         }
         uuids.push(messageId);
-        // The queued callback is best-effort: the message is already accepted and queued.
-        try { await enqueueStatusCallback(fastify.prisma, messageId, "queued"); }
-        catch (err) { request.log.error({ err, messageId }, "public API queued-callback enqueue failed"); }
       }
 
       if (uuids.length === 0) return plivoError(reply, 500, "Failed to queue message");

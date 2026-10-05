@@ -4,6 +4,7 @@ import { redisConnection } from "../lib/queue.js";
 import { decryptToken } from "../lib/public-api/credentials.js";
 import { newNonce, signV2 } from "../lib/public-api/plivo-signature.js";
 import { assertSafeCallbackUrl, UnsafeUrlError } from "../lib/public-api/safe-url.js";
+import { safeErr } from "../lib/public-api/safe-err.js";
 import type { CallbackJob } from "../lib/public-api/queues.js";
 
 const TIMEOUT_MS = 10_000;
@@ -25,8 +26,13 @@ export async function deliverCallback(job: Pick<Job<CallbackJob>, "data">, fetch
     throw err;
   }
 
+  // A token that cannot be decrypted (missing/rotated key, corrupt row) will not decrypt on a retry either.
+  let authToken: string;
+  try { authToken = decryptToken(key.tokenEnc); }
+  catch { throw new UnrecoverableError("credential token cannot be decrypted"); }
+
   const nonce = newNonce();
-  const signature = signV2(url, nonce, decryptToken(key.tokenEnc));
+  const signature = signV2(url, nonce, authToken);
   const form = new URLSearchParams(fields).toString();
   const headers: Record<string, string> = {
     "X-Plivo-Signature-V2": signature,
@@ -41,7 +47,14 @@ export async function deliverCallback(job: Pick<Job<CallbackJob>, "data">, fetch
     redirect: "manual",
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
+  // Drain the body we never read, so the undici socket is released (concurrency 10 would otherwise pin sockets).
+  await res.body?.cancel().catch(() => {});
   if (!res.ok) throw new Error(`callback endpoint answered HTTP ${res.status}`);
+}
+
+/** Worker `failed` handler: job id, attempt and a safe projection of the error only (never its message). */
+export function onCallbackJobFailed(job: Pick<Job<CallbackJob>, "id" | "attemptsMade"> | undefined, err: Error): void {
+  console.warn("[public-api-callbacks] job attempt failed", { jobId: job?.id, attempt: job?.attemptsMade, ...safeErr(err) });
 }
 
 export function startPublicApiCallbackWorker() {
@@ -50,7 +63,7 @@ export function startPublicApiCallbackWorker() {
     concurrency: 10,
     settings: { backoffStrategy: callbackBackoff },
   });
-  worker.on("error", (err) => console.error(`[public-api-callbacks] worker error: ${err.message}`));
-  worker.on("failed", (job, err) => console.warn(`[public-api-callbacks] job ${job?.id} attempt ${job?.attemptsMade} failed: ${err.message}`));
+  worker.on("error", (err) => console.error("[public-api-callbacks] worker error", safeErr(err)));
+  worker.on("failed", onCallbackJobFailed);
   return worker;
 }
