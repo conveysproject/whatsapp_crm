@@ -5,6 +5,7 @@ import { Readable } from "stream";
 import { verifyWebhookSignature } from "../lib/whatsapp.js";
 import { inboundMessageQueue } from "../lib/queue.js";
 import { getIo } from "../lib/io-ref.js";
+import { forwardMetaStatusToApiClient } from "../lib/public-api/callbacks.js";
 
 interface WaMediaObject {
   id: string;
@@ -40,6 +41,8 @@ interface WaStatusUpdate {
   status: string; // "sent" | "delivered" | "read" | "failed"
   timestamp: string;
   recipient_id: string;
+  errors?: Array<{ code?: number }>;
+  conversation?: { id?: string; origin?: { type?: string }; expiration_timestamp?: string | number };
 }
 
 interface WaChangeValue {
@@ -144,6 +147,12 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                 where: { whatsappMessageId: su.id },
                 select: { id: true, status: true },
               });
+              if (msg) {
+                // Public API clients: no-op for messages not sent through the API; never blocks the Meta 200.
+                await forwardMetaStatusToApiClient(fastify.prisma, msg.id, su).catch((err: unknown) => {
+                  fastify.log.error({ err }, "public-api status forward failed");
+                });
+              }
               if (msg && !TERMINAL.has(msg.status)) {
                 const currentRank = STATUS_RANK[msg.status] ?? -1;
                 const newRank = STATUS_RANK[su.status] ?? -1;

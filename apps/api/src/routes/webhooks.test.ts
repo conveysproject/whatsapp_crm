@@ -6,6 +6,10 @@ vi.mock("../lib/queue.js", () => ({
   inboundMessageQueue: { add: vi.fn().mockResolvedValue(undefined) },
 }));
 
+vi.mock("../lib/public-api/callbacks.js", () => ({
+  forwardMetaStatusToApiClient: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../lib/whatsapp.js", () => ({
   verifyWebhookSignature: vi.fn().mockReturnValue(true),
   sendTextMessage: vi.fn(),

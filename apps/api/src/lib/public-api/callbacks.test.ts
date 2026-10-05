@@ -3,13 +3,14 @@ import type { PrismaClient } from "@prisma/client";
 
 const add = vi.fn();
 vi.mock("./queues.js", () => ({ publicApiCallbackQueue: { add: (...a: unknown[]) => add(...a) }, publicApiSendQueue: { add: vi.fn() } }));
-import { enqueueStatusCallback, buildStatusFields } from "./callbacks.js";
+import { enqueueStatusCallback, buildStatusFields, forwardMetaStatusToApiClient } from "./callbacks.js";
 
 const prisma = {
   $transaction: vi.fn(),
   apiMessageMeta: { findUnique: vi.fn(), updateMany: vi.fn() },
   apiKey: { findUnique: vi.fn() },
   vendorSetting: { findFirst: vi.fn() },
+  message: { findUnique: vi.fn(), update: vi.fn() },
 };
 const P = prisma as unknown as PrismaClient;
 
@@ -135,5 +136,57 @@ describe("buildStatusFields", () => {
       MessageTime: "2026-10-05 10:00:00.123000", QueuedTime: "2026-10-05 10:00:00.123000", SentTime: "2026-10-05 10:00:01.000000",
       DeliveryReportTime: "2026-10-05 10:00:05.500000", ConversationID: "c1", ConversationOrigin: "service", ConversationExpirationTimestamp: "1790000000",
     });
+  });
+});
+
+describe("forwardMetaStatusToApiClient", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prisma));
+    prisma.apiKey.findUnique.mockResolvedValue({ callbackUrl: "https://c.example.com/cb" });
+    prisma.vendorSetting.findFirst.mockResolvedValue({ value: "14155552671" });
+    prisma.apiMessageMeta.updateMany.mockResolvedValue({ count: 1 });
+    prisma.message.findUnique.mockResolvedValue({ status: "sent" });
+    prisma.message.update.mockResolvedValue({});
+  });
+
+  it("ignores messages that were not sent through the API", async () => {
+    setMeta(null);
+    await forwardMetaStatusToApiClient(P, "m1", { status: "delivered" });
+    expect(add).not.toHaveBeenCalled();
+    expect(prisma.message.update).not.toHaveBeenCalled();
+  });
+
+  it("forwards delivered and read with Meta's conversation info", async () => {
+    setMeta(meta({ lastStatus: "sent", sequence: 2 }));
+    await forwardMetaStatusToApiClient(P, "m1", { status: "delivered", conversation: { id: "c9", origin: { type: "service" }, expiration_timestamp: "1790000000" } });
+    expect(add.mock.calls[0]![1].fields).toMatchObject({ Status: "delivered", ConversationID: "c9", ConversationOrigin: "service", ConversationExpirationTimestamp: "1790000000" });
+  });
+
+  it("ignores Meta's 'sent' (the send worker already reported it)", async () => {
+    setMeta(meta({ lastStatus: "sent" }));
+    await forwardMetaStatusToApiClient(P, "m1", { status: "sent" });
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it("failed after sent: marks the message failed, reports 'undelivered' with the mapped error code", async () => {
+    setMeta(meta({ lastStatus: "sent" }));
+    await forwardMetaStatusToApiClient(P, "m1", { status: "failed", errors: [{ code: 131047 }] });
+    expect(prisma.message.update.mock.calls[0]![0]).toMatchObject({ where: { id: "m1" }, data: { status: "failed" } });
+    expect(add.mock.calls[0]![1].fields).toMatchObject({ Status: "undelivered", ErrorCode: "380" });
+  });
+
+  it("failed before sent is reported as 'failed'", async () => {
+    setMeta(meta({ lastStatus: "queued" }));
+    await forwardMetaStatusToApiClient(P, "m1", { status: "failed" });
+    expect(add.mock.calls[0]![1].fields.Status).toBe("failed");
+  });
+
+  it("does not overwrite delivered/read messages with failed", async () => {
+    setMeta(meta({ lastStatus: "read" }));
+    prisma.message.findUnique.mockResolvedValue({ status: "read" });
+    await forwardMetaStatusToApiClient(P, "m1", { status: "failed" });
+    expect(prisma.message.update).not.toHaveBeenCalled();
+    expect(add).not.toHaveBeenCalled();
   });
 });

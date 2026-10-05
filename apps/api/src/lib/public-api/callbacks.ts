@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { publicApiCallbackQueue } from "./queues.js";
+import { plivoErrorFromMeta } from "./meta-errors.js";
 
 export type PlivoStatus = "queued" | "sent" | "delivered" | "read" | "failed" | "undelivered";
 
@@ -93,4 +94,41 @@ export async function enqueueStatusCallback(
     apiKeyId: meta.apiKeyId, organizationId: meta.organizationId, url,
     method: meta.callbackMethod === "GET" ? "GET" : "POST", fields,
   });
+}
+
+export interface MetaStatusUpdate {
+  status: string;
+  errors?: Array<{ code?: number }>;
+  conversation?: { id?: string; origin?: { type?: string }; expiration_timestamp?: string | number };
+}
+
+/**
+ * Called from the Meta status webhook for every status update. A no-op unless the message was sent through the
+ * public API, so dashboard messages are untouched. Meta's `sent` is ignored: the send worker already reported it.
+ */
+export async function forwardMetaStatusToApiClient(prisma: PrismaClient, messageId: string, su: MetaStatusUpdate): Promise<void> {
+  const meta = await prisma.apiMessageMeta.findUnique({ where: { messageId }, select: { messageId: true, lastStatus: true } });
+  if (!meta) return;
+
+  const conversation = su.conversation
+    ? {
+        ...(su.conversation.id ? { id: su.conversation.id } : {}),
+        ...(su.conversation.origin?.type ? { origin: su.conversation.origin.type } : {}),
+        ...(su.conversation.expiration_timestamp ? { expiration: Number(su.conversation.expiration_timestamp) } : {}),
+      }
+    : undefined;
+
+  if (su.status === "delivered" || su.status === "read") {
+    await enqueueStatusCallback(prisma, messageId, su.status, conversation ? { conversation } : {});
+    return;
+  }
+  if (su.status === "failed") {
+    if (!canAdvance(meta.lastStatus, "failed")) return;
+    const current = await prisma.message.findUnique({ where: { id: messageId }, select: { status: true } });
+    if (current && current.status !== "delivered" && current.status !== "read") {
+      await prisma.message.update({ where: { id: messageId }, data: { status: "failed" } });
+    }
+    const next: PlivoStatus = meta.lastStatus === "sent" ? "undelivered" : "failed";
+    await enqueueStatusCallback(prisma, messageId, next, { errorCode: plivoErrorFromMeta(su.errors?.[0]?.code) });
+  }
 }
