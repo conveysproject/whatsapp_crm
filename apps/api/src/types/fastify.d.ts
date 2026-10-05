@@ -12,6 +12,8 @@ export interface AuthContext {
 declare module "fastify" {
   interface FastifyRequest {
     auth: AuthContext;
+    /** Set by the public API Basic-auth preHandler. */
+    publicApi?: { apiKeyId: string; organizationId: string };
   }
   interface FastifyContextConfig {
     public?: boolean;
