@@ -27,8 +27,9 @@ const mockPrisma = {
   apiMessageMeta: { create: vi.fn(), findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn() },
 };
 
+const logLines: string[] = [];
 async function buildApp(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: { level: "error", stream: { write: (line: string) => { logLines.push(line); } } } });
   app.decorate("prisma", mockPrisma as unknown as PrismaClient);
   app.addHook("onRequest", async (r) => { r.publicApi = { apiKeyId: "k1", organizationId: "org-1" }; });
   const { publicApiMessagesRouter } = await import("./messages.js");
@@ -157,6 +158,32 @@ describe("POST /Message/", () => {
     expect(res.statusCode).toBe(500);
     expect(mockPrisma.message.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "msg-1", organizationId: "org-1" }, data: { status: "failed" } }));
     expect(enqueueCb).toHaveBeenCalledWith(expect.anything(), "msg-1", "failed", { errorCode: null });
+  });
+
+  it("S4: per-destination failures log no phone number or message text (only error name/code and ids)", async () => {
+    logLines.length = 0;
+    const leaky = Object.assign(new Error("Invalid prisma.message.create() invocation: { phoneNumber: \"14155552672\", body: \"hello\" }"), { name: "PrismaClientValidationError" });
+    mockPrisma.message.create.mockRejectedValue(leaky);
+    expect((await post(app, { ...body, text: "top secret words" })).statusCode).toBe(500);
+    mockPrisma.message.create.mockImplementation(async () => ({ id: "msg-9" }));
+    enqueueCb.mockRejectedValue(Object.assign(new Error("redis said 14155552672 top secret words"), { code: "ECONNREFUSED" }));
+    expect((await post(app, { ...body, text: "top secret words" })).statusCode).toBe(202);
+    const logged = logLines.join("");
+    expect(logged).toContain("PrismaClientValidationError");
+    expect(logged).toContain("ECONNREFUSED");
+    expect(logged).toContain("msg-9");
+    expect(logged).not.toContain("14155552672");
+    expect(logged).not.toContain("secret");
+    expect(logged).not.toContain("hello");
+  });
+
+  it("S8: media messages are stored with the inbox media kind (image/video/document) as contentType", async () => {
+    const cases: Array<[string, string]> = [["https://cdn.example.com/a.jpg", "image"], ["https://cdn.example.com/b.mp4", "video"], ["https://cdn.example.com/c.pdf?x=1", "document"]];
+    for (const [url, kind] of cases) {
+      mockPrisma.message.create.mockClear();
+      expect((await post(app, { ...body, text: undefined, media_urls: [url] })).statusCode).toBe(202);
+      expect(mockPrisma.message.create.mock.calls[0]![0].data).toMatchObject({ contentType: kind, mediaUrl: url });
+    }
   });
 
   it("a rejecting queued-callback enqueue does not fail the request", async () => {

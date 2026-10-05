@@ -1,12 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
 import { newApiId, plivoError } from "../../lib/public-api/responses.js";
 import {
-  parseSendBody, SendValidationError, toMetaInteractive, toMetaTemplateComponents, renderTemplateForInbox,
+  parseSendBody, SendValidationError, toMetaInteractive, toMetaTemplateComponents, renderTemplateForInbox, inferMediaKind,
   type SendContent,
 } from "../../lib/public-api/send-mapping.js";
 import { assertSafeCallbackUrl, UnsafeUrlError } from "../../lib/public-api/safe-url.js";
 import { publicApiSendQueue, type SendContentForWorker } from "../../lib/public-api/queues.js";
 import { enqueueStatusCallback, businessNumberDigits } from "../../lib/public-api/callbacks.js";
+import { safeErr } from "../../lib/public-api/safe-err.js";
 
 const PUBLIC = { config: { public: true } } as const;
 const both = (p: string) => [p, p.replace(/\/$/, "")];
@@ -14,7 +15,8 @@ const both = (p: string) => [p, p.replace(/\/$/, "")];
 function inboxFields(content: SendContentForWorker, templateBody: string | null) {
   switch (content.kind) {
     case "text": return { contentType: "text", body: content.text, mediaUrl: null };
-    case "media": return { contentType: "media", body: content.caption, mediaUrl: content.mediaUrl };
+    // The inbox renders image/video/document inline (not a generic "media"), so store the inferred kind.
+    case "media": return { contentType: inferMediaKind(content.mediaUrl), body: content.caption, mediaUrl: content.mediaUrl };
     case "template": return { contentType: "template", body: templateBody, mediaUrl: null };
     case "location": return { contentType: "location", body: `📍 Location: ${content.name} (${content.latitude},${content.longitude})`, mediaUrl: null };
     case "interactive": return { contentType: "interactive", body: JSON.stringify(content.interactive), mediaUrl: null };
@@ -149,10 +151,11 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
           // The queued callback goes BEFORE the send job so the worker's `sent` can never race ahead of it.
           // Best-effort: a failure here must not fail the accepted message.
           try { await enqueueStatusCallback(fastify.prisma, message.id, "queued"); }
-          catch (err) { request.log.error({ err, messageId }, "public API queued-callback enqueue failed"); }
+          catch (err) { request.log.error({ error: safeErr(err), messageId: message.id }, "public API queued-callback enqueue failed"); }
           await publicApiSendQueue.add("send", { messageId: message.id, organizationId, to: dst, content }, { jobId: `pubsend-${message.id}` });
         } catch (err) {
-          request.log.error({ err, messageId, organizationId }, "public API send failed for a destination");
+          // Never log the error object or message: Prisma validation errors echo the query (phone numbers, text).
+          request.log.error({ error: safeErr(err), messageId, organizationId }, "public API send failed for a destination");
           if (messageId) {
             try {
               await fastify.prisma.message.update({ where: { id: messageId, organizationId }, data: { status: "failed" } });

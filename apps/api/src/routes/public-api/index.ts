@@ -1,7 +1,8 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import { redisConnection } from "../../lib/queue.js";
-import { newApiId } from "../../lib/public-api/responses.js";
+import { plivoErrorBody } from "../../lib/public-api/responses.js";
+import { safeErr } from "../../lib/public-api/safe-err.js";
 import { publicApiAuth } from "./auth.js";
 import { publicApiMessagesRouter } from "./messages.js";
 
@@ -17,21 +18,24 @@ export function positiveIntEnv(name: string, fallback: number): number {
  */
 export function publicApiErrorHandler(error: unknown, request: FastifyRequest, reply: FastifyReply) {
   const status = (error as { statusCode?: number } | null | undefined)?.statusCode;
-  if (status === 429) return reply.status(429).send({ api_id: newApiId(), error: "Request was throttled." });
+  if (status === 429) return reply.status(429).send(plivoErrorBody("Request was throttled."));
   if (typeof status === "number" && status >= 400 && status < 500) {
     // Client errors (malformed JSON, payload too large, ...): safe, generic message only.
     const message = status === 413 ? "Request body is too large" : "Invalid request";
-    return reply.status(status).send({ api_id: newApiId(), error: message });
+    return reply.status(status).send(plivoErrorBody(message));
   }
-  request.log.error({ err: error }, "public API unhandled error");
-  return reply.status(500).send({ api_id: newApiId(), error: "Internal server error" });
+  // Name/code and request id only: error messages (e.g. Prisma validation errors) can echo phone numbers and text.
+  request.log.error({ error: safeErr(error), reqId: request.id }, "public API unhandled error");
+  return reply.status(500).send(plivoErrorBody("Internal server error"));
 }
 
-const throttled = () => ({ statusCode: 429, api_id: newApiId(), error: "Request was throttled." });
+const throttled = () => ({ statusCode: 429, ...plivoErrorBody("Request was throttled.") });
 
 /**
  * Registered at prefix `/v1/Account/:authId`. Encapsulated: the rate limiters, auth hook and error handler apply only to these routes.
- * Note: when Redis is down the limiters fail closed (the request errors and is answered with a masked 500).
+ * Note: when Redis is down the limiters do NOT fail fast: the shared ioredis client is built with
+ * `maxRetriesPerRequest: null` (lib/queue.ts), so limiter calls (and `queue.add` in the routes) wait until the client
+ * reconnects or the request times out upstream, rather than erroring into a 500.
  */
 export const publicApiRouter: FastifyPluginAsync = async (fastify) => {
   fastify.setErrorHandler(publicApiErrorHandler);

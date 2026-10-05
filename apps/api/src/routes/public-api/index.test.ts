@@ -113,6 +113,20 @@ describe("publicApiRouter", () => {
     expect(reply.status).toHaveBeenCalledWith(500);
   });
 
+  it("S4: the 500 log carries only the error name/code and request id, never the message (phone numbers, text)", async () => {
+    const { publicApiErrorHandler } = await import("./index.js");
+    const reply = { status: vi.fn().mockReturnThis(), send: vi.fn().mockReturnThis() };
+    const request = { id: "req-77", log: { error: vi.fn() } };
+    const err = Object.assign(new Error("Invalid invocation: dst 14155552672 text secret words"), { name: "PrismaClientValidationError", code: "P2009" });
+    publicApiErrorHandler(err, request as never, reply as never);
+    const logged = JSON.stringify(request.log.error.mock.calls);
+    expect(logged).toContain("PrismaClientValidationError");
+    expect(logged).toContain("P2009");
+    expect(logged).toContain("req-77");
+    expect(logged).not.toContain("14155552672");
+    expect(logged).not.toContain("secret");
+  });
+
   it("answers a malformed JSON body with a 400 Plivo-style body", async () => {
     const res = await app.inject({
       method: "POST",

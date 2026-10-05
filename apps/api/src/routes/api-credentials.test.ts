@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import type * as SafeUrlModule from "../lib/public-api/safe-url.js";
 
 vi.mock("../lib/audit.js", () => ({ writeAdminAudit: vi.fn() }));
 vi.mock("../lib/public-api/safe-url.js", async (orig) => {
-  const real = await orig<typeof import("../lib/public-api/safe-url.js")>();
+  const real = await orig<typeof SafeUrlModule>();
   return { ...real, assertSafeCallbackUrl: vi.fn(async (u: string) => { if (u.includes("bad")) throw new real.UnsafeUrlError("unsafe"); return new URL(u); }) };
 });
 
@@ -54,6 +55,49 @@ describe("api-credentials", () => {
     const res = await app.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: "Prod" } });
     expect(res.statusCode).toBe(503);
     expect(mockPrisma.apiKey.create).not.toHaveBeenCalled();
+  });
+
+  it("S6: POST answers 400 INVALID_BODY for a non-string, blank or overlong name and non-string or overlong URLs", async () => {
+    const bad: unknown[] = [
+      { name: 123 }, { name: ["a"] }, { name: { x: 1 } }, { name: "   " }, { name: "x".repeat(101) },
+      { name: "Prod", callbackUrl: ["https://ok.example.com/a"] }, { name: "Prod", inboundUrl: { href: "https://ok.example.com" } },
+      { name: "Prod", callbackUrl: 42 }, { name: "Prod", callbackUrl: `https://ok.example.com/${"a".repeat(2050)}` },
+    ];
+    for (const payload of bad) {
+      const res = await app.inject({ method: "POST", url: "/v1/api-credentials", payload: payload as object });
+      expect(res.statusCode, JSON.stringify(payload).slice(0, 80)).toBe(400);
+      expect(res.json()).toMatchObject({ error: { code: "INVALID_BODY", message: expect.any(String) } });
+    }
+    expect(mockPrisma.apiKey.create).not.toHaveBeenCalled();
+  });
+
+  it("S6: POST still accepts a 100-char name, null and empty URLs", async () => {
+    mockPrisma.apiKey.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: "key-1", name: data["name"], createdAt: new Date() }));
+    const res = await app.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: ` ${"x".repeat(100)} `, callbackUrl: null, inboundUrl: "" } });
+    expect(res.statusCode).toBe(201);
+    expect(mockPrisma.apiKey.create.mock.calls[0]![0].data).toMatchObject({ name: "x".repeat(100), callbackUrl: null, inboundUrl: null });
+  });
+
+  it("S6: PATCH answers 400 INVALID_BODY for a blank/non-string/overlong name and array/object URLs, and writes nothing", async () => {
+    mockPrisma.apiKey.findFirst.mockResolvedValue({ id: "key-1", organizationId: "org-1" });
+    const bad: unknown[] = [
+      { name: "" }, { name: "  " }, { name: 5 }, { name: null }, { name: "x".repeat(101) },
+      { callbackUrl: ["https://ok.example.com/a"] }, { inboundUrl: { a: 1 } }, { inboundUrl: `https://ok.example.com/${"a".repeat(2050)}` },
+    ];
+    for (const payload of bad) {
+      const res = await app.inject({ method: "PATCH", url: "/v1/api-credentials/key-1", payload: payload as object });
+      expect(res.statusCode, JSON.stringify(payload).slice(0, 80)).toBe(400);
+      expect(res.json()).toMatchObject({ error: { code: "INVALID_BODY" } });
+    }
+    expect(mockPrisma.apiKey.update).not.toHaveBeenCalled();
+  });
+
+  it("S6: PATCH updates a valid name and clears a URL with null", async () => {
+    mockPrisma.apiKey.findFirst.mockResolvedValue({ id: "key-1", organizationId: "org-1" });
+    mockPrisma.apiKey.update.mockResolvedValue({ id: "key-1" });
+    const res = await app.inject({ method: "PATCH", url: "/v1/api-credentials/key-1", payload: { name: " New ", callbackUrl: null } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.apiKey.update.mock.calls[0]![0].data).toEqual({ name: "New", callbackUrl: null });
   });
 
   it("403 when api_access is off", async () => {

@@ -7,6 +7,35 @@ import { encryptToken, hashToken, newAuthToken, TokenKeyError } from "../lib/pub
 
 interface CredentialBody { name?: string; callbackUrl?: string | null; inboundUrl?: string | null }
 
+const MAX_NAME = 100;
+const MAX_URL = 2048;
+
+/**
+ * Shape check before anything touches the values: a non-string name would crash `.trim()` and an array URL would pass
+ * `new URL()` (it coerces to a string) and then fail in Prisma, both as 500s. Returns an error message, or null.
+ * `name` may be absent here (POST reports a missing name separately); when present it must be 1..100 chars trimmed.
+ */
+function invalidCredentialBody(body: unknown): string | null {
+  if (body == null) return null;
+  if (typeof body !== "object" || Array.isArray(body)) return "body must be a JSON object";
+  const b = body as Record<string, unknown>;
+  const name = b["name"];
+  if (name !== undefined) {
+    if (typeof name !== "string") return "name must be a string";
+    const len = name.trim().length;
+    if (len < 1 || len > MAX_NAME) return `name must be 1 to ${MAX_NAME} characters`;
+  }
+  for (const field of ["callbackUrl", "inboundUrl"] as const) {
+    const v = b[field];
+    if (v === undefined || v === null) continue;
+    if (typeof v !== "string") return `${field} must be a string or null`;
+    if (v.length > MAX_URL) return `${field} must be at most ${MAX_URL} characters`;
+  }
+  return null;
+}
+
+const invalidBody = (reply: FastifyReply, message: string) => reply.status(400).send({ error: { code: "INVALID_BODY", message } });
+
 const LIST_SELECT = {
   id: true, name: true, callbackUrl: true, inboundUrl: true, lastUsedAt: true, revokedAt: true, createdAt: true,
 } as const;
@@ -43,6 +72,8 @@ export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: CredentialBody }>("/api-credentials", async (request, reply) => {
     const { organizationId, userId } = request.auth;
+    const bodyError = invalidCredentialBody(request.body);
+    if (bodyError) return invalidBody(reply, bodyError);
     const { name, callbackUrl, inboundUrl } = request.body ?? {};
     if (!name?.trim()) return reply.status(400).send({ error: { code: "MISSING_NAME", message: "name is required" } });
     if (!(await validUrl(reply, callbackUrl, "callbackUrl"))) return reply;
@@ -70,6 +101,8 @@ export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId, userId } = request.auth;
     const existing = await fastify.prisma.apiKey.findFirst({ where: { id: request.params.id, organizationId, revokedAt: null } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Credential not found" } });
+    const bodyError = invalidCredentialBody(request.body);
+    if (bodyError) return invalidBody(reply, bodyError);
     const { name, callbackUrl, inboundUrl } = request.body ?? {};
     if (!(await validUrl(reply, callbackUrl, "callbackUrl"))) return reply;
     if (!(await validUrl(reply, inboundUrl, "inboundUrl"))) return reply;
