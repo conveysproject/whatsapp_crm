@@ -12,6 +12,18 @@ interface WaMessageResponse {
   messages: Array<{ id: string }>;
 }
 
+export class WaApiError extends Error {
+  constructor(message: string, readonly metaCode: number | null, readonly metaSubcode: number | null) {
+    super(message);
+    this.name = "WaApiError";
+  }
+}
+
+async function waError(prefix: string, res: Response): Promise<WaApiError> {
+  const err = (await res.json().catch(() => ({}))) as { error?: { code?: number; error_subcode?: number } };
+  return new WaApiError(`${prefix}: ${JSON.stringify(err)}`, err.error?.code ?? null, err.error?.error_subcode ?? null);
+}
+
 export async function sendTextMessage(
   phoneNumberId: string,
   to: string,
@@ -35,8 +47,7 @@ export async function sendTextMessage(
     }),
   });
   if (!res.ok) {
-    const err = await res.json() as unknown;
-    throw new Error(`WA send failed: ${JSON.stringify(err)}`);
+    throw await waError("WA send failed", res);
   }
   const data = await res.json() as WaMessageResponse;
   return { messageId: data.messages[0]!.id };
@@ -77,8 +88,7 @@ export async function sendMediaMessage(
     }),
   });
   if (!res.ok) {
-    const err = await res.json() as unknown;
-    throw new Error(`WA media send failed: ${JSON.stringify(err)}`);
+    throw await waError("WA media send failed", res);
   }
   const data = await res.json() as WaMessageResponse;
   return { messageId: data.messages[0]!.id };
@@ -86,7 +96,9 @@ export async function sendMediaMessage(
 
 export interface WaInteractivePayload {
   type: "button" | "list" | "cta_url";
-  header?: { type: "text"; text: string };
+  header?:
+    | { type: "text"; text: string }
+    | { type: "image" | "video" | "document"; image?: { link: string }; video?: { link: string }; document?: { link: string } };
   body: { text: string };
   footer?: { text: string };
   action: Record<string, unknown>;
@@ -96,7 +108,14 @@ export interface WaTemplateComponent {
   type: "header" | "body" | "button" | "carousel";
   sub_type?: string;
   index?: number;
-  parameters?: Array<{ type: "text" | "image" | "video" | "document"; text?: string }>;
+  parameters?: Array<{
+    type: "text" | "image" | "video" | "document" | "payload";
+    text?: string;
+    payload?: string;
+    image?: { link: string };
+    video?: { link: string };
+    document?: { link: string };
+  }>;
   cards?: Array<{ card_index: number; components: WaTemplateComponent[] }>;
 }
 
@@ -127,8 +146,7 @@ export async function sendTemplateMessage(
     }),
   });
   if (!res.ok) {
-    const err = await res.json() as unknown;
-    throw new Error(`WA template send failed: ${JSON.stringify(err)}`);
+    throw await waError("WA template send failed", res);
   }
   const data = await res.json() as WaMessageResponse;
   return { messageId: data.messages[0]!.id };
@@ -155,9 +173,35 @@ export async function sendInteractiveMessage(
     }),
   });
   if (!res.ok) {
-    const err = await res.json() as unknown;
-    throw new Error(`WA interactive send failed: ${JSON.stringify(err)}`);
+    throw await waError("WA interactive send failed", res);
   }
+  const data = await res.json() as WaMessageResponse;
+  return { messageId: data.messages[0]!.id };
+}
+
+export async function sendLocationMessage(
+  phoneNumberId: string,
+  to: string,
+  location: { latitude: string; longitude: string; name: string; address: string },
+  accessToken: string
+): Promise<WaSendResult> {
+  const res = await fetch(`${WA_BASE}/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "location",
+      location: {
+        latitude: Number(location.latitude),
+        longitude: Number(location.longitude),
+        name: location.name,
+        address: location.address,
+      },
+    }),
+  });
+  if (!res.ok) throw await waError("WA location send failed", res);
   const data = await res.json() as WaMessageResponse;
   return { messageId: data.messages[0]!.id };
 }
