@@ -285,6 +285,7 @@ model Message {
   createdAt         DateTime         @default(now()) @map("created_at")
 
   labels         MessageLabel[]
+  apiMeta        ApiMessageMeta?
 
   @@index([conversationId])
   @@index([conversationId, sentAt])            // paginated inbox queries
@@ -845,10 +846,35 @@ model ApiKey {
   keyHash        String    @unique @map("key_hash")
   scopes         String[]
   lastUsedAt     DateTime? @map("last_used_at")
+  revokedAt      DateTime? @map("revoked_at")
+  createdBy      String?   @map("created_by")
+  tokenEnc       String?   @map("token_enc")
+  callbackUrl    String?   @map("callback_url")
+  inboundUrl     String?   @map("inbound_url")
   createdAt      DateTime  @default(now()) @map("created_at")
 
   @@index([organizationId])
   @@map("api_keys")
+}
+
+model ApiMessageMeta {
+  messageId        String    @id @map("message_id")
+  message          Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  apiKeyId         String    @map("api_key_id")
+  organizationId   String    @map("organization_id")
+  dst              String
+  callbackUrl      String?   @map("callback_url")
+  callbackMethod   String    @default("POST") @map("callback_method")
+  errorCode        String?   @map("error_code")
+  lastStatus       String?   @map("last_status")
+  sequence         Int       @default(0)
+  queuedAt         DateTime  @default(now()) @map("queued_at")
+  sentAt           DateTime? @map("sent_at")
+  deliveryReportAt DateTime? @map("delivery_report_at")
+
+  @@index([organizationId, queuedAt])
+  @@index([apiKeyId])
+  @@map("api_message_meta")
 }
 
 model Webhook {
