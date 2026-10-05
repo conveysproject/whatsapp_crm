@@ -18,7 +18,7 @@ const mockPrisma = {
   template: { findMany: vi.fn() },
   contact: { upsert: vi.fn() },
   conversation: { findFirst: vi.fn(), create: vi.fn() },
-  message: { create: vi.fn() },
+  message: { create: vi.fn(), update: vi.fn() },
   apiMessageMeta: { create: vi.fn() },
 };
 
@@ -39,13 +39,15 @@ describe("POST /Message/", () => {
   let n = 0;
   beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks(); n = 0;
-    mockPrisma.organization.findUnique.mockResolvedValue({ phoneNumberId: "pn-1", wabaAccessToken: "tok" });
+    mockPrisma.organization.findUnique.mockResolvedValue({ phoneNumberId: "pn-1", wabaAccessToken: "SECRET_TOKEN_XYZ" });
     mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "+1 415-555-2671" });
     mockPrisma.apiKey.findUnique.mockResolvedValue({ callbackUrl: null });
     mockPrisma.contact.upsert.mockResolvedValue({ id: "c1" });
     mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1" });
     mockPrisma.message.create.mockImplementation(async () => ({ id: `msg-${++n}` }));
     mockPrisma.apiMessageMeta.create.mockResolvedValue({});
+    mockPrisma.message.update.mockResolvedValue({});
+    enqueueCb.mockResolvedValue(undefined);
     app = await buildApp();
   });
   afterEach(async () => { await app.close(); });
@@ -57,9 +59,10 @@ describe("POST /Message/", () => {
     expect(mockPrisma.message.create.mock.calls[0]![0].data).toMatchObject({ organizationId: "org-1", direction: "outbound", contentType: "text", body: "hello", status: "sending" });
     expect(mockPrisma.contact.upsert.mock.calls[0]![0].where).toEqual({ organizationId_phoneNumber: { organizationId: "org-1", phoneNumber: "14155552672" } });
     expect(mockPrisma.apiMessageMeta.create.mock.calls[0]![0].data).toMatchObject({ messageId: "msg-1", apiKeyId: "k1", organizationId: "org-1", dst: "14155552672" });
+    expect(mockPrisma.conversation.findFirst.mock.calls[0]![0].where).toMatchObject({ organizationId: "org-1", whatsappContactId: "14155552672" });
     expect(sendAdd).toHaveBeenCalledTimes(2);
     expect(sendAdd.mock.calls[0]![1]).toMatchObject({ messageId: "msg-1", organizationId: "org-1", to: "14155552672", content: { kind: "text", text: "hello" } });
-    expect(JSON.stringify(sendAdd.mock.calls)).not.toContain("tok"); // Meta token never goes into Redis
+    expect(JSON.stringify(sendAdd.mock.calls)).not.toContain("SECRET_TOKEN_XYZ"); // Meta token never goes into Redis
     expect(enqueueCb).toHaveBeenCalledWith(expect.anything(), "msg-1", "queued");
   });
 
@@ -118,5 +121,40 @@ describe("POST /Message/", () => {
     sendAdd.mockClear();
     await post(app, { ...body, text: undefined, interactive: { type: "button", body: { text: "Pick" }, action: { buttons: [{ title: "A", id: "1" }] } } });
     expect(sendAdd.mock.calls[0]![1].content).toMatchObject({ kind: "interactive", interactive: { type: "button" } });
+  });
+
+  it("partial failure: second destination's message.create rejects -> 202 with one uuid, only the first queued", async () => {
+    mockPrisma.message.create.mockResolvedValueOnce({ id: "msg-1" }).mockRejectedValueOnce(new Error("db down"));
+    const res = await post(app, { ...body, dst: "+14155552672<+14155550000" });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().message_uuid).toEqual(["msg-1"]);
+    expect(sendAdd).toHaveBeenCalledTimes(1);
+    expect(sendAdd.mock.calls[0]![1]).toMatchObject({ messageId: "msg-1" });
+  });
+
+  it("500 with the Plivo error body when every destination fails", async () => {
+    mockPrisma.message.create.mockRejectedValue(new Error("db down"));
+    const res = await post(app, { ...body, dst: "+14155552672<+14155550000" });
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toMatchObject({ error: "Failed to queue message", api_id: expect.any(String) });
+    expect(sendAdd).not.toHaveBeenCalled();
+  });
+
+  it("a rejecting queued-callback enqueue does not fail the request", async () => {
+    enqueueCb.mockRejectedValue(new Error("redis down"));
+    const res = await post(app, body);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().message_uuid).toEqual(["msg-1"]);
+    expect(sendAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it("apiMessageMeta.create rejecting after message.create marks that message failed and queues nothing for it", async () => {
+    mockPrisma.apiMessageMeta.create.mockRejectedValueOnce(new Error("constraint"));
+    const res = await post(app, { ...body, dst: "+14155552672<+14155550000" });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().message_uuid).toEqual(["msg-2"]);
+    expect(mockPrisma.message.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "msg-1", organizationId: "org-1" }, data: expect.objectContaining({ status: "failed" }) }));
+    expect(sendAdd).toHaveBeenCalledTimes(1);
+    expect(sendAdd.mock.calls[0]![1]).toMatchObject({ messageId: "msg-2" });
   });
 });

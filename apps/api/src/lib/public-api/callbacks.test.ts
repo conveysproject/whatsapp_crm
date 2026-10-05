@@ -6,6 +6,7 @@ vi.mock("./queues.js", () => ({ publicApiCallbackQueue: { add: (...a: unknown[])
 import { enqueueStatusCallback, buildStatusFields } from "./callbacks.js";
 
 const prisma = {
+  $transaction: vi.fn(),
   apiMessageMeta: { findUnique: vi.fn(), updateMany: vi.fn() },
   apiKey: { findUnique: vi.fn() },
   vendorSetting: { findFirst: vi.fn() },
@@ -17,16 +18,23 @@ const meta = (over: Record<string, unknown> = {}) => ({
   errorCode: null, lastStatus: null, sequence: 0, queuedAt: new Date("2026-10-05T10:00:00.123Z"), sentAt: null, deliveryReportAt: null, ...over,
 });
 
+/** findUnique returns `m` for the initial read and `{ sequence: readBack }` for the in-transaction read-back (select: { sequence }). */
+function setMeta(m: ReturnType<typeof meta> | null, readBack?: number) {
+  prisma.apiMessageMeta.findUnique.mockImplementation(async (args: { select?: { sequence?: boolean } }) =>
+    args.select?.sequence ? { sequence: readBack ?? (m ? (m.sequence as number) + 1 : 1) } : m);
+}
+
 describe("enqueueStatusCallback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prisma));
     prisma.apiKey.findUnique.mockResolvedValue({ callbackUrl: "https://c.example.com/cb" });
     prisma.vendorSetting.findFirst.mockResolvedValue({ value: "+1 415-555-2671" });
     prisma.apiMessageMeta.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it("enqueues a queued callback with sequence 1 and form fields", async () => {
-    prisma.apiMessageMeta.findUnique.mockResolvedValue(meta());
+    setMeta(meta());
     await enqueueStatusCallback(P, "m1", "queued");
     expect(prisma.apiMessageMeta.updateMany.mock.calls[0]![0]).toMatchObject({ where: { messageId: "m1", lastStatus: null }, data: { lastStatus: "queued", sequence: { increment: 1 } } });
     const [name, data] = add.mock.calls[0]!;
@@ -37,42 +45,71 @@ describe("enqueueStatusCallback", () => {
   });
 
   it("per-message URL overrides the credential default", async () => {
-    prisma.apiMessageMeta.findUnique.mockResolvedValue(meta({ callbackUrl: "https://msg.example.com/x", callbackMethod: "GET" }));
+    setMeta(meta({ callbackUrl: "https://msg.example.com/x", callbackMethod: "GET" }));
     await enqueueStatusCallback(P, "m1", "queued");
     expect(add.mock.calls[0]![1]).toMatchObject({ url: "https://msg.example.com/x", method: "GET" });
   });
 
   it("only moves forward: read after delivered ok, delivered after read dropped, duplicate dropped", async () => {
-    prisma.apiMessageMeta.findUnique.mockResolvedValue(meta({ lastStatus: "delivered", sequence: 2 }));
+    setMeta(meta({ lastStatus: "delivered", sequence: 2 }));
     await enqueueStatusCallback(P, "m1", "read");
     expect(add).toHaveBeenCalledTimes(1);
-    prisma.apiMessageMeta.findUnique.mockResolvedValue(meta({ lastStatus: "read", sequence: 3 }));
+    setMeta(meta({ lastStatus: "read", sequence: 3 }));
     await enqueueStatusCallback(P, "m1", "delivered");
     await enqueueStatusCallback(P, "m1", "read");
     expect(add).toHaveBeenCalledTimes(1);
   });
 
   it("failed/undelivered only before delivered; never after read/delivered/failed", async () => {
-    prisma.apiMessageMeta.findUnique.mockResolvedValue(meta({ lastStatus: "sent" }));
+    setMeta(meta({ lastStatus: "sent" }));
     await enqueueStatusCallback(P, "m1", "undelivered", { errorCode: "380" });
     expect(add).toHaveBeenCalledTimes(1);
     expect(add.mock.calls[0]![1].fields).toMatchObject({ Status: "undelivered", ErrorCode: "380" });
     for (const last of ["delivered", "read", "failed", "undelivered"]) {
-      prisma.apiMessageMeta.findUnique.mockResolvedValue(meta({ lastStatus: last }));
+      setMeta(meta({ lastStatus: last }));
       await enqueueStatusCallback(P, "m1", "failed");
     }
     expect(add).toHaveBeenCalledTimes(1);
   });
 
   it("does not enqueue when a concurrent writer won the ratchet (updateMany count 0)", async () => {
-    prisma.apiMessageMeta.findUnique.mockResolvedValue(meta());
+    setMeta(meta());
     prisma.apiMessageMeta.updateMany.mockResolvedValue({ count: 0 });
     await enqueueStatusCallback(P, "m1", "queued");
     expect(add).not.toHaveBeenCalled();
   });
 
+  it("emits the Sequence read back inside the transaction, not meta.sequence + 1", async () => {
+    setMeta(meta({ sequence: 1, lastStatus: "queued" }), 5);
+    await enqueueStatusCallback(P, "m1", "sent");
+    expect(add.mock.calls[0]![1].fields).toMatchObject({ Status: "sent", Sequence: "5" });
+  });
+
+  it("enqueues nothing when the transaction loses the race (count 0)", async () => {
+    setMeta(meta());
+    prisma.apiMessageMeta.updateMany.mockResolvedValue({ count: 0 });
+    await enqueueStatusCallback(P, "m1", "queued");
+    expect(prisma.$transaction).toHaveBeenCalled();
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it("sequential writers on a fake table get strictly increasing, distinct sequences", async () => {
+    const row = { ...meta({ lastStatus: "queued", sequence: 1 }) } as Record<string, unknown>;
+    prisma.apiMessageMeta.findUnique.mockImplementation(async (args: { select?: { sequence?: boolean } }) =>
+      args.select?.sequence ? { sequence: row["sequence"] } : { ...row });
+    prisma.apiMessageMeta.updateMany.mockImplementation(async (args: { where: { lastStatus: string | null }; data: { lastStatus: string } }) => {
+      if (row["lastStatus"] !== args.where.lastStatus) return { count: 0 };
+      row["lastStatus"] = args.data.lastStatus; row["sequence"] = (row["sequence"] as number) + 1;
+      return { count: 1 };
+    });
+    await enqueueStatusCallback(P, "m1", "sent");
+    await enqueueStatusCallback(P, "m1", "delivered");
+    const seqs = add.mock.calls.map((c) => Number(c[1].fields.Sequence));
+    expect(seqs).toEqual([2, 3]);
+  });
+
   it("updates state but enqueues nothing when no callback URL is configured", async () => {
-    prisma.apiMessageMeta.findUnique.mockResolvedValue(meta());
+    setMeta(meta());
     prisma.apiKey.findUnique.mockResolvedValue({ callbackUrl: null });
     await enqueueStatusCallback(P, "m1", "queued");
     expect(prisma.apiMessageMeta.updateMany).toHaveBeenCalled();
@@ -80,7 +117,7 @@ describe("enqueueStatusCallback", () => {
   });
 
   it("does nothing for a message without api metadata", async () => {
-    prisma.apiMessageMeta.findUnique.mockResolvedValue(null);
+    setMeta(null);
     await enqueueStatusCallback(P, "ghost", "queued");
     expect(add).not.toHaveBeenCalled();
   });

@@ -80,32 +80,46 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
       const callbackUrl = parsed.callbackUrl ?? null; // per-message override only; the credential default is resolved at callback time
       const uuids: string[] = [];
       for (const dst of parsed.dsts) {
-        const contact = await fastify.prisma.contact.upsert({
-          where: { organizationId_phoneNumber: { organizationId, phoneNumber: dst } },
-          create: { organizationId, phoneNumber: dst },
-          update: {},
-          select: { id: true },
-        });
-        let conversation = await fastify.prisma.conversation.findFirst({ where: { organizationId, whatsappContactId: dst } });
-        if (!conversation) {
-          conversation = await fastify.prisma.conversation.create({
-            data: { organizationId, contactId: contact.id, whatsappContactId: dst, channelType: "whatsapp", status: "open" },
+        let messageId: string | null = null;
+        try {
+          const contact = await fastify.prisma.contact.upsert({
+            where: { organizationId_phoneNumber: { organizationId, phoneNumber: dst } },
+            create: { organizationId, phoneNumber: dst },
+            update: {},
+            select: { id: true },
           });
+          let conversation = await fastify.prisma.conversation.findFirst({ where: { organizationId, whatsappContactId: dst } });
+          if (!conversation) {
+            conversation = await fastify.prisma.conversation.create({
+              data: { organizationId, contactId: contact.id, whatsappContactId: dst, channelType: "whatsapp", status: "open" },
+            });
+          }
+          const message = await fastify.prisma.message.create({
+            data: {
+              conversationId: conversation.id, organizationId, direction: "outbound",
+              contentType: fields.contentType, body: fields.body, mediaUrl: fields.mediaUrl, status: "sending",
+            },
+          });
+          messageId = message.id;
+          await fastify.prisma.apiMessageMeta.create({
+            data: { messageId: message.id, apiKeyId, organizationId, dst, callbackUrl, callbackMethod: parsed.callbackMethod },
+          });
+          await publicApiSendQueue.add("send", { messageId: message.id, organizationId, to: dst, content }, { jobId: `pubsend-${message.id}` });
+        } catch (err) {
+          request.log.error({ err, messageId, organizationId }, "public API send failed for a destination");
+          if (messageId) {
+            try { await fastify.prisma.message.update({ where: { id: messageId, organizationId }, data: { status: "failed" } }); }
+            catch { /* best-effort cleanup */ }
+          }
+          continue;
         }
-        const message = await fastify.prisma.message.create({
-          data: {
-            conversationId: conversation.id, organizationId, direction: "outbound",
-            contentType: fields.contentType, body: fields.body, mediaUrl: fields.mediaUrl, status: "sending",
-          },
-        });
-        await fastify.prisma.apiMessageMeta.create({
-          data: { messageId: message.id, apiKeyId, organizationId, dst, callbackUrl, callbackMethod: parsed.callbackMethod },
-        });
-        await publicApiSendQueue.add("send", { messageId: message.id, organizationId, to: dst, content }, { jobId: `pubsend-${message.id}` });
-        await enqueueStatusCallback(fastify.prisma, message.id, "queued");
-        uuids.push(message.id);
+        uuids.push(messageId);
+        // The queued callback is best-effort: the message is already accepted and queued.
+        try { await enqueueStatusCallback(fastify.prisma, messageId, "queued"); }
+        catch (err) { request.log.error({ err, messageId }, "public API queued-callback enqueue failed"); }
       }
 
+      if (uuids.length === 0) return plivoError(reply, 500, "Failed to queue message");
       return reply.status(202).send({ api_id: newApiId(), message: "message(s) queued", message_uuid: uuids });
     });
   }

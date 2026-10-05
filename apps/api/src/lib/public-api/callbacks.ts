@@ -59,17 +59,24 @@ export async function enqueueStatusCallback(
 
   const now = new Date();
   const terminal = next === "delivered" || next === "read" || next === "failed" || next === "undelivered";
-  const won = await prisma.apiMessageMeta.updateMany({
-    where: { messageId, lastStatus: meta.lastStatus },
-    data: {
-      lastStatus: next,
-      sequence: { increment: 1 },
-      ...(extra.errorCode ? { errorCode: extra.errorCode } : {}),
-      ...(next === "sent" ? { sentAt: now } : {}),
-      ...(terminal ? { deliveryReportAt: now } : {}),
-    },
+  // Conditional update + read-back in one transaction: the winning updateMany holds the row lock until commit,
+  // so the read sees this writer's own incremented sequence (never a stale or duplicate value).
+  const sequence = await prisma.$transaction(async (tx) => {
+    const won = await tx.apiMessageMeta.updateMany({
+      where: { messageId, lastStatus: meta.lastStatus },
+      data: {
+        lastStatus: next,
+        sequence: { increment: 1 },
+        ...(extra.errorCode ? { errorCode: extra.errorCode } : {}),
+        ...(next === "sent" ? { sentAt: now } : {}),
+        ...(terminal ? { deliveryReportAt: now } : {}),
+      },
+    });
+    if (won.count === 0) return null;
+    const row = await tx.apiMessageMeta.findUnique({ where: { messageId }, select: { sequence: true } });
+    return row?.sequence ?? null;
   });
-  if (won.count === 0) return;
+  if (sequence === null) return;
 
   const key = await prisma.apiKey.findUnique({ where: { id: meta.apiKeyId }, select: { callbackUrl: true } });
   const url = meta.callbackUrl ?? key?.callbackUrl ?? null;
@@ -77,7 +84,7 @@ export async function enqueueStatusCallback(
 
   const from = await businessNumberDigits(prisma, meta.organizationId);
   const fields = buildStatusFields({
-    messageId, from, to: meta.dst, status: next, sequence: meta.sequence + 1,
+    messageId, from, to: meta.dst, status: next, sequence,
     errorCode: extra.errorCode ?? meta.errorCode,
     queuedAt: meta.queuedAt, sentAt: next === "sent" ? now : meta.sentAt, deliveryReportAt: terminal ? now : meta.deliveryReportAt,
     ...(extra.conversation ? { conversation: extra.conversation } : {}),
