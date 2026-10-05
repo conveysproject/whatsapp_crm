@@ -1170,27 +1170,27 @@ git commit -m "feat(public-api): credential management routes (create/list/updat
 import { describe, it, expect } from "vitest";
 import { parseSendBody, SendValidationError, inferMediaKind, toMetaTemplateComponents, toMetaInteractive, renderTemplateForInbox } from "./send-mapping.js";
 
-const base = { src: "+14151112221", dst: "+14151112222", type: "whatsapp" };
+const base = { src: "+14155552671", dst: "+14155552672", type: "whatsapp" };
 const bad = (b: unknown) => expect(() => parseSendBody(b)).toThrow(SendValidationError);
 
 describe("parseSendBody", () => {
   it("parses a text message", () => {
     const p = parseSendBody({ ...base, text: "hello", url: "https://c.example.com/cb", method: "get" });
-    expect(p.src).toBe("14151112221");
-    expect(p.dsts).toEqual(["14151112222"]);
+    expect(p.src).toBe("14155552671");
+    expect(p.dsts).toEqual(["14155552672"]);
     expect(p.callbackUrl).toBe("https://c.example.com/cb");
     expect(p.callbackMethod).toBe("GET");
     expect(p.content).toEqual({ kind: "text", text: "hello" });
   });
 
   it("splits dst on '<', normalizes and de-duplicates", () => {
-    const p = parseSendBody({ ...base, dst: "+14151112222<14151112222< +14155550000", text: "x" });
-    expect(p.dsts).toEqual(["14151112222", "14155550000"]);
+    const p = parseSendBody({ ...base, dst: "+14155552672<14155552672< +14155550000", text: "x" });
+    expect(p.dsts).toEqual(["14155552672", "14155550000"]);
   });
 
   it("rejects the whole request for any invalid, empty or too many recipients", () => {
-    bad({ ...base, dst: "+14151112222<abc", text: "x" });
-    bad({ ...base, dst: "+14151112222<<+14155550000", text: "x" });
+    bad({ ...base, dst: "+14155552672<abc", text: "x" });
+    bad({ ...base, dst: "+14155552672<<+14155550000", text: "x" });
     bad({ ...base, dst: "", text: "x" });
     const many = Array.from({ length: 21 }, (_, i) => `+1415555${String(1000 + i)}`).join("<");
     bad({ ...base, dst: many, text: "x" });
@@ -1547,7 +1547,7 @@ const prisma = {
 const P = prisma as unknown as PrismaClient;
 
 const meta = (over: Record<string, unknown> = {}) => ({
-  messageId: "m1", apiKeyId: "k1", organizationId: "org-1", dst: "14151112222", callbackUrl: null, callbackMethod: "POST",
+  messageId: "m1", apiKeyId: "k1", organizationId: "org-1", dst: "14155552672", callbackUrl: null, callbackMethod: "POST",
   errorCode: null, lastStatus: null, sequence: 0, queuedAt: new Date("2026-10-05T10:00:00.123Z"), sentAt: null, deliveryReportAt: null, ...over,
 });
 
@@ -1555,7 +1555,7 @@ describe("enqueueStatusCallback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prisma.apiKey.findUnique.mockResolvedValue({ callbackUrl: "https://c.example.com/cb" });
-    prisma.vendorSetting.findFirst.mockResolvedValue({ value: "+1 415-111-2221" });
+    prisma.vendorSetting.findFirst.mockResolvedValue({ value: "+1 415-555-2671" });
     prisma.apiMessageMeta.updateMany.mockResolvedValue({ count: 1 });
   });
 
@@ -1566,7 +1566,7 @@ describe("enqueueStatusCallback", () => {
     const [name, data] = add.mock.calls[0]!;
     expect(name).toBe("status");
     expect(data).toMatchObject({ apiKeyId: "k1", organizationId: "org-1", url: "https://c.example.com/cb", method: "POST" });
-    expect(data.fields).toMatchObject({ MessageUUID: "m1", To: "14151112222", From: "14151112221", Type: "whatsapp", Status: "queued", Sequence: "1" });
+    expect(data.fields).toMatchObject({ MessageUUID: "m1", To: "14155552672", From: "14155552671", Type: "whatsapp", Status: "queued", Sequence: "1" });
     expect(data.fields["ErrorCode"]).toBeUndefined();
   });
 
@@ -1623,7 +1623,7 @@ describe("enqueueStatusCallback", () => {
 describe("buildStatusFields", () => {
   it("formats times as 'YYYY-MM-DD HH:MM:SS.ffffff' and includes WhatsApp conversation fields when provided", () => {
     const f = buildStatusFields({
-      messageId: "m1", from: "14151112221", to: "14151112222", status: "delivered", sequence: 3, errorCode: null,
+      messageId: "m1", from: "14155552671", to: "14155552672", status: "delivered", sequence: 3, errorCode: null,
       queuedAt: new Date("2026-10-05T10:00:00.123Z"), sentAt: new Date("2026-10-05T10:00:01.000Z"), deliveryReportAt: new Date("2026-10-05T10:00:05.500Z"),
       conversation: { id: "c1", origin: "service", expiration: 1790000000 },
     });
@@ -1770,7 +1770,7 @@ async function buildApp(): Promise<FastifyInstance> {
   return app;
 }
 
-const body = { src: "+14151112221", dst: "+14151112222", type: "whatsapp", text: "hello" };
+const body = { src: "+14155552671", dst: "+14155552672", type: "whatsapp", text: "hello" };
 const post = (app: FastifyInstance, payload: unknown, url = "/v1/Account/k1/Message/") => app.inject({ method: "POST", url, payload: payload as object });
 
 describe("POST /Message/", () => {
@@ -1779,7 +1779,7 @@ describe("POST /Message/", () => {
   beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks(); n = 0;
     mockPrisma.organization.findUnique.mockResolvedValue({ phoneNumberId: "pn-1", wabaAccessToken: "tok" });
-    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "+1 415-111-2221" });
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "+1 415-555-2671" });
     mockPrisma.apiKey.findUnique.mockResolvedValue({ callbackUrl: null });
     mockPrisma.contact.upsert.mockResolvedValue({ id: "c1" });
     mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1" });
@@ -1790,14 +1790,14 @@ describe("POST /Message/", () => {
   afterEach(async () => { await app.close(); });
 
   it("accepts a text send: 202, one uuid per destination, org-scoped rows, job queued, queued callback", async () => {
-    const res = await post(app, { ...body, dst: "+14151112222<+14155550000" });
+    const res = await post(app, { ...body, dst: "+14155552672<+14155550000" });
     expect(res.statusCode).toBe(202);
     expect(res.json()).toMatchObject({ message: "message(s) queued", message_uuid: ["msg-1", "msg-2"], api_id: expect.any(String) });
     expect(mockPrisma.message.create.mock.calls[0]![0].data).toMatchObject({ organizationId: "org-1", direction: "outbound", contentType: "text", body: "hello", status: "sending" });
-    expect(mockPrisma.contact.upsert.mock.calls[0]![0].where).toEqual({ organizationId_phoneNumber: { organizationId: "org-1", phoneNumber: "14151112222" } });
-    expect(mockPrisma.apiMessageMeta.create.mock.calls[0]![0].data).toMatchObject({ messageId: "msg-1", apiKeyId: "k1", organizationId: "org-1", dst: "14151112222" });
+    expect(mockPrisma.contact.upsert.mock.calls[0]![0].where).toEqual({ organizationId_phoneNumber: { organizationId: "org-1", phoneNumber: "14155552672" } });
+    expect(mockPrisma.apiMessageMeta.create.mock.calls[0]![0].data).toMatchObject({ messageId: "msg-1", apiKeyId: "k1", organizationId: "org-1", dst: "14155552672" });
     expect(sendAdd).toHaveBeenCalledTimes(2);
-    expect(sendAdd.mock.calls[0]![1]).toMatchObject({ messageId: "msg-1", organizationId: "org-1", to: "14151112222", content: { kind: "text", text: "hello" } });
+    expect(sendAdd.mock.calls[0]![1]).toMatchObject({ messageId: "msg-1", organizationId: "org-1", to: "14155552672", content: { kind: "text", text: "hello" } });
     expect(JSON.stringify(sendAdd.mock.calls)).not.toContain("tok"); // Meta token never goes into Redis
     expect(enqueueCb).toHaveBeenCalledWith(expect.anything(), "msg-1", "queued");
   });
@@ -1810,12 +1810,12 @@ describe("POST /Message/", () => {
     mockPrisma.conversation.findFirst.mockResolvedValue(null);
     mockPrisma.conversation.create.mockResolvedValue({ id: "conv-new" });
     await post(app, body);
-    expect(mockPrisma.conversation.create.mock.calls[0]![0].data).toMatchObject({ organizationId: "org-1", whatsappContactId: "14151112222", channelType: "whatsapp", status: "open" });
+    expect(mockPrisma.conversation.create.mock.calls[0]![0].data).toMatchObject({ organizationId: "org-1", whatsappContactId: "14155552672", channelType: "whatsapp", status: "open" });
     expect(mockPrisma.conversation.create.mock.calls[0]![0].data.assignedTo).toBeUndefined();
   });
 
   it("400 for validation errors with the Plivo error body, and nothing is written", async () => {
-    const res = await post(app, { ...body, dst: "+14151112222<abc" });
+    const res = await post(app, { ...body, dst: "+14155552672<abc" });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toMatchObject({ error: expect.any(String), api_id: expect.any(String) });
     expect(mockPrisma.message.create).not.toHaveBeenCalled();
@@ -1823,7 +1823,7 @@ describe("POST /Message/", () => {
   });
 
   it("400 when src is not the org's connected number", async () => {
-    const res = await post(app, { ...body, src: "+14159998888" });
+    const res = await post(app, { ...body, src: "+14155551234" });
     expect(res.statusCode).toBe(400);
     expect(mockPrisma.message.create).not.toHaveBeenCalled();
   });
@@ -2029,7 +2029,7 @@ vi.mock("../lib/whatsapp.js", async () => {
 import { processSendJob } from "./public-api-send.worker.js";
 import { WaApiError } from "../lib/whatsapp.js";
 
-const job = (content: unknown) => ({ data: { messageId: "m1", organizationId: "org-1", to: "14151112222", content } }) as never;
+const job = (content: unknown) => ({ data: { messageId: "m1", organizationId: "org-1", to: "14155552672", content } }) as never;
 
 describe("processSendJob", () => {
   beforeEach(() => {
@@ -2044,7 +2044,7 @@ describe("processSendJob", () => {
     wa.sendTextMessage.mockResolvedValue({ messageId: "wamid.1" });
     await processSendJob(job({ kind: "text", text: "hi" }));
     expect(prisma.message.findFirst.mock.calls[0]![0].where).toMatchObject({ id: "m1", organizationId: "org-1" });
-    expect(wa.sendTextMessage).toHaveBeenCalledWith("pn-1", "14151112222", "hi", "tok");
+    expect(wa.sendTextMessage).toHaveBeenCalledWith("pn-1", "14155552672", "hi", "tok");
     expect(prisma.message.update.mock.calls[0]![0]).toMatchObject({ where: { id: "m1" }, data: { status: "sent", whatsappMessageId: "wamid.1" } });
     expect(enqueueCb).toHaveBeenCalledWith(expect.anything(), "m1", "sent");
   });
@@ -2052,9 +2052,9 @@ describe("processSendJob", () => {
   it("dispatches by content kind", async () => {
     for (const fn of Object.values(wa)) fn.mockResolvedValue({ messageId: "w" });
     await processSendJob(job({ kind: "media", mediaUrl: "https://x/a.mp4", caption: "c" }));
-    expect(wa.sendMediaMessage).toHaveBeenCalledWith("pn-1", "14151112222", "video", "https://x/a.mp4", "c", "tok");
+    expect(wa.sendMediaMessage).toHaveBeenCalledWith("pn-1", "14155552672", "video", "https://x/a.mp4", "c", "tok");
     await processSendJob(job({ kind: "template", name: "t", language: "en", components: [] }));
-    expect(wa.sendTemplateMessage).toHaveBeenCalledWith("pn-1", "14151112222", "t", "en", [], "tok");
+    expect(wa.sendTemplateMessage).toHaveBeenCalledWith("pn-1", "14155552672", "t", "en", [], "tok");
     await processSendJob(job({ kind: "location", latitude: "1", longitude: "2", name: "n", address: "a" }));
     expect(wa.sendLocationMessage).toHaveBeenCalled();
     await processSendJob(job({ kind: "interactive", interactive: { type: "button", body: { text: "b" }, action: {} } }));
@@ -2353,7 +2353,7 @@ describe("forwardMetaStatusToApiClient", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaFwd.apiKey.findUnique.mockResolvedValue({ callbackUrl: "https://c.example.com/cb" });
-    prismaFwd.vendorSetting.findFirst.mockResolvedValue({ value: "14151112221" });
+    prismaFwd.vendorSetting.findFirst.mockResolvedValue({ value: "14155552671" });
     prismaFwd.apiMessageMeta.updateMany.mockResolvedValue({ count: 1 });
     prismaFwd.message.findUnique.mockResolvedValue({ status: "sent" });
     prismaFwd.message.update.mockResolvedValue({});
@@ -2506,13 +2506,13 @@ describe("GET /Message/", () => {
   beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks();
     Object.assign(mockPrisma.apiMessageMeta, { findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn() });
-    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "+1 415-111-2221" });
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "+1 415-555-2671" });
     app = await buildApp();
   });
   afterEach(async () => { await app.close(); });
 
   const row = (over: Record<string, unknown> = {}) => ({
-    messageId: "m1", dst: "14151112222", lastStatus: "delivered", errorCode: null, queuedAt: new Date("2026-10-05T10:00:00Z"),
+    messageId: "m1", dst: "14155552672", lastStatus: "delivered", errorCode: null, queuedAt: new Date("2026-10-05T10:00:00Z"),
     message: { id: "m1", status: "delivered" }, ...over,
   });
 
@@ -2523,7 +2523,7 @@ describe("GET /Message/", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ meta: Record<string, unknown>; objects: Array<Record<string, unknown>> }>();
     expect(body.meta).toMatchObject({ limit: 20, offset: 20, total_count: 45, previous: expect.any(String), next: expect.any(String) });
-    expect(body.objects[0]).toMatchObject({ message_uuid: "m1", message_direction: "outbound", message_state: "delivered", message_type: "whatsapp", from_number: "14151112221", to_number: "14151112222", message_time: "2026-10-05 10:00:00+00:00" });
+    expect(body.objects[0]).toMatchObject({ message_uuid: "m1", message_direction: "outbound", message_state: "delivered", message_type: "whatsapp", from_number: "14155552671", to_number: "14155552672", message_time: "2026-10-05 10:00:00+00:00" });
     const where = (mockPrisma.apiMessageMeta as any).findMany.mock.calls[0][0].where;
     expect(where).toMatchObject({ organizationId: "org-1" });
   });
@@ -2554,13 +2554,13 @@ describe("GET /Message/:uuid/", () => {
   beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks();
     Object.assign(mockPrisma.apiMessageMeta, { findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn() });
-    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "14151112221" });
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "14155552671" });
     app = await buildApp();
   });
   afterEach(async () => { await app.close(); });
 
   it("returns the message, looked up by uuid AND org", async () => {
-    (mockPrisma.apiMessageMeta as any).findFirst.mockResolvedValue({ messageId: "m1", dst: "14151112222", lastStatus: "sent", errorCode: null, queuedAt: new Date("2026-10-05T10:00:00Z"), message: { id: "m1", status: "sent" } });
+    (mockPrisma.apiMessageMeta as any).findFirst.mockResolvedValue({ messageId: "m1", dst: "14155552672", lastStatus: "sent", errorCode: null, queuedAt: new Date("2026-10-05T10:00:00Z"), message: { id: "m1", status: "sent" } });
     const res = await app.inject({ method: "GET", url: "/v1/Account/k1/Message/m1/" });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ message_uuid: "m1", message_state: "sent", api_id: expect.any(String) });
@@ -2696,16 +2696,16 @@ import { forwardInboundToApiClient } from "./callbacks.js";
 
 describe("forwardInboundToApiClient", () => {
   const p = { apiKey: { findMany: vi.fn() }, vendorSetting: { findFirst: vi.fn() } };
-  beforeEach(() => { vi.clearAllMocks(); p.vendorSetting.findFirst.mockResolvedValue({ value: "+1 415-111-2221" }); });
+  beforeEach(() => { vi.clearAllMocks(); p.vendorSetting.findFirst.mockResolvedValue({ value: "+1 415-555-2671" }); });
 
   it("queues one inbound callback per active credential with an inbound URL, scoped to the org", async () => {
     p.apiKey.findMany.mockResolvedValue([{ id: "k1", inboundUrl: "https://c.example.com/in" }, { id: "k2", inboundUrl: "https://d.example.com/in" }]);
-    await forwardInboundToApiClient(p as unknown as PrismaClient, { organizationId: "org-1", messageId: "m9", fromPhone: "14151112222", text: "hello" });
+    await forwardInboundToApiClient(p as unknown as PrismaClient, { organizationId: "org-1", messageId: "m9", fromPhone: "14155552672", text: "hello" });
     expect(p.apiKey.findMany.mock.calls[0]![0].where).toMatchObject({ organizationId: "org-1", revokedAt: null, inboundUrl: { not: null } });
     expect(add).toHaveBeenCalledTimes(2);
     const [name, data] = add.mock.calls[0]!;
     expect(name).toBe("inbound");
-    expect(data).toMatchObject({ apiKeyId: "k1", organizationId: "org-1", url: "https://c.example.com/in", method: "POST", fields: { From: "14151112222", To: "14151112221", Text: "hello", Type: "whatsapp", MessageUUID: "m9" } });
+    expect(data).toMatchObject({ apiKeyId: "k1", organizationId: "org-1", url: "https://c.example.com/in", method: "POST", fields: { From: "14155552672", To: "14155552671", Text: "hello", Type: "whatsapp", MessageUUID: "m9" } });
   });
 
   it("sends an empty Text for non-text messages and does nothing without credentials", async () => {
