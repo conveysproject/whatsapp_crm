@@ -87,9 +87,9 @@ export function parseSendBody(body: unknown): ParsedSend {
     const t = body["template"];
     const name = str(t["name"]); const language = str(t["language"]);
     if (!name || !language) throw new SendValidationError("template.name and template.language are required");
-    content = { kind: "template", name, language, components: Array.isArray(t["components"]) ? (t["components"] as PlivoTemplateComponent[]) : [] };
+    content = { kind: "template", name, language, components: validateComponents(t["components"]) };
   } else if (isObj(body["interactive"])) {
-    content = { kind: "interactive", interactive: body["interactive"] as unknown as PlivoInteractive };
+    content = { kind: "interactive", interactive: validateInteractive(body["interactive"]) };
   } else if (isObj(body["location"])) {
     const l = body["location"];
     const [latitude, longitude, name, address] = ["latitude", "longitude", "name", "address"].map((k) => (l[k] == null ? null : String(l[k]))) as Array<string | null>;
@@ -97,6 +97,8 @@ export function parseSendBody(body: unknown): ParsedSend {
       throw new SendValidationError("location requires numeric latitude and longitude plus name and address");
     }
     content = { kind: "location", latitude, longitude, name, address };
+  } else if (body["template"] != null || body["interactive"] != null || body["location"] != null) {
+    throw new SendValidationError("template, interactive and location must be JSON objects");
   } else if (media.length > 0) {
     if (media.length > 1) throw new SendValidationError("WhatsApp messages accept a single media URL");
     const url = str(media[0]);
@@ -111,9 +113,53 @@ export function parseSendBody(body: unknown): ParsedSend {
 
 type MetaParam = NonNullable<WaTemplateComponent["parameters"]>[number];
 
+const bad = (msg: string): never => { throw new SendValidationError(msg); };
+
+/** Validates untrusted template components; throws SendValidationError on any malformed shape. */
+function validateComponents(raw: unknown): PlivoTemplateComponent[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) return bad("template.components must be an array");
+  return raw.map((c: unknown, ci): PlivoTemplateComponent => {
+    if (!isObj(c) || typeof c["type"] !== "string") return bad(`template.components[${ci}] must be an object with a string type`);
+    const rawParams = c["parameters"];
+    if (rawParams !== undefined && !Array.isArray(rawParams)) return bad(`template.components[${ci}].parameters must be an array`);
+    const parameters = ((rawParams ?? []) as unknown[]).map((p, pi) => {
+      const at = `template.components[${ci}].parameters[${pi}]`;
+      if (!isObj(p) || typeof p["type"] !== "string") return bad(`${at} must be an object with a string type`);
+      if (p["type"] === "text") {
+        if (typeof p["text"] !== "string") return bad(`${at}.text must be a string`);
+        return { type: "text", text: p["text"] };
+      }
+      if (p["type"] === "payload") {
+        if (typeof p["payload"] !== "string") return bad(`${at}.payload must be a string`);
+        return { type: "payload", payload: p["payload"] };
+      }
+      if (p["type"] === "media") {
+        const m = p["media"];
+        if (typeof m !== "string" || !m.startsWith("https://")) return bad(`${at}.media must be an https URL`);
+        return { type: "media", media: m };
+      }
+      return bad(`${at}.type must be one of text, media, payload`);
+    });
+    const out: PlivoTemplateComponent = { type: c["type"], parameters };
+    if (c["sub_type"] !== undefined) {
+      if (typeof c["sub_type"] !== "string") return bad(`template.components[${ci}].sub_type must be a string`);
+      out.sub_type = c["sub_type"];
+    }
+    if (c["index"] !== undefined) {
+      const ix = c["index"];
+      if ((typeof ix !== "string" && typeof ix !== "number") || (typeof ix === "string" && ix.trim() === "") || !Number.isInteger(Number(ix))) {
+        return bad(`template.components[${ci}].index must be an integer`);
+      }
+      out.index = ix;
+    }
+    return out;
+  });
+}
+
 export function toMetaTemplateComponents(components: PlivoTemplateComponent[], headerFormat: string | null): WaTemplateComponent[] {
-  return components.map((c) => {
-    const type = c.type?.toLowerCase();
+  return validateComponents(components).map((c) => {
+    const type = c.type.toLowerCase();
     if (type !== "header" && type !== "body" && type !== "button") {
       throw new SendValidationError(`Unsupported template component type: ${c.type}`);
     }
@@ -121,10 +167,10 @@ export function toMetaTemplateComponents(components: PlivoTemplateComponent[], h
       if (p.type === "media") {
         const f = (headerFormat ?? "IMAGE").toLowerCase();
         const kind = f === "video" || f === "document" ? f : "image";
-        return { type: kind, [kind]: { link: p.media ?? "" } } as MetaParam;
+        return { type: kind, [kind]: { link: p.media as string } } as MetaParam;
       }
-      if (p.type === "payload") return { type: "payload", payload: p.payload ?? "" };
-      return { type: "text", text: p.text ?? "" };
+      if (p.type === "payload") return { type: "payload", payload: p.payload as string };
+      return { type: "text", text: p.text as string };
     });
     return {
       type,
@@ -135,8 +181,62 @@ export function toMetaTemplateComponents(components: PlivoTemplateComponent[], h
   });
 }
 
+const INTERACTIVE_TYPES = ["button", "cta_url", "list"];
+
+/** Validates an untrusted interactive object; throws SendValidationError on any malformed shape. */
+function validateInteractive(raw: unknown): PlivoInteractive {
+  if (!isObj(raw)) return bad("interactive must be an object");
+  const type = raw["type"];
+  if (typeof type !== "string" || !INTERACTIVE_TYPES.includes(type)) return bad(`Unsupported interactive type: ${String(type)}`);
+  const body = raw["body"];
+  if (!isObj(body) || typeof body["text"] !== "string") return bad("interactive.body.text must be a string");
+  const action = raw["action"];
+  if (!isObj(action)) return bad("interactive.action must be an object");
+
+  const out: PlivoInteractive = { type, body: { text: body["text"] }, action: {} };
+  const header = raw["header"];
+  if (header !== undefined) {
+    if (!isObj(header) || typeof header["type"] !== "string") return bad("interactive.header must be an object with a string type");
+    if (header["media"] !== undefined && typeof header["media"] !== "string") return bad("interactive.header.media must be a string");
+    out.header = { type: header["type"], ...(typeof header["media"] === "string" ? { media: header["media"] } : {}) };
+  }
+  const footer = raw["footer"];
+  if (footer !== undefined) {
+    if (!isObj(footer) || typeof footer["text"] !== "string") return bad("interactive.footer.text must be a string");
+    out.footer = { text: footer["text"] };
+  }
+  if (action["button"] !== undefined) {
+    if (typeof action["button"] !== "string") return bad("interactive.action.button must be a string");
+    out.action.button = action["button"];
+  }
+  if (action["sections"] !== undefined) {
+    if (!Array.isArray(action["sections"])) return bad("interactive.action.sections must be an array");
+    out.action.sections = action["sections"];
+  }
+  const buttons = action["buttons"];
+  if (buttons !== undefined) {
+    if (!Array.isArray(buttons)) return bad("interactive.action.buttons must be an array");
+    out.action.buttons = buttons.map((b: unknown, i) => {
+      if (!isObj(b) || typeof b["title"] !== "string") return bad(`interactive.action.buttons[${i}] must be an object with a string title`);
+      if (b["id"] !== undefined && typeof b["id"] !== "string") return bad(`interactive.action.buttons[${i}].id must be a string`);
+      if (b["cta_url"] !== undefined && typeof b["cta_url"] !== "string") return bad(`interactive.action.buttons[${i}].cta_url must be a string`);
+      return { title: b["title"], ...(typeof b["id"] === "string" ? { id: b["id"] } : {}), ...(typeof b["cta_url"] === "string" ? { cta_url: b["cta_url"] } : {}) };
+    });
+  }
+  const lists = action["lists"];
+  if (lists !== undefined) {
+    if (!Array.isArray(lists)) return bad("interactive.action.lists must be an array");
+    out.action.lists = lists.map((r: unknown, i) => {
+      if (!isObj(r) || typeof r["title"] !== "string" || typeof r["id"] !== "string") return bad(`interactive.action.lists[${i}] must be an object with string id and title`);
+      return { title: r["title"], id: r["id"] };
+    });
+  }
+  return out;
+}
+
 /** PROVISIONAL: shapes follow Plivo's docs examples; confirm against the client's real interactive requests. */
-export function toMetaInteractive(i: PlivoInteractive): WaInteractivePayload {
+export function toMetaInteractive(input: PlivoInteractive): WaInteractivePayload {
+  const i = validateInteractive(input);
   const header = i.header?.type === "media" && i.header.media
     ? ({ type: inferMediaKind(i.header.media), [inferMediaKind(i.header.media)]: { link: i.header.media } } as WaInteractivePayload["header"])
     : undefined;
@@ -149,12 +249,9 @@ export function toMetaInteractive(i: PlivoInteractive): WaInteractivePayload {
     if (!b?.cta_url) throw new SendValidationError("cta_url requires action.buttons[0].cta_url");
     return { type: "cta_url", ...common, action: { name: "cta_url", parameters: { display_text: b.title, url: b.cta_url } } };
   }
-  if (i.type === "list") {
-    if (i.action.sections) return { type: "list", ...common, action: { button: i.action.button ?? "Options", sections: i.action.sections } };
-    const rows = (i.action.lists ?? []).map((r) => ({ id: r.id, title: r.title }));
-    return { type: "list", ...common, action: { button: i.action.button ?? "Options", sections: [{ title: "Options", rows }] } };
-  }
-  throw new SendValidationError(`Unsupported interactive type: ${i.type}`);
+  if (i.action.sections) return { type: "list", ...common, action: { button: i.action.button ?? "Options", sections: i.action.sections } };
+  const rows = (i.action.lists ?? []).map((r) => ({ id: r.id, title: r.title }));
+  return { type: "list", ...common, action: { button: i.action.button ?? "Options", sections: [{ title: "Options", rows }] } };
 }
 
 type StoredComp = { type?: string; format?: string; text?: string; buttons?: unknown[] };
@@ -165,7 +262,7 @@ export function renderTemplateForInbox(name: string, stored: unknown[], componen
   const find = (t: string) => comps.find((c) => c.type?.toUpperCase() === t);
   let body = find("BODY")?.text ?? "";
   const bodyParams = components.find((c) => c.type?.toLowerCase() === "body")?.parameters ?? [];
-  bodyParams.forEach((p, idx) => { body = body.replace(new RegExp(`\\{\\{${idx + 1}\\}\\}`, "g"), p.text ?? ""); });
+  body = body.replace(/\{\{(\d+)\}\}/g, (_m, n: string) => bodyParams[Number(n) - 1]?.text ?? "");
   const header = find("HEADER");
   return JSON.stringify({
     templateName: name,

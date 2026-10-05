@@ -114,3 +114,100 @@ describe("renderTemplateForInbox", () => {
     expect(json).toMatchObject({ templateName: "welcome", body: "Hi Ann, order 42", footer: "bye" });
   });
 });
+
+// ---- Fix round 1: malformed untrusted input must always yield SendValidationError ----
+const cast = (v: unknown): never => v as never;
+const tpl = (t: unknown) => ({ ...base, template: t });
+const inter = (i: unknown) => ({ ...base, interactive: i });
+const mapT = (components: unknown) => () => toMetaTemplateComponents(cast(components), null);
+const mapI = (i: unknown) => () => toMetaInteractive(cast(i));
+
+describe("exclusivity edge cases", () => {
+  it("rejects text combined with interactive / location / template+media", () => {
+    bad({ ...base, text: "x", interactive: { type: "button", body: { text: "b" }, action: {} } });
+    bad({ ...base, text: "x", location: { latitude: "1", longitude: "2", name: "n", address: "a" } });
+    bad({ ...base, template: { name: "t", language: "en" }, media_urls: ["https://m.example.com/a.png"] });
+  });
+  it("rejects empty media_urls / non-object template with SendValidationError", () => {
+    bad({ ...base, media_urls: [] });
+    bad({ ...base, media_urls: "" });
+    bad({ ...base, template: "str" });
+    bad({ ...base, interactive: "str" });
+    bad({ ...base, location: "str" });
+  });
+});
+
+describe("template component validation", () => {
+  const badComponents: Array<[string, unknown]> = [
+    ["null component", [null]],
+    ["numeric type", [{ type: 5 }]],
+    ["components not array", "x"],
+    ["parameters string", [{ type: "body", parameters: "x" }]],
+    ["parameters object", [{ type: "body", parameters: {} }]],
+    ["parameters [null]", [{ type: "body", parameters: [null] }]],
+    ["parameter numeric type", [{ type: "body", parameters: [{ type: 3 }] }]],
+    ["unknown parameter type", [{ type: "body", parameters: [{ type: "weird", text: "a" }] }]],
+    ["empty parameter type", [{ type: "body", parameters: [{ type: "" }] }]],
+    ["text param w/o text", [{ type: "body", parameters: [{ type: "text" }] }]],
+    ["text param numeric text", [{ type: "body", parameters: [{ type: "text", text: 5 }] }]],
+    ["payload param w/o payload", [{ type: "button", parameters: [{ type: "payload" }] }]],
+    ["media param w/o media", [{ type: "header", parameters: [{ type: "media" }] }]],
+    ["media param empty media", [{ type: "header", parameters: [{ type: "media", media: "" }] }]],
+    ["media param http", [{ type: "header", parameters: [{ type: "media", media: "http://x/a.png" }] }]],
+    ["index abc", [{ type: "button", index: "abc", parameters: [] }]],
+    ["index null", [{ type: "button", index: null, parameters: [] }]],
+    ["index 1.5", [{ type: "button", index: 1.5, parameters: [] }]],
+  ];
+  it.each(badComponents)("mapper rejects %s", (_n, comps) => { expect(mapT(comps)).toThrow(SendValidationError); });
+  it.each(badComponents)("parseSendBody rejects %s", (_n, comps) => {
+    expect(() => parseSendBody(tpl({ name: "t", language: "en", components: comps }))).toThrow(SendValidationError);
+  });
+});
+
+describe("interactive validation", () => {
+  const badInteractive: Array<[string, unknown]> = [
+    ["no body", { type: "button", action: { buttons: [] } }],
+    ["body not object", { type: "button", body: "x", action: { buttons: [] } }],
+    ["non-string body.text", { type: "button", body: { text: 5 }, action: { buttons: [] } }],
+    ["no action", { type: "button", body: { text: "b" } }],
+    ["action not object", { type: "button", body: { text: "b" }, action: "x" }],
+    ["buttons string", { type: "button", body: { text: "b" }, action: { buttons: "x" } }],
+    ["buttons [null]", { type: "button", body: { text: "b" }, action: { buttons: [null] } }],
+    ["button w/o title", { type: "button", body: { text: "b" }, action: { buttons: [{ id: "1" }] } }],
+    ["lists string", { type: "list", body: { text: "b" }, action: { lists: "x" } }],
+    ["lists [null]", { type: "list", body: { text: "b" }, action: { lists: [null] } }],
+    ["cta buttons [null]", { type: "cta_url", body: { text: "b" }, action: { buttons: [null] } }],
+    ["unknown type, no body/action", { type: "x" }],
+    ["missing type", { body: { text: "b" }, action: {} }],
+    ["footer not object", { type: "button", body: { text: "b" }, footer: "f", action: { buttons: [] } }],
+    ["header not object", { type: "button", body: { text: "b" }, header: "h", action: { buttons: [] } }],
+  ];
+  it.each(badInteractive)("mapper rejects %s", (_n, i) => { expect(mapI(i)).toThrow(SendValidationError); });
+  it.each(badInteractive)("parseSendBody+mapper rejects %s", (_n, i) => {
+    expect(() => {
+      const p = parseSendBody(inter(i));
+      if (p.content.kind !== "interactive") throw new Error("wrong kind");
+      toMetaInteractive(p.content.interactive);
+    }).toThrow(SendValidationError);
+  });
+  it("unknown type reports Unsupported interactive type even without body/action", () => {
+    expect(mapI({ type: "x" })).toThrow(/Unsupported interactive type/);
+  });
+});
+
+describe("renderTemplateForInbox hardening", () => {
+  const render = (text: string, params: string[]) =>
+    (JSON.parse(renderTemplateForInbox("n", [{ type: "BODY", text }], [{ type: "body", parameters: params.map((t) => ({ type: "text", text: t })) }])) as { body: string }).body;
+  it("treats parameter text literally (no $ replacement patterns)", () => {
+    expect(render("Pay {{1}} now", ["Total $& due"])).toBe("Pay Total $& due now");
+    expect(render("Pay {{1}} now", ["$$"])).toBe("Pay $$ now");
+    expect(render("Pay {{1}} now", ["$1"])).toBe("Pay $1 now");
+    expect(render("Pay {{1}} now", ["a$`b"])).toBe("Pay a$`b now");
+  });
+  it("does a single pass (no re-substitution inside inserted values)", () => {
+    expect(render("A {{1}} B {{2}}", ["{{2}}", "x"])).toBe("A {{2}} B x");
+  });
+  it("replaces missing params with empty string", () => {
+    expect(render("A {{1}} B {{2}}", ["x"])).toBe("A x B ");
+  });
+});
