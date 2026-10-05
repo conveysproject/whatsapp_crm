@@ -11,6 +11,9 @@ interface SettingEntry {
   dataType?: string;
 }
 
+/** Keys (lower-cased prefixes) that only the platform may set: see lib/plan-limits.ts. */
+const PLATFORM_CONTROLLED_PREFIXES = ["plan_feature_", "plan_limit_"] as const;
+
 function castSetting(value: string | null, dataType: string): unknown {
   if (value === null || value === "") return null;
   switch (dataType) {
@@ -88,7 +91,21 @@ export const vendorSettingsRouter: FastifyPluginAsync = async (fastify) => {
       if (!canAccess(role, permissions, "settings_access")) {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_access permission required" } });
       }
-      const { settings } = request.body;
+      const { settings } = request.body ?? {};
+      if (
+        !Array.isArray(settings) ||
+        settings.some((s) => typeof s !== "object" || s === null || typeof s.key !== "string" || s.key.trim() === "")
+      ) {
+        return reply.status(400).send({ error: { code: "INVALID_BODY", message: "settings must be a list of { key, value } entries" } });
+      }
+      // Plan switches and limits are platform-controlled. Never let a tenant (even an admin) write them here,
+      // or they could grant themselves plan features (e.g. api_access) or lift plan limits.
+      const blocked = settings.filter((s) => PLATFORM_CONTROLLED_PREFIXES.some((p) => s.key.trim().toLowerCase().startsWith(p)));
+      if (blocked.length > 0) {
+        return reply.status(400).send({
+          error: { code: "FORBIDDEN_KEY", message: "These settings are managed by the platform and cannot be changed here" },
+        });
+      }
       await Promise.all(
         settings.map((s) =>
           fastify.prisma.vendorSetting.upsert({

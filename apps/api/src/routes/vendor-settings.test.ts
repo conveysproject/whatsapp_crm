@@ -55,6 +55,56 @@ describe("PUT /v1/vendor-settings", () => {
     expect(res.statusCode).toBe(200);
     expect(mockPrisma.vendorSetting.upsert).toHaveBeenCalledTimes(1);
   });
+
+  // Plan switches and limits are platform-controlled: a tenant admin must not be able to grant themselves
+  // plan features or lift plan limits through the generic settings writer.
+  it.each([
+    "plan_feature_api_access",
+    "plan_feature_ai_chat_bot",
+    "plan_limit_contacts",
+    "plan_limit_team_members",
+    "  Plan_Feature_API_Access ",
+    "PLAN_LIMIT_FLOWS",
+  ])("rejects the platform-controlled key %j with 400 and writes nothing", async (key) => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/vendor-settings",
+      payload: { settings: [{ key, value: "1" }] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: { code: "FORBIDDEN_KEY" } });
+    expect(mockPrisma.vendorSetting.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects the WHOLE request when one key is platform-controlled (no partial write)", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/vendor-settings",
+      payload: { settings: [{ key: "enable_vendor_webhook", value: "true" }, { key: "plan_limit_contacts", value: "-1" }] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.vendorSetting.upsert).not.toHaveBeenCalled();
+  });
+
+  it("does not block ordinary keys that merely contain 'plan' (e.g. plan_notes_text, my_plan_feature_flag)", async () => {
+    mockPrisma.vendorSetting.upsert.mockResolvedValue({});
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/vendor-settings",
+      payload: { settings: [{ key: "plan_notes_text", value: "x" }, { key: "my_plan_feature_flag", value: "x" }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.vendorSetting.upsert).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns 400 INVALID_BODY (not a 500) for a missing/non-array settings list or non-string keys", async () => {
+    for (const payload of [{}, { settings: "x" }, { settings: [{ value: "1" }] }, { settings: [{ key: 5, value: "1" }] }, { settings: [null] }]) {
+      const res = await app.inject({ method: "PUT", url: "/v1/vendor-settings", payload });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: { code: "INVALID_BODY" } });
+    }
+    expect(mockPrisma.vendorSetting.upsert).not.toHaveBeenCalled();
+  });
 });
 
 describe("settings section gate (D15)", () => {
