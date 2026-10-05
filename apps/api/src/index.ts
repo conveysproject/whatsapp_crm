@@ -24,6 +24,8 @@ import { startMessageCleanupWorker, scheduleMessageCleanupCron } from "./workers
 import { startTrustScoreWorker, scheduleTrustScoreCron } from "./workers/trust-score.js";
 import { startClosureDeadlineWorker, scheduleClosureDeadlineCron } from "./workers/closure-deadline.worker.js";
 import { startRegisterPhoneWorker, scheduleRegisterPhoneSweepCron } from "./workers/register-phone.worker.js";
+import { startPublicApiSendWorker } from "./workers/public-api-send.worker.js";
+import { startPublicApiCallbackWorker } from "./workers/public-api-callbacks.worker.js";
 console.log("[startup] all workers ready");
 
 if (process.env["NODE_ENV"] === "production" && process.env["IS_DEMO_MODE"] === "true") {
@@ -74,6 +76,10 @@ async function start() {
   if (process.env["AUTO_REGISTER_PHONE_ENABLED"] === "true") {
     startRegisterPhoneWorker();
     scheduleRegisterPhoneSweepCron().catch((err) => server.log.warn({ err }, "Register-phone sweep schedule failed"));
+  }
+  if (process.env["PUBLIC_API_ENABLED"] === "true") {
+    startPublicApiSendWorker();
+    startPublicApiCallbackWorker();
   }
 }
 

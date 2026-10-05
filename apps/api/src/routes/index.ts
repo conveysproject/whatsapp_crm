@@ -53,6 +53,7 @@ import { rolesRouter } from "./roles.js";
 import { notificationsRouter } from "./notifications.js";
 import { automationSettingsRouter } from "./automation-settings.js";
 import { contactEventsRouter } from "./contact-events.js";
+import { publicApiRouter } from "./public-api/index.js";
 
 export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoute);
@@ -109,4 +110,8 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(rolesRouter, { prefix: "/v1" });
   await fastify.register(notificationsRouter, { prefix: "/v1" });
   await fastify.register(automationSettingsRouter, { prefix: "/v1" });
+  // Plivo-compatible public API: off unless PUBLIC_API_ENABLED=true (see docs/prd-plivo-compatible-api.md).
+  if (process.env["PUBLIC_API_ENABLED"] === "true") {
+    await fastify.register(publicApiRouter, { prefix: "/v1/Account/:authId" });
+  }
 };
