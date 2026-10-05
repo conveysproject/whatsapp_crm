@@ -5,7 +5,11 @@ import type { PrismaClient } from "@prisma/client";
 const sendAdd = vi.fn();
 const enqueueCb = vi.fn();
 vi.mock("../../lib/public-api/queues.js", () => ({ publicApiSendQueue: { add: (...a: unknown[]) => sendAdd(...a) }, publicApiCallbackQueue: { add: vi.fn() } }));
-vi.mock("../../lib/public-api/callbacks.js", () => ({ enqueueStatusCallback: (...a: unknown[]) => enqueueCb(...a), businessNumberDigits: vi.fn() }));
+vi.mock("../../lib/public-api/callbacks.js", () => ({ enqueueStatusCallback: (...a: unknown[]) => enqueueCb(...a), businessNumberDigits: async (p: PrismaClient, org: string) => {
+    const r = await p.vendorSetting.findFirst({ where: { organizationId: org, key: "current_phone_number_number" } });
+    return (r?.value ?? "").replace(/\D/g, "");
+  },
+}));
 vi.mock("../../lib/public-api/safe-url.js", async (orig) => {
   const real = await orig<typeof import("../../lib/public-api/safe-url.js")>();
   return { ...real, assertSafeCallbackUrl: vi.fn(async (u: string) => { if (u.includes("bad")) throw new real.UnsafeUrlError("unsafe"); return new URL(u); }) };
@@ -19,7 +23,7 @@ const mockPrisma = {
   contact: { upsert: vi.fn() },
   conversation: { findFirst: vi.fn(), create: vi.fn() },
   message: { create: vi.fn(), update: vi.fn() },
-  apiMessageMeta: { create: vi.fn() },
+  apiMessageMeta: { create: vi.fn(), findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn() },
 };
 
 async function buildApp(): Promise<FastifyInstance> {
@@ -156,5 +160,77 @@ describe("POST /Message/", () => {
     expect(mockPrisma.message.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "msg-1", organizationId: "org-1" }, data: expect.objectContaining({ status: "failed" }) }));
     expect(sendAdd).toHaveBeenCalledTimes(1);
     expect(sendAdd.mock.calls[0]![1]).toMatchObject({ messageId: "msg-2" });
+  });
+});
+
+describe("GET /Message/", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    vi.resetModules(); vi.clearAllMocks();
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "+1 415-555-2671" });
+    app = await buildApp();
+  });
+  afterEach(async () => { await app.close(); });
+
+  const row = (over: Record<string, unknown> = {}) => ({
+    messageId: "m1", dst: "14155552672", lastStatus: "delivered", errorCode: null, queuedAt: new Date("2026-10-05T10:00:00Z"),
+    message: { id: "m1", status: "delivered" }, ...over,
+  });
+
+  it("lists org-scoped API messages with Plivo pagination meta", async () => {
+    mockPrisma.apiMessageMeta.findMany.mockResolvedValue([row()]);
+    mockPrisma.apiMessageMeta.count.mockResolvedValue(45);
+    const res = await app.inject({ method: "GET", url: "/v1/Account/k1/Message/?limit=20&offset=20" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ meta: Record<string, unknown>; objects: Array<Record<string, unknown>> }>();
+    expect(body.meta).toMatchObject({ limit: 20, offset: 20, total_count: 45, previous: expect.any(String), next: expect.any(String) });
+    expect(body.objects[0]).toMatchObject({ message_uuid: "m1", message_direction: "outbound", message_state: "delivered", message_type: "whatsapp", from_number: "14155552671", to_number: "14155552672", message_time: "2026-10-05 10:00:00+00:00" });
+    const where = mockPrisma.apiMessageMeta.findMany.mock.calls[0]![0].where;
+    expect(where).toMatchObject({ organizationId: "org-1" });
+  });
+
+  it("caps limit at 20 and applies filters", async () => {
+    mockPrisma.apiMessageMeta.findMany.mockResolvedValue([]);
+    mockPrisma.apiMessageMeta.count.mockResolvedValue(0);
+    await app.inject({ method: "GET", url: "/v1/Account/k1/Message/?limit=500&message_state=failed&error_code=380&message_time__gt=2026-10-05%2000:00:00" });
+    const arg = mockPrisma.apiMessageMeta.findMany.mock.calls[0]![0];
+    expect(arg.take).toBe(20);
+    expect(arg.where).toMatchObject({ organizationId: "org-1", lastStatus: "failed", errorCode: "380" });
+    expect(arg.where.queuedAt.gt).toEqual(new Date("2026-10-05T00:00:00Z"));
+  });
+
+  it("returns an empty page for inbound direction (inbound messages are not API-listed)", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/Account/k1/Message/?message_direction=inbound" });
+    expect(res.json<{ objects: unknown[] }>().objects).toEqual([]);
+    expect(mockPrisma.apiMessageMeta.findMany).not.toHaveBeenCalled();
+  });
+
+  it("400 for a bad time filter", async () => {
+    expect((await app.inject({ method: "GET", url: "/v1/Account/k1/Message/?message_time__gt=garbage" })).statusCode).toBe(400);
+  });
+});
+
+describe("GET /Message/:uuid/", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    vi.resetModules(); vi.clearAllMocks();
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "14155552671" });
+    app = await buildApp();
+  });
+  afterEach(async () => { await app.close(); });
+
+  it("returns the message, looked up by uuid AND org", async () => {
+    mockPrisma.apiMessageMeta.findFirst.mockResolvedValue({ messageId: "m1", dst: "14155552672", lastStatus: "sent", errorCode: null, queuedAt: new Date("2026-10-05T10:00:00Z"), message: { id: "m1", status: "sent" } });
+    const res = await app.inject({ method: "GET", url: "/v1/Account/k1/Message/m1/" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ message_uuid: "m1", message_state: "sent", api_id: expect.any(String) });
+    expect(mockPrisma.apiMessageMeta.findFirst.mock.calls[0]![0].where).toEqual({ messageId: "m1", organizationId: "org-1" });
+  });
+
+  it("404 (same body as unknown) for another org's message", async () => {
+    mockPrisma.apiMessageMeta.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "GET", url: "/v1/Account/k1/Message/other-org-msg/" });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ error: expect.any(String), api_id: expect.any(String) });
   });
 });
