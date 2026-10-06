@@ -64,7 +64,7 @@ export const PERMISSION_GROUPS = [
     description: "Access to configuration sections",
     subPermissions: [
       { key: "settings_agents", label: "Agent settings" },
-      { key: "settings_api_key", label: "API Key access" },
+      { key: "settings_api_key", label: "API credentials" },
       { key: "settings_whatsapp", label: "WhatsApp Business Setup" },
       { key: "settings_billing", label: "Invoice & Billing" },
       { key: "settings_tags", label: "Manage Tags" },

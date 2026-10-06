@@ -12,6 +12,7 @@ import {
   formatDate,
   formatLastUsed,
   listCredentials,
+  MAX_ACTIVE_CREDENTIALS,
   messageForError,
   revokeCredential,
   rotateCredential,
@@ -287,10 +288,13 @@ function ApiCredentialsBody(): JSX.Element | null {
 
   const refresh = (): Promise<void> => qc.invalidateQueries({ queryKey: QUERY_KEY });
 
-  // Orgs without API access never see this section (and are not invited to ask for it): render nothing while
-  // the first request is in flight and when the server says the plan does not include API access.
-  const planRequired = error instanceof ApiCredentialsError && error.code === "PLAN_REQUIRED";
-  if (isLoading || planRequired) return null;
+  // Orgs without API access (not yet rolled out, or blocked) never see this section: render nothing while the
+  // first request is in flight and when the server says API access is not available.
+  const notAvailable = error instanceof ApiCredentialsError && error.code === "API_NOT_AVAILABLE";
+  if (isLoading || notAvailable) return null;
+
+  const activeCount = (data ?? []).filter((c) => c.revokedAt === null).length;
+  const atLimit = activeCount >= MAX_ACTIVE_CREDENTIALS;
 
   let content: JSX.Element;
   if (error) {
@@ -331,9 +335,21 @@ function ApiCredentialsBody(): JSX.Element | null {
           </p>
         </div>
         {!error && (
-          <button type="button" onClick={() => setDialog({ kind: "create" })} className={`${primaryBtn} shrink-0`}>
-            Create credential
-          </button>
+          <div className="shrink-0 flex flex-col items-end gap-1">
+            <button
+              type="button"
+              onClick={() => setDialog({ kind: "create" })}
+              disabled={atLimit}
+              className={primaryBtn}
+            >
+              Create credential
+            </button>
+            {atLimit && (
+              <p data-testid="credential-limit" className="text-xs text-gray-500">
+                {activeCount} of {MAX_ACTIVE_CREDENTIALS} active credentials. Revoke one to create another.
+              </p>
+            )}
+          </div>
         )}
       </div>
 
@@ -404,7 +420,7 @@ function ApiCredentialsBody(): JSX.Element | null {
 
 export function ApiCredentialsSection(): JSX.Element {
   return (
-    <PermissionGate permission="settings_access" sub="api_credentials">
+    <PermissionGate permission="settings_access" sub="settings_api_key">
       <ApiCredentialsBody />
     </PermissionGate>
   );

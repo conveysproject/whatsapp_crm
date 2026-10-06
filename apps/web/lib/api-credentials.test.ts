@@ -90,6 +90,14 @@ describe("api calls", () => {
     expect((err as ApiCredentialsError).code).toBe("INVALID_URL");
     expect(messageForError(err)).toBe("callbackUrl must be public https");
   });
+  it("shows the server's CREDENTIAL_LIMIT message and no longer special-cases PLAN_REQUIRED", async () => {
+    const message = "You can have at most 10 active credentials. Revoke one first.";
+    mockFetch(409, { error: { code: "CREDENTIAL_LIMIT", message } });
+    const err = await createCredential({ name: "n", callbackUrl: "", inboundUrl: "" }).catch((e: unknown) => e);
+    expect((err as ApiCredentialsError).code).toBe("CREDENTIAL_LIMIT");
+    expect(messageForError(err)).toBe(message);
+    expect(messageForError(new ApiCredentialsError("PLAN_REQUIRED", "raw", 403))).toBe("raw");
+  });
   it("never leaks raw objects for unknown errors", () => {
     expect(messageForError({ weird: true })).toMatch(/try again/i);
   });

@@ -28,6 +28,8 @@ export interface CredentialInput {
 
 export const NAME_MAX = 100;
 export const URL_MAX = 2048;
+/** Server-side cap on non-revoked credentials per organization (keep in sync with the API). */
+export const MAX_ACTIVE_CREDENTIALS = 10;
 
 export class ApiCredentialsError extends Error {
   readonly code: string;
@@ -71,7 +73,6 @@ export function validateCredentialInput(input: CredentialInput): CredentialFormE
 /** Human-readable message for any thrown value; never exposes raw objects or stacks. */
 export function messageForError(err: unknown): string {
   if (err instanceof ApiCredentialsError) {
-    if (err.code === "PLAN_REQUIRED") return "API access is not enabled for your plan. Contact support to enable it.";
     if (err.code === "NOT_CONFIGURED") return "API credentials are temporarily unavailable. Please contact support.";
     if (err.code === "FORBIDDEN") return "You do not have permission to manage API credentials.";
     return err.message;

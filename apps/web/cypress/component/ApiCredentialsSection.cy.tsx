@@ -55,16 +55,45 @@ describe('ApiCredentialsSection', () => {
     cy.contains('button', 'Create credential').should('be.visible');
   });
 
-  it('renders nothing at all on PLAN_REQUIRED (orgs without API access never see the section)', () => {
+  it('renders nothing at all on API_NOT_AVAILABLE (orgs without API access never see the section)', () => {
     cy.intercept('GET', '/api/v1/api-credentials', {
       statusCode: 403,
-      body: { error: { code: 'PLAN_REQUIRED', message: 'plan' } },
+      body: { error: { code: 'API_NOT_AVAILABLE', message: 'API access is not available for this organization.' } },
     }).as('list');
     mountSection();
     cy.wait('@list');
     cy.contains('API Credentials').should('not.exist');
-    cy.contains('Contact support').should('not.exist');
+    cy.contains('not available').should('not.exist');
     cy.contains('button', 'Create credential').should('not.exist');
+  });
+
+  it('disables Create and shows "10 of 10 active credentials" at the cap; revoked ones do not count', () => {
+    const ten = Array.from({ length: 10 }, (_, i) => ({ ...active, id: `MAACT${i}`, name: `Key ${i}` }));
+    cy.intercept('GET', '/api/v1/api-credentials', { body: { data: [...ten, revoked] } });
+    mountSection();
+    cy.contains('button', 'Create credential').should('be.disabled');
+    cy.get('[data-testid="credential-limit"]').should('contain.text', '10 of 10 active credentials');
+  });
+
+  it('keeps Create enabled with 9 active credentials plus revoked ones', () => {
+    const nine = Array.from({ length: 9 }, (_, i) => ({ ...active, id: `MAACT${i}`, name: `Key ${i}` }));
+    cy.intercept('GET', '/api/v1/api-credentials', { body: { data: [...nine, revoked, revoked] } });
+    mountSection();
+    cy.contains('button', 'Create credential').should('not.be.disabled');
+    cy.get('[data-testid="credential-limit"]').should('not.exist');
+  });
+
+  it('shows the server message when the create call is rejected with CREDENTIAL_LIMIT', () => {
+    cy.intercept('GET', '/api/v1/api-credentials', { body: { data: [] } });
+    cy.intercept('POST', '/api/v1/api-credentials', {
+      statusCode: 409,
+      body: { error: { code: 'CREDENTIAL_LIMIT', message: 'You can have at most 10 active credentials. Revoke one first.' } },
+    });
+    mountSection();
+    cy.contains('button', 'Create credential').click();
+    cy.get('#cred-create-name').type('CI');
+    cy.get('[role="dialog"]').contains('button', 'Create credential').click();
+    cy.contains('You can have at most 10 active credentials. Revoke one first.').should('be.visible');
   });
 
   it('does not flash the section while the first request is still loading', () => {
