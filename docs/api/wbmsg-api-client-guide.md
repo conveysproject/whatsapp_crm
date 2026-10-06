@@ -64,7 +64,7 @@ WhatsApp rules still apply: free-form (`text`, `media_urls`, `interactive`, `loc
 
 **Inbound messages** from your customers are forwarded to your inbound URL with `From`, `To`, `Text`, `Type`, `MessageUUID` **(confirm; media, location and button replies are being aligned with your samples)**.
 
-**Signature:** every callback carries `X-Plivo-Signature-V2` and `X-Plivo-Signature-V2-Nonce`. Verify with your Auth Token: `base64(HMAC-SHA256(auth_token, callback_url_without_query + nonce))`. Callbacks only go to public `https` URLs; private or internal addresses are refused.
+**Signature:** every callback carries a signature header and a nonce header (your WBMSG contact provides the exact header names for your integration). Verify with your Auth Token: `base64(HMAC-SHA256(auth_token, callback_url_without_query + nonce))`. Callbacks only go to public `https` URLs; private or internal addresses are refused.
 
 ## 6. Templates
 All under `/WhatsApp/Template/{waba_id}/`; `waba_id` is your WhatsApp Business Account ID (any other ID returns `404`).
