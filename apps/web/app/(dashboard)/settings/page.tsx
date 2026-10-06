@@ -3,6 +3,7 @@ import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { PermissionGate } from "@/components/PermissionGate";
+import { ApiUsageLink } from "@/components/settings/api-usage/ApiUsageLink";
 
 interface Org {
   name: string;
@@ -68,6 +69,7 @@ export default async function SettingsPage(): Promise<JSX.Element> {
             <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
           </Link>
         ))}
+        <ApiUsageLink />
       </div>
     </div>
     </PermissionGate>

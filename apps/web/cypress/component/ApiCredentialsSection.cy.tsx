@@ -38,6 +38,7 @@ describe('ApiCredentialsSection', () => {
     cy.contains('Production').should('be.visible');
     cy.contains('MAACTIVE0001').should('be.visible');
     cy.contains('Never').should('be.visible');
+    cy.contains('a', 'View usage').should('have.attr', 'href', '/settings/api-usage');
     cy.get('[data-revoked="false"]').within(() => {
       cy.contains('button', 'Rotate').should('exist');
       cy.contains('button', 'Revoke').should('exist');
@@ -63,6 +64,7 @@ describe('ApiCredentialsSection', () => {
     mountSection();
     cy.wait('@list');
     cy.contains('API Credentials').should('not.exist');
+    cy.contains('View usage').should('not.exist');
     cy.contains('not available').should('not.exist');
     cy.contains('button', 'Create credential').should('not.exist');
   });

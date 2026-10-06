@@ -21,6 +21,7 @@ const LABELS: Record<string, string> = {
   billing: "Billing",
   labels: "Labels",
   "vendor-settings": "Advanced Settings",
+  "api-usage": "API Usage",
   "whatsapp-account": "WhatsApp Account",
   routing: "Routing Rules",
   "media-library": "Media Library",

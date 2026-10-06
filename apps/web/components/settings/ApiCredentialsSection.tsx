@@ -3,6 +3,7 @@
 import { JSX, useState, type FormEvent } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { toast } from "sonner";
 import { PermissionGate } from "@/components/PermissionGate";
 import { CopyButton, CredentialRevealDialog } from "@/components/settings/CredentialRevealDialog";
@@ -333,6 +334,9 @@ function ApiCredentialsBody(): JSX.Element | null {
           <p className="text-sm text-gray-500">
             Auth ID and Auth Token for the WBMSG API. Tokens are shown only once, when created or rotated.
           </p>
+          <Link href="/settings/api-usage" className="mt-1 inline-block text-sm text-blue-600 hover:underline">
+            View usage
+          </Link>
         </div>
         {!error && (
           <div className="shrink-0 flex flex-col items-end gap-1">
