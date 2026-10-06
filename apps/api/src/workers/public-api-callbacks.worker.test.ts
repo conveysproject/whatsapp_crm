@@ -55,6 +55,9 @@ describe("deliverCallback", () => {
     const nonce = init.headers["X-Plivo-Signature-V2-Nonce"]!;
     expect(init.headers["X-Plivo-Signature-V2"]).toBe(signV2("https://c.example.com/hook", nonce, "secret-token"));
     expect(init.headers["X-Plivo-Signature-Ma-V2"]).toBe(init.headers["X-Plivo-Signature-V2"]);
+    // WBMSG-named copies carry the same value, so clients can move off the legacy header names
+    expect(init.headers["X-WBMSG-Signature"]).toBe(init.headers["X-Plivo-Signature-V2"]);
+    expect(init.headers["X-WBMSG-Signature-Nonce"]).toBe(nonce);
   });
 
   it("GET callbacks carry fields in the query string and sign the URL without it", async () => {

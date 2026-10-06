@@ -37,7 +37,10 @@ export async function deliverCallback(job: Pick<Job<CallbackJob>, "data">, fetch
   const nonce = newNonce();
   const signature = signV2(url, nonce, authToken);
   const form = new URLSearchParams(fields).toString();
+  // The X-WBMSG-* names are the supported ones; the legacy names stay so integrations written against them keep verifying.
   const headers: Record<string, string> = {
+    "X-WBMSG-Signature": signature,
+    "X-WBMSG-Signature-Nonce": nonce,
     "X-Plivo-Signature-V2": signature,
     "X-Plivo-Signature-Ma-V2": signature,
     "X-Plivo-Signature-V2-Nonce": nonce,
