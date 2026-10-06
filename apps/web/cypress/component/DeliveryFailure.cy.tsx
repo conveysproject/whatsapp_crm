@@ -25,6 +25,12 @@ describe('Inbox failed message', () => {
     cy.mount(<div><FailedTick deliveryError={err} /><NotDeliveredNote status="failed" deliveryError={err} /></div>);
     cy.get('[data-testid="not-delivered"]').should('have.text', 'Not delivered: Healthy ecosystem (code 131049)');
     cy.get('span[title]').should('have.attr', 'title', '131049: Healthy ecosystem — Blocked (engagement)');
+    cy.get('[role="img"]').should('have.attr', 'aria-label', 'Not delivered: 131049: Healthy ecosystem — Blocked (engagement)');
+  });
+  it('keeps a hidden text label on the failed tick when there is no reason', () => {
+    cy.mount(<FailedTick deliveryError={null} />);
+    cy.get('[role="img"]').should('have.attr', 'aria-label', 'Not delivered');
+    cy.get('[data-testid="failed-tick-text"]').should('have.text', 'Not delivered');
   });
   it('renders no note when there is no reason or the message did not fail', () => {
     cy.mount(<NotDeliveredNote status="failed" deliveryError={null} />);

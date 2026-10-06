@@ -5,6 +5,7 @@ import { useInfiniteQuery, useQueryClient, type InfiniteData } from "@tanstack/r
 import { useEffect } from "react";
 import { getSocket } from "@/lib/socket";
 import type { DeliveryError } from "@/lib/delivery-error";
+import { createCoalescer, shouldRefetchForFailedStatus } from "@/lib/failed-status-refetch";
 
 export interface Message {
   id: string;
@@ -67,10 +68,15 @@ export function useMessages(conversationId: string | null) {
       }
     };
 
+    // The socket event carries no reason: refetch so Meta's failure reason appears without a manual refresh.
+    // Only when this thread holds the message, and coalesced so a campaign's burst of failures causes one refetch.
+    const refetch = createCoalescer(() => {
+      void queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+    }, 1000);
+
     const statusHandler = (data: { whatsappMessageId: string; status: string }) => {
-      // The socket event carries no reason: refetch so Meta's failure reason appears without a manual refresh.
-      if (data.status === "failed") {
-        void queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+      if (data.status === "failed" && shouldRefetchForFailedStatus(queryClient.getQueryData(["messages", conversationId]), data.whatsappMessageId)) {
+        refetch.trigger();
       }
       queryClient.setQueryData(
         ["messages", conversationId],
@@ -94,6 +100,7 @@ export function useMessages(conversationId: string | null) {
     return () => {
       socket.off("new-message", newMsgHandler);
       socket.off("message:status", statusHandler);
+      refetch.cancel();
     };
   }, [conversationId, queryClient]);
 

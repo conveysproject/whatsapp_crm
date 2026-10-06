@@ -5,8 +5,9 @@ import { formatDeliveryError, shortDeliveryError, type DeliveryError } from "@/l
 export function FailedTick({ deliveryError }: { deliveryError?: DeliveryError | null }): JSX.Element {
   const reason = formatDeliveryError(deliveryError);
   return (
-    <span className="text-red-400 text-[10px] ml-1" title={reason || "Not delivered"} aria-label={reason ? `Not delivered: ${reason}` : "Not delivered"}>
-      !
+    <span role="img" className="text-red-400 text-[10px] ml-1" title={reason || "Not delivered"} aria-label={reason ? `Not delivered: ${reason}` : "Not delivered"}>
+      <span aria-hidden="true">!</span>
+      {!reason && <span className="sr-only" data-testid="failed-tick-text">Not delivered</span>}
     </span>
   );
 }
