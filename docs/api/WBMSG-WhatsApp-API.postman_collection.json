@@ -1,0 +1,606 @@
+{
+  "info": {
+    "name": "WBMSG WhatsApp API",
+    "description": "Sample requests for the WBMSG WhatsApp API: send messages, read delivery state, manage templates.\n\n1. Set the collection variables auth_id and auth_token (Settings > API Credentials in the WBMSG dashboard), plus src (your WhatsApp Business number), dst (a recipient), waba_id and template_name.\n2. Run a request. Authentication (HTTP Basic) is configured once at the collection level.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      {
+        "key": "username",
+        "value": "{{auth_id}}",
+        "type": "string"
+      },
+      {
+        "key": "password",
+        "value": "{{auth_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://wbmsg-production.up.railway.app"
+    },
+    {
+      "key": "auth_id",
+      "value": ""
+    },
+    {
+      "key": "auth_token",
+      "value": ""
+    },
+    {
+      "key": "src",
+      "value": "918269150291"
+    },
+    {
+      "key": "dst",
+      "value": "919876543210"
+    },
+    {
+      "key": "dst2",
+      "value": "919876543211"
+    },
+    {
+      "key": "waba_id",
+      "value": ""
+    },
+    {
+      "key": "template_name",
+      "value": "your_template_name"
+    },
+    {
+      "key": "template_language",
+      "value": "en"
+    },
+    {
+      "key": "template_id",
+      "value": ""
+    },
+    {
+      "key": "message_uuid",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Messages",
+      "item": [
+        {
+          "name": "Send text message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/Message/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "Message"
+              ]
+            },
+            "description": "Free-form text. Delivered only inside the 24-hour window after the customer last messaged you; otherwise use a template.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"src\": \"{{src}}\",\n  \"dst\": \"{{dst}}\",\n  \"type\": \"whatsapp\",\n  \"text\": \"Hello from WBMSG!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Queued (202)', () => pm.response.to.have.status(202));",
+                  "const ids = pm.response.json().message_uuid;",
+                  "if (ids && ids.length) pm.collectionVariables.set('message_uuid', ids[0]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send template message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/Message/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "Message"
+              ]
+            },
+            "description": "The template must be APPROVED and language must match exactly. Remove or add components to match your template (a header needs a media parameter).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"src\": \"{{src}}\",\n  \"dst\": \"{{dst}}\",\n  \"type\": \"whatsapp\",\n  \"template\": {\n    \"name\": \"{{template_name}}\",\n    \"language\": \"{{template_language}}\",\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"Alex\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": \"WB-1001\"\n          }\n        ]\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Queued (202)', () => pm.response.to.have.status(202));",
+                  "const ids = pm.response.json().message_uuid;",
+                  "if (ids && ids.length) pm.collectionVariables.set('message_uuid', ids[0]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send template message with image header",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/Message/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "Message"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"src\": \"{{src}}\",\n  \"dst\": \"{{dst}}\",\n  \"type\": \"whatsapp\",\n  \"template\": {\n    \"name\": \"{{template_name}}\",\n    \"language\": \"{{template_language}}\",\n    \"components\": [\n      {\n        \"type\": \"header\",\n        \"parameters\": [\n          {\n            \"type\": \"media\",\n            \"media\": \"https://example.com/logo.png\"\n          }\n        ]\n      },\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"Alex\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": \"WB-1001\"\n          }\n        ]\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Queued (202)', () => pm.response.to.have.status(202));",
+                  "const ids = pm.response.json().message_uuid;",
+                  "if (ids && ids.length) pm.collectionVariables.set('message_uuid', ids[0]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send to several recipients (dst separated by <)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/Message/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "Message"
+              ]
+            },
+            "description": "Up to 20 recipients. 'url' sets the status callback for this request (public https only).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"src\": \"{{src}}\",\n  \"dst\": \"{{dst}}<{{dst2}}\",\n  \"type\": \"whatsapp\",\n  \"template\": {\n    \"name\": \"{{template_name}}\",\n    \"language\": \"{{template_language}}\",\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"Alex\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": \"WB-1001\"\n          }\n        ]\n      }\n    ]\n  },\n  \"url\": \"https://your-server.example.com/wbmsg/status\",\n  \"method\": \"POST\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Queued (202)', () => pm.response.to.have.status(202));",
+                  "const ids = pm.response.json().message_uuid;",
+                  "if (ids && ids.length) pm.collectionVariables.set('message_uuid', ids[0]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/Message/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "Message"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"src\": \"{{src}}\",\n  \"dst\": \"{{dst}}\",\n  \"type\": \"whatsapp\",\n  \"media_urls\": [\n    \"https://example.com/photo.jpg\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Queued (202)', () => pm.response.to.have.status(202));",
+                  "const ids = pm.response.json().message_uuid;",
+                  "if (ids && ids.length) pm.collectionVariables.set('message_uuid', ids[0]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/Message/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "Message"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"src\": \"{{src}}\",\n  \"dst\": \"{{dst}}\",\n  \"type\": \"whatsapp\",\n  \"location\": {\n    \"latitude\": \"28.6139\",\n    \"longitude\": \"77.2090\",\n    \"name\": \"Our office\",\n    \"address\": \"New Delhi, India\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Queued (202)', () => pm.response.to.have.status(202));",
+                  "const ids = pm.response.json().message_uuid;",
+                  "if (ids && ids.length) pm.collectionVariables.set('message_uuid', ids[0]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/Message/?limit=20&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "Message"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "Newest first. Optional filters: message_state, message_direction, message_type, error_code."
+          }
+        },
+        {
+          "name": "List delivered messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/Message/?message_state=delivered&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "Message"
+              ],
+              "query": [
+                {
+                  "key": "message_state",
+                  "value": "delivered"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get message",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/Message/{{message_uuid}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "Message",
+                "{{message_uuid}}"
+              ]
+            },
+            "description": "message_uuid is saved automatically by the send requests above."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Templates",
+      "item": [
+        {
+          "name": "Create template (utility)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/WhatsApp/Template/{{waba_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "WhatsApp",
+                "Template",
+                "{{waba_id}}"
+              ]
+            },
+            "description": "Submits to WhatsApp for review. Keep utility templates plainly transactional.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"account_update\",\n  \"language\": \"en\",\n  \"category\": \"UTILITY\",\n  \"components\": [\n    {\n      \"type\": \"BODY\",\n      \"text\": \"Hi {{1}}, your account setup was updated. Reference: {{2}}.\",\n      \"example\": {\n        \"body_text\": [\n          [\n            \"Alex\",\n            \"WB-1001\"\n          ]\n        ]\n      }\n    },\n    {\n      \"type\": \"FOOTER\",\n      \"text\": \"Example Company\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.template_id) pm.collectionVariables.set('template_id', j.template_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/WhatsApp/Template/{{waba_id}}/?limit=20&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "WhatsApp",
+                "Template",
+                "{{waba_id}}"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get template",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/WhatsApp/Template/{{waba_id}}/{{template_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "WhatsApp",
+                "Template",
+                "{{waba_id}}",
+                "{{template_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/WhatsApp/Template/{{waba_id}}/{{template_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "WhatsApp",
+                "Template",
+                "{{waba_id}}",
+                "{{template_id}}"
+              ]
+            },
+            "description": "Only approved, rejected or paused templates can be edited. name, language and category cannot change.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"account_update\",\n  \"language\": \"en\",\n  \"category\": \"UTILITY\",\n  \"components\": [\n    {\n      \"type\": \"BODY\",\n      \"text\": \"Hi {{1}}, your account was updated. Reference: {{2}}.\",\n      \"example\": {\n        \"body_text\": [\n          [\n            \"Alex\",\n            \"WB-1002\"\n          ]\n        ]\n      }\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete template",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/WhatsApp/Template/{{waba_id}}/{{template_id}}/?name=account_update",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "WhatsApp",
+                "Template",
+                "{{waba_id}}",
+                "{{template_id}}"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "account_update"
+                }
+              ]
+            },
+            "description": "The name query parameter is required and must match the template. Returns 204."
+          }
+        }
+      ]
+    }
+  ]
+}
