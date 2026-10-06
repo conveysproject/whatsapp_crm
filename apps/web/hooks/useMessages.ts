@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useInfiniteQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { getSocket } from "@/lib/socket";
+import type { DeliveryError } from "@/lib/delivery-error";
 
 export interface Message {
   id: string;
@@ -16,6 +17,7 @@ export interface Message {
   mediaUrl?: string | null;
   status?: string | null;
   whatsappMessageId?: string | null;
+  deliveryError?: DeliveryError | null;
 }
 
 interface MessagesPage {
@@ -66,6 +68,10 @@ export function useMessages(conversationId: string | null) {
     };
 
     const statusHandler = (data: { whatsappMessageId: string; status: string }) => {
+      // The socket event carries no reason: refetch so Meta's failure reason appears without a manual refresh.
+      if (data.status === "failed") {
+        void queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+      }
       queryClient.setQueryData(
         ["messages", conversationId],
         (prev: InfiniteData<MessagesPage> | undefined) => {

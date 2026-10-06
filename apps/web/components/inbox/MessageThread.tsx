@@ -6,6 +6,8 @@ import { IntentBadge } from "@/components/intent-badge";
 import { VoicePlayer } from "@/components/voice-player";
 import { MediaMessage } from "./MediaMessage";
 import { formatWhatsAppText } from "@/lib/whatsapp-format";
+import { FailedTick, NotDeliveredNote } from "./DeliveryFailure";
+import type { DeliveryError } from "@/lib/delivery-error";
 
 interface Props {
   conversationId: string | null;
@@ -224,12 +226,12 @@ function InteractiveMessageBubble({ body, richContent }: { body: string | null; 
   );
 }
 
-function MessageTicks({ status }: { status?: string | null }): JSX.Element | null {
+function MessageTicks({ status, deliveryError }: { status?: string | null; deliveryError?: DeliveryError | null }): JSX.Element | null {
   if (status === "sending") {
     return <span className="text-gray-400 text-[10px] ml-1">⏱</span>;
   }
   if (status === "failed") {
-    return <span className="text-red-400 text-[10px] ml-1">!</span>;
+    return <FailedTick deliveryError={deliveryError} />;
   }
   if (status === "sent") {
     return (
@@ -364,8 +366,9 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
                   msg.contentType === "template" ? "px-3 pb-2" : "",
                 ].join(" ")}>
                   {formatTime(msg.sentAt)}
-                  {msg.direction === "outbound" && <MessageTicks status={msg.status} />}
+                  {msg.direction === "outbound" && <MessageTicks status={msg.status} deliveryError={msg.deliveryError} />}
                 </p>
+                {msg.direction === "outbound" && <NotDeliveredNote status={msg.status} deliveryError={msg.deliveryError} />}
               </div>
             </div>
           </div>

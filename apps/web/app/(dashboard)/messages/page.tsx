@@ -4,6 +4,8 @@ import { JSX, useState } from "react";
 import { PermissionGate } from "@/components/PermissionGate";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { LogStatusBadge } from "@/components/messages/LogStatusBadge";
+import type { DeliveryError } from "@/lib/delivery-error";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -13,6 +15,7 @@ interface MessageLog {
   contentType: string;
   direction: "inbound" | "outbound";
   status: string;
+  deliveryError?: DeliveryError | null;
   createdAt: string;
   conversation: {
     contact: { firstName: string | null; lastName: string | null; phoneNumber: string } | null;
@@ -213,9 +216,7 @@ function MessageLogTab(): JSX.Element {
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_COLOR[msg.status] ?? "bg-gray-100 text-gray-600"}`}>
-                        {msg.status}
-                      </span>
+                      <LogStatusBadge status={msg.status} colorClass={STATUS_COLOR[msg.status]} deliveryError={msg.deliveryError} />
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
                       {new Date(msg.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
