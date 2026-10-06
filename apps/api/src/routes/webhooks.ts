@@ -7,7 +7,7 @@ import { inboundMessageQueue } from "../lib/queue.js";
 import { getIo } from "../lib/io-ref.js";
 import { forwardMetaStatusToApiClient } from "../lib/public-api/callbacks.js";
 import { safeErr } from "../lib/public-api/safe-err.js";
-import { normalizeMetaError, formatMetaError, redactForLog } from "../lib/meta-error.js";
+import { normalizeMetaError, formatMetaError, redactForLog, shortWamid } from "../lib/meta-error.js";
 
 interface WaMediaObject {
   id: string;
@@ -159,12 +159,12 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                 // Meta refused/failed delivery. "failed" has no rank in STATUS_RANK, so the ratchet below would silently
                 // drop it and the message would show "sent" forever. Record it with ONE conditional update that can
                 // never overwrite a message that already reached delivered/read.
-                // Log the Meta code and wamid only (never the recipient phone number or message text).
+                // Log the Meta code and a short wamid suffix only (a full wamid embeds the phone number in base64) (never the recipient phone number or message text).
                 // Meta's reason (code/title/message/details) is logged through redactForLog, which strips digit runs.
                 const deliveryError = normalizeMetaError(su.errors?.[0]);
-                const logField = (v: string | null | undefined): string => redactForLog((v ?? "").slice(0, 200));
+                const logField = (v: string | null | undefined): string => redactForLog(v ?? "").slice(0, 200);
                 console.log(
-                  `[webhook] STATUS failed wamid=${su.id} code=${deliveryError?.code ?? "n/a"}` +
+                  `[webhook] STATUS failed wamid=...${shortWamid(su.id)} code=${deliveryError?.code ?? "n/a"}` +
                   ` title="${logField(deliveryError?.title)}" message="${logField(deliveryError?.message)}" details="${logField(deliveryError?.details)}"`,
                 );
                 if (msg) {
@@ -231,7 +231,7 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                         status: "failed",
                         ...(() => {
                           const e = normalizeMetaError(su.errors?.[0]);
-                          if (e) return { errorMessage: formatMetaError(e) };
+                          if (e) return { errorMessage: e.code !== null && !e.title && !e.message && !e.details ? `Meta delivery failed (code ${e.code})` : formatMetaError(e) };
                           return su.errors?.[0]?.code ? { errorMessage: `Meta delivery failed (code ${su.errors[0].code})` } : {};
                         })(),
                       },

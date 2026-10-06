@@ -257,7 +257,7 @@ describe("POST /v1/webhooks/whatsapp: Meta delivery FAILURES are recorded (dashb
     mockPrisma.campaignRecipient.findFirst.mockResolvedValue({ id: "r1", status: "sent", contactId: "c1", campaign: { id: "camp1" } });
     expect((await send("failed", { errors: [{ code: 131049 }] })).statusCode).toBe(200);
     const arg = mockPrisma.campaignRecipient.updateMany.mock.calls[0]![0] as { data: { status: string; errorMessage?: string } };
-    expect(arg.data).toEqual({ status: "failed", errorMessage: "131049" });
+    expect(arg.data).toEqual({ status: "failed", errorMessage: "Meta delivery failed (code 131049)" });
   });
 
   it("keeps the existing campaign ratchet for delivered (plain forward update)", async () => {
@@ -274,6 +274,22 @@ describe("POST /v1/webhooks/whatsapp: Meta delivery FAILURES are recorded (dashb
     expect(lines.join(" | ")).toContain("131049");
     expect(lines.join(" | ")).toContain("wamid.out");
     expect(lines.join(" | ")).not.toContain("919752250586");
+  });
+
+  it("logs only a short wamid suffix, never the base64 of the recipient's number", async () => {
+    const wamid = "wamid.HBgMOTE5NzUyMjUwNTg2FQIAERgSNkY4OTJDQjRDQzk2NUU1Mzc1AA==";
+    expect(Buffer.from("HBgMOTE5NzUyMjUwNTg2", "base64").toString()).toContain("919752250586");
+    await send("failed", { id: wamid, errors: [{ code: 131049 }] });
+    const line = logSpy.mock.calls.map((c) => c.join(" ")).filter((l) => l.includes("STATUS failed")).join(" | ");
+    expect(line).toContain(wamid.slice(-12));
+    expect(line).not.toContain("HBgMOTE5NzUy");
+    expect(line).not.toContain(wamid);
+  });
+
+  it("redacts a long failure title before truncating (number at the cut point)", async () => {
+    await send("failed", { errors: [{ code: 1, title: "x".repeat(190) + " +919752250586" }] });
+    const line = logSpy.mock.calls.map((c) => c.join(" ")).filter((l) => l.includes("STATUS failed")).join(" | ");
+    expect(line).not.toContain("9752");
   });
 
   const full = { code: 131049, title: "Healthy ecosystem", message: "Message blocked for +971 50 123 4567", error_data: { details: "ecosystem engagement" }, href: "https://x" };

@@ -50,12 +50,31 @@ export function normalizeMetaError(raw: unknown): MetaDeliveryError | null {
 export function formatMetaError(e: MetaDeliveryError | null): string {
   if (!e) return "Unknown error";
   const text = [e.title, e.message].filter(Boolean).join(" — ");
+  const codeOnly = e.code !== null && !text && !e.details;
+  if (codeOnly) return `Meta error ${e.code}`;
   let line = e.code !== null ? `${e.code}${text ? ": " : ""}${text}` : text;
   if (e.details) line += line ? ` (${e.details})` : e.details;
   return line || "Unknown error";
 }
 
-/** Strip anything that looks like a phone number (10+ digits) so it can never reach logs. */
+/** Strip anything that looks like a phone number (9+ digits, any common separators) so it can never reach logs. */
 export function redactForLog(text: string): string {
-  return text.replace(/\+?\d(?:[\s-]*\d){9,}/g, "[redacted]");
+  return text.replace(/\+?\(?\d(?:[\s\-.()/]*\d){8,}/g, "[redacted]");
+}
+
+/** Last 12 chars of a wamid. A full wamid embeds the recipient's phone number in base64, so never log it whole. */
+export function shortWamid(id: string | null | undefined): string {
+  return (id ?? "").slice(-12);
+}
+
+/** Campaign recipient error text for a failed send: Meta's reason when the API returned one, else the error's own message. */
+export function describeSendFailure(err: unknown): string {
+  if (err instanceof Error) {
+    if (err.name === "WaApiError") {
+      const me = (err as Error & { metaError?: MetaDeliveryError | null }).metaError;
+      if (me) return formatMetaError(me);
+    }
+    return err.message;
+  }
+  return String(err);
 }

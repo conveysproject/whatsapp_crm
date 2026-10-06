@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { normalizeMetaError, formatMetaError, redactForLog } from "./meta-error.js";
+import { normalizeMetaError, formatMetaError, redactForLog, shortWamid, describeSendFailure } from "./meta-error.js";
+import { WaApiError } from "./whatsapp.js";
 
 describe("normalizeMetaError", () => {
   it("normalizes a webhook error entry", () => {
@@ -45,11 +46,60 @@ describe("formatMetaError", () => {
   it("omits missing parts", () => {
     expect(formatMetaError({ code: 1, subcode: null, title: null, message: "M", details: null, href: null })).toBe("1: M");
     expect(formatMetaError({ code: null, subcode: null, title: "T", message: null, details: "D", href: null })).toBe("T (D)");
-    expect(formatMetaError({ code: 5, subcode: null, title: null, message: null, details: null, href: null })).toBe("5");
+    expect(formatMetaError({ code: 5, subcode: null, title: null, message: null, details: null, href: null })).toBe("Meta error 5");
   });
   it("says Unknown error when empty", () => {
     expect(formatMetaError(null)).toBe("Unknown error");
     expect(formatMetaError({ code: null, subcode: null, title: null, message: null, details: null, href: null })).toBe("Unknown error");
+  });
+});
+
+describe("redactForLog formats", () => {
+  it.each([
+    ["call (415) 555-2671 now", "call [redacted] now"],
+    ["call +1 (415) 555-2671 now", "call [redacted] now"],
+    ["call 415.555.2671 now", "call [redacted] now"],
+    ["call 50 123 4567 now", "call [redacted] now"],
+    ["call 415/555/2671 now", "call [redacted] now"],
+    ["call 971501234567 now", "call [redacted] now"],
+  ])("redacts %s", (input, out) => {
+    expect(redactForLog(input)).toBe(out);
+  });
+  it("does not mangle ordinary Meta text or short numbers", () => {
+    expect(redactForLog("Message undeliverable. 131049")).toBe("Message undeliverable. 131049");
+    expect(redactForLog("error 131049")).toBe("error 131049");
+  });
+  it("redacts before truncating: a number straddling the cut cannot survive partially", () => {
+    const logged = redactForLog("x".repeat(190) + " +919752250586").slice(0, 200);
+    expect(logged).not.toContain("9752");
+    expect(logged).not.toMatch(/\d{4}/);
+  });
+});
+
+describe("shortWamid", () => {
+  it("keeps only the last 12 characters, never the leading part", () => {
+    const id = "wamid.HBgMOTE5NzUyMjUwNTg2FQIAERgSNkY4OTJDQjRDQzk2NUU1Mzc1AA==";
+    expect(shortWamid(id)).toBe(id.slice(-12));
+    expect(shortWamid(id)).toHaveLength(12);
+    expect(id.startsWith("wamid.HBgMOTE5NzUy")).toBe(true);
+    expect(shortWamid(id)).not.toContain("HBgM");
+    expect(shortWamid(null)).toBe("");
+    expect(shortWamid("abc")).toBe("abc");
+  });
+});
+
+describe("describeSendFailure", () => {
+  it("uses Meta's reason for a WaApiError that has one", () => {
+    const me = { code: 131049, subcode: null, title: "T", message: "M", details: null, href: null };
+    expect(describeSendFailure(new WaApiError("raw", 131049, null, me))).toBe("131049: T — M");
+  });
+  it("keeps the HTTP-context message when the body was not JSON (no metaError)", () => {
+    expect(describeSendFailure(new WaApiError("send failed: {}", null, null, null))).toBe("send failed: {}");
+  });
+  it("uses message for a plain Error and String() for a non-Error", () => {
+    expect(describeSendFailure(new Error("boom"))).toBe("boom");
+    expect(describeSendFailure("oops")).toBe("oops");
+    expect(describeSendFailure(42)).toBe("42");
   });
 });
 
