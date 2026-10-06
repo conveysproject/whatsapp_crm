@@ -194,7 +194,7 @@ describe("POST /v1/webhooks/whatsapp: Meta delivery FAILURES are recorded (dashb
     const arg = mockPrisma.message.updateMany.mock.calls[0]![0] as { where: { id: string; status: { in: string[] } }; data: { status: string } };
     expect(arg.where.id).toBe("m1");
     expect(arg.where.status.in.sort()).toEqual(["sending", "sent"]);
-    expect(arg.data).toEqual({ status: "failed" });
+    expect(arg.data).toEqual({ status: "failed", deliveryError: { code: 131049, subcode: null, title: null, message: null, details: null, href: null } });
     expect(io.to).toHaveBeenCalledWith("org:org-1");
     expect(io.emit).toHaveBeenCalledWith("message:status", { whatsappMessageId: "wamid.out", status: "failed" });
     expect(mockPrisma.message.update).not.toHaveBeenCalled();
@@ -253,11 +253,11 @@ describe("POST /v1/webhooks/whatsapp: Meta delivery FAILURES are recorded (dashb
     expect(mockPrisma.campaignRecipient.update).not.toHaveBeenCalled();
   });
 
-  it("stores Meta's failure code as the campaign recipient's error message when Meta provides one", async () => {
+  it("stores Meta's formatted failure reason as the campaign recipient's error message when Meta provides one", async () => {
     mockPrisma.campaignRecipient.findFirst.mockResolvedValue({ id: "r1", status: "sent", contactId: "c1", campaign: { id: "camp1" } });
     expect((await send("failed", { errors: [{ code: 131049 }] })).statusCode).toBe(200);
     const arg = mockPrisma.campaignRecipient.updateMany.mock.calls[0]![0] as { data: { status: string; errorMessage?: string } };
-    expect(arg.data).toEqual({ status: "failed", errorMessage: "Meta delivery failed (code 131049)" });
+    expect(arg.data).toEqual({ status: "failed", errorMessage: "131049" });
   });
 
   it("keeps the existing campaign ratchet for delivered (plain forward update)", async () => {
@@ -274,5 +274,56 @@ describe("POST /v1/webhooks/whatsapp: Meta delivery FAILURES are recorded (dashb
     expect(lines.join(" | ")).toContain("131049");
     expect(lines.join(" | ")).toContain("wamid.out");
     expect(lines.join(" | ")).not.toContain("919752250586");
+  });
+
+  const full = { code: 131049, title: "Healthy ecosystem", message: "Message blocked for +971 50 123 4567", error_data: { details: "ecosystem engagement" }, href: "https://x" };
+
+  it("stores the normalized Meta error on the message (and only the error object, never the raw payload)", async () => {
+    await send("failed", { errors: [full] });
+    const arg = mockPrisma.message.updateMany.mock.calls[0]![0] as { data: { status: string; deliveryError: Record<string, unknown> } };
+    expect(arg.data.deliveryError).toEqual({ code: 131049, subcode: null, title: "Healthy ecosystem", message: "Message blocked for +971 50 123 4567", details: "ecosystem engagement", href: "https://x" });
+    expect(JSON.stringify(mockPrisma.message.updateMany.mock.calls)).not.toContain("919752250586");
+    expect(mockPrisma.message.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("also stores the reason when the public-API hook already marked the message failed (first update matches 0 rows)", async () => {
+    mockPrisma.message.updateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+    mockPrisma.message.findFirst.mockResolvedValueOnce({ id: "m1", status: "failed" }).mockResolvedValueOnce({ status: "failed" });
+    await send("failed", { errors: [full] });
+    expect(mockPrisma.message.updateMany).toHaveBeenCalledTimes(2);
+    const second = mockPrisma.message.updateMany.mock.calls[1]![0] as { where: unknown; data: { deliveryError: { code: number } } };
+    expect(second.where).toEqual({ id: "m1", status: "failed" });
+    expect(second.data.deliveryError.code).toBe(131049);
+  });
+
+  it("never touches a delivered/read message and writes no error when Meta sent none", async () => {
+    mockPrisma.message.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.message.findFirst.mockResolvedValue({ id: "m1", status: "read" });
+    await send("failed", { errors: [full] });
+    for (const call of mockPrisma.message.updateMany.mock.calls) {
+      expect((call[0] as { where: { status: unknown } }).where.status).not.toBe("read");
+      expect((call[0] as { where: { status: unknown } }).where.status).not.toBe("delivered");
+    }
+    mockPrisma.message.updateMany.mockClear();
+    await send("failed");
+    expect(mockPrisma.message.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs code/title/message/details but never a phone number, even one inside Meta's text", async () => {
+    await send("failed", { errors: [full] });
+    const line = logSpy.mock.calls.map((c) => c.join(" ")).filter((l) => l.includes("STATUS")).join(" | ");
+    expect(line).toContain("code=131049");
+    expect(line).toContain('title="Healthy ecosystem"');
+    expect(line).toContain("Message blocked for [redacted]");
+    expect(line).toContain('details="ecosystem engagement"');
+    expect(line).not.toContain("919752250586");
+    expect(line).not.toContain("123 4567");
+  });
+
+  it("uses the formatted Meta reason as the campaign recipient's error message", async () => {
+    mockPrisma.campaignRecipient.findFirst.mockResolvedValue({ id: "r1", status: "sent", contactId: "c1", campaign: { id: "camp1" } });
+    await send("failed", { errors: [{ ...full, message: "Blocked" }] });
+    const arg = mockPrisma.campaignRecipient.updateMany.mock.calls[0]![0] as { data: { errorMessage?: string } };
+    expect(arg.data.errorMessage).toBe("131049: Healthy ecosystem — Blocked (ecosystem engagement)");
   });
 });

@@ -1,3 +1,4 @@
+import type { MetaDeliveryError } from "../lib/meta-error.js";
 import { Worker, type Job } from "bullmq";
 import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
@@ -12,8 +13,11 @@ import {
   sendTextMessage, sendMediaMessage, sendTemplateMessage, sendInteractiveMessage, sendLocationMessage, WaApiError,
 } from "../lib/whatsapp.js";
 
-async function fail(messageId: string, organizationId: string, errorCode: string | null): Promise<void> {
-  await prisma.message.update({ where: { id: messageId, organizationId }, data: { status: "failed" } });
+async function fail(messageId: string, organizationId: string, errorCode: string | null, metaError: MetaDeliveryError | null = null): Promise<void> {
+  await prisma.message.update({
+    where: { id: messageId, organizationId },
+    data: { status: "failed", ...(metaError ? { deliveryError: { ...metaError } } : {}) },
+  });
   await enqueueStatusCallback(prisma, messageId, "failed", { errorCode });
 }
 
@@ -57,7 +61,7 @@ export async function processSendJob(job: Pick<Job<SendJob>, "data">): Promise<v
       case "interactive": ({ messageId: wamid } = await sendInteractiveMessage(phoneNumberId, to, content.interactive, token)); break;
     }
   } catch (err) {
-    return fail(messageId, organizationId, err instanceof WaApiError ? plivoErrorFromMeta(err.metaCode) : null);
+    return fail(messageId, organizationId, err instanceof WaApiError ? plivoErrorFromMeta(err.metaCode) : null, err instanceof WaApiError ? err.metaError : null);
   }
 
   const sentAt = new Date();

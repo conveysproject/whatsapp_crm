@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
-import { sendTextMessage, sendMediaMessage, sendInteractiveMessage, sendTemplateMessage } from "../lib/whatsapp.js";
+import { sendTextMessage, sendMediaMessage, sendInteractiveMessage, sendTemplateMessage, WaApiError } from "../lib/whatsapp.js";
+import { formatMetaError, redactForLog } from "../lib/meta-error.js";
 import type { WaInteractivePayload } from "../lib/whatsapp.js";
 import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
 import type { ConversationId } from "@WBMSG/shared";
@@ -24,6 +25,16 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "inbox_access permission required" } });
     }
   });
+
+  // Marks a draft failed and keeps Meta's reason (error object only) on the row; logs it with digits redacted.
+  const markDraftFailed = async (draftId: string, err: unknown, log: { error: (m: string) => void }): Promise<void> => {
+    const metaError = err instanceof WaApiError ? err.metaError : null;
+    if (metaError) log.error(`[send] Meta rejected message: ${redactForLog(formatMetaError(metaError))}`);
+    await fastify.prisma.message.update({
+      where: { id: draftId },
+      data: { status: "failed", ...(metaError ? { deliveryError: { ...metaError } } : {}) },
+    });
+  };
 
   // ── Message log (all messages with date filter) ──────────────────────────
   fastify.get<{
@@ -355,7 +366,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
         try {
           ({ messageId } = await sendTemplateMessage(phoneNumberId, conversation.whatsappContactId, template.name, template.language, components, accessToken));
         } catch (err) {
-          await fastify.prisma.message.update({ where: { id: draft.id }, data: { status: "failed" } });
+          await markDraftFailed(draft.id, err, request.log);
           throw err;
         }
 
@@ -440,7 +451,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
           messageId = result.messageId;
         }
       } catch (err) {
-        await fastify.prisma.message.update({ where: { id: draft.id }, data: { status: "failed" } });
+        await markDraftFailed(draft.id, err, request.log);
         throw err;
       }
 

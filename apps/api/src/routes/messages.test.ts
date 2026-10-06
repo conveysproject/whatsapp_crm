@@ -25,7 +25,17 @@ const mockAuth = {
   teamRole: null as "lead" | "member" | null,
 };
 
+const wa = vi.hoisted(() => {
+  class WaApiError extends Error {
+    constructor(message: string, readonly metaCode: number | null, readonly metaSubcode: number | null, readonly metaError: unknown = null) {
+      super(message);
+    }
+  }
+  return { WaApiError };
+});
+
 vi.mock("../lib/whatsapp.js", () => ({
+  WaApiError: wa.WaApiError,
   sendTextMessage: vi.fn().mockResolvedValue({ messageId: "wamid-123" }),
   sendMediaMessage: vi.fn().mockResolvedValue({ messageId: "wamid-media-456" }),
   sendInteractiveMessage: vi.fn().mockResolvedValue({ messageId: "wamid-int-789" }),
@@ -69,6 +79,21 @@ describe("GET /v1/messages/log", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json<{ data: unknown[]; total: number }>().total).toBe(1);
+  });
+
+  it("returns deliveryError for failed rows and null for rows without one", async () => {
+    const err = { code: 131049, subcode: null, title: "Healthy ecosystem", message: "Blocked", details: null, href: null };
+    mockPrisma.message.findMany.mockResolvedValue([
+      { id: "m-1", status: "failed", deliveryError: err, createdAt: new Date("2026-05-01"), conversation: { contact: null } },
+      { id: "m-2", status: "sent", deliveryError: null, createdAt: new Date("2026-05-01"), conversation: { contact: null } },
+    ]);
+    mockPrisma.message.count.mockResolvedValue(2);
+    const res = await app.inject({ method: "GET", url: "/v1/messages/log" });
+    const rows = res.json<{ data: Array<{ deliveryError: unknown }> }>().data;
+    expect(rows[0]!.deliveryError).toEqual(err);
+    expect(rows[1]!.deliveryError).toBeNull();
+    const arg = mockPrisma.message.findMany.mock.calls[0]![0] as { select?: unknown };
+    expect(arg.select).toBeUndefined();
   });
 });
 
@@ -115,6 +140,28 @@ describe("POST /v1/conversations/:id/messages — text", () => {
     });
     expect(res.statusCode).toBe(201);
     expect(vi.mocked(sendTextMessage)).toHaveBeenCalledWith("pn-1", "+919000000001", "Hello", "token-abc");
+  });
+
+  it("stores Meta's reason on the draft when the send is rejected", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(baseConversation);
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-1", status: "sending" });
+    mockPrisma.message.update.mockResolvedValue({});
+    const { sendTextMessage } = await import("../lib/whatsapp.js");
+    const metaError = { code: 131049, subcode: null, title: null, message: "Blocked for 919876543210", details: null, href: null };
+    vi.mocked(sendTextMessage).mockRejectedValueOnce(new wa.WaApiError("WA send failed: {}", 131049, null, metaError));
+    const res = await app.inject({ method: "POST", url: "/v1/conversations/conv-1/messages", headers: { "content-type": "application/json" }, payload: { text: "Hello" } });
+    expect(res.statusCode).toBe(500);
+    expect(mockPrisma.message.update).toHaveBeenCalledWith({ where: { id: "msg-1" }, data: { status: "failed", deliveryError: metaError } });
+  });
+
+  it("still marks the draft failed (no deliveryError) for non-Meta errors", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(baseConversation);
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-1", status: "sending" });
+    mockPrisma.message.update.mockResolvedValue({});
+    const { sendTextMessage } = await import("../lib/whatsapp.js");
+    vi.mocked(sendTextMessage).mockRejectedValueOnce(new Error("network"));
+    await app.inject({ method: "POST", url: "/v1/conversations/conv-1/messages", headers: { "content-type": "application/json" }, payload: { text: "Hello" } });
+    expect(mockPrisma.message.update).toHaveBeenCalledWith({ where: { id: "msg-1" }, data: { status: "failed" } });
   });
 });
 

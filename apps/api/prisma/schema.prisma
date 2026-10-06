@@ -275,6 +275,7 @@ model Message {
   whatsappMessageId String?          @unique @map("whatsapp_message_id")
   wabPhoneNumberId  String?          @map("wab_phone_number_id") // which business number sent/received
   status            MessageStatus    @default(sent)
+  deliveryError     Json?            @map("delivery_error") // Meta failure reason (normalized error object only, never the raw webhook)
   isSystemMessage   Boolean          @default(false) @map("is_system_message") // bot/SLA notifications, hidden in inbox
   senderName        String?          @map("sender_name")
   isForwarded       Boolean          @default(false) @map("is_forwarded")

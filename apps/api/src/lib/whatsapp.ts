@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "./prisma.js";
 import { onPhoneStatusPending } from "./register-phone-enqueue.js";
+import { normalizeMetaError, type MetaDeliveryError } from "./meta-error.js";
 
 const WA_BASE = "https://graph.facebook.com/v25.0";
 
@@ -13,7 +14,12 @@ interface WaMessageResponse {
 }
 
 export class WaApiError extends Error {
-  constructor(message: string, readonly metaCode: number | null, readonly metaSubcode: number | null) {
+  constructor(
+    message: string,
+    readonly metaCode: number | null,
+    readonly metaSubcode: number | null,
+    readonly metaError: MetaDeliveryError | null = null,
+  ) {
     super(message);
     this.name = "WaApiError";
   }
@@ -21,7 +27,7 @@ export class WaApiError extends Error {
 
 async function waError(prefix: string, res: Response): Promise<WaApiError> {
   const err = (await res.json().catch(() => ({}))) as { error?: { code?: number; error_subcode?: number } };
-  return new WaApiError(`${prefix}: ${JSON.stringify(err)}`, err.error?.code ?? null, err.error?.error_subcode ?? null);
+  return new WaApiError(`${prefix}: ${JSON.stringify(err)}`, err.error?.code ?? null, err.error?.error_subcode ?? null, normalizeMetaError(err));
 }
 
 export async function sendTextMessage(

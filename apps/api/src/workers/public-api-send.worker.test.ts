@@ -24,7 +24,7 @@ vi.mock("../lib/public-api/queues.js", () => ({ publicApiSendQueue: {}, publicAp
 vi.mock("../lib/queue.js", () => ({ redisConnection: {} }));
 vi.mock("../lib/io-ref.js", () => ({ getIo: () => null }));
 vi.mock("../lib/whatsapp.js", async () => {
-  class WaApiError extends Error { constructor(m: string, readonly metaCode: number | null, readonly metaSubcode: number | null) { super(m); } }
+  class WaApiError extends Error { constructor(m: string, readonly metaCode: number | null, readonly metaSubcode: number | null, readonly metaError: unknown = null) { super(m); } }
   return { ...wa, WaApiError };
 });
 
@@ -92,6 +92,14 @@ describe("processSendJob", () => {
     wa.sendTextMessage.mockRejectedValue(new WaApiError("WA send failed: {...}", 131047, null));
     await processSendJob(job({ kind: "text", text: "hi" }));
     expect(prisma.message.update.mock.calls[0]![0]).toMatchObject({ data: { status: "failed" } });
+    expect(enqueueCb).toHaveBeenCalledWith(expect.anything(), "m1", "failed", { errorCode: "380" });
+  });
+
+  it("a Meta rejection stores Meta's reason on the message; the ErrorCode mapping is unchanged", async () => {
+    const metaError = { code: 131047, subcode: null, title: null, message: "Re-engagement", details: "24h", href: null };
+    wa.sendTextMessage.mockRejectedValue(new WaApiError("WA send failed: {...}", 131047, null, metaError));
+    await processSendJob(job({ kind: "text", text: "hi" }));
+    expect(prisma.message.update.mock.calls[0]![0]).toMatchObject({ data: { status: "failed", deliveryError: metaError } });
     expect(enqueueCb).toHaveBeenCalledWith(expect.anything(), "m1", "failed", { errorCode: "380" });
   });
 

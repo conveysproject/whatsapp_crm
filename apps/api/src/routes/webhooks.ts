@@ -7,6 +7,7 @@ import { inboundMessageQueue } from "../lib/queue.js";
 import { getIo } from "../lib/io-ref.js";
 import { forwardMetaStatusToApiClient } from "../lib/public-api/callbacks.js";
 import { safeErr } from "../lib/public-api/safe-err.js";
+import { normalizeMetaError, formatMetaError, redactForLog } from "../lib/meta-error.js";
 
 interface WaMediaObject {
   id: string;
@@ -42,7 +43,7 @@ interface WaStatusUpdate {
   status: string; // "sent" | "delivered" | "read" | "failed"
   timestamp: string;
   recipient_id: string;
-  errors?: Array<{ code?: number }>;
+  errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string }; href?: string }>;
   conversation?: { id?: string; origin?: { type?: string }; expiration_timestamp?: string | number };
 }
 
@@ -159,13 +160,26 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                 // drop it and the message would show "sent" forever. Record it with ONE conditional update that can
                 // never overwrite a message that already reached delivered/read.
                 // Log the Meta code and wamid only (never the recipient phone number or message text).
-                const failCode = su.errors?.[0]?.code;
-                console.log(`[webhook] STATUS failed wamid=${su.id} code=${failCode ?? "n/a"}`);
+                // Meta's reason (code/title/message/details) is logged through redactForLog, which strips digit runs.
+                const deliveryError = normalizeMetaError(su.errors?.[0]);
+                const logField = (v: string | null | undefined): string => redactForLog((v ?? "").slice(0, 200));
+                console.log(
+                  `[webhook] STATUS failed wamid=${su.id} code=${deliveryError?.code ?? "n/a"}` +
+                  ` title="${logField(deliveryError?.title)}" message="${logField(deliveryError?.message)}" details="${logField(deliveryError?.details)}"`,
+                );
                 if (msg) {
                   const res = await fastify.prisma.message.updateMany({
                     where: { id: msg.id, status: { in: ["sending", "sent"] } },
-                    data: { status: "failed" },
+                    data: { status: "failed", ...(deliveryError ? { deliveryError: { ...deliveryError } } : {}) },
                   });
+                  // The public API hook may already have set "failed" (the update above then matches 0 rows):
+                  // store the reason regardless. Idempotent, latest error wins, never touches delivered/read.
+                  if (res.count === 0 && deliveryError) {
+                    await fastify.prisma.message.updateMany({
+                      where: { id: msg.id, status: "failed" },
+                      data: { deliveryError: { ...deliveryError } },
+                    });
+                  }
                   // Tell the live UI whenever the message IS failed, whichever path recorded it: the public API hook
                   // above may already have set it (then this update matches 0 rows). Re-read so we never announce
                   // "failed" for a message that actually reached delivered/read.
@@ -215,7 +229,11 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                       where: { id: recipient.id, status: { in: ["pending", "sent", "accepted"] } },
                       data: {
                         status: "failed",
-                        ...(su.errors?.[0]?.code ? { errorMessage: `Meta delivery failed (code ${su.errors[0].code})` } : {}),
+                        ...(() => {
+                          const e = normalizeMetaError(su.errors?.[0]);
+                          if (e) return { errorMessage: formatMetaError(e) };
+                          return su.errors?.[0]?.code ? { errorMessage: `Meta delivery failed (code ${su.errors[0].code})` } : {};
+                        })(),
                       },
                     });
                   } else if (newRecipientRank > currentRecipientRank) {

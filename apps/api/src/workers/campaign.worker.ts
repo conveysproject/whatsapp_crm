@@ -1,7 +1,8 @@
 import { Worker } from "bullmq";
 import { redisConnection } from "../lib/queue.js";
 import { prisma } from "../lib/prisma.js";
-import { sendTextMessage, sendTemplateMessage } from "../lib/whatsapp.js";
+import { sendTextMessage, sendTemplateMessage, WaApiError } from "../lib/whatsapp.js";
+import { formatMetaError } from "../lib/meta-error.js";
 import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
 import { evaluateSegment, type FilterRule } from "../lib/segment-evaluator.js";
 import { getIo } from "../lib/io-ref.js";
@@ -315,7 +316,7 @@ export const campaignWorker = new Worker<CampaignJob>(
 
         sent++;
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorMessage = err instanceof WaApiError ? formatMetaError(err.metaError) : err instanceof Error ? err.message : String(err);
         if (isTransientError(err) && (recipient.retries ?? 0) < 3) {
           await prisma.campaignRecipient.update({
             where: { id: recipient.id },

@@ -26,6 +26,13 @@ describe("WaApiError", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 502, json: async () => { throw new Error("bad json"); } }));
     const err = await sendTextMessage("pn", "1", "x", "tok").catch((e: unknown) => e);
     expect((err as WaApiError).metaCode).toBeNull();
+    expect((err as WaApiError).metaError).toBeNull();
+  });
+
+  it("carries the normalized Meta error object", async () => {
+    stubFetch(400, { error: { code: 131047, error_subcode: 2494, message: "Re-engagement", type: "OAuthException", error_data: { details: "24h window" }, fbtrace_id: "x" } });
+    const err = await sendTextMessage("pn", "919999999999", "hi", "tok").catch((e: unknown) => e);
+    expect((err as WaApiError).metaError).toEqual({ code: 131047, subcode: 2494, title: null, message: "Re-engagement", details: "24h window", href: null });
   });
 });
 
