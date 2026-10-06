@@ -21,6 +21,8 @@ export async function publicApiAuth(
   const row = authId && authId === request.params.authId
     ? await request.server.prisma.apiKey.findUnique({ where: { id: authId } })
     : null;
+  // Usage attribution only (no effect on the response): a wrong token against a real credential counts as that credential's failure.
+  if (row) request.publicApiAttempt = { apiKeyId: row.id, organizationId: row.organizationId };
   const hashOk = tokenMatchesHash(token, row?.keyHash ?? DUMMY_HASH);
   if (!row || !hashOk || row.revokedAt) return plivoError(reply, 401, BAD_CREDENTIALS);
 

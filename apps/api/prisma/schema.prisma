@@ -1568,3 +1568,46 @@ model OrgAutomationSettings {
 
   @@map("org_automation_settings")
 }
+
+/// Raw per-request log of the public API (metadata only; short retention). Null org/key = unattributed request.
+model ApiRequestLog {
+  id             String   @id @default(uuid())
+  organizationId String?  @map("organization_id")
+  apiKeyId       String?  @map("api_key_id")
+  method         String
+  endpoint       String
+  statusCode     Int      @map("status_code")
+  outcome        String
+  errorClass     String?  @map("error_class")
+  durationMs     Int      @map("duration_ms")
+  messages       Int      @default(0)
+  requestId      String   @map("request_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt])
+  @@index([apiKeyId, createdAt])
+  @@index([createdAt])
+  @@map("api_request_logs")
+}
+
+/// Per (org, credential, UTC day, endpoint) usage counters. Metering source of truth; never deleted.
+model ApiUsageDaily {
+  organizationId String   @map("organization_id")
+  apiKeyId       String   @map("api_key_id")
+  day            DateTime @db.Date
+  endpoint       String
+  requests       Int      @default(0)
+  success        Int      @default(0)
+  clientErrors   Int      @default(0) @map("client_errors")
+  serverErrors   Int      @default(0) @map("server_errors")
+  rateLimited    Int      @default(0) @map("rate_limited")
+  authFailures   Int      @default(0) @map("auth_failures")
+  messages       Int      @default(0)
+  durationMsSum  BigInt   @default(0) @map("duration_ms_sum")
+  durationMsMax  Int      @default(0) @map("duration_ms_max")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+
+  @@id([organizationId, apiKeyId, day, endpoint])
+  @@index([organizationId, day])
+  @@map("api_usage_daily")
+}

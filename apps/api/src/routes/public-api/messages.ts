@@ -169,6 +169,7 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
       }
 
       if (uuids.length === 0) return plivoError(reply, 500, "Failed to queue message");
+      request.usageMessages = uuids.length;
       return reply.status(202).send({ api_id: newApiId(), message: "message(s) queued", message_uuid: uuids });
     });
   }

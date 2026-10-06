@@ -3,6 +3,7 @@ import rateLimit from "@fastify/rate-limit";
 import { redisConnection } from "../../lib/queue.js";
 import { plivoErrorBody } from "../../lib/public-api/responses.js";
 import { safeErr } from "../../lib/public-api/safe-err.js";
+import { recordApiRequest } from "../../lib/public-api/usage.js";
 import { publicApiAuth } from "./auth.js";
 import { publicApiMessagesRouter } from "./messages.js";
 
@@ -39,6 +40,25 @@ const throttled = () => ({ statusCode: 429, ...plivoErrorBody("Request was throt
  */
 export const publicApiRouter: FastifyPluginAsync = async (fastify) => {
   fastify.setErrorHandler(publicApiErrorHandler);
+
+  // Usage metering: exactly one event per response of this plugin (incl. 4xx/5xx/429). Synchronous, in-memory, never throws.
+  // The route PATTERN is recorded (never the URL, which carries the auth id and message ids).
+  fastify.addHook("onResponse", (request, reply, done) => {
+    try {
+      const who = request.publicApi ?? request.publicApiAttempt;
+      recordApiRequest({
+        method: request.method,
+        routeUrl: request.routeOptions?.url,
+        statusCode: reply.statusCode,
+        durationMs: Math.max(0, Math.round(reply.elapsedTime)) || 0,
+        requestId: String(request.id),
+        messages: request.usageMessages ?? 0,
+        organizationId: who?.organizationId ?? null,
+        apiKeyId: who?.apiKeyId ?? null,
+      });
+    } catch { /* usage recording must never affect a response */ }
+    done();
+  });
 
   const perCredentialMax = positiveIntEnv("PUBLIC_API_RATE_LIMIT", 300);
   const preAuthMax = positiveIntEnv("PUBLIC_API_PREAUTH_RATE_LIMIT", perCredentialMax * 10);
