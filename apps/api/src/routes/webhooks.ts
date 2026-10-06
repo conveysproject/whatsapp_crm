@@ -154,7 +154,31 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                   fastify.log.error({ error: safeErr(err) }, "public-api status forward failed");
                 });
               }
-              if (msg && !TERMINAL.has(msg.status)) {
+              if (su.status === "failed") {
+                // Meta refused/failed delivery. "failed" has no rank in STATUS_RANK, so the ratchet below would silently
+                // drop it and the message would show "sent" forever. Record it with ONE conditional update that can
+                // never overwrite a message that already reached delivered/read.
+                // Log the Meta code and wamid only (never the recipient phone number or message text).
+                const failCode = su.errors?.[0]?.code;
+                console.log(`[webhook] STATUS failed wamid=${su.id} code=${failCode ?? "n/a"}`);
+                if (msg) {
+                  const res = await fastify.prisma.message.updateMany({
+                    where: { id: msg.id, status: { in: ["sending", "sent"] } },
+                    data: { status: "failed" },
+                  });
+                  // Tell the live UI whenever the message IS failed, whichever path recorded it: the public API hook
+                  // above may already have set it (then this update matches 0 rows). Re-read so we never announce
+                  // "failed" for a message that actually reached delivered/read.
+                  let isFailed = res.count > 0;
+                  if (!isFailed) {
+                    const current = await fastify.prisma.message.findFirst({ where: { id: msg.id }, select: { status: true } });
+                    isFailed = current?.status === "failed";
+                  }
+                  if (isFailed && org) {
+                    io?.to(`org:${org.id}`).emit("message:status", { whatsappMessageId: su.id, status: "failed" });
+                  }
+                }
+              } else if (msg && !TERMINAL.has(msg.status)) {
                 const currentRank = STATUS_RANK[msg.status] ?? -1;
                 const newRank = STATUS_RANK[su.status] ?? -1;
                 if (newRank > currentRank) {
@@ -185,7 +209,16 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                 if (recipient) {
                   const currentRecipientRank = RECIPIENT_RANK[recipient.status] ?? -1;
                   const newRecipientRank = RECIPIENT_RANK[recipientStatus] ?? -1;
-                  if (newRecipientRank > currentRecipientRank) {
+                  if (recipientStatus === "failed") {
+                    // Same reason as above: "failed" has no rank, so record it explicitly, never over delivered/played/read.
+                    await fastify.prisma.campaignRecipient.updateMany({
+                      where: { id: recipient.id, status: { in: ["pending", "sent", "accepted"] } },
+                      data: {
+                        status: "failed",
+                        ...(su.errors?.[0]?.code ? { errorMessage: `Meta delivery failed (code ${su.errors[0].code})` } : {}),
+                      },
+                    });
+                  } else if (newRecipientRank > currentRecipientRank) {
                     await fastify.prisma.campaignRecipient.update({
                       where: { id: recipient.id },
                       data: { status: recipientStatus },
