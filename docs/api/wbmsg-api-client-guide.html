@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WBMSG WhatsApp API: Developer Guide</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  :root { --ink:#1b2430; --muted:#5b6675; --line:#d9dee5; --brand:#0b7a57; --soft:#f4f7f6; --code:#0f1720; }
+  * { box-sizing: border-box; }
+  body { font: 10.5pt/1.5 "Segoe UI", Arial, Helvetica, sans-serif; color: var(--ink); margin: 0; }
+  h1 { font-size: 26pt; margin: 0 0 4pt; letter-spacing: -0.5px; }
+  h2 { font-size: 15pt; margin: 26pt 0 8pt; padding-bottom: 4pt; border-bottom: 2px solid var(--brand); page-break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 16pt 0 5pt; page-break-after: avoid; }
+  p { margin: 5pt 0; }
+  ul, ol { margin: 5pt 0 5pt 18pt; padding: 0; }
+  li { margin: 2pt 0; }
+  code { font: 9.3pt Consolas, "Courier New", monospace; background: var(--soft); padding: 1pt 3pt; border-radius: 3px; }
+  pre { background: var(--code); color: #e8eef5; padding: 9pt 11pt; border-radius: 6px; font: 8.8pt/1.45 Consolas, "Courier New", monospace; white-space: pre-wrap; word-break: break-word; page-break-inside: avoid; margin: 7pt 0; }
+  pre code { background: none; color: inherit; padding: 0; font: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 7pt 0; font-size: 9.6pt; page-break-inside: auto; }
+  th, td { border: 1px solid var(--line); padding: 4.5pt 6pt; text-align: left; vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  tr { page-break-inside: avoid; }
+  .cover { padding: 36mm 0 20mm; border-bottom: 4px solid var(--brand); margin-bottom: 14mm; page-break-after: always; }
+  .cover .tag { color: var(--brand); font-weight: 700; letter-spacing: 2px; font-size: 10pt; text-transform: uppercase; }
+  .cover .sub { color: var(--muted); font-size: 13pt; margin-top: 8pt; }
+  .cover dl { margin-top: 26mm; display: grid; grid-template-columns: 34mm 1fr; gap: 5pt 10pt; font-size: 10.5pt; }
+  .cover dt { color: var(--muted); } .cover dd { margin: 0; }
+  .note { border-left: 4px solid var(--brand); background: var(--soft); padding: 7pt 10pt; margin: 8pt 0; border-radius: 0 4px 4px 0; page-break-inside: avoid; }
+  .warn { border-left-color: #b7791f; background: #fffaf0; }
+  .toc { margin: 0 0 8mm 18pt; } .toc a { color: var(--ink); text-decoration: none; } .toc li { margin: 3pt 0; }
+  .method { display: inline-block; font: 700 8.5pt Consolas, monospace; padding: 1pt 6pt; border-radius: 3px; color: #fff; margin-right: 5pt; vertical-align: 1pt; }
+  .get { background: #2563eb; } .post { background: #0b7a57; } .del { background: #b42318; }
+  .ep { font: 600 10pt Consolas, "Courier New", monospace; margin: 12pt 0 3pt; page-break-after: avoid; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="tag">WBMSG</div>
+  <h1>WhatsApp API<br>Developer Guide</h1>
+  <div class="sub">Send messages, manage templates and receive delivery and inbound events from your own application.</div>
+  <dl>
+    <dt>Version</dt><dd>1.0 &middot; October 2026</dd>
+    <dt>Base URL</dt><dd><code>https://wbmsg-production.up.railway.app/v1/Account/{auth_id}/</code></dd>
+    <dt>Authentication</dt><dd>HTTP Basic (Auth ID and Auth Token)</dd>
+    <dt>Format</dt><dd>JSON requests, JSON responses, form-encoded callbacks</dd>
+    <dt>Support</dt><dd>Contact your WBMSG account manager</dd>
+  </dl>
+</div>
+
+<h2 style="margin-top:0">Contents</h2>
+<ol class="toc">
+  <li><a href="#start">Getting started</a></li>
+  <li><a href="#basics">Basics: authentication, limits, errors</a></li>
+  <li><a href="#send">Send a message</a></li>
+  <li><a href="#read">Read messages</a></li>
+  <li><a href="#callbacks">Callbacks: delivery status and inbound messages</a></li>
+  <li><a href="#templates">Templates</a></li>
+  <li><a href="#errors">Error codes</a></li>
+  <li><a href="#whatsapp">WhatsApp rules to know</a></li>
+  <li><a href="#support">Support checklist</a></li>
+</ol>
+
+<h2 id="start">1. Getting started</h2>
+<ol>
+  <li>In the WBMSG dashboard open <b>Settings &rsaquo; API Credentials</b>. You need the Settings API permission (organization admins have it).</li>
+  <li>Create a credential. You receive an <b>Auth ID</b> (a UUID) and an <b>Auth Token</b>. <b>The token is shown once.</b> Store it securely. You can rotate it at any time (the old token stops working immediately) or revoke the credential.</li>
+  <li>Optionally set a <b>status callback URL</b> and an <b>inbound URL</b> on the credential. Both must be public <code>https</code> URLs.</li>
+  <li>Your WhatsApp Business number and templates are your own, managed in WBMSG. Conversation charges are billed to you directly by Meta.</li>
+</ol>
+<p>An organization can hold up to 10 active credentials. The <b>Settings &rsaquo; API Usage</b> page shows request counts, success and error rates per credential and per endpoint.</p>
+
+<h2 id="basics">2. Basics</h2>
+<table>
+  <tr><th style="width:26%">Item</th><th>Detail</th></tr>
+  <tr><td>Base URL</td><td><code>https://wbmsg-production.up.railway.app/v1/Account/{auth_id}/</code></td></tr>
+  <tr><td>Authentication</td><td>HTTP Basic. User = Auth ID, password = Auth Token. The <code>{auth_id}</code> in the path must be the same credential.</td></tr>
+  <tr><td>Request body</td><td>JSON, <code>Content-Type: application/json</code></td></tr>
+  <tr><td>Rate limit</td><td>300 requests per minute per credential. Exceeding it returns HTTP <code>429</code>.</td></tr>
+  <tr><td>Error body</td><td><code>{"api_id": "&lt;uuid&gt;", "error": "&lt;message&gt;"}</code></td></tr>
+</table>
+<table>
+  <tr><th style="width:14%">HTTP</th><th>Meaning</th></tr>
+  <tr><td>200 / 202 / 204</td><td>Success. <code>202</code> means a message was queued; <code>204</code> is a successful delete with no body.</td></tr>
+  <tr><td>400</td><td>Validation problem. The <code>error</code> text says what to fix.</td></tr>
+  <tr><td>401</td><td>Missing or wrong credentials.</td></tr>
+  <tr><td>403</td><td>The account is not active, or API access is not available for it.</td></tr>
+  <tr><td>404</td><td>Unknown resource. The same response is used for resources that belong to another account.</td></tr>
+  <tr><td>429</td><td>Rate limited. Retry after a short pause.</td></tr>
+  <tr><td>502</td><td>WhatsApp (Meta) could not be reached or refused the request. Safe to retry later.</td></tr>
+</table>
+
+<h2 id="send">3. Send a message</h2>
+<div class="ep"><span class="method post">POST</span>/Message/</div>
+<table>
+  <tr><th style="width:22%">Field</th><th>Notes</th></tr>
+  <tr><td><code>src</code></td><td>Your connected WhatsApp Business number, digits only (for example <code>918269150291</code>).</td></tr>
+  <tr><td><code>dst</code></td><td>One or more recipients in international format, separated by <code>&lt;</code>. At most 20 per request. Duplicates are removed.</td></tr>
+  <tr><td><code>type</code></td><td><code>whatsapp</code></td></tr>
+  <tr><td>One of: <code>text</code>, <code>media_urls</code>, <code>template</code>, <code>interactive</code>, <code>location</code></td><td>Exactly one content field per request. Details below.</td></tr>
+  <tr><td><code>url</code></td><td>Optional status callback URL for this request. Overrides the credential's callback URL.</td></tr>
+  <tr><td><code>method</code></td><td><code>POST</code> (default) or <code>GET</code>: how the status callback is delivered.</td></tr>
+</table>
+<h3>Content types</h3>
+<ul>
+  <li><b>text</b>: a string of up to 4096 characters.</li>
+  <li><b>media_urls</b>: an array of <code>https</code> URLs to an image, video, audio file or document.</li>
+  <li><b>template</b>: <code>{"name": "...", "language": "en", "components": [...]}</code>. The template must exist in your account with status <code>APPROVED</code>, and <code>language</code> must be exactly the code the template was created with. See the example below.</li>
+  <li><b>location</b>: <code>{"latitude": "...", "longitude": "...", "name": "...", "address": "..."}</code>, all four as strings.</li>
+  <li><b>interactive</b>: reply-button, call-to-action and list messages.</li>
+</ul>
+<h3>Example: send a template</h3>
+<pre><code>curl -u AUTH_ID:AUTH_TOKEN -H "Content-Type: application/json" \
+  -X POST https://wbmsg-production.up.railway.app/v1/Account/AUTH_ID/Message/ \
+  -d '{
+    "src": "918269150291",
+    "dst": "919876543210&lt;918109760150",
+    "type": "whatsapp",
+    "template": {
+      "name": "order_update",
+      "language": "en",
+      "components": [
+        {"type": "header", "parameters": [{"type": "media", "media": "https://example.com/logo.png"}]},
+        {"type": "body",   "parameters": [{"type": "text", "text": "Alex"}, {"type": "text", "text": "WB-1001"}]}
+      ]
+    }
+  }'</code></pre>
+<p>Response, HTTP <code>202</code>:</p>
+<pre><code>{
+  "api_id": "5d935d21-46de-4566-9232-ac9c8a9ce569",
+  "message": "message(s) queued",
+  "message_uuid": ["426ed7b5-7b63-46b9-a659-39ac815a52cd", "cbe73c0d-..."]
+}</code></pre>
+<p>One <code>message_uuid</code> is returned per recipient, in order. The call returns as soon as the message is queued. Delivery is reported by <a href="#callbacks">callbacks</a> or by <a href="#read">reading the message</a>.</p>
+<p><b>Template components.</b> <code>header</code> takes a media parameter when the template has an image, video or document header. <code>body</code> takes one text parameter per <code>{{1}}</code>, <code>{{2}}</code>, ... placeholder, in order. Button parameters use <code>"type": "button"</code> with <code>sub_type</code> (<code>quick_reply</code> or <code>url</code>) and <code>index</code>.</p>
+
+<h2 id="read">4. Read messages</h2>
+<div class="ep"><span class="method get">GET</span>/Message/</div>
+<p>Lists the messages sent with your account, newest first.</p>
+<table>
+  <tr><th style="width:26%">Query parameter</th><th>Notes</th></tr>
+  <tr><td><code>limit</code></td><td>Page size, maximum 20 (default 20).</td></tr>
+  <tr><td><code>offset</code></td><td>Number of records to skip (default 0).</td></tr>
+  <tr><td><code>message_state</code></td><td>Filter by state, for example <code>delivered</code>.</td></tr>
+  <tr><td><code>message_direction</code>, <code>message_type</code>, <code>error_code</code></td><td>Optional filters.</td></tr>
+</table>
+<p>The response contains <code>meta</code> (<code>limit</code>, <code>offset</code>, <code>total_count</code>, <code>previous</code>, <code>next</code>) and <code>objects</code>.</p>
+<div class="ep"><span class="method get">GET</span>/Message/{message_uuid}/</div>
+<p>Returns one message: <code>message_uuid</code>, <code>message_state</code>, <code>message_direction</code>, <code>message_type</code>, <code>to_number</code>, <code>from_number</code>, <code>error_code</code> and <code>message_time</code>.</p>
+<table>
+  <tr><th style="width:20%">message_state</th><th>Meaning</th></tr>
+  <tr><td>queued</td><td>Accepted by WBMSG, not yet sent to WhatsApp.</td></tr>
+  <tr><td>sent</td><td>Handed to WhatsApp.</td></tr>
+  <tr><td>delivered</td><td>Delivered to the recipient's phone.</td></tr>
+  <tr><td>read</td><td>Opened by the recipient.</td></tr>
+  <tr><td>failed</td><td>Could not be sent. See <code>error_code</code>.</td></tr>
+  <tr><td>undelivered</td><td>Sent, but WhatsApp could not deliver it. See <code>error_code</code>.</td></tr>
+</table>
+
+<h2 id="callbacks">5. Callbacks</h2>
+<h3>Delivery status callbacks</h3>
+<p>WBMSG calls your callback URL each time a message changes state. The call is a form-encoded <code>POST</code> (or a query-string <code>GET</code> if you chose <code>method=GET</code>) with these fields:</p>
+<table>
+  <tr><th style="width:24%">Field</th><th>Notes</th></tr>
+  <tr><td><code>MessageUUID</code></td><td>The id returned when you sent the message.</td></tr>
+  <tr><td><code>To</code>, <code>From</code></td><td>Recipient and your business number.</td></tr>
+  <tr><td><code>Type</code></td><td><code>whatsapp</code></td></tr>
+  <tr><td><code>Status</code></td><td><code>queued</code>, <code>sent</code>, <code>delivered</code>, <code>read</code>, <code>failed</code> or <code>undelivered</code></td></tr>
+  <tr><td><code>ErrorCode</code></td><td>Only present when <code>Status</code> is <code>failed</code> or <code>undelivered</code>. See <a href="#errors">error codes</a>.</td></tr>
+  <tr><td><code>Sequence</code></td><td>Increases with each status change of the same message. Use it to ignore out-of-order calls.</td></tr>
+  <tr><td><code>MessageTime</code></td><td>Time of the status change.</td></tr>
+</table>
+<p>Reply with any <code>2xx</code> status within a few seconds. If your endpoint fails or times out, WBMSG retries after 60, 120 and 240 seconds.</p>
+<h3>Inbound messages</h3>
+<p>Messages your customers send to your WhatsApp number are forwarded to your inbound URL as a form-encoded <code>POST</code> with <code>From</code>, <code>To</code>, <code>Text</code>, <code>Type</code> and <code>MessageUUID</code>.</p>
+<h3>Verifying a callback</h3>
+<p>Every callback carries two headers:</p>
+<ul>
+  <li><code>X-WBMSG-Signature</code>: the signature</li>
+  <li><code>X-WBMSG-Signature-Nonce</code>: a random value used in the signature</li>
+</ul>
+<p>Compute <code>base64( HMAC-SHA256( key = your Auth Token, message = callback_url_without_query_string + nonce ) )</code> and compare it with the header. Reject the callback if they differ.</p>
+<pre><code>// Node.js
+const crypto = require("crypto");
+function valid(url, nonce, signature, authToken) {
+  const base = url.split("?")[0];
+  const expected = crypto.createHmac("sha256", authToken).update(base + nonce).digest("base64");
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+}</code></pre>
+<div class="note">Callbacks are only sent to public <code>https</code> addresses. Private, internal and local addresses are refused.</div>
+
+<h2 id="templates">6. Templates</h2>
+<p>All template calls use <code>/WhatsApp/Template/{waba_id}/</code>, where <code>waba_id</code> is your WhatsApp Business Account ID. Any other id returns <code>404</code>. <code>template_id</code> is the id WhatsApp assigns to the template.</p>
+<div class="ep"><span class="method post">POST</span>/WhatsApp/Template/{waba_id}/</div>
+<p>Creates a template and submits it to WhatsApp for review.</p>
+<table>
+  <tr><th style="width:26%">Field</th><th>Notes</th></tr>
+  <tr><td><code>name</code></td><td>Lowercase letters, digits and underscores.</td></tr>
+  <tr><td><code>language</code></td><td>For example <code>en</code> or <code>en_US</code>. Use the same code when sending.</td></tr>
+  <tr><td><code>category</code></td><td><code>MARKETING</code>, <code>UTILITY</code> or <code>AUTHENTICATION</code></td></tr>
+  <tr><td><code>components</code></td><td>Must include a <code>BODY</code>. May also include <code>HEADER</code>, <code>FOOTER</code> and <code>BUTTONS</code>. An image, video or document header needs <code>example.header_handle</code> (a WhatsApp upload handle).</td></tr>
+  <tr><td><code>allow_category_change</code></td><td>Optional boolean. Lets WhatsApp re-categorize the template if it judges the category wrong.</td></tr>
+</table>
+<pre><code>curl -u AUTH_ID:AUTH_TOKEN -H "Content-Type: application/json" \
+  -X POST https://wbmsg-production.up.railway.app/v1/Account/AUTH_ID/WhatsApp/Template/WABA_ID/ \
+  -d '{
+    "name": "account_update",
+    "language": "en",
+    "category": "UTILITY",
+    "components": [
+      {"type": "BODY",
+       "text": "Hi {{1}}, your account setup was updated. Reference: {{2}}.",
+       "example": {"body_text": [["Alex", "WB-1001"]]}},
+      {"type": "FOOTER", "text": "Example Company"}
+    ]
+  }'</code></pre>
+<p>Response: <code>{"api_id": "...", "status": "success", "message": "template submitted to meta for review", "template_id": "1098860766374195", "template_name": "account_update", "template_status": "PENDING", "template_language": "en", "template_category": "UTILITY"}</code></p>
+<div class="ep"><span class="method get">GET</span>/WhatsApp/Template/{waba_id}/</div>
+<p>Lists templates. Query: <code>template_name</code> (substring filter), <code>limit</code> (maximum 20), <code>offset</code>. Returns <code>meta</code> and <code>objects</code>, each with <code>template_id</code>, <code>name</code>, <code>language</code>, <code>category</code> and <code>status</code>.</p>
+<div class="ep"><span class="method get">GET</span>/WhatsApp/Template/{waba_id}/{template_id}/</div>
+<p>Returns one template with <code>quality_score</code> (<code>{"score": "GREEN"}</code> and similar), <code>rejected_reason</code> and the full <code>components</code>.</p>
+<div class="ep"><span class="method post">POST</span>/WhatsApp/Template/{waba_id}/{template_id}/</div>
+<p>Edits a template's components. The body has the same shape as create. <code>name</code>, <code>language</code> and <code>category</code> cannot change. Only <b>approved</b>, <b>rejected</b> and <b>paused</b> templates can be edited; the template returns to review. WhatsApp limits how often a template can be edited.</p>
+<div class="ep"><span class="method del">DELETE</span>/WhatsApp/Template/{waba_id}/{template_id}/?name={template_name}</div>
+<p>Deletes the template at WhatsApp and in WBMSG. <code>name</code> is required and must match the template. Returns <code>204</code>. If WhatsApp refuses, the template is kept and you receive <code>502</code>.</p>
+<h3>Template status values</h3>
+<table>
+  <tr><th style="width:26%">Status</th><th>Meaning</th></tr>
+  <tr><td>PENDING</td><td>Under review. Utility templates are often approved within minutes; others can take up to 24 hours.</td></tr>
+  <tr><td>APPROVED</td><td>Ready to send.</td></tr>
+  <tr><td>REJECTED</td><td>Not approved. <code>rejected_reason</code> says why. Edit and resubmit.</td></tr>
+  <tr><td>PAUSED</td><td>Paused by WhatsApp after poor quality feedback. Cannot be sent until it recovers.</td></tr>
+  <tr><td>DISABLED</td><td>Disabled by WhatsApp. Cannot be sent.</td></tr>
+  <tr><td>IN_APPEAL</td><td>A review of a rejection or restriction is in progress.</td></tr>
+  <tr><td>FLAGGED</td><td>At risk of being disabled because of quality issues.</td></tr>
+  <tr><td>LIMIT_EXCEEDED</td><td>The template count or sending limit for the account was reached.</td></tr>
+  <tr><td>PENDING_DELETION</td><td>Scheduled for deletion.</td></tr>
+  <tr><td>ARCHIVED</td><td>Removed from use.</td></tr>
+</table>
+
+<h2 id="errors">7. Error codes</h2>
+<p><code>ErrorCode</code> appears on failed and undelivered messages, in callbacks and when reading a message.</p>
+<table>
+  <tr><th style="width:18%">Code</th><th>Meaning</th></tr>
+  <tr><td>310</td><td>The phone number is not registered on WhatsApp.</td></tr>
+  <tr><td>330</td><td>The message type is not supported.</td></tr>
+  <tr><td>340</td><td>The template does not exist, is paused or is disabled.</td></tr>
+  <tr><td>350</td><td>Template parameters do not match the template (wrong count or format).</td></tr>
+  <tr><td>360</td><td>The WhatsApp Business account is locked or disabled.</td></tr>
+  <tr><td>370</td><td>WhatsApp throughput or rate limit reached. Slow down and retry.</td></tr>
+  <tr><td>380</td><td>More than 24 hours since the customer last wrote to you. Send an approved template instead.</td></tr>
+  <tr><td>6-digit number</td><td>WhatsApp's own error code, passed through unchanged (for example <code>131049</code>). Details for any failure are in the WBMSG Message Log.</td></tr>
+</table>
+<div class="note warn"><b>Error 131049.</b> WhatsApp limits how many marketing templates one person receives from businesses in a period, and may decline to deliver the message. Do not retry immediately. Wait at least 24 hours before resending a marketing template to the same person. Utility templates are not affected, and messages sent inside an open 24-hour window are not counted.</div>
+
+<h2 id="whatsapp">8. WhatsApp rules to know</h2>
+<ul>
+  <li><b>24-hour window.</b> Free-form messages (text, media, interactive, location) can only be delivered within 24 hours after the customer last messaged you. Outside the window, use an approved template.</li>
+  <li><b>Templates are reviewed by WhatsApp.</b> Keep utility templates plainly transactional. Promotional wording makes WhatsApp classify them as marketing.</li>
+  <li><b>Opt-in.</b> Only message people who agreed to hear from you on WhatsApp.</li>
+  <li><b>Quality.</b> Low quality feedback can pause a template or limit your number. Watch <code>quality_score</code> on your templates.</li>
+</ul>
+
+<h2 id="support">9. Support checklist</h2>
+<p>When you contact support, include: the <code>message_uuid</code> or <code>api_id</code>, the time with its time zone, and your Auth ID. <b>Never send your Auth Token.</b></p>
+
+</body>
+</html>
