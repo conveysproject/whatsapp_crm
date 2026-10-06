@@ -82,7 +82,10 @@ describe("api-usage routes", () => {
       expect(res.json()).toEqual(emptySummary);
       const [, org, opts] = h.summary.mock.calls[0]!;
       expect(org).toBe("org-1");
-      expect(opts.from.toISOString()).toBe(new Date(Date.UTC(opts.to.getUTCFullYear(), opts.to.getUTCMonth(), opts.to.getUTCDate() - 6)).toISOString());
+      // whole UTC days: `to` is tomorrow 00:00Z (exclusive), `from` is exactly 7 days earlier
+      expect(opts.to.toISOString()).toMatch(/T00:00:00\.000Z$/);
+      expect(opts.to.getTime() - opts.from.getTime()).toBe(7 * 86_400_000);
+      expect(opts.to.getTime()).toBeGreaterThan(Date.now());
       expect(opts.apiKeyId).toBeUndefined();
     });
 
@@ -96,12 +99,26 @@ describe("api-usage routes", () => {
         await summary("?range=7d");
         o = h.summary.mock.calls[1]![2];
         expect(o.from.toISOString()).toBe("2026-09-30T00:00:00.000Z");
-        expect(o.to.toISOString()).toBe("2026-10-06T15:42:10.000Z");
+        expect(o.to.toISOString()).toBe("2026-10-07T00:00:00.000Z"); // end of today UTC, exclusive
         await summary("?range=30d&apiKeyId=key-1");
         o = h.summary.mock.calls[2]![2];
         expect(o.from.toISOString()).toBe("2026-09-07T00:00:00.000Z");
+        expect(o.to.toISOString()).toBe("2026-10-07T00:00:00.000Z");
         expect(o.apiKeyId).toBe("key-1");
       } finally { vi.useRealTimers(); }
+    });
+
+    it("day presets are the same whole-day window at ANY instant, including exactly 00:00:00.000Z and 23:59:59.999Z", async () => {
+      for (const now of ["2026-10-06T00:00:00.000Z", "2026-10-06T23:59:59.999Z"]) {
+        vi.useFakeTimers({ now: new Date(now), toFake: ["Date"] });
+        try {
+          h.summary.mockClear();
+          await summary("?range=7d");
+          const o = h.summary.mock.calls[0]![2];
+          expect(o.from.toISOString(), now).toBe("2026-09-30T00:00:00.000Z");
+          expect(o.to.toISOString(), now).toBe("2026-10-07T00:00:00.000Z");
+        } finally { vi.useRealTimers(); }
+      }
     });
 
     it("custom range: dates inclusive of the end day, from < to, max 366 days", async () => {
@@ -128,6 +145,24 @@ describe("api-usage routes", () => {
       const o = h.summary.mock.calls[0]![2];
       expect(o.from.toISOString()).toBe("2026-09-01T10:00:00.000Z");
       expect(o.to.toISOString()).toBe("2026-09-05T04:30:00.000Z");
+    });
+
+    it("rejects impossible datetimes instead of letting them roll over", async () => {
+      for (const bad of [
+        "2026-02-31T10:00:00Z", "2026-04-31T10:00:00Z", "2025-02-29T10:00:00Z", "2026-09-01T24:00:00Z", "2026-09-01T24:00:00+05:30",
+        "2026-09-01T10:60:00Z", "2026-09-01T10:00:60Z", "2026-09-01T23:59:60Z", "2026-00-10T10:00:00Z", "2026-09-00T10:00:00Z",
+        "2026-09-31T10:00:00+05:30",
+      ]) {
+        const res = await summary("?range=custom&from=" + encodeURIComponent(bad) + "&to=2026-09-30");
+        expect(res.statusCode, bad).toBe(400);
+        expect(res.json()).toMatchObject({ error: { code: "INVALID_QUERY" } });
+        expect((await summary("?range=custom&from=2026-08-01&to=" + encodeURIComponent(bad))).statusCode, "to " + bad).toBe(400);
+      }
+      expect(h.summary).not.toHaveBeenCalled();
+      // valid edge values still pass (leap day, last second, offset)
+      for (const good of ["2028-02-29T10:00:00Z", "2028-02-29T23:59:59Z", "2028-03-01T00:00:00.123+05:30", "2028-02-29T23:59:59-08:00"]) {
+        expect((await summary("?range=custom&from=2028-02-01&to=" + encodeURIComponent(good))).statusCode, good).toBe(200);
+      }
     });
 
     it("rejects bounds that are not YYYY-MM-DD or an ISO datetime with Z/offset (no server-local parsing)", async () => {

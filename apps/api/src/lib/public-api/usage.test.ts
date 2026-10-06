@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import {
   endpointKey, outcomeFor, errorClassFor, utcDay, recordApiRequest, flushApiUsage, aggregateEvents,
-  startApiUsageFlusher, stopApiUsageFlusher, bufferedCount, droppedCount, resetApiUsageForTests, type ApiRequestEvent,
+  startApiUsageFlusher, stopApiUsageFlusher, bufferedCount, droppedCount, unattributedDroppedCount, drainUsageOnShutdown, resetApiUsageForTests, type ApiRequestEvent,
 } from "./usage.js";
 
 const ev = (over: Partial<ApiRequestEvent> = {}): ApiRequestEvent => ({
@@ -354,6 +354,78 @@ describe("recorder and flush", () => {
     });
   });
 
+  describe("cap on unattributed raw rows (no organization)", () => {
+    beforeEach(() => { delete process.env["API_UNATTRIBUTED_RAW_PER_MIN"]; });
+    afterEach(() => { delete process.env["API_UNATTRIBUTED_RAW_PER_MIN"]; });
+    const unattr = (over: Partial<ApiRequestEvent> = {}) => ev({ organizationId: null, apiKeyId: null, statusCode: 401, ...over });
+
+    it("buffers at most 300 unattributed events per minute (default), counts the rest, and logs the counter on the next flush", async () => {
+      vi.useFakeTimers({ now: new Date("2026-10-06T10:00:10Z"), toFake: ["Date"] });
+      const { prisma, createMany } = fakePrisma();
+      const logger = { warn: vi.fn() };
+      for (let i = 0; i < 350; i++) recordApiRequest(unattr());
+      expect(bufferedCount()).toBe(300);
+      expect(unattributedDroppedCount()).toBe(50);
+      expect(droppedCount()).toBe(0);
+      await flushApiUsage(prisma, logger);
+      expect(rowsOf(createMany)).toHaveLength(300);
+      const calls = logger.warn.mock.calls as Array<[Record<string, unknown>, string]>;
+      expect(calls.some(([o]) => o["unattributedDropped"] === 50)).toBe(true);
+      expect(unattributedDroppedCount()).toBe(0);
+    });
+
+    it("applies to undefined org too, and to 429s and other statuses", () => {
+      vi.useFakeTimers({ now: new Date("2026-10-06T10:00:10Z"), toFake: ["Date"] });
+      process.env["API_UNATTRIBUTED_RAW_PER_MIN"] = "3";
+      for (let i = 0; i < 2; i++) recordApiRequest(ev({ organizationId: undefined, apiKeyId: undefined, statusCode: 429 }));
+      for (let i = 0; i < 3; i++) recordApiRequest(unattr({ statusCode: 500 }));
+      expect(bufferedCount()).toBe(3);
+      expect(unattributedDroppedCount()).toBe(2);
+    });
+
+    it("the budget refreshes in the next minute", () => {
+      vi.useFakeTimers({ now: new Date("2026-10-06T10:00:10Z"), toFake: ["Date"] });
+      process.env["API_UNATTRIBUTED_RAW_PER_MIN"] = "5";
+      for (let i = 0; i < 8; i++) recordApiRequest(unattr());
+      vi.setSystemTime(new Date("2026-10-06T10:01:01Z"));
+      for (let i = 0; i < 8; i++) recordApiRequest(unattr());
+      expect(bufferedCount()).toBe(10);
+      expect(unattributedDroppedCount()).toBe(6);
+    });
+
+    it("falls back to 300 on a missing/invalid/non-positive env value", () => {
+      vi.useFakeTimers({ now: new Date("2026-10-06T10:00:10Z"), toFake: ["Date"] });
+      for (const bad of ["", "abc", "0", "-5"]) {
+        resetApiUsageForTests();
+        process.env["API_UNATTRIBUTED_RAW_PER_MIN"] = bad;
+        for (let i = 0; i < 301; i++) recordApiRequest(unattr());
+        expect(bufferedCount(), bad).toBe(300);
+      }
+    });
+
+    it("is NOT applied to attributed events (neither raw rows nor rollups), and does not eat their budget", async () => {
+      vi.useFakeTimers({ now: new Date("2026-10-06T10:00:10Z"), toFake: ["Date"] });
+      process.env["API_UNATTRIBUTED_RAW_PER_MIN"] = "2";
+      const { prisma, createMany, executeRaw } = fakePrisma();
+      for (let i = 0; i < 10; i++) recordApiRequest(unattr());
+      for (let i = 0; i < 50; i++) recordApiRequest(ev({ statusCode: 202 }));
+      for (let i = 0; i < 50; i++) recordApiRequest(ev({ statusCode: 400 }));
+      expect(unattributedDroppedCount()).toBe(8);
+      await flushApiUsage(prisma);
+      expect(rowsOf(createMany)).toHaveLength(102);
+      const { values } = stmtOf(executeRaw.mock.calls[0]!);
+      expect(values.slice(0, PARAMS_PER_GROUP)).toContain(100); // all 100 attributed requests in the rollup
+    });
+
+    it("dropped unattributed events were in no rollup (nothing metered is lost)", async () => {
+      process.env["API_UNATTRIBUTED_RAW_PER_MIN"] = "1";
+      const { prisma, executeRaw } = fakePrisma();
+      for (let i = 0; i < 5; i++) recordApiRequest(unattr());
+      await flushApiUsage(prisma);
+      expect(executeRaw).not.toHaveBeenCalled();
+    });
+  });
+
   describe("raw-row cap for auth failures (rollups always count every request)", () => {
     it("writes at most 30 raw 401 rows per credential per minute but counts all of them in the rollup", async () => {
       vi.useFakeTimers({ now: new Date("2026-10-06T10:00:10Z"), toFake: ["Date"] });
@@ -382,5 +454,29 @@ describe("recorder and flush", () => {
       await flushApiUsage(prisma);
       expect(rowsOf(createMany)).toHaveLength(60);
     });
+  });
+});
+
+describe("drainUsageOnShutdown", () => {
+  it("flushes immediately, again after the workers close, and resolves", async () => {
+    const order: string[] = [];
+    let closed = false;
+    await drainUsageOnShutdown(
+      async () => { order.push("close-start"); await new Promise((r) => setTimeout(r, 20)); closed = true; order.push("close-end"); },
+      async () => { order.push(closed ? "flush-after" : "flush-early"); },
+    );
+    expect(order).toEqual(["flush-early", "close-start", "close-end", "flush-after"]);
+  });
+
+  it("is capped: resolves after the cap even when the workers never close, and the early flush has already run", async () => {
+    const flush = vi.fn(async () => undefined);
+    const t0 = Date.now();
+    await drainUsageOnShutdown(() => new Promise(() => undefined), flush, 50);
+    expect(Date.now() - t0).toBeLessThan(1000);
+    expect(flush).toHaveBeenCalledTimes(1);
+  });
+
+  it("never rejects when close or flush throw", async () => {
+    await expect(drainUsageOnShutdown(async () => { throw new Error("x"); }, async () => { throw new Error("y"); })).resolves.toBeUndefined();
   });
 });

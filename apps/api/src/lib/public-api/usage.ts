@@ -58,6 +58,13 @@ const TX_OPTIONS = { timeout: 30_000, maxWait: 5_000 } as const;
 /** At most this many RAW rows per credential per minute for 401s (anyone can send `knownId:wrong`). Rollups count all. */
 const AUTH_RAW_PER_MINUTE = 30;
 const AUTH_RAW_MAP_MAX = 5000;
+/**
+ * Requests with NO organization (unknown credential id, pre-auth 429) share ONE per-minute budget of buffered events
+ * (env API_UNATTRIBUTED_RAW_PER_MIN, default 300), so an unauthenticated flood cannot fill the DB or crowd customers' events
+ * out of the buffer. They are in no rollup, so dropping them loses no metering.
+ */
+const DEFAULT_UNATTRIBUTED_PER_MINUTE = 300;
+const UNATTRIBUTED_KEY = "__unattributed__";
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,64}$/;
 
 // ---- pure helpers ----
@@ -101,10 +108,12 @@ export function successSampleRate(): number {
   return Number.isFinite(n) && n >= 0 && n <= 1 ? n : 1;
 }
 
-function flushIntervalMs(): number {
-  const n = Number.parseInt(process.env["API_USAGE_FLUSH_MS"] ?? "", 10);
-  return Number.isFinite(n) && n > 0 ? n : DEFAULT_FLUSH_MS;
+function positiveIntEnv(name: string, fallback: number): number {
+  const n = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
 }
+
+const flushIntervalMs = () => positiveIntEnv("API_USAGE_FLUSH_MS", DEFAULT_FLUSH_MS);
 
 /** In-memory aggregation per (org, key, day, endpoint). Events without org AND credential are not rolled up. */
 export function aggregateEvents(events: Array<ApiRequestEvent & { at: Date }>): UsageGroup[] {
@@ -140,6 +149,7 @@ export function aggregateEvents(events: Array<ApiRequestEvent & { at: Date }>): 
 
 let buffer: BufferedEvent[] = [];
 let dropped = 0;
+let unattributedDropped = 0;
 let timer: NodeJS.Timeout | null = null;
 let activePrisma: PrismaClient | null = null;
 let activeLogger: UsageLogger | undefined;
@@ -150,9 +160,10 @@ const authRawCounts = new Map<string, { minute: number; count: number }>();
 
 export const bufferedCount = () => buffer.length;
 export const droppedCount = () => dropped;
+export const unattributedDroppedCount = () => unattributedDropped;
 
 export function resetApiUsageForTests(): void {
-  buffer = []; dropped = 0; flushQueued = false; inFlight = null; authRawCounts.clear();
+  buffer = []; dropped = 0; unattributedDropped = 0; flushQueued = false; inFlight = null; authRawCounts.clear();
 }
 
 const num = (v: unknown, fallback = 0) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
@@ -166,8 +177,8 @@ function sanitizeMethod(v: unknown): string {
   return String(v ?? "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 10) || "OTHER";
 }
 
-/** True while this credential is under its per-minute budget of raw 401 rows. Bounded memory. */
-function allowAuthFailureRaw(apiKeyId: string, nowMs: number): boolean {
+/** True while this key (a credential id, or the unattributed sentinel) is under its per-minute budget. Bounded memory. */
+function allowAuthFailureRaw(apiKeyId: string, nowMs: number, limit = AUTH_RAW_PER_MINUTE): boolean {
   const minute = Math.floor(nowMs / 60_000);
   if (authRawCounts.size > AUTH_RAW_MAP_MAX) {
     for (const [k, v] of authRawCounts) if (v.minute !== minute) authRawCounts.delete(k);
@@ -178,7 +189,7 @@ function allowAuthFailureRaw(apiKeyId: string, nowMs: number): boolean {
     authRawCounts.set(apiKeyId, { minute, count: 1 });
     return true;
   }
-  if (entry.count >= AUTH_RAW_PER_MINUTE) return false;
+  if (entry.count >= limit) return false;
   entry.count += 1;
   return true;
 }
@@ -190,6 +201,10 @@ export function recordApiRequest(event: ApiRequestEvent): void {
     const status = event.statusCode;
     const apiKeyId = event.apiKeyId ?? null;
     const at = new Date();
+    if (!event.organizationId && !allowAuthFailureRaw(UNATTRIBUTED_KEY, at.getTime(), positiveIntEnv("API_UNATTRIBUTED_RAW_PER_MIN", DEFAULT_UNATTRIBUTED_PER_MINUTE))) {
+      unattributedDropped += 1;
+      return;
+    }
     let raw: boolean;
     if (status >= 400) {
       // Errors are always logged raw, except the flood-prone 401s on a real credential (capped per minute).
@@ -253,6 +268,24 @@ export async function flushApiUsage(prisma: PrismaClient, logger?: UsageLogger):
   }
 }
 
+/**
+ * Shutdown sequence: flush at once (don't wait on the workers, in case they hang), AND flush again after the workers
+ * close (events recorded while they drained). Single-flight makes the two flushes safe. Resolves when both are done or
+ * after `capMs`, whichever is first; never rejects.
+ */
+export async function drainUsageOnShutdown(closeWorkers: () => Promise<unknown>, flush: () => Promise<void>, capMs = 10_000): Promise<void> {
+  let capTimer: NodeJS.Timeout | undefined;
+  const cap = new Promise<void>((resolve) => { capTimer = setTimeout(resolve, capMs); capTimer.unref(); });
+  const drain = (async () => {
+    const early = flush().catch(() => undefined);
+    await Promise.allSettled([closeWorkers()]);
+    await early;
+    await flush();
+  })().catch(() => undefined);
+  await Promise.race([drain, cap]);
+  if (capTimer) clearTimeout(capTimer);
+}
+
 /** Writes ONE batch (raw rows + one ordered multi-row rollup upsert) in ONE transaction. Never throws. */
 async function flushBatch(prisma: PrismaClient, logger?: UsageLogger): Promise<void> {
   if (buffer.length === 0) return;
@@ -260,6 +293,8 @@ async function flushBatch(prisma: PrismaClient, logger?: UsageLogger): Promise<v
   buffer = [];
   const droppedNow = dropped;
   dropped = 0;
+  const unattributedNow = unattributedDropped;
+  unattributedDropped = 0;
   try {
     const raws = batch.filter((e) => e.raw).map((e) => ({
       id: randomUUID(),
@@ -284,6 +319,7 @@ async function flushBatch(prisma: PrismaClient, logger?: UsageLogger): Promise<v
     warn(logger, { error: safeErr(err), lost: batch.length }, "api usage flush failed");
   }
   if (droppedNow > 0) warn(logger, { dropped: droppedNow }, "api usage buffer overflowed; events dropped");
+  if (unattributedNow > 0) warn(logger, { unattributedDropped: unattributedNow }, "unattributed api requests over the per-minute budget; events dropped");
 }
 
 /** Deterministic lock order: concurrent transactions touching the same rows always lock them in the same order. */

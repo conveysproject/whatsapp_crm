@@ -16,7 +16,7 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
-  recordApiRequest, flushApiUsage, resetApiUsageForTests, aggregateEvents, sortGroups, upsertStatement, type ApiRequestEvent, type UsageGroup,
+  recordApiRequest, flushApiUsage, resetApiUsageForTests, aggregateEvents, sortGroups, upsertStatement, unattributedDroppedCount, type ApiRequestEvent, type UsageGroup,
 } from "../src/lib/public-api/usage.js";
 import { getUsageSummary, listRequests } from "../src/lib/public-api/usage-queries.js";
 import { cleanupApiRequestLogs, DELETE_BATCH } from "../src/lib/public-api/usage-cleanup.js";
@@ -412,6 +412,36 @@ async function main() {
   check(`(9) normal budget: loops full batches then stops on the short one (${DELETE_BATCH} + 2000 = ${DELETE_BATCH + 2000} in ${Date.now() - tLoop} ms)`, rest === DELETE_BATCH + 2000 && (await prisma.apiRequestLog.count({ where: { apiKeyId: "kold" } })) === 0, rest);
   const rollFinal = (await prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM api_usage_daily`)[0]!.n;
   check("(9) rollups still untouched after the budget loop", rollFinal === rollBefore.n, rollFinal);
+
+  section("(11) Series consistency with a 401, whole-day preset window, unattributed raw cap");
+  const dayStart = Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+  const sumA = await getUsageSummary(prisma, A, { from: new Date(dayStart - 6 * 86_400_000), to: new Date(dayStart + 86_400_000) });
+  const today = sumA?.series.at(-1);
+  check("(11) 7d whole-day window ending tomorrow 00:00Z (exclusive): 7 buckets, last = today", sumA?.series.length === 7 && sumA.range.to === new Date(dayStart + 86_400_000).toISOString(), { n: sumA?.series.length, to: sumA?.range.to });
+  check("(11) today's daily bucket (org A: 2x400 + 1x500 + 1x401): errors EXCLUDE the 401, failedSignins = 1",
+    today?.errors === 3 && today.failedSignins === 1 && today.requests === 12 && sumA?.totals.failedSignins === 1, today);
+  check("(11) series errors equal totals clientErrors + serverErrors - authFailures", sumA !== null && today?.errors === sumA.totals.clientErrors + sumA.totals.serverErrors - sumA.totals.authFailures, sumA?.totals);
+  const hourWin = { from: new Date(Date.now() - 3 * 3600_000), to: new Date(Date.now() + 3600_000) };
+  const sumH = await getUsageSummary(prisma, A, hourWin);
+  check("(11) hourly (raw) path agrees: errors 3, failedSignins 1 in total over the buckets",
+    sumH?.range.granularity === "hour" && sumH.series.reduce((a, x) => a + x.errors, 0) === 3 && sumH.series.reduce((a, x) => a + x.failedSignins, 0) === 1, sumH?.series.filter((x) => x.requests));
+
+  const UA = `smoke-unattr-${rnd()}`;
+  const kU = await mkKey(A, "U key");
+  const nullBefore = await prisma.apiRequestLog.count({ where: { organizationId: null } });
+  resetApiUsageForTests();
+  delete process.env["API_UNATTRIBUTED_RAW_PER_MIN"];
+  for (let i = 0; i < 450; i++) ev({ statusCode: 401, requestId: `${UA}-${i}` });
+  for (let i = 0; i < 20; i++) ev({ statusCode: 202, organizationId: A, apiKeyId: kU });
+  const droppedUn = unattributedDroppedCount();
+  await flushApiUsage(prisma);
+  const nullAfter = await prisma.apiRequestLog.count({ where: { organizationId: null } });
+  const kuRoll = (await prisma.$queryRaw<Array<{ r: number }>>`SELECT coalesce(sum(requests),0)::int AS r FROM api_usage_daily WHERE api_key_id = ${kU}`)[0]!.r;
+  const kuRaw = await prisma.apiRequestLog.count({ where: { apiKeyId: kU } });
+  // a minute boundary may split the burst into two budgets (<= 2 x 300); 450 over one budget writes exactly 300
+  check("(11) 450 unattributed 401s write at most the per-minute budget (300, or up to 600 across a minute boundary), the rest is counted as dropped",
+    nullAfter - nullBefore + droppedUn === 450 && nullAfter - nullBefore >= 300 && nullAfter - nullBefore < 450 + 1 && droppedUn === 450 - (nullAfter - nullBefore), { written: nullAfter - nullBefore, droppedUn });
+  check("(11) attributed events recorded in the same burst are untouched: 20 raw rows and 20 rolled-up requests", kuRaw === 20 && kuRoll === 20, { kuRaw, kuRoll });
 }
 
 main()

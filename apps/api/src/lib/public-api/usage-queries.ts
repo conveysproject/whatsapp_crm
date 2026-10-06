@@ -42,7 +42,8 @@ export interface UsageSummary {
   /** The EFFECTIVE window every part of the summary used. `approximate`: hourly numbers come from sampled raw logs. */
   range: { from: string; to: string; granularity: "hour" | "day"; approximate: boolean };
   totals: UsageCounts;
-  series: Array<{ t: string; requests: number; success: number; errors: number }>;
+  /** errors = client + server errors EXCLUDING auth failures (same basis as errorRate); failedSignins = auth failures. */
+  series: Array<{ t: string; requests: number; success: number; errors: number; failedSignins: number }>;
   byEndpoint: Array<{ endpoint: string } & UsageCounts>;
   byCredential: Array<{ apiKeyId: string; name: string; revoked: boolean; lastUsedAt: string | null } & UsageCounts>;
   messagesByStatus: Record<(typeof MESSAGE_STATUSES)[number], number>;
@@ -141,6 +142,9 @@ export async function getUsageSummary(
   const lastDay = utcDay(new Date(to.getTime() - 1));
   const keyFilter = apiKeyId ? Prisma.sql`AND api_key_id = ${apiKeyId}` : Prisma.empty;
 
+  // CAVEAT (hourly view): raw 401 rows are capped per credential per minute (and unattributed rows per minute), so during a
+  // wrong-token flood hourly requests / clientErrors / failedSignins can UNDERCOUNT while `approximate` stays false (it only
+  // reflects success sampling). Daily numbers come from the rollups and are always exact. See the PRD.
   // Day granularity reads the rollups (exact, every request counted). Hourly granularity reads the raw log, because a
   // window of <= 48 h does not align with UTC days (exact while API_REQUEST_LOG_SUCCESS_SAMPLE_RATE = 1; errors always exact).
   const src = granularity === "day"
@@ -185,7 +189,7 @@ export async function getUsageSummary(
   for (const r of seriesRows) if (r.k) seriesByKey.set(r.k, r);
   const series = bucketKeys(from, to, granularity).map((t) => {
     const c = toCounts(seriesByKey.get(t));
-    return { t, requests: c.requests, success: c.success, errors: c.clientErrors + c.serverErrors };
+    return { t, requests: c.requests, success: c.success, errors: Math.max(0, c.clientErrors + c.serverErrors - c.authFailures), failedSignins: c.authFailures };
   });
 
   const credIds = credRows.map((r) => r.k).filter((k): k is string => !!k);

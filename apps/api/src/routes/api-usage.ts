@@ -12,7 +12,13 @@ const OUTCOMES = new Set(["success", "client_error", "server_error", "error"]);
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 /** ISO datetime that carries its own offset (Z or +hh:mm); an offset-less datetime would be read in server-local time. */
-const DATETIME_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:?\d{2})$/;
+const DATETIME_WITH_OFFSET = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-](\d{2}):?(\d{2}))$/;
+
+/** True when y-m-d is a real calendar date (no JS Date rollover). */
+function isRealDate(y: number, m: number, d: number): boolean {
+  if (m < 1 || m > 12 || d < 1) return false;
+  return d <= new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
 
 /** Normalizes a query value: Fastify yields an array for repeated keys; use the first string. */
 function qp(v: unknown): string | undefined {
@@ -30,10 +36,16 @@ const notFound = (reply: FastifyReply) => reply.status(404).send({ error: { code
  */
 function parseBound(v: string, isTo: boolean): Date | null {
   const dateOnly = DATE_ONLY.test(v);
-  if (!dateOnly && !DATETIME_WITH_OFFSET.test(v)) return null;
+  const m = dateOnly ? null : DATETIME_WITH_OFFSET.exec(v);
+  if (!dateOnly && !m) return null;
+  // Strict ranges: JS Date would silently roll 2026-02-31 / T24:00 / T10:60 over to a different instant.
+  if (m) {
+    const [y, mo, d, h, mi, sec, offH, offM] = [m[1], m[2], m[3], m[4], m[5], m[6] ?? "0", m[8] ?? "0", m[9] ?? "0"].map(Number) as [number, number, number, number, number, number, number, number];
+    if (!isRealDate(y, mo, d) || h > 23 || mi > 59 || sec > 59 || offH > 23 || offM > 59) return null;
+  }
   const d = new Date(dateOnly ? `${v}T00:00:00.000Z` : v);
   if (Number.isNaN(d.getTime())) return null;
-  if (dateOnly && d.toISOString().slice(0, 10) !== v) return null; // e.g. 2026-02-31
+  if (dateOnly && !isRealDate(Number(v.slice(0, 4)), Number(v.slice(5, 7)), Number(v.slice(8, 10)))) return null; // e.g. 2026-02-31
   return isTo && dateOnly ? new Date(d.getTime() + DAY_MS) : d;
 }
 
@@ -72,9 +84,10 @@ export const apiUsageRouter: FastifyPluginAsync = async (fastify) => {
       to = new Date();
       from = new Date(to.getTime() - DAY_MS);
     } else if (Object.hasOwn(DAY_PRESETS, range)) {
-      to = new Date();
-      const todayStart = Date.parse(`${to.toISOString().slice(0, 10)}T00:00:00.000Z`);
-      from = new Date(todayStart - (DAY_PRESETS[range]! - 1) * DAY_MS);
+      // Exactly the last N whole UTC days including today, at any instant: `to` is the END of today (tomorrow 00:00Z, exclusive).
+      const todayStart = Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+      to = new Date(todayStart + DAY_MS);
+      from = new Date(to.getTime() - DAY_PRESETS[range]! * DAY_MS);
     } else {
       return invalid(reply, "range must be 24h, 7d, 30d or custom");
     }

@@ -26,7 +26,7 @@ import { startClosureDeadlineWorker, scheduleClosureDeadlineCron } from "./worke
 import { startRegisterPhoneWorker, scheduleRegisterPhoneSweepCron } from "./workers/register-phone.worker.js";
 import { startPublicApiSendWorker } from "./workers/public-api-send.worker.js";
 import { startPublicApiCallbackWorker } from "./workers/public-api-callbacks.worker.js";
-import { startApiUsageFlusher, flushApiUsage } from "./lib/public-api/usage.js";
+import { startApiUsageFlusher, flushApiUsage, drainUsageOnShutdown } from "./lib/public-api/usage.js";
 import { prisma } from "./lib/prisma.js";
 console.log("[startup] all workers ready");
 
@@ -87,10 +87,12 @@ async function start() {
     // Let in-flight public-API sends finish on a deploy instead of dying mid-send (a stalled send is reported
     // failed, never re-run). Capped at 10 s; only registered when the public API is on.
     process.once("SIGTERM", () => {
-      const cap = new Promise<void>((resolve) => setTimeout(resolve, 10_000).unref());
-      // Flush usage AFTER the workers close: events recorded while the drain runs are then still in the single final flush.
-      const drain = Promise.allSettled(publicApiWorkers.map((w) => w.close())).then(() => flushApiUsage(prisma, server.log));
-      void Promise.race([drain, cap]).finally(() => process.exit(0));
+      // Usage flush starts immediately AND runs again after the workers close (single-flight); the whole drain is capped at 10 s.
+      void drainUsageOnShutdown(
+        () => Promise.allSettled(publicApiWorkers.map((w) => w.close())),
+        () => flushApiUsage(prisma, server.log),
+        10_000
+      ).finally(() => process.exit(0));
     });
   }
 }

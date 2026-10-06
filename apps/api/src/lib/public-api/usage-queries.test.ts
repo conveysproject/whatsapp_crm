@@ -51,8 +51,8 @@ describe("getUsageSummary", () => {
     });
     expect(s.totals.success + s.totals.clientErrors + s.totals.serverErrors).toBe(s.totals.requests);
     expect(s.series).toHaveLength(30);
-    expect(s.series.find((x) => x.t === "2026-10-06")).toEqual({ t: "2026-10-06", requests: 4, success: 3, errors: 1 });
-    expect(s.series.find((x) => x.t === "2026-10-05")).toEqual({ t: "2026-10-05", requests: 0, success: 0, errors: 0 });
+    expect(s.series.find((x) => x.t === "2026-10-06")).toEqual({ t: "2026-10-06", requests: 4, success: 3, errors: 0, failedSignins: 1 });
+    expect(s.series.find((x) => x.t === "2026-10-05")).toEqual({ t: "2026-10-05", requests: 0, success: 0, errors: 0, failedSignins: 0 });
     expect(s.byEndpoint.map((e) => e.endpoint)).toEqual(["message.get", "message.send"]);
     expect(s.byCredential[0]).toMatchObject({ apiKeyId: "key-1", name: "Prod", revoked: false, lastUsedAt: "2026-10-06T08:00:00.000Z", requests: 10 });
     expect(s.messagesByStatus).toEqual({ queued: 3, sent: 0, delivered: 4, read: 0, failed: 1, undelivered: 0 });
@@ -61,6 +61,18 @@ describe("getUsageSummary", () => {
     expect(queries.some((q) => q.sql.includes("api_request_logs"))).toBe(false);
   });
 
+
+  it("series errors EXCLUDE auth failures (never negative) and failedSignins reports them, daily and hourly", async () => {
+    const row = (k: string) => ({ k, ...agg({ requests: 10n, success: 4n, client_errors: 5n, server_errors: 1n, auth_failures: 3n }) });
+    const day = await getUsageSummary(mockPrisma({ rows: { totals: [agg()], series: [row("2026-10-06")] } }).prisma, "org-1", range30d);
+    expect(day!.series.find((x) => x.t === "2026-10-06")).toEqual({ t: "2026-10-06", requests: 10, success: 4, errors: 3, failedSignins: 3 });
+    const hour = await getUsageSummary(mockPrisma({ rows: { totals: [agg()], series: [row("2026-10-06T10:00:00Z")] } }).prisma, "org-1",
+      { from: new Date("2026-10-05T10:30:00Z"), to: new Date("2026-10-06T10:30:00Z") });
+    expect(hour!.series.find((x) => x.t === "2026-10-06T10:00:00Z")).toEqual({ t: "2026-10-06T10:00:00Z", requests: 10, success: 4, errors: 3, failedSignins: 3 });
+    // inconsistent counters (auth_failures > client_errors) clamp at 0
+    const clamp = await getUsageSummary(mockPrisma({ rows: { totals: [agg()], series: [{ k: "2026-10-06", ...agg({ requests: 5n, client_errors: 1n, server_errors: 0n, auth_failures: 4n }) }] } }).prisma, "org-1", range30d);
+    expect(clamp!.series.find((x) => x.t === "2026-10-06")).toMatchObject({ errors: 0, failedSignins: 4 });
+  });
   it("uses the raw log with hourly buckets for a range <= 48h", async () => {
     const { prisma, queries } = mockPrisma({ rows: { totals: [agg()], series: [{ k: "2026-10-06T10:00:00Z", ...agg({ requests: 2n }) }] } });
     const s = (await getUsageSummary(prisma, "org-1", range24h))!;
