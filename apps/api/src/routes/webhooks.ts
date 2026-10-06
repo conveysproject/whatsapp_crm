@@ -316,11 +316,11 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
             }).catch(() => { /* dump failures must never block the 200 response */ });
 
             if (!org) {
-              console.log(`[webhook] DROP wamid=${msg.id} from=${msg.from} — no org for phone_number_id=${phone_number_id}`);
+              console.log(`[webhook] DROP wamid=...${shortWamid(msg.id)} — no org for phone_number_id=${phone_number_id}`);
               continue;
             }
 
-            console.log(`[webhook] QUEUE wamid=${msg.id} from=${msg.from} type=${msg.type} body=${JSON.stringify(body)} org=${org.id}`);
+            console.log(`[webhook] QUEUE wamid=...${shortWamid(msg.id)} type=${msg.type} org=${org.id}`);
             await inboundMessageQueue.add("inbound", {
               organizationId: org.id,
               whatsappContactPhone: msg.from,
