@@ -11,6 +11,7 @@ const mockPrisma = {
   organization: { findUnique: vi.fn() },
   vendorSetting: { findFirst: vi.fn() },
   apiMessageMeta: { findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn() },
+  template: { findMany: vi.fn(), findFirst: vi.fn() },
 };
 const ID = "11111111-1111-1111-1111-111111111111";
 const auth = `Basic ${Buffer.from(`${ID}:good`).toString("base64")}`;
@@ -53,6 +54,15 @@ describe("publicApiRouter", () => {
     const res = await list({});
     expect(res.statusCode).toBe(401);
     expect(res.json()).toMatchObject({ api_id: expect.any(String) }); // Plivo-style body, not the Clerk one
+  });
+
+  it("serves the template routes in the same authenticated child context (401 without credentials, org-scoped 404 with them)", async () => {
+    const url = `/v1/Account/${ID}/WhatsApp/Template/waba-x/`;
+    expect((await app.inject({ method: "GET", url })).statusCode).toBe(401);
+    mockPrisma.organization.findUnique.mockResolvedValue({ status: "active", whatsappBusinessAccountId: "waba-1", wabaAccessToken: "t" });
+    const res = await app.inject({ method: "GET", url, headers: { authorization: auth } });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ api_id: expect.any(String), error: "Resource not found" });
   });
 
   it("rate limits per client+credential with HTTP 429 and a Plivo-style body", async () => {

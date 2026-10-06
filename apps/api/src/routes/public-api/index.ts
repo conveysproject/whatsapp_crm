@@ -7,6 +7,7 @@ import { safeErr } from "../../lib/public-api/safe-err.js";
 import { recordApiRequest } from "../../lib/public-api/usage.js";
 import { publicApiAuth } from "./auth.js";
 import { publicApiMessagesRouter } from "./messages.js";
+import { publicApiTemplatesRouter } from "./templates.js";
 
 /** Positive integer from an env var; falls back when missing, empty, non-numeric, zero or negative. */
 export function positiveIntEnv(name: string, fallback: number): number {
@@ -107,5 +108,6 @@ export const publicApiRouter: FastifyPluginAsync = async (fastify) => {
       errorResponseBuilder: throttled,
     });
     await child.register(publicApiMessagesRouter);
+    await child.register(publicApiTemplatesRouter);
   });
 };

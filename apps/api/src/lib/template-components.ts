@@ -240,3 +240,20 @@ export function contactBodyVars(contact: {
   const pool = [name, contact.phoneNumber, contact.email ?? ""];
   return Array.from({ length: varCount }, (_, i) => pool[i] ?? "");
 }
+
+type SyncComp = { type?: string; format?: string; text?: string; buttons?: unknown[] };
+
+export function extractTemplateFields(components: object[]) {
+  const comps = components as SyncComp[];
+  const header = comps.find((c) => c.type?.toUpperCase() === "HEADER");
+  const body = comps.find((c) => c.type?.toUpperCase() === "BODY");
+  const footer = comps.find((c) => c.type?.toUpperCase() === "FOOTER");
+  const buttons = comps.find((c) => c.type?.toUpperCase() === "BUTTONS");
+  return {
+    headerFormat: header?.format?.toUpperCase() ?? (header ? "TEXT" : "NONE"),
+    headerText: header?.format?.toUpperCase() === "TEXT" ? (header.text ?? null) : null,
+    bodyText: body?.text ?? null,
+    footerText: footer?.text ?? null,
+    buttonCount: (buttons?.buttons as unknown[])?.length ?? 0,
+  };
+}

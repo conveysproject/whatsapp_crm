@@ -3,7 +3,7 @@ import type { TemplateCategory, TemplateStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { submitTemplateToMeta } from "../lib/meta-templates.js";
 import { sendTemplateMessage, getMetaTemplateAnalytics, uploadMediaHandle } from "../lib/whatsapp.js";
-import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
+import { buildTemplateComponents, contactBodyVars, extractTemplateFields } from "../lib/template-components.js";
 import type { TemplateId, ContactId } from "@WBMSG/shared";
 import { canAccess, canAccessSub } from "../lib/permissions.js";
 
@@ -19,23 +19,6 @@ interface SendToContactBody {
   variables: string[];
   mediaUrl?: string;
   cardMediaUrls?: string[];
-}
-
-type SyncComp = { type?: string; format?: string; text?: string; buttons?: unknown[] };
-
-function extractTemplateFields(components: object[]) {
-  const comps = components as SyncComp[];
-  const header = comps.find((c) => c.type?.toUpperCase() === "HEADER");
-  const body = comps.find((c) => c.type?.toUpperCase() === "BODY");
-  const footer = comps.find((c) => c.type?.toUpperCase() === "FOOTER");
-  const buttons = comps.find((c) => c.type?.toUpperCase() === "BUTTONS");
-  return {
-    headerFormat: header?.format?.toUpperCase() ?? (header ? "TEXT" : "NONE"),
-    headerText: header?.format?.toUpperCase() === "TEXT" ? (header.text ?? null) : null,
-    bodyText: body?.text ?? null,
-    footerText: footer?.text ?? null,
-    buttonCount: (buttons?.buttons as unknown[])?.length ?? 0,
-  };
 }
 
 export const templatesRouter: FastifyPluginAsync = async (fastify) => {
