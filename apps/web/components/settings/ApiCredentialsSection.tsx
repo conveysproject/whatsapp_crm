@@ -275,7 +275,7 @@ function CredentialRow({
   );
 }
 
-function ApiCredentialsBody(): JSX.Element {
+function ApiCredentialsBody(): JSX.Element | null {
   const qc = useQueryClient();
   const { data, error, isLoading, refetch, isFetching } = useQuery<ApiCredential[], Error>({
     queryKey: QUERY_KEY,
@@ -287,18 +287,13 @@ function ApiCredentialsBody(): JSX.Element {
 
   const refresh = (): Promise<void> => qc.invalidateQueries({ queryKey: QUERY_KEY });
 
+  // Orgs without API access never see this section (and are not invited to ask for it): render nothing while
+  // the first request is in flight and when the server says the plan does not include API access.
   const planRequired = error instanceof ApiCredentialsError && error.code === "PLAN_REQUIRED";
+  if (isLoading || planRequired) return null;
 
   let content: JSX.Element;
-  if (isLoading) {
-    content = <p className="text-sm text-gray-400">Loading…</p>;
-  } else if (planRequired) {
-    content = (
-      <p role="status" className="text-sm rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 px-3 py-2 text-blue-900 dark:text-blue-200">
-        API access is not enabled for your plan. Contact support to enable it.
-      </p>
-    );
-  } else if (error) {
+  if (error) {
     content = (
       <div role="alert" className="flex items-center justify-between gap-3 text-sm rounded-md bg-red-50 dark:bg-red-950 border border-red-200 px-3 py-2 text-red-700 dark:text-red-300">
         <span>{messageForError(error)}</span>
@@ -335,7 +330,7 @@ function ApiCredentialsBody(): JSX.Element {
             Auth ID and Auth Token for the WBMSG API. Tokens are shown only once, when created or rotated.
           </p>
         </div>
-        {!planRequired && !error && !isLoading && (
+        {!error && (
           <button type="button" onClick={() => setDialog({ kind: "create" })} className={`${primaryBtn} shrink-0`}>
             Create credential
           </button>

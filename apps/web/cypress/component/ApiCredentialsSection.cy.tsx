@@ -55,14 +55,24 @@ describe('ApiCredentialsSection', () => {
     cy.contains('button', 'Create credential').should('be.visible');
   });
 
-  it('shows a calm info state on PLAN_REQUIRED and no create button', () => {
+  it('renders nothing at all on PLAN_REQUIRED (orgs without API access never see the section)', () => {
     cy.intercept('GET', '/api/v1/api-credentials', {
       statusCode: 403,
       body: { error: { code: 'PLAN_REQUIRED', message: 'plan' } },
-    });
+    }).as('list');
     mountSection();
-    cy.contains('API access is not enabled for your plan. Contact support to enable it.').should('be.visible');
+    cy.wait('@list');
+    cy.contains('API Credentials').should('not.exist');
+    cy.contains('Contact support').should('not.exist');
     cy.contains('button', 'Create credential').should('not.exist');
+  });
+
+  it('does not flash the section while the first request is still loading', () => {
+    cy.intercept('GET', '/api/v1/api-credentials', { delay: 1500, body: { data: [] } }).as('delayedList');
+    mountSection();
+    cy.contains('API Credentials').should('not.exist');
+    cy.wait('@delayedList');
+    cy.contains('API Credentials').should('be.visible');
   });
 
   it('shows an inline error with Retry on other errors', () => {
