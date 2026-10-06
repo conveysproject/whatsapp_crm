@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import { redisConnection } from "../../lib/queue.js";
+import { clientIp } from "../../lib/public-api/client-ip.js";
 import { plivoErrorBody } from "../../lib/public-api/responses.js";
 import { safeErr } from "../../lib/public-api/safe-err.js";
 import { recordApiRequest } from "../../lib/public-api/usage.js";
@@ -69,15 +70,27 @@ export const publicApiRouter: FastifyPluginAsync = async (fastify) => {
   const perCredentialMax = positiveIntEnv("PUBLIC_API_RATE_LIMIT", 300);
   const preAuthMax = positiveIntEnv("PUBLIC_API_PREAUTH_RATE_LIMIT", perCredentialMax * 10);
 
-  // Coarse PRE-AUTH flood guard, keyed by IP only. The API is not built with `trustProxy`, so behind a reverse proxy
-  // `req.ip` is the proxy address and this degrades to ONE global bucket - which is why its max is high (10x) and why
-  // the per-credential limiter below is the authoritative one. It must not be keyed by authId: unauthenticated
-  // requests would then let a third party exhaust a victim's bucket.
+  // Coarse PRE-AUTH flood guard, keyed by the client IP only. The API is not built with `trustProxy`, so behind
+  // Railway `req.ip` is the proxy address; `clientIp` reads the real address from X-Forwarded-For (right-most public
+  // entry, only when the socket peer is our own proxy) so spoofed headers cannot choose a bucket. The max stays high
+  // (10x) because shared NATs exist, and the per-credential limiter below is the authoritative one. It must not be
+  // keyed by authId: unauthenticated requests would then let a third party exhaust a victim's bucket.
+  let probesLeft = 20;
+  fastify.addHook("onRequest", (req, _reply, done) => {
+    // One-off deployment probe (no addresses): confirms the proxy header shape without logging anyone's IP.
+    if (probesLeft > 0) {
+      probesLeft--;
+      const xff = req.headers["x-forwarded-for"];
+      const entries = (Array.isArray(xff) ? xff.join(",") : xff ?? "").split(",").filter((e) => e.trim()).length;
+      req.log.info({ xffEntries: entries, hasRealIp: Boolean(req.headers["x-real-ip"]), resolvedIsPeer: clientIp(req.ip, xff, req.headers["x-real-ip"]) === req.ip }, "[public-api] client-ip probe");
+    }
+    done();
+  });
   await fastify.register(rateLimit, {
     max: preAuthMax,
     timeWindow: "1 minute",
     ...(redisConnection ? { redis: redisConnection } : {}),
-    keyGenerator: (req) => `pub:ip:${req.ip}`,
+    keyGenerator: (req) => `pub:ip:${clientIp(req.ip, req.headers["x-forwarded-for"], req.headers["x-real-ip"])}`,
     errorResponseBuilder: throttled,
   });
   fastify.addHook("preHandler", (req, reply) => publicApiAuth(req as never, reply));

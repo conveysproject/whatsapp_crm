@@ -93,6 +93,25 @@ describe("publicApiRouter", () => {
     delete process.env["PUBLIC_API_PREAUTH_RATE_LIMIT"];
   });
 
+  it("pre-auth guard keys by the real client address behind the proxy; spoofed leading X-Forwarded-For entries do not mint buckets", async () => {
+    process.env["PUBLIC_API_PREAUTH_RATE_LIMIT"] = "3";
+    app = await rebuild();
+    const from = (xff: string) => app.inject({ method: "GET", url: `/v1/Account/${ID}/Message/`, remoteAddress: "100.64.0.7", headers: { "x-forwarded-for": xff } });
+    for (let i = 0; i < 3; i++) expect((await from(`${i}.${i}.${i}.${i + 1}, 203.0.113.5`)).statusCode).toBe(401);
+    expect((await from("8.8.8.8, 203.0.113.5")).statusCode).toBe(429); // same real client, different spoofed prefix
+    expect((await from("203.0.113.6")).statusCode).toBe(401); // a different real client has its own bucket
+    delete process.env["PUBLIC_API_PREAUTH_RATE_LIMIT"];
+  });
+
+  it("pre-auth guard ignores X-Forwarded-For from a public peer (direct connection)", async () => {
+    process.env["PUBLIC_API_PREAUTH_RATE_LIMIT"] = "3";
+    app = await rebuild();
+    const from = (xff: string) => app.inject({ method: "GET", url: `/v1/Account/${ID}/Message/`, remoteAddress: "198.51.100.20", headers: { "x-forwarded-for": xff } });
+    for (let i = 0; i < 3; i++) expect((await from(`9.9.9.${i}`)).statusCode).toBe(401);
+    expect((await from("9.9.9.99")).statusCode).toBe(429);
+    delete process.env["PUBLIC_API_PREAUTH_RATE_LIMIT"];
+  });
+
   it.each(["", "abc", "0", "-5"])("falls back to the default limit when PUBLIC_API_RATE_LIMIT=%j", async (v) => {
     process.env["PUBLIC_API_RATE_LIMIT"] = v;
     app = await rebuild();
