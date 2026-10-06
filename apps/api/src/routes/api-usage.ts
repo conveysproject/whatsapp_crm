@@ -49,6 +49,23 @@ function parseBound(v: string, isTo: boolean): Date | null {
   return isTo && dateOnly ? new Date(d.getTime() + DAY_MS) : d;
 }
 
+/**
+ * Resolves a `24h | 7d | 30d` preset to its window. Shared by /summary and /requests so both produce identical windows.
+ * `24h` is rolling; `7d` / `30d` are the last N whole UTC days including today (`to` = tomorrow 00:00Z, exclusive).
+ */
+function presetWindow(range: string): { from: Date; to: Date } | null {
+  if (range === "24h") {
+    const to = new Date();
+    return { from: new Date(to.getTime() - DAY_MS), to };
+  }
+  if (Object.hasOwn(DAY_PRESETS, range)) {
+    const todayStart = Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const to = new Date(todayStart + DAY_MS);
+    return { from: new Date(to.getTime() - DAY_PRESETS[range]! * DAY_MS), to };
+  }
+  return null;
+}
+
 export const apiUsageRouter: FastifyPluginAsync = async (fastify) => {
   // Same gate as the credentials routes: permission first, then API access (identical body for blocked / not allow-listed).
   fastify.addHook("preHandler", async (request, reply) => {
@@ -80,16 +97,10 @@ export const apiUsageRouter: FastifyPluginAsync = async (fastify) => {
       if (fd.getTime() >= td.getTime()) return invalid(reply, "from must be before to");
       if (td.getTime() - fd.getTime() > MAX_RANGE_MS) return invalid(reply, "range may span at most 366 days");
       from = fd; to = td;
-    } else if (range === "24h") {
-      to = new Date();
-      from = new Date(to.getTime() - DAY_MS);
-    } else if (Object.hasOwn(DAY_PRESETS, range)) {
-      // Exactly the last N whole UTC days including today, at any instant: `to` is the END of today (tomorrow 00:00Z, exclusive).
-      const todayStart = Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
-      to = new Date(todayStart + DAY_MS);
-      from = new Date(to.getTime() - DAY_PRESETS[range]! * DAY_MS);
     } else {
-      return invalid(reply, "range must be 24h, 7d, 30d or custom");
+      const w = presetWindow(range);
+      if (!w) return invalid(reply, "range must be 24h, 7d, 30d or custom");
+      ({ from, to } = w);
     }
 
     const data = await getUsageSummary(fastify.prisma, request.auth.organizationId, { from, to, ...(apiKeyId ? { apiKeyId } : {}) });
@@ -115,8 +126,30 @@ export const apiUsageRouter: FastifyPluginAsync = async (fastify) => {
     const cursor = qp(q["cursor"]);
     if (cursor !== undefined && cursor.length > 200) return invalid(reply, "cursor is invalid");
 
+    // Optional window: a `range` preset (same helper as /summary) OR explicit from/to; never both. No params = all retained rows.
+    const rangeParam = qp(q["range"]);
+    const fromParam = qp(q["from"]);
+    const toParam = qp(q["to"]);
+    let window: { from?: Date; to?: Date } = {};
+    if (rangeParam !== undefined) {
+      if (fromParam !== undefined || toParam !== undefined) return invalid(reply, "use either range or from/to, not both");
+      const w = presetWindow(rangeParam);
+      if (!w) return invalid(reply, "range must be 24h, 7d or 30d");
+      window = w;
+    } else if (fromParam !== undefined || toParam !== undefined) {
+      const fd = fromParam !== undefined ? parseBound(fromParam, false) : undefined;
+      const td = toParam !== undefined ? parseBound(toParam, true) : undefined;
+      if (fd === null || td === null) return invalid(reply, "from and to must be YYYY-MM-DD or an ISO datetime with Z or an offset");
+      if (fd && td) {
+        if (fd.getTime() >= td.getTime()) return invalid(reply, "from must be before to");
+        if (td.getTime() - fd.getTime() > MAX_RANGE_MS) return invalid(reply, "range may span at most 366 days");
+      }
+      window = { ...(fd ? { from: fd } : {}), ...(td ? { to: td } : {}) };
+    }
+
     const res = await listRequests(fastify.prisma, request.auth.organizationId, {
       limit,
+      ...window,
       ...(cursor ? { cursor } : {}),
       ...(outcome ? { outcome: outcome as OutcomeFilter } : {}),
       ...(apiKeyId ? { apiKeyId } : {}),

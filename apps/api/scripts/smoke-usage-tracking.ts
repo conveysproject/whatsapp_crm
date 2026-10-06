@@ -327,10 +327,10 @@ async function main() {
     mkRow(7, "server_error", 500, D("2026-10-05T11:59:59.999Z")), mkRow(8, "success", 202, D("2026-10-05T11:00:00.000Z")),
   ];
   await prisma.apiRequestLog.createMany({ data: pageRows });
-  const walk = async (limit: number, outcome?: "error" | "success" | "client_error") => {
+  const walk = async (limit: number, outcome?: "error" | "success" | "client_error", win?: { from?: Date; to?: Date }) => {
     const got: string[] = []; let cur: string | undefined; let guard = 0;
     for (;;) {
-      const res = await listRequests(prisma, P, { limit, ...(outcome ? { outcome } : {}), ...(cur ? { cursor: cur } : {}) });
+      const res = await listRequests(prisma, P, { limit, ...(win ?? {}), ...(outcome ? { outcome } : {}), ...(cur ? { cursor: cur } : {}) });
       if (!res || res === "invalid_cursor") return { got, bad: true };
       got.push(...res.data.map((x) => x.id));
       if (!res.nextCursor || ++guard > 50) break;
@@ -347,6 +347,19 @@ async function main() {
   check("(8) limit=1 without filter visits all 9 rows once", !w3.bad && w3.got.length === 9 && new Set(w3.got).size === 9, w3.got.length);
   const ordered = (await prisma.apiRequestLog.findMany({ where: { organizationId: P }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true } })).map((x) => x.id);
   check("(8) pagination order equals ORDER BY created_at DESC, id DESC", w3.got.join() === ordered.join());
+
+  // Window [11:30:00.000Z, 12:00:00.001Z): includes the 6 rows at 12:00:00.000 and the 11:59:59.999 row; excludes 12:00:00.001 (exclusive end) and 11:00.
+  const win = { from: D("2026-10-05T11:30:00.000Z"), to: D("2026-10-05T12:00:00.001Z") };
+  const inWin = pageRows.filter((x) => x.createdAt >= win.from && x.createdAt < win.to);
+  const wAll = await walk(1, undefined, win);
+  check("(8) a from/to window excludes older rows (11:00) and the row at the exclusive end (12:00:00.001): 7 rows", !wAll.bad && wAll.got.length === 7 && [...wAll.got].sort().join() === inWin.map((x) => x.id).sort().join(), wAll.got.length);
+  const wErr = await walk(1, "error", win);
+  const expectedWinErr = inWin.filter((x) => x.outcome !== "success").map((x) => x.id).sort();
+  check("(8) window + outcome=error + limit=1: 5 rows, no skips, no duplicates (4 share created_at)", !wErr.bad && wErr.got.length === 5 && new Set(wErr.got).size === 5 && [...wErr.got].sort().join() === expectedWinErr.join(), wErr.got.length);
+  const wErr2 = await walk(2, "error", win);
+  check("(8) window + outcome=error + limit=2 yields the same order as limit=1", !wErr2.bad && wErr2.got.join() === wErr.got.join(), wErr2.got.length);
+  const onlyFrom = await walk(3, undefined, { from: D("2026-10-05T12:00:00.000Z") });
+  check("(8) from-only window keeps rows >= from (7 rows: 12:00:00.000 x6 + 12:00:00.001)", !onlyFrom.bad && onlyFrom.got.length === 7, onlyFrom.got.length);
 
   section("(10) EXPLAIN of the main queries (index usage report; seq scans are reported, not failed)");
   await prisma.$executeRaw`ANALYZE api_request_logs`;

@@ -252,6 +252,27 @@ describe("listRequests", () => {
     expect(where["OR"]).toEqual([{ createdAt: { lt: new Date("2026-10-06T10:00:02.000Z") } }, { createdAt: new Date("2026-10-06T10:00:02.000Z"), id: { lt: "id-2" } }]);
   });
 
+  it("adds created_at >= from AND < to when a window is given, and keeps the cursor condition beside it", async () => {
+    const { prisma, p } = mockPrisma();
+    const from = new Date("2026-10-01T00:00:00.000Z");
+    const to = new Date("2026-10-07T00:00:00.000Z");
+    const cursor = encodeCursor(new Date("2026-10-06T10:00:02.000Z"), "id-2");
+    await listRequests(prisma, "org-1", { limit: 10, from, to, cursor });
+    const where = (p.apiRequestLog.findMany.mock.calls as unknown as Array<[{ where: Record<string, unknown> }]>)[0]![0].where;
+    expect(where).toMatchObject({ organizationId: "org-1", createdAt: { gte: from, lt: to } });
+    // The cursor condition lives in OR (its own createdAt comparisons), so the window cannot be overwritten by it.
+    expect(where["OR"]).toEqual([{ createdAt: { lt: new Date("2026-10-06T10:00:02.000Z") } }, { createdAt: new Date("2026-10-06T10:00:02.000Z"), id: { lt: "id-2" } }]);
+  });
+
+  it("supports a one-sided window and no createdAt bound without one", async () => {
+    const { prisma, p } = mockPrisma();
+    await listRequests(prisma, "org-1", { limit: 10, from: new Date("2026-10-01T00:00:00.000Z") });
+    await listRequests(prisma, "org-1", { limit: 10 });
+    const calls = p.apiRequestLog.findMany.mock.calls as unknown as Array<[{ where: Record<string, unknown> }]>;
+    expect(calls[0]![0].where["createdAt"]).toEqual({ gte: new Date("2026-10-01T00:00:00.000Z") });
+    expect(calls[1]![0].where).not.toHaveProperty("createdAt");
+  });
+
   it("single outcome is passed through", async () => {
     const { prisma, p } = mockPrisma();
     await listRequests(prisma, "org-1", { limit: 10, outcome: "server_error" });

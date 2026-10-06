@@ -265,9 +265,9 @@ export function decodeCursor(cursor: string): { createdAt: Date; id: string } | 
 export async function listRequests(
   prisma: PrismaClient,
   organizationId: string,
-  opts: { limit: number; cursor?: string; outcome?: OutcomeFilter; apiKeyId?: string; endpoint?: string }
+  opts: { limit: number; cursor?: string; outcome?: OutcomeFilter; apiKeyId?: string; endpoint?: string; from?: Date; to?: Date }
 ): Promise<{ data: RequestRow[]; nextCursor: string | null } | null | "invalid_cursor"> {
-  const { limit, cursor, outcome, apiKeyId, endpoint } = opts;
+  const { limit, cursor, outcome, apiKeyId, endpoint, from, to } = opts;
   if (apiKeyId && !(await ownsKey(prisma, organizationId, apiKeyId))) return null;
   const c = cursor ? decodeCursor(cursor) : undefined;
   if (cursor && !c) return "invalid_cursor";
@@ -277,6 +277,8 @@ export async function listRequests(
       organizationId,
       ...(apiKeyId ? { apiKeyId } : {}),
       ...(endpoint ? { endpoint } : {}),
+      // Optional window [from, to): the cursor's own createdAt comparisons live in OR, which Prisma ANDs with this.
+      ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) } } : {}),
       ...(outcome ? { outcome: outcome === "error" ? { in: ["client_error", "server_error"] } : outcome } : {}),
       ...(c ? { OR: [{ createdAt: { lt: c.createdAt } }, { createdAt: c.createdAt, id: { lt: c.id } }] } : {}),
     },

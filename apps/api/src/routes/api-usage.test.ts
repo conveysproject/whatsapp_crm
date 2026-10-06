@@ -227,6 +227,66 @@ describe("api-usage routes", () => {
       expect((await requests("?apiKeyId=foreign")).statusCode).toBe(404);
     });
 
+    describe("date range", () => {
+      const win = () => h.list.mock.calls[0]![2] as { from?: Date; to?: Date };
+
+      it("no range params -> no window (all retained rows)", async () => {
+        await requests();
+        expect(win().from).toBeUndefined();
+        expect(win().to).toBeUndefined();
+      });
+
+      it("from/to: a date-only to is inclusive of that day; datetimes with an offset are honoured", async () => {
+        await requests("?from=2026-09-01&to=2026-09-30");
+        expect(win().from!.toISOString()).toBe("2026-09-01T00:00:00.000Z");
+        expect(win().to!.toISOString()).toBe("2026-10-01T00:00:00.000Z");
+        h.list.mockClear();
+        await requests("?from=2026-09-01T10:00:00%2B02:00&to=2026-09-02T00:00:00Z");
+        expect(win().from!.toISOString()).toBe("2026-09-01T08:00:00.000Z");
+        expect(win().to!.toISOString()).toBe("2026-09-02T00:00:00.000Z");
+      });
+
+      it("400 INVALID_QUERY for bad dates, from >= to, spans over 366 days, unknown/custom range, range mixed with from/to", async () => {
+        for (const qs of [
+          "?from=nope", "?to=2026-02-31", "?from=2026-09-01T10:00:00", "?from=2026-09-02&to=2026-09-01", "?from=2026-09-01T00:00:00Z&to=2026-09-01T00:00:00Z",
+          "?from=2024-01-01&to=2026-01-01", "?range=1y", "?range=custom", "?range=7d&from=2026-09-01",
+        ]) {
+          const res = await requests(qs);
+          expect(res.statusCode, qs).toBe(400);
+          expect(res.json()).toMatchObject({ error: { code: "INVALID_QUERY" } });
+        }
+        expect(h.list).not.toHaveBeenCalled();
+      });
+
+      it("range presets resolve to EXACTLY the window /summary uses", async () => {
+        vi.useFakeTimers({ now: new Date("2026-10-06T15:42:10.123Z"), toFake: ["Date"] });
+        try {
+          for (const range of ["24h", "7d", "30d"]) {
+            h.list.mockClear(); h.summary.mockClear();
+            await requests(`?range=${range}`);
+            await summary(`?range=${range}`);
+            const s = h.summary.mock.calls[0]![2] as { from: Date; to: Date };
+            expect(win().from!.getTime(), range).toBe(s.from.getTime());
+            expect(win().to!.getTime(), range).toBe(s.to.getTime());
+          }
+          h.list.mockClear();
+          await requests("?range=7d");
+          expect(win().from!.toISOString()).toBe("2026-09-30T00:00:00.000Z");
+          expect(win().to!.toISOString()).toBe("2026-10-07T00:00:00.000Z");
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("repeated range / from / to params use the first value and do not 500", async () => {
+        expect((await requests("?range=7d&range=30d")).statusCode).toBe(200);
+        expect(win().to!.getTime() - win().from!.getTime()).toBe(7 * 86_400_000);
+        h.list.mockClear();
+        expect((await requests("?from=2026-09-01&from=2020-01-01&to=2026-09-02&to=2027-01-01")).statusCode).toBe(200);
+        expect(win().from!.toISOString()).toBe("2026-09-01T00:00:00.000Z");
+      });
+    });
+
     it("repeated params do not 500", async () => {
       expect((await requests("?limit=5&limit=7&outcome=success&outcome=error")).statusCode).toBe(200);
       expect(h.list.mock.calls[0]![2]).toMatchObject({ limit: 5, outcome: "success" });
