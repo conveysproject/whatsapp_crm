@@ -81,14 +81,15 @@ async function start() {
   }
   if (process.env["PUBLIC_API_ENABLED"] === "true") {
     const publicApiWorkers = [startPublicApiSendWorker(), startPublicApiCallbackWorker()];
-    // Usage metering: buffered in memory, flushed in batches; the raw-log retention purge runs daily.
+    // Usage metering: buffered in memory, flushed in batches (single-flight); the raw-log retention purge runs hourly.
     startApiUsageFlusher(prisma, server.log);
     scheduleApiUsageCleanupCron().catch((err) => server.log.warn({ err }, "API usage cleanup cron schedule failed"));
     // Let in-flight public-API sends finish on a deploy instead of dying mid-send (a stalled send is reported
     // failed, never re-run). Capped at 10 s; only registered when the public API is on.
     process.once("SIGTERM", () => {
       const cap = new Promise<void>((resolve) => setTimeout(resolve, 10_000).unref());
-      const drain = Promise.allSettled([...publicApiWorkers.map((w) => w.close()), flushApiUsage(prisma, server.log)]);
+      // Flush usage AFTER the workers close: events recorded while the drain runs are then still in the single final flush.
+      const drain = Promise.allSettled(publicApiWorkers.map((w) => w.close())).then(() => flushApiUsage(prisma, server.log));
       void Promise.race([drain, cap]).finally(() => process.exit(0));
     });
   }

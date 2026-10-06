@@ -100,14 +100,17 @@ const h = vi.hoisted(() => {
           .slice(0, take),
     },
     // Emulates the rollup upsert emitted by flushApiUsage (positional values) and the summary's rollup reads.
-    $executeRaw: async (_s: unknown, ...v: any[]) => {
-      const [organizationId, apiKeyId, day, endpoint, requests, success, clientErrors, serverErrors, rateLimited, authFailures, messages, sum, max] = v;
+    // The statement is ONE multi-row upsert: 13 positional values per group.
+    $executeRaw: async (stmt: { values: any[] }) => {
+      for (let i = 0; i < stmt.values.length; i += 13) {
+      const [organizationId, apiKeyId, day, endpoint, requests, success, clientErrors, serverErrors, rateLimited, authFailures, messages, sum, max] = stmt.values.slice(i, i + 13);
       const key = JSON.stringify([organizationId, apiKeyId, day, endpoint]);
       const cur = t.rollup.get(key) ?? { organizationId, apiKeyId, day, endpoint, requests: 0, success: 0, client_errors: 0, server_errors: 0, rate_limited: 0, auth_failures: 0, messages: 0, duration_ms_sum: 0, duration_ms_max: 0 };
       cur["requests"] += requests; cur["success"] += success; cur["client_errors"] += clientErrors; cur["server_errors"] += serverErrors;
       cur["rate_limited"] += rateLimited; cur["auth_failures"] += authFailures; cur["messages"] += messages; cur["duration_ms_sum"] += sum;
       cur["duration_ms_max"] = Math.max(cur["duration_ms_max"], max);
       t.rollup.set(key, cur);
+      }
       return 1;
     },
     $queryRaw: async (q: { sql: string; values: any[] }) => {
@@ -401,7 +404,8 @@ describe("public API end-to-end (real router + workers, in-memory Prisma)", () =
       const res = await dashboard("org-1", "/v1/api-usage/summary?range=7d");
       expect(res.statusCode).toBe(200);
       const body = res.json() as { totals: Record<string, number>; byCredential: Array<{ apiKeyId: string; authFailures: number }>; byEndpoint: Array<{ endpoint: string; requests: number }> };
-      expect(body.totals).toMatchObject({ requests: 5, success: 2, clientErrors: 3, serverErrors: 0, rateLimited: 1, authFailures: 1, messages: 1 });
+      expect(body.totals).toMatchObject({ requests: 5, success: 2, clientErrors: 3, serverErrors: 0, rateLimited: 1, authFailures: 1, failedSignins: 1, billableRequests: 3, messages: 1 });
+      expect(body.totals["errorRate"]).toBe(0.5); // (3 client errors - 1 auth failure) / (5 requests - 1 auth failure)
       expect(body.totals["success"]! + body.totals["clientErrors"]! + body.totals["serverErrors"]!).toBe(body.totals["requests"]);
       expect(body.byCredential).toHaveLength(1);
       expect(body.byCredential[0]).toMatchObject({ apiKeyId: cred1.authId, authFailures: 1 });

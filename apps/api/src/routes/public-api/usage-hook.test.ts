@@ -108,9 +108,22 @@ describe("public API usage hook", () => {
     expect(h.record.mock.calls[0]![0]).toMatchObject({ statusCode: 500, organizationId: "org-1" });
   });
 
-  it("never breaks the response when recording throws", async () => {
+  it("the hook function never throws when recording throws (the response is already sent when onResponse runs)", async () => {
+    const { recordUsageOnResponse } = await import("./index.js");
     h.record.mockImplementation(() => { throw new Error("recorder down"); });
-    const res = await get(`/v1/Account/${ID}/Message/`);
-    expect(res.statusCode).toBe(200);
+    const request = { method: "GET", routeOptions: { url: "/x" }, id: "r1", publicApi: { organizationId: "o", apiKeyId: "k" } };
+    const reply = { statusCode: 200, elapsedTime: 3.2 };
+    expect(() => recordUsageOnResponse(request as never, reply as never)).not.toThrow();
+    expect(h.record).toHaveBeenCalledTimes(1);
+    // even a request object that explodes on property access must not escape
+    const hostile = new Proxy({}, { get() { throw new Error("boom"); } });
+    expect(() => recordUsageOnResponse(hostile as never, reply as never)).not.toThrow();
+    // and a throwing recorder does not change the real response
+    expect((await get(`/v1/Account/${ID}/Message/`)).statusCode).toBe(200);
+  });
+
+  it("passes the raw request id through; sanitising happens in recordApiRequest", async () => {
+    await app.inject({ method: "GET", url: `/v1/Account/${ID}/Message/`, headers: { authorization: auth(), "request-id": "x y z" } });
+    expect(h.record.mock.calls[0]![0].requestId).toBe("x y z");
   });
 });

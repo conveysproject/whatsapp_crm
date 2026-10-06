@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { safeErr } from "./safe-err.js";
 
 /**
@@ -49,6 +49,16 @@ export interface UsageLogger { warn: (obj: object, msg: string) => void }
 const MAX_BUFFER = 10_000;
 const FLUSH_AT = 200;
 const DEFAULT_FLUSH_MS = 5000;
+/** Rows per createMany / groups per upsert statement: keeps the bind-parameter count far below Postgres' 65 535 limit. */
+const RAW_CHUNK = 2000;
+const UPSERT_CHUNK = 500;
+/** flushApiUsage keeps flushing while events keep arriving, but never loops forever (shutdown must stay bounded). */
+const MAX_DRAIN_LOOPS = 5;
+const TX_OPTIONS = { timeout: 30_000, maxWait: 5_000 } as const;
+/** At most this many RAW rows per credential per minute for 401s (anyone can send `knownId:wrong`). Rollups count all. */
+const AUTH_RAW_PER_MINUTE = 30;
+const AUTH_RAW_MAP_MAX = 5000;
+const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,64}$/;
 
 // ---- pure helpers ----
 
@@ -83,7 +93,8 @@ export function utcDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-function sampleRate(): number {
+/** Parsed API_REQUEST_LOG_SUCCESS_SAMPLE_RATE (0..1, default 1). */
+export function successSampleRate(): number {
   const raw = process.env["API_REQUEST_LOG_SUCCESS_SAMPLE_RATE"];
   if (raw === undefined || raw.trim() === "") return 1;
   const n = Number(raw);
@@ -133,55 +144,117 @@ let timer: NodeJS.Timeout | null = null;
 let activePrisma: PrismaClient | null = null;
 let activeLogger: UsageLogger | undefined;
 let flushQueued = false;
+/** The single flush currently running (single-flight). Never rejects. */
+let inFlight: Promise<void> | null = null;
+const authRawCounts = new Map<string, { minute: number; count: number }>();
 
 export const bufferedCount = () => buffer.length;
 export const droppedCount = () => dropped;
 
 export function resetApiUsageForTests(): void {
-  buffer = []; dropped = 0; flushQueued = false;
+  buffer = []; dropped = 0; flushQueued = false; inFlight = null; authRawCounts.clear();
 }
 
 const num = (v: unknown, fallback = 0) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
+
+/** Client-controlled values never reach the database verbatim: a safe request id, or a fresh UUID. */
+export function sanitizeRequestId(v: unknown): string {
+  return typeof v === "string" && REQUEST_ID_RE.test(v) ? v : randomUUID();
+}
+
+function sanitizeMethod(v: unknown): string {
+  return String(v ?? "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 10) || "OTHER";
+}
+
+/** True while this credential is under its per-minute budget of raw 401 rows. Bounded memory. */
+function allowAuthFailureRaw(apiKeyId: string, nowMs: number): boolean {
+  const minute = Math.floor(nowMs / 60_000);
+  if (authRawCounts.size > AUTH_RAW_MAP_MAX) {
+    for (const [k, v] of authRawCounts) if (v.minute !== minute) authRawCounts.delete(k);
+    if (authRawCounts.size > AUTH_RAW_MAP_MAX) authRawCounts.clear();
+  }
+  const entry = authRawCounts.get(apiKeyId);
+  if (!entry || entry.minute !== minute) {
+    authRawCounts.set(apiKeyId, { minute, count: 1 });
+    return true;
+  }
+  if (entry.count >= AUTH_RAW_PER_MINUTE) return false;
+  entry.count += 1;
+  return true;
+}
 
 /** Synchronous and exception-safe: recording must never affect a response. */
 export function recordApiRequest(event: ApiRequestEvent): void {
   try {
     if (!event || typeof event.statusCode !== "number" || !Number.isFinite(event.statusCode)) return;
     const status = event.statusCode;
-    const raw = status >= 400 ? true : sampleRate() >= 1 ? true : sampleRate() <= 0 ? false : Math.random() < sampleRate();
+    const apiKeyId = event.apiKeyId ?? null;
+    const at = new Date();
+    let raw: boolean;
+    if (status >= 400) {
+      // Errors are always logged raw, except the flood-prone 401s on a real credential (capped per minute).
+      raw = status === 401 && apiKeyId ? allowAuthFailureRaw(apiKeyId, at.getTime()) : true;
+    } else {
+      const rate = successSampleRate();
+      raw = rate >= 1 ? true : rate <= 0 ? false : Math.random() < rate;
+    }
+    if (buffer.length >= MAX_BUFFER) {
+      // O(1) overflow policy: drop the NEW event (the buffered batch is older and about to be flushed) and count it.
+      dropped += 1;
+      return;
+    }
     buffer.push({
-      method: String(event.method ?? ""),
+      method: sanitizeMethod(event.method),
       routeUrl: typeof event.routeUrl === "string" ? event.routeUrl : undefined,
       statusCode: status,
       durationMs: Math.max(0, Math.round(num(event.durationMs))),
-      requestId: String(event.requestId ?? ""),
+      requestId: sanitizeRequestId(event.requestId),
       messages: Math.max(0, Math.trunc(num(event.messages))),
       organizationId: event.organizationId ?? null,
-      apiKeyId: event.apiKeyId ?? null,
-      at: new Date(),
+      apiKeyId,
+      at,
       raw,
     });
-    if (buffer.length > MAX_BUFFER) {
-      const over = buffer.length - MAX_BUFFER;
-      buffer.splice(0, over);
-      dropped += over;
-    }
-    if (buffer.length >= FLUSH_AT && activePrisma && !flushQueued) {
+    if (buffer.length >= FLUSH_AT && activePrisma && !flushQueued && !inFlight) {
       flushQueued = true;
       const prisma = activePrisma;
       const logger = activeLogger;
-      queueMicrotask(() => { flushQueued = false; void flushApiUsage(prisma, logger); });
+      queueMicrotask(() => { flushQueued = false; triggerFlush(prisma, logger); });
     }
   } catch {
     /* recording is best-effort */
   }
 }
 
+function startFlight(prisma: PrismaClient, logger?: UsageLogger): Promise<void> {
+  const p: Promise<void> = flushBatch(prisma, logger).finally(() => { if (inFlight === p) inFlight = null; });
+  inFlight = p;
+  return p;
+}
+
+/** Timer / threshold trigger: skipped while a flush is running; the remaining events wait for the next trigger. */
+function triggerFlush(prisma: PrismaClient, logger?: UsageLogger): void {
+  if (inFlight || buffer.length === 0) return;
+  void startFlight(prisma, logger);
+}
+
 /**
- * Writes the buffered events (raw rows + per-group rollup upserts) in ONE transaction. The buffer is swapped before any
- * await, so concurrent calls never double count. Never throws; a failed flush drops that batch (logged by name/code only).
+ * Flushes everything buffered, single-flight: awaits the flush already running, then flushes what remains (events
+ * recorded meanwhile), up to MAX_DRAIN_LOOPS rounds. Used on shutdown. Never throws.
+ *
+ * Delivery guarantee: AT MOST ONCE. A failed batch is dropped, not retried (metering is best-effort; billing must
+ * reconcile `messages` against `api_message_meta`). Client aborts are not counted (Fastify's onResponse does not fire).
  */
 export async function flushApiUsage(prisma: PrismaClient, logger?: UsageLogger): Promise<void> {
+  for (let i = 0; i < MAX_DRAIN_LOOPS; i++) {
+    while (inFlight) await inFlight;
+    if (buffer.length === 0) return;
+    await startFlight(prisma, logger);
+  }
+}
+
+/** Writes ONE batch (raw rows + one ordered multi-row rollup upsert) in ONE transaction. Never throws. */
+async function flushBatch(prisma: PrismaClient, logger?: UsageLogger): Promise<void> {
   if (buffer.length === 0) return;
   const batch = buffer;
   buffer = [];
@@ -192,7 +265,7 @@ export async function flushApiUsage(prisma: PrismaClient, logger?: UsageLogger):
       id: randomUUID(),
       organizationId: e.organizationId ?? null,
       apiKeyId: e.apiKeyId ?? null,
-      method: e.method.toUpperCase(),
+      method: e.method,
       endpoint: endpointKey(e.method, e.routeUrl),
       statusCode: e.statusCode,
       outcome: outcomeFor(e.statusCode),
@@ -202,32 +275,44 @@ export async function flushApiUsage(prisma: PrismaClient, logger?: UsageLogger):
       requestId: e.requestId,
       createdAt: e.at,
     }));
-    const groups = aggregateEvents(batch);
+    const groups = sortGroups(aggregateEvents(batch));
     await prisma.$transaction(async (tx) => {
-      if (raws.length > 0) await tx.apiRequestLog.createMany({ data: raws });
-      for (const g of groups) {
-        await tx.$executeRaw`
-          INSERT INTO api_usage_daily (organization_id, api_key_id, day, endpoint, requests, success, client_errors, server_errors,
-            rate_limited, auth_failures, messages, duration_ms_sum, duration_ms_max, updated_at)
-          VALUES (${g.organizationId}, ${g.apiKeyId}, ${g.day}::date, ${g.endpoint}, ${g.requests}, ${g.success}, ${g.clientErrors},
-            ${g.serverErrors}, ${g.rateLimited}, ${g.authFailures}, ${g.messages}, ${g.durationMsSum}::bigint, ${g.durationMsMax}, now())
-          ON CONFLICT (organization_id, api_key_id, day, endpoint) DO UPDATE SET
-            requests = api_usage_daily.requests + EXCLUDED.requests,
-            success = api_usage_daily.success + EXCLUDED.success,
-            client_errors = api_usage_daily.client_errors + EXCLUDED.client_errors,
-            server_errors = api_usage_daily.server_errors + EXCLUDED.server_errors,
-            rate_limited = api_usage_daily.rate_limited + EXCLUDED.rate_limited,
-            auth_failures = api_usage_daily.auth_failures + EXCLUDED.auth_failures,
-            messages = api_usage_daily.messages + EXCLUDED.messages,
-            duration_ms_sum = api_usage_daily.duration_ms_sum + EXCLUDED.duration_ms_sum,
-            duration_ms_max = GREATEST(api_usage_daily.duration_ms_max, EXCLUDED.duration_ms_max),
-            updated_at = now()`;
-      }
-    });
-    if (droppedNow > 0) warn(logger, { dropped: droppedNow }, "api usage buffer overflowed; oldest events dropped");
+      for (let i = 0; i < raws.length; i += RAW_CHUNK) await tx.apiRequestLog.createMany({ data: raws.slice(i, i + RAW_CHUNK) });
+      for (let i = 0; i < groups.length; i += UPSERT_CHUNK) await tx.$executeRaw(upsertStatement(groups.slice(i, i + UPSERT_CHUNK)));
+    }, TX_OPTIONS);
   } catch (err) {
     warn(logger, { error: safeErr(err), lost: batch.length }, "api usage flush failed");
   }
+  if (droppedNow > 0) warn(logger, { dropped: droppedNow }, "api usage buffer overflowed; events dropped");
+}
+
+/** Deterministic lock order: concurrent transactions touching the same rows always lock them in the same order. */
+export function sortGroups(groups: UsageGroup[]): UsageGroup[] {
+  const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  return [...groups].sort((a, b) =>
+    cmp(a.organizationId, b.organizationId) || cmp(a.apiKeyId, b.apiKeyId) || cmp(a.day, b.day) || cmp(a.endpoint, b.endpoint));
+}
+
+/** ONE multi-row INSERT ... ON CONFLICT for already-sorted, key-unique groups (parameterized). */
+export function upsertStatement(groups: UsageGroup[]): Prisma.Sql {
+  const values = Prisma.join(groups.map((g) => Prisma.sql`(${g.organizationId}, ${g.apiKeyId}, ${g.day}::date, ${g.endpoint},
+    ${g.requests}, ${g.success}, ${g.clientErrors}, ${g.serverErrors}, ${g.rateLimited}, ${g.authFailures}, ${g.messages},
+    ${g.durationMsSum}::bigint, ${g.durationMsMax}, now())`));
+  return Prisma.sql`
+    INSERT INTO api_usage_daily (organization_id, api_key_id, day, endpoint, requests, success, client_errors, server_errors,
+      rate_limited, auth_failures, messages, duration_ms_sum, duration_ms_max, updated_at)
+    VALUES ${values}
+    ON CONFLICT (organization_id, api_key_id, day, endpoint) DO UPDATE SET
+      requests = api_usage_daily.requests + EXCLUDED.requests,
+      success = api_usage_daily.success + EXCLUDED.success,
+      client_errors = api_usage_daily.client_errors + EXCLUDED.client_errors,
+      server_errors = api_usage_daily.server_errors + EXCLUDED.server_errors,
+      rate_limited = api_usage_daily.rate_limited + EXCLUDED.rate_limited,
+      auth_failures = api_usage_daily.auth_failures + EXCLUDED.auth_failures,
+      messages = api_usage_daily.messages + EXCLUDED.messages,
+      duration_ms_sum = api_usage_daily.duration_ms_sum + EXCLUDED.duration_ms_sum,
+      duration_ms_max = GREATEST(api_usage_daily.duration_ms_max, EXCLUDED.duration_ms_max),
+      updated_at = now()`;
 }
 
 function warn(logger: UsageLogger | undefined, obj: object, msg: string): void {
@@ -241,7 +326,7 @@ export function startApiUsageFlusher(prisma: PrismaClient, logger?: UsageLogger)
   stopApiUsageFlusher();
   activePrisma = prisma;
   activeLogger = logger;
-  timer = setInterval(() => { void flushApiUsage(prisma, logger); }, flushIntervalMs());
+  timer = setInterval(() => triggerFlush(prisma, logger), flushIntervalMs());
   timer.unref();
 }
 

@@ -30,6 +30,23 @@ export function publicApiErrorHandler(error: unknown, request: FastifyRequest, r
   return reply.status(500).send(plivoErrorBody("Internal server error"));
 }
 
+/** Records one usage event for a finished response. Never throws (the hook must not affect a response). */
+export function recordUsageOnResponse(request: FastifyRequest, reply: FastifyReply): void {
+  try {
+    const who = request.publicApi ?? request.publicApiAttempt;
+    recordApiRequest({
+      method: request.method,
+      routeUrl: request.routeOptions?.url,
+      statusCode: reply.statusCode,
+      durationMs: Math.max(0, Math.round(reply.elapsedTime)) || 0,
+      requestId: String(request.id),
+      messages: request.usageMessages ?? 0,
+      organizationId: who?.organizationId ?? null,
+      apiKeyId: who?.apiKeyId ?? null,
+    });
+  } catch { /* usage recording must never affect a response */ }
+}
+
 const throttled = () => ({ statusCode: 429, ...plivoErrorBody("Request was throttled.") });
 
 /**
@@ -43,20 +60,9 @@ export const publicApiRouter: FastifyPluginAsync = async (fastify) => {
 
   // Usage metering: exactly one event per response of this plugin (incl. 4xx/5xx/429). Synchronous, in-memory, never throws.
   // The route PATTERN is recorded (never the URL, which carries the auth id and message ids).
+  // Known limitation: Fastify does not fire onResponse for requests aborted by the client, so those are not counted.
   fastify.addHook("onResponse", (request, reply, done) => {
-    try {
-      const who = request.publicApi ?? request.publicApiAttempt;
-      recordApiRequest({
-        method: request.method,
-        routeUrl: request.routeOptions?.url,
-        statusCode: reply.statusCode,
-        durationMs: Math.max(0, Math.round(reply.elapsedTime)) || 0,
-        requestId: String(request.id),
-        messages: request.usageMessages ?? 0,
-        organizationId: who?.organizationId ?? null,
-        apiKeyId: who?.apiKeyId ?? null,
-      });
-    } catch { /* usage recording must never affect a response */ }
+    recordUsageOnResponse(request, reply);
     done();
   });
 
