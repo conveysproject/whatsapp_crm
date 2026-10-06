@@ -1,8 +1,8 @@
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { canAccessSub } from "../lib/permissions.js";
-import { isFeatureEnabled } from "../lib/plan-limits.js";
 import { writeAdminAudit } from "../lib/audit.js";
 import { assertSafeCallbackUrl, UnsafeUrlError } from "../lib/public-api/safe-url.js";
+import { checkPublicApiAccess, MAX_ACTIVE_CREDENTIALS } from "../lib/public-api/access.js";
 import { encryptToken, hashToken, newAuthToken, TokenKeyError } from "../lib/public-api/credentials.js";
 
 interface CredentialBody { name?: string; callbackUrl?: string | null; inboundUrl?: string | null }
@@ -53,11 +53,13 @@ async function validUrl(reply: FastifyReply, url: string | null | undefined, fie
 export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.addHook("preHandler", async (request, reply) => {
     const { role, permissions } = request.auth;
-    if (!canAccessSub(role, permissions, "settings_access", "api_credentials")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "api_credentials permission required" } });
+    if (!canAccessSub(role, permissions, "settings_access", "settings_api_key")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_api_key permission required" } });
     }
-    if (!(await isFeatureEnabled(fastify.prisma, request.auth.organizationId, "api_access"))) {
-      return reply.status(403).send({ error: { code: "PLAN_REQUIRED", message: "API access is not enabled for this plan" } });
+    // Same body for "not allow-listed" and "blocked" so the reason is not revealed.
+    const access = await checkPublicApiAccess(fastify.prisma, request.auth.organizationId);
+    if (!access.allowed) {
+      return reply.status(403).send({ error: { code: "API_NOT_AVAILABLE", message: "API access is not available for this organization." } });
     }
   });
 
@@ -78,6 +80,12 @@ export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
     if (!name?.trim()) return reply.status(400).send({ error: { code: "MISSING_NAME", message: "name is required" } });
     if (!(await validUrl(reply, callbackUrl, "callbackUrl"))) return reply;
     if (!(await validUrl(reply, inboundUrl, "inboundUrl"))) return reply;
+
+    // Cap before generating or storing anything. A tiny race between this count and the create is accepted.
+    const active = await fastify.prisma.apiKey.count({ where: { organizationId, revokedAt: null } });
+    if (active >= MAX_ACTIVE_CREDENTIALS) {
+      return reply.status(409).send({ error: { code: "CREDENTIAL_LIMIT", message: `You can have at most ${MAX_ACTIVE_CREDENTIALS} active credentials. Revoke one first.` } });
+    }
 
     const token = newAuthToken();
     let tokenEnc: string;

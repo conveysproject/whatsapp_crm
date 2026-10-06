@@ -162,3 +162,15 @@ Vitest, same patterns as `routes/*.test.ts`: auth (valid/invalid/revoked/cross-o
 - **Q7 Credential storage.** Reuse the unused `api_keys` table (needs an additive migration) vs. a new `public_api_credentials` table. Recommended: reuse.
 - **Q9 Recoverable auth token.** Needed for exact Plivo-style callback signatures (see Security). Recommended: encrypted-at-rest copy with an env-held key, token still shown once to the client.
 - **Q8 Contact side effects.** Should an API send to a new number run contact-created assignment rules and routing (as inbound does) or stay silent? Recommended: create the contact silently, no assignment/automation, to avoid surprising the client's agents.
+
+## Access model update (2026-10-06)
+
+Org admins now manage API credentials themselves; no support or super-admin step is needed.
+
+1. **Per-org plan switch removed for this API only.** `plan_feature_api_access` no longer gates the dashboard credential routes or the public API. Outbound webhooks (`lib/webhook-dispatch.ts`) and billing still use it unchanged.
+2. **Access helper.** `lib/public-api/access.ts` exports `checkPublicApiAccess(prisma, organizationId)` and `MAX_ACTIVE_CREDENTIALS = 10`. An org is allowed unless it is outside the rollout allow-list (`not_allowed`) or its kill switch is set (`blocked`).
+3. **Rollout.** Temporary allow-list env var `PUBLIC_API_ALLOWED_ORGS` (comma-separated organization ids, read on every call). While non-empty, only listed orgs pass. To open the API to all orgs, delete the variable.
+4. **Kill switch.** Vendor setting `plan_feature_public_api_blocked` = `1` or `true` blocks one org immediately, including its existing credentials. The `plan_feature_` prefix is refused by `PUT /v1/vendor-settings`, so tenants cannot set or clear it.
+5. **Same response for both reasons.** Dashboard routes answer `403 API_NOT_AVAILABLE`; the public API answers `403` "API access is not available for this account". The reason is not revealed.
+6. **Dashboard permission.** Routes require `settings_access@settings_api_key` (admin default allow; admins can grant it to other roles; labelled "API credentials" in the permissions grid). The permission check runs before the access check.
+7. **Credential cap.** At most 10 active (non-revoked) credentials per org; `POST /api-credentials` answers `409 CREDENTIAL_LIMIT` before generating or storing anything. A tiny race between the count and the create is accepted.

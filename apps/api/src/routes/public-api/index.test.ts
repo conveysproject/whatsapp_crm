@@ -34,7 +34,7 @@ describe("publicApiRouter", () => {
     process.env["PUBLIC_API_RATE_LIMIT"] = "3";
     mockPrisma.apiKey.findUnique.mockResolvedValue({ id: ID, organizationId: "org-1", keyHash: hashToken("good"), revokedAt: null, lastUsedAt: new Date() });
     mockPrisma.organization.findUnique.mockResolvedValue({ status: "active" });
-    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "1" });
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue(null); // no kill switch
     mockPrisma.apiMessageMeta.findMany.mockResolvedValue([]);
     mockPrisma.apiMessageMeta.count.mockResolvedValue(0);
     app = await buildApp();

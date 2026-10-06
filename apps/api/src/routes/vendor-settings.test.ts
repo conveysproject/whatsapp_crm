@@ -60,6 +60,7 @@ describe("PUT /v1/vendor-settings", () => {
   // plan features or lift plan limits through the generic settings writer.
   it.each([
     "plan_feature_api_access",
+    "plan_feature_public_api_blocked",
     "plan_feature_ai_chat_bot",
     "plan_limit_contacts",
     "plan_limit_team_members",

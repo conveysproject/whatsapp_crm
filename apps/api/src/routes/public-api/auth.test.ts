@@ -30,10 +30,11 @@ describe("publicApiAuth", () => {
     mockPrisma.apiKey.findUnique.mockResolvedValue({ id: ID, organizationId: "org-1", keyHash: hashToken("good-token"), revokedAt: null, lastUsedAt: null });
     mockPrisma.apiKey.update.mockResolvedValue({});
     mockPrisma.organization.findUnique.mockResolvedValue({ status: "active" });
-    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "1" });
+    delete process.env["PUBLIC_API_ALLOWED_ORGS"];
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue(null); // no kill switch, no plan setting
     app = await buildApp();
   });
-  afterEach(async () => { await app.close(); });
+  afterEach(async () => { await app.close(); delete process.env["PUBLIC_API_ALLOWED_ORGS"]; });
 
   const get = (auth?: string, id = ID) =>
     app.inject({ method: "GET", url: `/v1/Account/${id}/ping`, headers: auth ? { authorization: auth } : {} });
@@ -66,10 +67,28 @@ describe("publicApiAuth", () => {
     expect((await get(basic(ID, "good-token"))).statusCode).toBe(401);
   });
 
-  it("403 when the org is not active or api_access is off", async () => {
+  it("403 when the org is not active", async () => {
     mockPrisma.organization.findUnique.mockResolvedValueOnce({ status: "banned" });
     expect((await get(basic(ID, "good-token"))).statusCode).toBe(403);
-    mockPrisma.vendorSetting.findFirst.mockResolvedValueOnce(null);
-    expect((await get(basic(ID, "good-token"))).statusCode).toBe(403);
+  });
+
+  it("403 with the Plivo error body and no handler run when the org is blocked or not allow-listed (same body)", async () => {
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "1" });
+    const blocked = await get(basic(ID, "good-token"));
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue(null);
+    process.env["PUBLIC_API_ALLOWED_ORGS"] = "other-org";
+    const notAllowed = await get(basic(ID, "good-token"));
+    for (const res of [blocked, notAllowed]) {
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({ api_id: expect.any(String), error: "API access is not available for this account" });
+    }
+    expect(JSON.parse(blocked.body).error).toBe(JSON.parse(notAllowed.body).error);
+    expect(mockPrisma.apiKey.update).not.toHaveBeenCalled();
+  });
+
+  it("allows an org with no plan setting at all, and an allow-listed org", async () => {
+    expect((await get(basic(ID, "good-token"))).statusCode).toBe(200);
+    process.env["PUBLIC_API_ALLOWED_ORGS"] = "org-1";
+    expect((await get(basic(ID, "good-token"))).statusCode).toBe(200);
   });
 });

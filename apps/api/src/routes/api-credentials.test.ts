@@ -10,7 +10,7 @@ vi.mock("../lib/public-api/safe-url.js", async (orig) => {
 });
 
 const mockPrisma = {
-  apiKey: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+  apiKey: { create: vi.fn(), findMany: vi.fn(), findFirst: vi.fn(), update: vi.fn(), count: vi.fn() },
   vendorSetting: { findFirst: vi.fn() },
 };
 
@@ -30,10 +30,12 @@ describe("api-credentials", () => {
   beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks();
     process.env["PUBLIC_API_TOKEN_KEY"] = Buffer.alloc(32, 9).toString("base64");
-    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "1" }); // api_access on
+    delete process.env["PUBLIC_API_ALLOWED_ORGS"];
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue(null); // no kill switch
+    mockPrisma.apiKey.count.mockResolvedValue(0);
     app = await buildApp();
   });
-  afterEach(async () => { await app.close(); });
+  afterEach(async () => { await app.close(); delete process.env["PUBLIC_API_ALLOWED_ORGS"]; });
 
   it("creates a credential, returns the token once, stores hash + encrypted copy scoped to the org", async () => {
     mockPrisma.apiKey.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: "key-1", name: data["name"], createdAt: new Date() }));
@@ -100,20 +102,81 @@ describe("api-credentials", () => {
     expect(mockPrisma.apiKey.update.mock.calls[0]![0].data).toEqual({ name: "New", callbackUrl: null });
   });
 
-  it("403 when api_access is off", async () => {
+  const NOT_AVAILABLE = { error: { code: "API_NOT_AVAILABLE", message: "API access is not available for this organization." } };
+  const calls: Array<[string, string, object?]> = [
+    ["POST", "/v1/api-credentials", { name: "Prod" }], ["GET", "/v1/api-credentials"],
+    ["PATCH", "/v1/api-credentials/k", { name: "x" }], ["POST", "/v1/api-credentials/k/rotate"], ["DELETE", "/v1/api-credentials/k"],
+  ];
+
+  it("403 API_NOT_AVAILABLE on every route when the org is blocked or not allow-listed, with an identical body", async () => {
+    const bodies: string[] = [];
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "1" });
+    for (const [method, url, payload] of calls) {
+      const res = await app.inject({ method: method as "GET", url, ...(payload ? { payload } : {}) });
+      expect(res.statusCode, `${method} ${url} blocked`).toBe(403);
+      expect(res.json()).toEqual(NOT_AVAILABLE);
+      bodies.push(res.body);
+    }
     mockPrisma.vendorSetting.findFirst.mockResolvedValue(null);
-    const res = await app.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: "Prod" } });
-    expect(res.statusCode).toBe(403);
+    process.env["PUBLIC_API_ALLOWED_ORGS"] = "someone-else";
+    for (const [i, [method, url, payload]] of calls.entries()) {
+      const res = await app.inject({ method: method as "GET", url, ...(payload ? { payload } : {}) });
+      expect(res.statusCode, `${method} ${url} not allowed`).toBe(403);
+      expect(res.body).toBe(bodies[i]);
+    }
+    expect(mockPrisma.apiKey.create).not.toHaveBeenCalled();
+    expect(mockPrisma.apiKey.update).not.toHaveBeenCalled();
   });
 
-  it("denies non-admin without the sub-permission, allows with it", async () => {
+  it("an org with no plan setting at all can use the routes", async () => {
+    mockPrisma.apiKey.findMany.mockResolvedValue([]);
+    expect((await app.inject({ method: "GET", url: "/v1/api-credentials" })).statusCode).toBe(200);
+  });
+
+  it("permission is settings_access@settings_api_key: denied without it, allowed with it, admin bypasses", async () => {
     const denied = await buildApp("agent", { settings_access: "allow" });
     expect((await denied.inject({ method: "GET", url: "/v1/api-credentials" })).statusCode).toBe(403);
     await denied.close();
+    const oldKey = await buildApp("agent", { settings_access: "allow", "settings_access@api_credentials": "allow" });
+    expect((await oldKey.inject({ method: "GET", url: "/v1/api-credentials" })).statusCode).toBe(403);
+    await oldKey.close();
     mockPrisma.apiKey.findMany.mockResolvedValue([]);
-    const allowed = await buildApp("agent", { settings_access: "allow", "settings_access@api_credentials": "allow" });
+    const allowed = await buildApp("agent", { settings_access: "allow", "settings_access@settings_api_key": "allow" });
     expect((await allowed.inject({ method: "GET", url: "/v1/api-credentials" })).statusCode).toBe(200);
     await allowed.close();
+    expect((await app.inject({ method: "GET", url: "/v1/api-credentials" })).statusCode).toBe(200); // admin
+  });
+
+  it("users without permission get FORBIDDEN even when the org is blocked (permission is checked first)", async () => {
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "1" });
+    const denied = await buildApp("agent", { settings_access: "allow" });
+    const res = await denied.inject({ method: "GET", url: "/v1/api-credentials" });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ error: { code: "FORBIDDEN" } });
+    await denied.close();
+  });
+
+  it("cap: 10 active credentials -> 409 CREDENTIAL_LIMIT and nothing is created", async () => {
+    mockPrisma.apiKey.count.mockResolvedValue(10);
+    const res = await app.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: "Prod" } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: { code: "CREDENTIAL_LIMIT", message: "You can have at most 10 active credentials. Revoke one first." } });
+    expect(mockPrisma.apiKey.create).not.toHaveBeenCalled();
+  });
+
+  it("cap: 9 active credentials -> created; the count is org-scoped and ignores revoked credentials", async () => {
+    mockPrisma.apiKey.count.mockResolvedValue(9);
+    mockPrisma.apiKey.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: "key-1", name: data["name"], createdAt: new Date() }));
+    const res = await app.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: "Prod" } });
+    expect(res.statusCode).toBe(201);
+    expect(mockPrisma.apiKey.count).toHaveBeenCalledWith({ where: { organizationId: "org-1", revokedAt: null } });
+  });
+
+  it("cap: checked before the encryption key is touched (409, not 503, when over the cap)", async () => {
+    delete process.env["PUBLIC_API_TOKEN_KEY"];
+    mockPrisma.apiKey.count.mockResolvedValue(10);
+    const res = await app.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: "Prod" } });
+    expect(res.statusCode).toBe(409);
   });
 
   it("rejects an unsafe callback URL", async () => {

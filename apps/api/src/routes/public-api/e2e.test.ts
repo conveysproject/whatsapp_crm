@@ -117,6 +117,7 @@ import { newAuthToken, hashToken, encryptToken } from "../../lib/public-api/cred
 import { WaApiError } from "../../lib/whatsapp.js";
 
 const ORIG_KEY = process.env["PUBLIC_API_TOKEN_KEY"];
+const ORIG_ALLOWED = process.env["PUBLIC_API_ALLOWED_ORGS"];
 const CALLBACK_URL = "https://8.8.8.8/hooks/status"; // public IP literal: passes the SSRF guard with no DNS
 const SRC = "14155552671";
 const DST = "14155552672";
@@ -126,7 +127,6 @@ interface Cred { authId: string; token: string }
 function seedOrg(orgId: string, cred: Cred) {
   h.t.organization.set(orgId, { id: orgId, status: "active", phoneNumberId: `pn-${orgId}`, wabaAccessToken: `waba-secret-${orgId}` });
   h.t.vendorSetting.push(
-    { organizationId: orgId, key: "plan_feature_api_access", value: "1" },
     { organizationId: orgId, key: "current_phone_number_number", value: "+1 415-555-2671" }
   );
   h.t.apiKey.set(cred.authId, {
@@ -157,6 +157,7 @@ describe("public API end-to-end (real router + workers, in-memory Prisma)", () =
   beforeEach(async () => {
     process.env["PUBLIC_API_TOKEN_KEY"] = randomBytes(32).toString("base64");
     for (const m of Object.values(h.t)) Array.isArray(m) ? (m.length = 0) : m.clear();
+    delete process.env["PUBLIC_API_ALLOWED_ORGS"];
     h.sendJobs.length = 0; h.callbackJobs.length = 0; fetchCalls.length = 0;
     h.sendTextMessage.fn = async () => ({ messageId: "wamid.E2E" });
 
@@ -169,7 +170,10 @@ describe("public API end-to-end (real router + workers, in-memory Prisma)", () =
     app.decorate("prisma", h.fake as unknown as PrismaClient);
     await app.register(publicApiRouter, { prefix: "/v1/Account/:authId" });
   });
-  afterEach(async () => { await app.close(); });
+  afterEach(async () => {
+    await app.close();
+    if (ORIG_ALLOWED === undefined) delete process.env["PUBLIC_API_ALLOWED_ORGS"]; else process.env["PUBLIC_API_ALLOWED_ORGS"] = ORIG_ALLOWED;
+  });
   afterAll(() => {
     if (ORIG_KEY === undefined) delete process.env["PUBLIC_API_TOKEN_KEY"]; else process.env["PUBLIC_API_TOKEN_KEY"] = ORIG_KEY;
   });
@@ -238,5 +242,42 @@ describe("public API end-to-end (real router + workers, in-memory Prisma)", () =
     const json = list.json() as { objects: unknown[]; meta: { total_count: number } };
     expect(json.objects).toEqual([]);
     expect(json.meta.total_count).toBe(0);
+  });
+
+  it("an org with no plan setting can create a credential through the dashboard route and send with it", async () => {
+    const { apiCredentialsRouter } = await import("../api-credentials.js");
+    const dash = Fastify({ logger: false });
+    const prisma = {
+      ...h.fake,
+      apiKey: {
+        ...h.fake.apiKey,
+        count: async () => 0,
+        create: async ({ data }: any) => { const r = { id: "ak-new", revokedAt: null, lastUsedAt: null, ...data }; h.t.apiKey.set(r.id, r); return r; },
+      },
+    };
+    (prisma as any).adminAuditLog = { create: async () => ({}) };
+    dash.decorate("prisma", prisma as unknown as PrismaClient);
+    dash.addHook("onRequest", async (r) => { r.auth = { userId: "u-1", organizationId: "org-1", role: "admin", permissions: {}, teamId: null, teamRole: null } as never; });
+    await dash.register(apiCredentialsRouter, { prefix: "/v1" });
+    expect(h.t.vendorSetting.some((r) => r.key === "plan_feature_api_access")).toBe(false);
+    const created = await dash.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: "New" } });
+    await dash.close();
+    expect(created.statusCode).toBe(201);
+    const { authId, authToken } = created.json<{ data: { authId: string; authToken: string } }>().data;
+    expect((await post({ authId, token: authToken })).statusCode).toBe(202);
+  });
+
+  it("PUBLIC_API_ALLOWED_ORGS gates the public API: 403 for an unlisted org, success once the org is listed", async () => {
+    process.env["PUBLIC_API_ALLOWED_ORGS"] = "org-2";
+    expect((await post(cred1)).statusCode).toBe(403);
+    process.env["PUBLIC_API_ALLOWED_ORGS"] = " org-9 , org-1 ";
+    expect((await post(cred1)).statusCode).toBe(202);
+  });
+
+  it("a blocked org's existing credential stops working immediately", async () => {
+    expect((await post(cred1)).statusCode).toBe(202);
+    h.t.vendorSetting.push({ organizationId: "org-1", key: "plan_feature_public_api_blocked", value: "1" });
+    expect((await post(cred1)).statusCode).toBe(403);
+    expect((await post(cred2)).statusCode).toBe(202); // other orgs unaffected
   });
 });
