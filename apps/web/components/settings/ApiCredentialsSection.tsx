@@ -152,7 +152,7 @@ function CredentialFormDialog({
       title={mode === "create" ? "Create API credential" : "Edit API credential"}
       description={
         mode === "create"
-          ? "A new Auth ID and Auth Token are generated for the Plivo-compatible API."
+          ? "A new Auth ID and Auth Token are generated for the WBMSG API."
           : undefined
       }
       onClose={onClose}
@@ -310,7 +310,7 @@ function ApiCredentialsBody(): JSX.Element {
       <div className="text-center py-6 space-y-2">
         <p className="text-sm font-medium">No API credentials yet</p>
         <p className="text-sm text-gray-500">
-          Create a credential to send WhatsApp messages from your own systems using the Plivo-compatible API.
+          Create a credential to send WhatsApp messages from your own systems using the WBMSG API.
         </p>
       </div>
     );
@@ -332,7 +332,7 @@ function ApiCredentialsBody(): JSX.Element {
         <div>
           <h2 id="api-credentials-heading" className="font-medium">API Credentials</h2>
           <p className="text-sm text-gray-500">
-            Auth ID and Auth Token for the Plivo-compatible WBMSG API. Tokens are shown only once, when created or rotated.
+            Auth ID and Auth Token for the WBMSG API. Tokens are shown only once, when created or rotated.
           </p>
         </div>
         {!planRequired && !error && !isLoading && (

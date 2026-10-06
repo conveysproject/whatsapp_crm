@@ -254,7 +254,7 @@ export const settings: DocCategory = {
           paragraphs: [
             "Go to Settings > Vendor Settings to access advanced configuration options.",
             "Bot Response Timeout — set how many seconds WBMSG waits before considering the bot unresponsive.",
-            "API Credentials — create, edit, rotate, and revoke the Auth ID and Auth Token used by the Plivo-compatible API. The token is shown only once, when a credential is created or rotated. Requires API access on your plan.",
+            "API Credentials — create, edit, rotate, and revoke the Auth ID and Auth Token used by the WBMSG API. The token is shown only once, when a credential is created or rotated. Requires API access on your plan.",
             "Webhook Retry Count — how many times WBMSG retries a failed webhook delivery.",
             "Rate Limiting Configuration — control how many API requests are allowed per time window.",
           ],

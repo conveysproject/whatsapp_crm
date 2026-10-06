@@ -1,5 +1,5 @@
 /**
- * Client helpers for the Plivo-compatible API credentials endpoints
+ * Client helpers for the API credentials endpoints
  * (`/api/v1/api-credentials`). Pure functions + thin fetch wrappers so the logic is
  * unit-testable. Secrets (authToken) are returned to callers only and never cached here.
  */
