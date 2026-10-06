@@ -16,6 +16,12 @@ const META_TO_PLIVO: Record<number, string> = {
   131047: "380", // re-engagement: >24h since last customer reply
 };
 
+/**
+ * Plivo-style ErrorCode for a Meta error. Codes we know map to Plivo's 3xx codes; any other valid Meta code is
+ * passed through as its own digits (Meta codes are 6 digits, Plivo's are 3, so they cannot clash) so the client
+ * and operators can always see the real reason instead of an empty ErrorCode.
+ */
 export function plivoErrorFromMeta(metaCode: number | null | undefined): string | null {
-  return metaCode == null ? null : (META_TO_PLIVO[metaCode] ?? null);
+  if (metaCode == null || !Number.isInteger(metaCode) || metaCode <= 0) return null;
+  return META_TO_PLIVO[metaCode] ?? String(metaCode);
 }
