@@ -48,6 +48,7 @@ import { contactAssignmentRulesRouter } from "./contact-assignment-rules.js";
 import { teamsRouter } from "./teams.js";
 import { webhookEndpointsRouter } from "./webhook-endpoints.js";
 import { apiCredentialsRouter } from "./api-credentials.js";
+import { apiUsageRouter } from "./api-usage.js";
 import { countriesRouter } from "./countries.js";
 import { rolesRouter } from "./roles.js";
 import { notificationsRouter } from "./notifications.js";
@@ -106,6 +107,7 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(teamsRouter, { prefix: "/v1" });
   await fastify.register(webhookEndpointsRouter, { prefix: "/v1" });
   await fastify.register(apiCredentialsRouter, { prefix: "/v1" });
+  await fastify.register(apiUsageRouter, { prefix: "/v1" });
   await fastify.register(countriesRouter, { prefix: "/v1" });
   await fastify.register(rolesRouter, { prefix: "/v1" });
   await fastify.register(notificationsRouter, { prefix: "/v1" });
