@@ -16,6 +16,8 @@ const h = vi.hoisted(() => {
     conversation: new Map<string, Row>(),
     message: new Map<string, Row>(),
     apiMessageMeta: new Map<string, Row>(),
+    apiRequestLog: [] as Row[],
+    rollup: new Map<string, Row>(),
   };
   const sendJobs: Array<{ name: string; data: any; opts: any }> = [];
   const callbackJobs: Array<{ name: string; data: any }> = [];
@@ -89,8 +91,45 @@ const h = vi.hoisted(() => {
         [...t.apiMessageMeta.values()].filter((x) => matches(x, where)).map((r) => ({ ...r, ...(include?.message ? { message: t.message.get(r.messageId) } : {}) })),
       count: async ({ where }: any) => [...t.apiMessageMeta.values()].filter((x) => matches(x, where)).length,
     },
+    apiRequestLog: {
+      createMany: async ({ data }: any) => { t.apiRequestLog.push(...data); return { count: data.length }; },
+      findMany: async ({ where, take }: any) =>
+        t.apiRequestLog
+          .filter((r) => r.organizationId === where.organizationId && (!where.outcome || (where.outcome.in ? where.outcome.in.includes(r.outcome) : r.outcome === where.outcome)))
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+          .slice(0, take),
+    },
+    // Emulates the rollup upsert emitted by flushApiUsage (positional values) and the summary's rollup reads.
+    $executeRaw: async (_s: unknown, ...v: any[]) => {
+      const [organizationId, apiKeyId, day, endpoint, requests, success, clientErrors, serverErrors, rateLimited, authFailures, messages, sum, max] = v;
+      const key = JSON.stringify([organizationId, apiKeyId, day, endpoint]);
+      const cur = t.rollup.get(key) ?? { organizationId, apiKeyId, day, endpoint, requests: 0, success: 0, client_errors: 0, server_errors: 0, rate_limited: 0, auth_failures: 0, messages: 0, duration_ms_sum: 0, duration_ms_max: 0 };
+      cur["requests"] += requests; cur["success"] += success; cur["client_errors"] += clientErrors; cur["server_errors"] += serverErrors;
+      cur["rate_limited"] += rateLimited; cur["auth_failures"] += authFailures; cur["messages"] += messages; cur["duration_ms_sum"] += sum;
+      cur["duration_ms_max"] = Math.max(cur["duration_ms_max"], max);
+      t.rollup.set(key, cur);
+      return 1;
+    },
+    $queryRaw: async (q: { sql: string; values: any[] }) => {
+      if (!q.sql.includes("FROM api_usage_daily")) return [];
+      const rows = [...t.rollup.values()].filter((r) => r["organizationId"] === q.values[0]); // first parameter is always the org
+      const group = /SELECT (\S+) AS k/.exec(q.sql)?.[1];
+      const zero = { requests: 0, success: 0, client_errors: 0, server_errors: 0, rate_limited: 0, auth_failures: 0, messages: 0, duration_ms_sum: 0, duration_ms_max: 0 };
+      const agg = (rs: Row[]) => rs.reduce((a, r) => ({
+        requests: a.requests + r["requests"], success: a.success + r["success"], client_errors: a.client_errors + r["client_errors"],
+        server_errors: a.server_errors + r["server_errors"], rate_limited: a.rate_limited + r["rate_limited"], auth_failures: a.auth_failures + r["auth_failures"],
+        messages: a.messages + r["messages"], duration_ms_sum: a.duration_ms_sum + r["duration_ms_sum"], duration_ms_max: Math.max(a.duration_ms_max, r["duration_ms_max"]),
+      }), zero);
+      if (!group) return [agg(rows)];
+      const field = group === "day::text" ? "day" : group === "api_key_id" ? "apiKeyId" : "endpoint";
+      const by = new Map<string, Row[]>();
+      for (const r of rows) by.set(r[field], [...(by.get(r[field]) ?? []), r]);
+      return [...by.entries()].map(([k, rs]) => ({ k, ...agg(rs) }));
+    },
     $transaction: async (fn: (tx: any) => Promise<unknown>) => fn(fake),
   };
+  fake.apiKey.findMany = async ({ where }: any) => [...t.apiKey.values()].filter((r) => r["organizationId"] === where.organizationId && where.id.in.includes(r["id"]));
+  fake.apiMessageMeta.groupBy = async () => [];
   return { t, fake, sendJobs, callbackJobs, sendTextMessage: { fn: null as null | ((...a: unknown[]) => Promise<unknown>) } };
 });
 
@@ -120,6 +159,7 @@ import { deliverCallback } from "../../workers/public-api-callbacks.worker.js";
 import { signV2 } from "../../lib/public-api/plivo-signature.js";
 import { newAuthToken, hashToken, encryptToken } from "../../lib/public-api/credentials.js";
 import { WaApiError } from "../../lib/whatsapp.js";
+import { flushApiUsage, resetApiUsageForTests } from "../../lib/public-api/usage.js";
 
 const ORIG_KEY = process.env["PUBLIC_API_TOKEN_KEY"];
 const ORIG_ALLOWED = process.env["PUBLIC_API_ALLOWED_ORGS"];
@@ -163,6 +203,7 @@ describe("public API end-to-end (real router + workers, in-memory Prisma)", () =
   beforeEach(async () => {
     process.env["PUBLIC_API_TOKEN_KEY"] = randomBytes(32).toString("base64");
     for (const m of Object.values(h.t)) Array.isArray(m) ? (m.length = 0) : m.clear();
+    resetApiUsageForTests();
     delete process.env["PUBLIC_API_ALLOWED_ORGS"];
     process.env["PUBLIC_API_ENABLED"] = "true";
     h.sendJobs.length = 0; h.callbackJobs.length = 0; fetchCalls.length = 0;
@@ -306,5 +347,73 @@ describe("public API end-to-end (real router + workers, in-memory Prisma)", () =
   it("the platform flag off refuses the public API", async () => {
     process.env["PUBLIC_API_ENABLED"] = "false";
     expect((await post(cred1)).statusCode).toBe(403);
+  });
+
+  describe("usage tracking (real recorder, emulated rollup SQL)", () => {
+    const send = (c: Cred, token = c.token, payload: unknown = { src: `+${SRC}`, dst: `+${DST}`, type: "whatsapp", text: "hi" }) =>
+      app.inject({
+        method: "POST", url: `/v1/Account/${c.authId}/Message/`,
+        headers: { authorization: basic({ authId: c.authId, token }) }, payload: payload as object,
+      });
+
+    async function dashboard(orgId: string, url: string) {
+      const { apiUsageRouter } = await import("../api-usage.js");
+      const dash = Fastify({ logger: false });
+      dash.decorate("prisma", h.fake as unknown as PrismaClient);
+      dash.addHook("onRequest", async (r) => { r.auth = { userId: "u-1", organizationId: orgId, role: "admin", permissions: {}, teamId: null, teamRole: null } as never; });
+      await dash.register(apiUsageRouter, { prefix: "/v1" });
+      const res = await dash.inject({ method: "GET", url });
+      await dash.close();
+      return res;
+    }
+
+    it("counts every response once per org/credential, separates tenants and unattributed traffic, and totals add up", async () => {
+      expect((await send(cred1)).statusCode).toBe(202); // success, 1 message
+      expect((await send(cred1, cred1.token, {})).statusCode).toBe(400); // validation
+      expect((await send(cred1, "wrong-token")).statusCode).toBe(401); // auth failure attributed to the real credential
+      const ghost: Cred = { authId: "ak-does-not-exist", token: "x" };
+      expect((await send(ghost)).statusCode).toBe(401); // unattributed
+      expect((await send(cred2)).statusCode).toBe(202); // other org
+
+      // per-credential 429 from a second app with a limit of 1 request/minute
+      const prevLimit = process.env["PUBLIC_API_RATE_LIMIT"];
+      process.env["PUBLIC_API_RATE_LIMIT"] = "1";
+      const limited = Fastify({ logger: false });
+      limited.decorate("prisma", h.fake as unknown as PrismaClient);
+      await limited.register(publicApiRouter, { prefix: "/v1/Account/:authId" });
+      const list = () => limited.inject({ method: "GET", url: `/v1/Account/${cred1.authId}/Message/`, headers: { authorization: basic(cred1) } });
+      expect((await list()).statusCode).toBe(200);
+      expect((await list()).statusCode).toBe(429);
+      await limited.close();
+      if (prevLimit === undefined) delete process.env["PUBLIC_API_RATE_LIMIT"]; else process.env["PUBLIC_API_RATE_LIMIT"] = prevLimit;
+
+      await flushApiUsage(h.fake as unknown as PrismaClient);
+
+      // raw log: the unattributed 401 has null org/key; no destination numbers or url paths are stored
+      const raws = h.t.apiRequestLog;
+      expect(raws).toHaveLength(7);
+      const ghostRow = raws.find((r) => r["organizationId"] === null)!;
+      expect(ghostRow).toMatchObject({ apiKeyId: null, statusCode: 401, errorClass: "auth", endpoint: "message.send" });
+      expect(JSON.stringify(raws)).not.toContain(DST);
+      expect(JSON.stringify(raws)).not.toContain("/v1/Account");
+      expect(raws.find((r) => r["statusCode"] === 429)).toMatchObject({ organizationId: "org-1", apiKeyId: cred1.authId, errorClass: "rate_limited", endpoint: "message.list" });
+
+      const res = await dashboard("org-1", "/v1/api-usage/summary?range=7d");
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { totals: Record<string, number>; byCredential: Array<{ apiKeyId: string; authFailures: number }>; byEndpoint: Array<{ endpoint: string; requests: number }> };
+      expect(body.totals).toMatchObject({ requests: 5, success: 2, clientErrors: 3, serverErrors: 0, rateLimited: 1, authFailures: 1, messages: 1 });
+      expect(body.totals["success"]! + body.totals["clientErrors"]! + body.totals["serverErrors"]!).toBe(body.totals["requests"]);
+      expect(body.byCredential).toHaveLength(1);
+      expect(body.byCredential[0]).toMatchObject({ apiKeyId: cred1.authId, authFailures: 1 });
+      expect(body.byEndpoint.map((e) => [e.endpoint, e.requests]).sort()).toEqual([["message.list", 2], ["message.send", 3]]);
+
+      const other = await dashboard("org-2", "/v1/api-usage/summary?range=7d");
+      expect((other.json() as { totals: { requests: number } }).totals.requests).toBe(1);
+
+      const failed = await dashboard("org-1", "/v1/api-usage/requests?outcome=error");
+      const rows = (failed.json() as { data: Array<{ statusCode: number; apiKeyId: string }> }).data;
+      expect(rows.map((r) => r.statusCode).sort()).toEqual([400, 401, 429]);
+      expect(rows.every((r) => r.apiKeyId === cred1.authId)).toBe(true); // org 2 and the unattributed row never appear
+    });
   });
 });

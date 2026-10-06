@@ -1,6 +1,7 @@
 import { Queue, Worker } from "bullmq";
 import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
+import { cleanupApiRequestLogs } from "../lib/public-api/usage-cleanup.js";
 
 export const messageCleanupQueue = new Queue("message-cleanup", { connection: redisConnection });
 messageCleanupQueue.on("error", (err) => console.error(`[message-cleanup] queue error: ${err.message}`));
@@ -11,6 +12,11 @@ export function startMessageCleanupWorker() {
     async (job) => {
       if (job.name === "recover-stuck") {
         await recoverStuckMessages();
+        return;
+      }
+      if (job.name === "api-usage-cleanup") {
+        const deleted = await cleanupApiRequestLogs(prisma);
+        if (deleted > 0) console.log(`[message-cleanup] deleted ${deleted} expired API request log rows`);
         return;
       }
       const settings = await prisma.vendorSetting.findMany({
@@ -59,6 +65,18 @@ export async function scheduleMessageCleanupCron() {
     {
       repeat: { pattern: "*/5 * * * *" },
       jobId: "message-stuck-recovery-cron",
+    }
+  );
+}
+
+/** Daily purge of raw public-API request logs past the retention. Scheduled only when PUBLIC_API_ENABLED=true (see index.ts). */
+export async function scheduleApiUsageCleanupCron() {
+  await messageCleanupQueue.add(
+    "api-usage-cleanup",
+    {},
+    {
+      repeat: { pattern: "30 3 * * *" }, // 03:30 daily
+      jobId: "api-usage-cleanup-cron",
     }
   );
 }
