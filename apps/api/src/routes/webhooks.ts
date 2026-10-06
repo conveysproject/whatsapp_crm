@@ -7,6 +7,7 @@ import { inboundMessageQueue } from "../lib/queue.js";
 import { getIo } from "../lib/io-ref.js";
 import { forwardMetaStatusToApiClient } from "../lib/public-api/callbacks.js";
 import { safeErr } from "../lib/public-api/safe-err.js";
+import { fromMetaTemplateStatus } from "../lib/template-status.js";
 import { normalizeMetaError, formatMetaError, redactForLog, shortWamid } from "../lib/meta-error.js";
 
 interface WaMediaObject {
@@ -119,12 +120,14 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
         for (const change of entry.changes) {
           if (change.field === "message_template_status_update") {
             const { message_template_id, event } = change.value as unknown as { message_template_id: string; event: string };
-            const statusMap: Record<string, string> = { APPROVED: "approved", REJECTED: "rejected", PENDING: "pending" };
-            const status = statusMap[event] ?? "pending";
-            await fastify.prisma.template.updateMany({
-              where: { metaTemplateId: message_template_id },
-              data: { status: status as "approved" | "rejected" | "pending" },
-            });
+            // An event we do not recognise keeps the current status (it used to be forced to "pending", which hid paused/disabled templates).
+            const status = fromMetaTemplateStatus(event);
+            if (status) {
+              await fastify.prisma.template.updateMany({
+                where: { metaTemplateId: message_template_id },
+                data: { status },
+              });
+            }
             continue;
           }
 

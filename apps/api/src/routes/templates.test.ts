@@ -338,3 +338,33 @@ describe("DELETE /v1/templates/:id (shared Meta delete)", () => {
     expect(mockPrisma.template.delete).not.toHaveBeenCalled();
   });
 });
+
+describe("POST /v1/templates/sync: Meta statuses", () => {
+  let app: FastifyInstance;
+  const realFetch = globalThis.fetch;
+  const syncWith = async (metaStatus: string, existing: { id: string; status: string } | null) => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ whatsappBusinessAccountId: "waba-1", wabaAccessToken: "tok" });
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue(null);
+    mockPrisma.template.findFirst.mockResolvedValue(existing);
+    mockPrisma.template.create.mockResolvedValue({});
+    mockPrisma.template.update.mockResolvedValue({});
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [{ id: "9", name: "promo", status: metaStatus, category: "UTILITY", language: "en", components: [{ type: "BODY", text: "Hi" }] }] }) }) as unknown as typeof fetch;
+    return app.inject({ method: "POST", url: "/v1/templates/sync" });
+  };
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { globalThis.fetch = realFetch; await app.close(); });
+
+  it.each([["PAUSED", "paused"], ["DISABLED", "disabled"], ["IN_APPEAL", "in_appeal"], ["FLAGGED", "flagged"], ["LIMIT_EXCEEDED", "limit_exceeded"]])(
+    "stores Meta %s as %s (it used to be inserted verbatim and could fail the whole sync)", async (meta, ours) => {
+      const res = await syncWith(meta, null);
+      expect(res.statusCode).toBe(200);
+      expect(mockPrisma.template.create.mock.calls[0]![0].data.status).toBe(ours);
+    });
+
+  it("an unknown Meta status keeps an existing row's status and starts a new row as pending", async () => {
+    await syncWith("SOMETHING_NEW", { id: "t-1", status: "approved" });
+    expect(mockPrisma.template.update.mock.calls[0]![0].data.status).toBe("approved");
+    await syncWith("SOMETHING_NEW", null);
+    expect(mockPrisma.template.create.mock.calls[0]![0].data.status).toBe("pending");
+  });
+});

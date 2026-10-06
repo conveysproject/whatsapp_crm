@@ -350,6 +350,13 @@ enum TemplateStatus {
   pending
   approved
   rejected
+  paused
+  disabled
+  in_appeal
+  flagged
+  limit_exceeded
+  pending_deletion
+  archived
 }
 
 enum TemplateCategory {

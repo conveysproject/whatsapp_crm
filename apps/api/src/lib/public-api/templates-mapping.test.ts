@@ -106,6 +106,9 @@ describe("templateStatus", () => {
     expect(templateStatus("pending")).toBe("PENDING");
     expect(templateStatus("approved")).toBe("APPROVED");
     expect(templateStatus("rejected")).toBe("REJECTED");
+    expect(templateStatus("paused")).toBe("PAUSED");
+    expect(templateStatus("disabled")).toBe("DISABLED");
+    expect(templateStatus("in_appeal")).toBe("IN_APPEAL");
   });
 });
 

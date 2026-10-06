@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { TemplateRow, type TemplateData } from "./TemplateRow";
 
-const STATUSES = ["all", "draft", "approved", "pending", "rejected"] as const;
+const STATUSES = ["all", "draft", "approved", "pending", "rejected", "paused", "disabled", "in_appeal", "flagged", "limit_exceeded", "pending_deletion", "archived"] as const;
 const CATEGORIES = ["all", "marketing", "utility", "authentication"] as const;
 
 type StatusFilter = (typeof STATUSES)[number];
@@ -115,6 +115,13 @@ export function TemplateActiveTab({ templates }: { templates: TemplateData[] }):
               <option value="approved">Approved</option>
               <option value="pending">Pending</option>
               <option value="rejected">Rejected</option>
+              <option value="paused">Paused</option>
+              <option value="disabled">Disabled</option>
+              <option value="in_appeal">In appeal</option>
+              <option value="flagged">Flagged</option>
+              <option value="limit_exceeded">Limit exceeded</option>
+              <option value="pending_deletion">Pending deletion</option>
+              <option value="archived">Archived</option>
             </select>
             {/* Flag icon */}
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -167,7 +174,7 @@ export function TemplateActiveTab({ templates }: { templates: TemplateData[] }):
             <span className="flex-1 min-w-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Name</span>
             <span className="w-20 shrink-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Language</span>
             <span className="w-28 shrink-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Category</span>
-            <span className="w-24 shrink-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</span>
+            <span className="w-32 shrink-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</span>
             <span className="w-32 shrink-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Updated On</span>
             <span className="w-20 shrink-0 text-xs font-medium text-gray-500 uppercase tracking-wide text-right">Action</span>
           </div>

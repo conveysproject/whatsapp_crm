@@ -8,7 +8,7 @@ export interface TemplateData {
   name: string;
   category: string;
   language: string;
-  status: "draft" | "pending" | "approved" | "rejected";
+  status: "draft" | "pending" | "approved" | "rejected" | "paused" | "disabled" | "in_appeal" | "flagged" | "limit_exceeded" | "pending_deletion" | "archived";
   components: Array<{
     type?: string;
     format?: string;
@@ -41,6 +41,19 @@ const statusVariant: Record<string, "yellow" | "green" | "red" | "gray"> = {
   pending: "yellow",
   approved: "green",
   rejected: "red",
+  paused: "yellow",
+  disabled: "red",
+  in_appeal: "yellow",
+  flagged: "yellow",
+  limit_exceeded: "red",
+  pending_deletion: "gray",
+  archived: "gray",
+};
+
+const statusLabel: Record<string, string> = {
+  in_appeal: "in appeal",
+  limit_exceeded: "limit exceeded",
+  pending_deletion: "pending deletion",
 };
 
 const qualityColor: Record<string, string> = {
@@ -114,8 +127,8 @@ export function TemplateRow({ template: t, onRefresh }: { template: TemplateData
         <span className="w-28 shrink-0 text-sm text-gray-600 capitalize">{t.category.toLowerCase()}</span>
 
         {/* Status */}
-        <div className="w-24 shrink-0 flex items-center gap-1.5">
-          <Badge variant={statusVariant[t.status] ?? "gray"}>{t.status}</Badge>
+        <div className="w-32 shrink-0 flex items-center gap-1.5">
+          <Badge variant={statusVariant[t.status] ?? "gray"}>{statusLabel[t.status] ?? t.status}</Badge>
           {qualityDotClass && (
             <span className={`inline-block w-2 h-2 rounded-full ${qualityDotClass}`} title={`Quality: ${t.qualityScore}`} />
           )}

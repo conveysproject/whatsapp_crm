@@ -127,6 +127,36 @@ describe("POST /v1/webhooks/whatsapp", () => {
   });
 });
 
+describe("POST /v1/webhooks/whatsapp: template status events", () => {
+  let app: FastifyInstance;
+  const tplMock = { updateMany: vi.fn().mockResolvedValue({ count: 1 }) };
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    (mockPrisma as unknown as Record<string, unknown>)["template"] = tplMock;
+    app = await buildApp();
+  });
+  afterEach(async () => { await app.close(); });
+  const send = (event: string) => app.inject({
+    method: "POST", url: "/v1/webhooks/whatsapp", headers: { "x-hub-signature-256": "sha256=mocked" },
+    payload: { object: "whatsapp_business_account", entry: [{ id: "e1", changes: [{ field: "message_template_status_update", value: { message_template_id: "777", event } }] }] },
+  });
+
+  it.each([
+    ["APPROVED", "approved"], ["REJECTED", "rejected"], ["PENDING", "pending"], ["PAUSED", "paused"], ["DISABLED", "disabled"],
+    ["IN_APPEAL", "in_appeal"], ["FLAGGED", "flagged"], ["LIMIT_EXCEEDED", "limit_exceeded"], ["PENDING_DELETION", "pending_deletion"],
+    ["ARCHIVED", "archived"], ["DELETED", "archived"], ["REINSTATED", "approved"],
+  ])("%s is stored as %s", async (event, status) => {
+    expect((await send(event)).statusCode).toBe(200);
+    expect(tplMock.updateMany).toHaveBeenCalledWith({ where: { metaTemplateId: "777" }, data: { status } });
+  });
+
+  it("an unknown event changes nothing (it used to be forced to pending)", async () => {
+    expect((await send("SOMETHING_NEW")).statusCode).toBe(200);
+    expect(tplMock.updateMany).not.toHaveBeenCalled();
+  });
+});
+
 describe("POST /v1/webhooks/whatsapp status updates (public API hook)", () => {
   let app: FastifyInstance;
   const prev = process.env["PUBLIC_API_ENABLED"];

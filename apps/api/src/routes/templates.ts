@@ -6,6 +6,7 @@ import { sendTemplateMessage, getMetaTemplateAnalytics, uploadMediaHandle } from
 import { buildTemplateComponents, contactBodyVars, extractTemplateFields } from "../lib/template-components.js";
 import type { TemplateId, ContactId } from "@WBMSG/shared";
 import { canAccess, canAccessSub } from "../lib/permissions.js";
+import { fromMetaTemplateStatus } from "../lib/template-status.js";
 
 interface TemplateBody {
   name: string;
@@ -301,7 +302,8 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       const existing = await fastify.prisma.template.findFirst({
         where: { organizationId, name: t.name, language: lang },
       });
-      const statusVal = (t.status?.toLowerCase() ?? "pending") as "approved" | "pending" | "rejected";
+      // Unknown Meta statuses keep an existing row's status (new rows start as pending).
+      const statusVal = fromMetaTemplateStatus(t.status) ?? existing?.status ?? "pending";
       const componentsVal = (t.components ?? []) as object[];
       const extracted = extractTemplateFields(componentsVal);
 

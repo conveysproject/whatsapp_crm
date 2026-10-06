@@ -1,10 +1,12 @@
+import type { TemplateStatus } from "@prisma/client";
+import { toPublicTemplateStatus } from "../template-status.js";
 import { newApiId } from "./responses.js";
 
 /** A client-input problem; the message is safe to return to the caller (it never echoes request values). */
 export class TemplateValidationError extends Error {}
 
 export type PublicTemplateCategory = "marketing" | "utility" | "authentication";
-export type PublicTemplateStatus = "draft" | "pending" | "approved" | "rejected";
+export type PublicTemplateStatus = TemplateStatus;
 
 export interface ParsedTemplate {
   name: string;
@@ -100,10 +102,8 @@ export function parseListQuery(q: Record<string, unknown> | null | undefined): {
   };
 }
 
-export function templateStatus(s: PublicTemplateStatus): "PENDING" | "APPROVED" | "REJECTED" {
-  if (s === "approved") return "APPROVED";
-  if (s === "rejected") return "REJECTED";
-  return "PENDING"; // draft and pending
+export function templateStatus(s: PublicTemplateStatus): string {
+  return toPublicTemplateStatus(s);
 }
 
 export interface TemplateRow {

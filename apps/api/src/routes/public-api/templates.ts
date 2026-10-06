@@ -8,6 +8,7 @@ import {
 import { safeErr } from "../../lib/public-api/safe-err.js";
 import { submitTemplateToMeta, editTemplateOnMeta, deleteTemplateOnMeta, MetaTemplateError } from "../../lib/meta-templates.js";
 import { extractTemplateFields } from "../../lib/template-components.js";
+import { PUBLIC_EDITABLE_STATUSES } from "../../lib/template-status.js";
 
 const PUBLIC = { config: { public: true } } as const;
 const both = (p: string) => [p, p.replace(/\/$/, "")];
@@ -172,7 +173,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
       const { organizationId } = ctx;
       const row = await fastify.prisma.template.findFirst({ where: { organizationId, metaTemplateId: request.params.templateId } });
       if (!row?.metaTemplateId) return plivoError(reply, 404, NOT_FOUND);
-      if (row.status !== "approved" && row.status !== "rejected") return plivoError(reply, 400, "Only approved or rejected templates can be edited");
+      if (!PUBLIC_EDITABLE_STATUSES.has(row.status)) return plivoError(reply, 400, "Only approved, rejected or paused templates can be edited");
       if (parsed.name !== row.name || parsed.language !== row.language || parsed.category !== row.category) {
         return plivoError(reply, 400, "name, language and category cannot be changed");
       }

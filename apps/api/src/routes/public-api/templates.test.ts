@@ -290,6 +290,20 @@ describe("public API templates", () => {
   });
 
   describe("POST update", () => {
+    it.each(["pending", "disabled", "in_appeal", "flagged", "limit_exceeded", "pending_deletion", "archived"] as const)("a %s template cannot be edited (400, Meta not called)", async (status) => {
+      seed({ status });
+      const res = await post(`${base}/waba-1/9001/`, { name: "promo", language: "en_US", category: "marketing", components: [{ type: "BODY", text: "New {{1}}" }] });
+      expect(res.statusCode).toBe(400);
+      expect(edit).not.toHaveBeenCalled();
+    });
+
+    it("a paused template can be edited (Meta allows it)", async () => {
+      seed({ status: "paused" });
+      const res = await post(`${base}/waba-1/9001/`, { name: "promo", language: "en_US", category: "marketing", components: [{ type: "BODY", text: "New {{1}}" }] });
+      expect(res.statusCode).toBe(200);
+      expect(edit).toHaveBeenCalled();
+    });
+
     const editBody = () => ({ name: "promo", language: "en_US", category: "marketing", components: [{ type: "BODY", text: "New {{1}}" }] });
 
     it("edits at Meta, updates components and goes back to PENDING", async () => {
