@@ -76,6 +76,11 @@ export function endpointKey(method: string, routeUrl: string | undefined): strin
   if (path === "/Message" && m === "POST") return "message.send";
   if (path === "/Message" && m === "GET") return "message.list";
   if (path === "/Message/:uuid" && m === "GET") return "message.get";
+  if (path === "/WhatsApp/Template/:wabaId" && m === "POST") return "template.create";
+  if (path === "/WhatsApp/Template/:wabaId" && m === "GET") return "template.list";
+  if (path === "/WhatsApp/Template/:wabaId/:templateId" && m === "GET") return "template.get";
+  if (path === "/WhatsApp/Template/:wabaId/:templateId" && m === "POST") return "template.update";
+  if (path === "/WhatsApp/Template/:wabaId/:templateId" && m === "DELETE") return "template.delete";
   return "other";
 }
 

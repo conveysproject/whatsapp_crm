@@ -239,11 +239,9 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
     if (!template) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Template not found" } });
     }
-    if (template.metaTemplateId) {
-      const org = await fastify.prisma.organization.findFirst({ where: { id: organizationId } });
-      if (!org?.whatsappBusinessAccountId) {
-        return reply.status(400).send({ error: { code: "NO_WABA", message: "Organization has no WhatsApp Business Account configured" } });
-      }
+    const org = template.metaTemplateId ? await fastify.prisma.organization.findFirst({ where: { id: organizationId } }) : null;
+    // No WhatsApp Business Account (disconnected or moved): there is nothing this org can manage at Meta, so the local row is removed.
+    if (template.metaTemplateId && org?.whatsappBusinessAccountId) {
       // Same token order as the submit route: vendor setting, then the org token, then the env fallback.
       const vs = await fastify.prisma.vendorSetting.findFirst({ where: { organizationId, key: "whatsapp_access_token" }, select: { value: true } });
       const accessToken = vs?.value || org.wabaAccessToken || process.env["WA_ACCESS_TOKEN"] || "";

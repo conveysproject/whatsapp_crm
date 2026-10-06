@@ -40,7 +40,8 @@ export class MetaTemplateError extends Error {
   }
 }
 
-const TEMPLATE_NOT_FOUND_SUBCODE = 2593002;
+// Meta answers a delete of an already-removed template with code 100 and one of these subcodes.
+const TEMPLATE_NOT_FOUND_SUBCODES = [2593002, 33];
 
 async function readMetaError(res: Response): Promise<{ code: number | null; subcode: number | null }> {
   try {
@@ -134,7 +135,7 @@ export async function deleteTemplateOnMeta(opts: {
   const res = await metaFetch(what, url, { method: "DELETE", headers: { Authorization: `Bearer ${opts.accessToken}` } });
   if (!res.ok) {
     const { code, subcode } = await readMetaError(res);
-    if (code === 100 && subcode === TEMPLATE_NOT_FOUND_SUBCODE) return;
+    if (code === 100 && subcode !== null && TEMPLATE_NOT_FOUND_SUBCODES.includes(subcode)) return;
     throw new MetaTemplateError(withCode(what, code), code, res.status);
   }
   const data = (await res.json().catch(() => null)) as { success?: unknown } | null;

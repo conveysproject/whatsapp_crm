@@ -315,8 +315,16 @@ describe("DELETE /v1/templates/:id (shared Meta delete)", () => {
     expect(mockPrisma.template.delete).toHaveBeenCalled();
   });
 
-  it("no WABA or token configured but a Meta id exists: 400 and the row is kept", async () => {
+  it("org has no WABA (disconnected): nothing to delete at Meta, the local row is removed", async () => {
     mockPrisma.organization.findFirst.mockResolvedValue({ whatsappBusinessAccountId: null, wabaAccessToken: null });
+    const res = await app.inject({ method: "DELETE", url: "/v1/templates/t-1" });
+    expect(res.statusCode).toBe(204);
+    expect(deleteOnMeta).not.toHaveBeenCalled();
+    expect(mockPrisma.template.delete).toHaveBeenCalled();
+  });
+
+  it("WABA present but no token anywhere: 400 and the row is kept", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ whatsappBusinessAccountId: "waba-1", wabaAccessToken: null });
     const res = await app.inject({ method: "DELETE", url: "/v1/templates/t-1" });
     expect(res.statusCode).toBe(400);
     expect(deleteOnMeta).not.toHaveBeenCalled();

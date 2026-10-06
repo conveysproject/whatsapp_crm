@@ -107,13 +107,18 @@ describe("deleteTemplateOnMeta", () => {
     await expect(deleteTemplateOnMeta({ wabaId: "w1", accessToken: TOKEN, name: "a", metaTemplateId: "1" })).rejects.toBeInstanceOf(MetaTemplateError);
   });
 
+  it("treats Meta 'object does not exist' (100 / 33) as already deleted", async () => {
+    fetchMock.mockResolvedValue(json(400, metaErr(100, 33)));
+    await expect(deleteTemplateOnMeta({ wabaId: "w", accessToken: "t", name: "n", metaTemplateId: "1" })).resolves.toBeUndefined();
+  });
+
   it("treats Meta 'template not found' (100 / 2593002) as already deleted", async () => {
     fetchMock.mockResolvedValue(json(400, metaErr(100, 2593002)));
     await expect(deleteTemplateOnMeta({ wabaId: "w1", accessToken: TOKEN, name: "a", metaTemplateId: "1" })).resolves.toBeUndefined();
   });
 
   it("does not treat other code-100 errors as success", async () => {
-    fetchMock.mockResolvedValue(json(400, metaErr(100, 33)));
+    fetchMock.mockResolvedValue(json(400, metaErr(100, 2494000)));
     await expect(deleteTemplateOnMeta({ wabaId: "w1", accessToken: TOKEN, name: "a", metaTemplateId: "1" })).rejects.toBeInstanceOf(MetaTemplateError);
   });
 

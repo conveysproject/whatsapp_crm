@@ -197,6 +197,14 @@ describe("public API templates", () => {
       expect(rows).toHaveLength(0);
     });
 
+    it.each([401, 403, 429])("Meta auth/throttle failure (HTTP %i) is a 502, not the caller's template problem", async (status) => {
+      const { MetaTemplateError } = await import("../../lib/meta-templates.js");
+      submit.mockRejectedValue(new MetaTemplateError("Meta template submission failed (code 190)", 190, status));
+      const res = await post(`${base}/waba-1/`, goodBody());
+      expect(res.statusCode).toBe(502);
+      expect(rows).toHaveLength(0);
+    });
+
     it("an unexpected error is a 502, removes the row, and logs no secrets", async () => {
       submit.mockRejectedValue(new Error(`boom ${TOKEN} +14155552671`));
       const res = await post(`${base}/waba-1/`, goodBody());

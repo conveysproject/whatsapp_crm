@@ -44,6 +44,7 @@ function checkComponent(c: unknown): string {
   if (type === "FOOTER") checkText(c, MAX_HEADER_FOOTER_TEXT, "FOOTER");
   if (type === "HEADER") {
     checkText(c, MAX_HEADER_FOOTER_TEXT, "HEADER");
+    if (c["format"] !== undefined && typeof c["format"] !== "string") throw new TemplateValidationError("HEADER format must be a string");
     const format = typeof c["format"] === "string" ? c["format"].toUpperCase() : "TEXT";
     if (MEDIA_FORMATS.includes(format)) {
       const handle = isObj(c["example"]) ? c["example"]["header_handle"] : undefined;

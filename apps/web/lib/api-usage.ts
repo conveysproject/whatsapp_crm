@@ -244,6 +244,11 @@ const ENDPOINT_LABELS: Record<string, string> = {
   "message.send": "Send message",
   "message.list": "List messages",
   "message.get": "Get message",
+  "template.create": "Create template",
+  "template.list": "List templates",
+  "template.get": "Get template",
+  "template.update": "Update template",
+  "template.delete": "Delete template",
   other: "Other",
 };
 

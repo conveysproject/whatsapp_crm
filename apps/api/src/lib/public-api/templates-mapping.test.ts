@@ -61,6 +61,12 @@ describe("parseTemplateBody", () => {
     expect(bad({ components: [valid().components[0], { type: "BUTTONS", buttons: [{ type: "QUICK_REPLY", text: 3 }] }] })).toThrow(TemplateValidationError);
     expect(bad({ components: [valid().components[0], { type: "BUTTONS", buttons: [null] }] })).toThrow(TemplateValidationError);
   });
+  it("rejects a non-string HEADER format (would otherwise throw later and become a 500)", () => {
+    for (const format of [5, true, {}, null]) {
+      expect(bad({ components: [{ type: "HEADER", format, text: "h" }, valid().components[0]] })).toThrow(TemplateValidationError);
+    }
+  });
+
   it("requires example.header_handle (array of strings) for media headers", () => {
     const hdr = (h: object) => ({ components: [{ type: "HEADER", ...h }, valid().components[0]] });
     expect(bad(hdr({ format: "IMAGE" }))).toThrow(TemplateValidationError);

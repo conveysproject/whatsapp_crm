@@ -19,7 +19,8 @@ type Components = Parameters<typeof submitTemplateToMeta>[0]["components"];
 interface Ctx { organizationId: string; wabaId: string }
 
 /** Meta rejected the request (our input) vs. Meta was unreachable / failed (not the caller's fault). */
-const isMetaOutage = (err: MetaTemplateError) => err.status === 0 || err.status >= 500;
+// Meta auth (401/403) and throttling (429) are our problem, not the caller's template, so they are reported as 502 too.
+const isMetaOutage = (err: MetaTemplateError) => err.status === 0 || err.status >= 500 || err.status === 401 || err.status === 403 || err.status === 429;
 const metaMessage = (err: MetaTemplateError) => (err.code === null ? "Meta rejected the template" : `Meta rejected the template (code ${err.code})`);
 
 export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {

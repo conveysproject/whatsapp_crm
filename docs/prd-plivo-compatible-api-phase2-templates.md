@@ -58,3 +58,12 @@ No flag beyond the existing `PUBLIC_API_ENABLED`. Rollback is a revert; no data 
 
 ## Risks
 Plivo's exact error bodies and the Update immutability rules were read from a summarised page; the client's real samples should be checked before release (same PROVISIONAL marking as Phase 1). Meta edit limits (about 10 edits per 30 days, one per 24 hours) surface as 400 with Meta's code.
+
+## Review outcome (2026-10-06) and known limitations
+Fixed after independent review: per-endpoint usage keys (`template.*`) and web labels, non-string HEADER `format` now 400 (was a 500), Meta 401/403/429 on create/update reported as 502, dashboard delete removes the local row when the org has no WABA, Meta "already deleted" recognised for codes 100/2593002 and 100/33.
+Known limitations (documented, not fixed):
+- Updating a draft returns 404 (a draft has no Meta id and cannot be addressed by `template_id`); the list endpoint excludes drafts.
+- If Meta accepts a create but the connection fails before we record it (or the follow-up local update fails), the template exists at Meta without a usable local row until the dashboard "Sync from Meta" reconciles it; a retry then gets Meta's duplicate error.
+- The duplicate name+language guard (advisory lock) covers public API creates only; dashboard create and sync can still insert duplicates (no unique index, no migration in this phase).
+- Meta's exact "already deleted" error for the documented delete call is unverified; confirm against a sandbox before relying on delete retries.
+- The advisory lock was tested with mocks only; verify once against a real Postgres.

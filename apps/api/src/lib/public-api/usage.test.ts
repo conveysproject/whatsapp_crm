@@ -37,6 +37,11 @@ describe("pure helpers", () => {
     expect(endpointKey("GET", "/v1/Account/:authId/Message/")).toBe("message.list");
     expect(endpointKey("GET", "/v1/Account/:authId/Message/:uuid/")).toBe("message.get");
     expect(endpointKey("get", "/v1/Account/:authId/Message/:uuid")).toBe("message.get");
+    expect(endpointKey("POST", "/v1/Account/:authId/WhatsApp/Template/:wabaId/")).toBe("template.create");
+    expect(endpointKey("GET", "/v1/Account/:authId/WhatsApp/Template/:wabaId/")).toBe("template.list");
+    expect(endpointKey("GET", "/v1/Account/:authId/WhatsApp/Template/:wabaId/:templateId/")).toBe("template.get");
+    expect(endpointKey("POST", "/v1/Account/:authId/WhatsApp/Template/:wabaId/:templateId")).toBe("template.update");
+    expect(endpointKey("DELETE", "/v1/Account/:authId/WhatsApp/Template/:wabaId/:templateId/")).toBe("template.delete");
     expect(endpointKey("DELETE", "/v1/Account/:authId/Message/")).toBe("other");
     expect(endpointKey("GET", undefined)).toBe("other");
     expect(endpointKey("GET", "/v1/Account/abc/Nope")).toBe("other");
