@@ -20,7 +20,7 @@ interface MetaTemplateButton {
   example?: string[];
 }
 
-interface MetaTemplateComponent {
+export interface MetaTemplateComponent {
   type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS";
   format?: string;
   text?: string;
@@ -32,6 +32,40 @@ interface SubmitResult {
   status: "pending";
 }
 
+/** A Meta template call failed. Carries Meta's numeric code only: never Meta's text, the request, or the access token. */
+export class MetaTemplateError extends Error {
+  constructor(message: string, public readonly code: number | null, public readonly status: number) {
+    super(message);
+    this.name = "MetaTemplateError";
+  }
+}
+
+const TEMPLATE_NOT_FOUND_SUBCODE = 2593002;
+
+async function readMetaError(res: Response): Promise<{ code: number | null; subcode: number | null }> {
+  try {
+    const body = (await res.json()) as { error?: { code?: unknown; error_subcode?: unknown } } | null;
+    const code = body?.error?.code;
+    const subcode = body?.error?.error_subcode;
+    return { code: typeof code === "number" ? code : null, subcode: typeof subcode === "number" ? subcode : null };
+  } catch {
+    return { code: null, subcode: null };
+  }
+}
+
+const withCode = (what: string, code: number | null) => (code === null ? what : `${what} (code ${code})`);
+
+/** fetch wrapper: network failures become a MetaTemplateError (the raw error text is dropped). */
+async function metaFetch(what: string, url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new MetaTemplateError(`${what}: network error`, null, 0);
+  }
+}
+
+const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" });
+
 export async function submitTemplateToMeta(opts: {
   wabaId: string;
   accessToken: string;
@@ -39,24 +73,70 @@ export async function submitTemplateToMeta(opts: {
   category: string;
   language: string;
   components: MetaTemplateComponent[];
+  allowCategoryChange?: boolean;
 }): Promise<SubmitResult> {
-  const res = await fetch(`${WA_BASE}/${opts.wabaId}/message_templates`, {
+  const what = "Meta template submission failed";
+  const res = await metaFetch(what, `${WA_BASE}/${opts.wabaId}/message_templates`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${opts.accessToken}`,
-      "Content-Type": "application/json",
-    },
+    headers: authHeaders(opts.accessToken),
     body: JSON.stringify({
       name: opts.name.toLowerCase().replace(/\s+/g, "_"),
       category: opts.category.toUpperCase(),
       language: opts.language,
       components: opts.components,
+      ...(opts.allowCategoryChange ? { allow_category_change: true } : {}),
     }),
   });
   if (!res.ok) {
-    const err = await res.json() as unknown;
-    throw new Error(`Meta template submission failed: ${JSON.stringify(err)}`);
+    const { code } = await readMetaError(res);
+    throw new MetaTemplateError(withCode(what, code), code, res.status);
   }
-  const data = await res.json() as { id: string; status: string };
-  return { metaTemplateId: data.id, status: "pending" };
+  const data = (await res.json().catch(() => null)) as { id?: unknown } | null;
+  if (!data || (typeof data.id !== "string" && typeof data.id !== "number")) {
+    throw new MetaTemplateError(`${what}: no template id returned`, null, res.status);
+  }
+  return { metaTemplateId: String(data.id), status: "pending" };
+}
+
+/** Edits an existing template's components at Meta (POST /{template-id}). Meta puts it back into review. */
+export async function editTemplateOnMeta(opts: {
+  accessToken: string;
+  metaTemplateId: string;
+  components: object[];
+  category?: string;
+}): Promise<void> {
+  const what = "Meta template edit failed";
+  const res = await metaFetch(what, `${WA_BASE}/${encodeURIComponent(opts.metaTemplateId)}`, {
+    method: "POST",
+    headers: authHeaders(opts.accessToken),
+    body: JSON.stringify({ components: opts.components, ...(opts.category ? { category: opts.category.toUpperCase() } : {}) }),
+  });
+  if (!res.ok) {
+    const { code } = await readMetaError(res);
+    throw new MetaTemplateError(withCode(what, code), code, res.status);
+  }
+  const data = (await res.json().catch(() => null)) as { success?: unknown } | null;
+  if (data?.success === false) throw new MetaTemplateError(what, null, res.status);
+}
+
+/**
+ * Deletes a template at Meta by name + hsm_id (the documented call). Resolves when Meta says it is already gone,
+ * so a retry after a half-finished delete can complete.
+ */
+export async function deleteTemplateOnMeta(opts: {
+  wabaId: string;
+  accessToken: string;
+  name: string;
+  metaTemplateId: string;
+}): Promise<void> {
+  const what = "Meta template delete failed";
+  const url = `${WA_BASE}/${encodeURIComponent(opts.wabaId)}/message_templates?name=${encodeURIComponent(opts.name)}&hsm_id=${encodeURIComponent(opts.metaTemplateId)}`;
+  const res = await metaFetch(what, url, { method: "DELETE", headers: { Authorization: `Bearer ${opts.accessToken}` } });
+  if (!res.ok) {
+    const { code, subcode } = await readMetaError(res);
+    if (code === 100 && subcode === TEMPLATE_NOT_FOUND_SUBCODE) return;
+    throw new MetaTemplateError(withCode(what, code), code, res.status);
+  }
+  const data = (await res.json().catch(() => null)) as { success?: unknown } | null;
+  if (data?.success === false) throw new MetaTemplateError(what, null, res.status);
 }
