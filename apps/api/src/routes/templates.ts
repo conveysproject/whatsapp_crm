@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { TemplateCategory, TemplateStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
-import { submitTemplateToMeta } from "../lib/meta-templates.js";
+import { submitTemplateToMeta, deleteTemplateOnMeta, MetaTemplateError } from "../lib/meta-templates.js";
 import { sendTemplateMessage, getMetaTemplateAnalytics, uploadMediaHandle } from "../lib/whatsapp.js";
 import { buildTemplateComponents, contactBodyVars, extractTemplateFields } from "../lib/template-components.js";
 import type { TemplateId, ContactId } from "@WBMSG/shared";
@@ -241,13 +241,23 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
     }
     if (template.metaTemplateId) {
       const org = await fastify.prisma.organization.findFirst({ where: { id: organizationId } });
-      const accessToken = org?.wabaAccessToken ?? process.env["WA_ACCESS_TOKEN"] ?? "";
+      if (!org?.whatsappBusinessAccountId) {
+        return reply.status(400).send({ error: { code: "NO_WABA", message: "Organization has no WhatsApp Business Account configured" } });
+      }
+      // Same token order as the submit route: vendor setting, then the org token, then the env fallback.
+      const vs = await fastify.prisma.vendorSetting.findFirst({ where: { organizationId, key: "whatsapp_access_token" }, select: { value: true } });
+      const accessToken = vs?.value || org.wabaAccessToken || process.env["WA_ACCESS_TOKEN"] || "";
+      if (!accessToken) {
+        return reply.status(400).send({ error: { code: "NO_TOKEN", message: "No WhatsApp access token configured for this organization" } });
+      }
+      // A refused delete must not drop the local row, or the template would live on at Meta with no way to manage it.
       try {
-        await fetch(`https://graph.facebook.com/v25.0/${template.metaTemplateId}`, {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-      } catch { /* non-critical */ }
+        await deleteTemplateOnMeta({ wabaId: org.whatsappBusinessAccountId, accessToken, name: template.name, metaTemplateId: template.metaTemplateId });
+      } catch (err) {
+        const code = err instanceof MetaTemplateError ? err.code : null;
+        request.log.error({ templateId: template.id, metaCode: code }, "Meta template delete failed");
+        return reply.status(502).send({ error: { code: "META_ERROR", message: code === null ? "Meta could not delete the template" : `Meta could not delete the template (code ${code})` } });
+      }
     }
     await fastify.prisma.template.delete({ where: { id: template.id } });
     return reply.status(204).send();

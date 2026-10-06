@@ -1,14 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import type * as MetaTemplatesModule from "../lib/meta-templates.js";
 
 const mockPrisma = {
-  template: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+  template: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  vendorSetting: { findFirst: vi.fn() },
   message: { groupBy: vi.fn(), create: vi.fn() },
   contact: { findFirst: vi.fn() },
   conversation: { findFirst: vi.fn(), create: vi.fn() },
-  organization: { findUnique: vi.fn() },
+  organization: { findUnique: vi.fn(), findFirst: vi.fn() },
 };
+const deleteOnMeta = vi.fn();
+vi.mock("../lib/meta-templates.js", async (orig) => {
+  const real = await orig<typeof MetaTemplatesModule>();
+  return { ...real, deleteTemplateOnMeta: (...a: unknown[]) => deleteOnMeta(...a) };
+});
 const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {}, teamId: null as string | null, teamRole: null as "lead" | "member" | null };
 
 vi.mock("../lib/whatsapp.js", () => ({
@@ -255,5 +262,71 @@ describe("templates section gate (D15)", () => {
     const res = await app.inject({ method: "DELETE", url: "/v1/templates/t-1" });
     expect(res.statusCode).toBe(403);
     await app.close();
+  });
+});
+
+describe("DELETE /v1/templates/:id (shared Meta delete)", () => {
+  let app: FastifyInstance;
+  const tpl = { id: "t-1", organizationId: "org-1", name: "promo", metaTemplateId: "9001" };
+  beforeEach(async () => {
+    vi.resetModules(); vi.clearAllMocks();
+    mockPrisma.template.findFirst.mockResolvedValue(tpl);
+    mockPrisma.template.delete.mockResolvedValue(tpl);
+    mockPrisma.organization.findFirst.mockResolvedValue({ whatsappBusinessAccountId: "waba-1", wabaAccessToken: "ORG_TOKEN" });
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue(null);
+    deleteOnMeta.mockResolvedValue(undefined);
+    app = await buildApp();
+  });
+  afterEach(async () => { await app.close(); });
+
+  it("deletes at Meta with the documented call (waba + name + id), then locally; org-scoped", async () => {
+    const res = await app.inject({ method: "DELETE", url: "/v1/templates/t-1" });
+    expect(res.statusCode).toBe(204);
+    expect(deleteOnMeta).toHaveBeenCalledWith({ wabaId: "waba-1", accessToken: "ORG_TOKEN", name: "promo", metaTemplateId: "9001" });
+    expect(mockPrisma.template.findFirst.mock.calls[0]![0].where).toEqual({ id: "t-1", organizationId: "org-1" });
+    expect(mockPrisma.template.delete).toHaveBeenCalledWith({ where: { id: "t-1" } });
+  });
+
+  it("prefers the vendor-setting token (as the submit route does)", async () => {
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "VS_TOKEN" });
+    await app.inject({ method: "DELETE", url: "/v1/templates/t-1" });
+    expect(deleteOnMeta.mock.calls[0]![0].accessToken).toBe("VS_TOKEN");
+  });
+
+  it("Meta failure: 502 and the row is kept (no orphan at Meta)", async () => {
+    const { MetaTemplateError } = await import("../lib/meta-templates.js");
+    deleteOnMeta.mockRejectedValue(new MetaTemplateError("x", 190, 400));
+    const res = await app.inject({ method: "DELETE", url: "/v1/templates/t-1" });
+    expect(res.statusCode).toBe(502);
+    expect(mockPrisma.template.delete).not.toHaveBeenCalled();
+  });
+
+  it("no Meta id: deletes locally without calling Meta", async () => {
+    mockPrisma.template.findFirst.mockResolvedValue({ ...tpl, metaTemplateId: null });
+    const res = await app.inject({ method: "DELETE", url: "/v1/templates/t-1" });
+    expect(res.statusCode).toBe(204);
+    expect(deleteOnMeta).not.toHaveBeenCalled();
+    expect(mockPrisma.template.delete).toHaveBeenCalled();
+  });
+
+  it("Meta says the template is already gone (helper resolves): deletes locally", async () => {
+    deleteOnMeta.mockResolvedValue(undefined);
+    expect((await app.inject({ method: "DELETE", url: "/v1/templates/t-1" })).statusCode).toBe(204);
+    expect(mockPrisma.template.delete).toHaveBeenCalled();
+  });
+
+  it("no WABA or token configured but a Meta id exists: 400 and the row is kept", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ whatsappBusinessAccountId: null, wabaAccessToken: null });
+    const res = await app.inject({ method: "DELETE", url: "/v1/templates/t-1" });
+    expect(res.statusCode).toBe(400);
+    expect(deleteOnMeta).not.toHaveBeenCalled();
+    expect(mockPrisma.template.delete).not.toHaveBeenCalled();
+  });
+
+  it("404 for another org's template: nothing called", async () => {
+    mockPrisma.template.findFirst.mockResolvedValue(null);
+    expect((await app.inject({ method: "DELETE", url: "/v1/templates/t-9" })).statusCode).toBe(404);
+    expect(deleteOnMeta).not.toHaveBeenCalled();
+    expect(mockPrisma.template.delete).not.toHaveBeenCalled();
   });
 });
