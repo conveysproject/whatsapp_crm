@@ -10,7 +10,10 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const apply = process.argv.includes("--apply");
-const DB_URL = "postgresql://postgres:TWaGRPILYCQYOdRGipvyAtvpUfWRLSOK@trolley.proxy.rlwy.net:28192/railway";
+const DB_URL: string =
+  process.env["DATABASE_PUBLIC_URL"] ??
+  process.env["DATABASE_URL"] ??
+  (() => { throw new Error("Set DATABASE_PUBLIC_URL (run via: railway run --service Postgres <command>)"); })();
 
 const adapter = new PrismaPg({ connectionString: DB_URL });
 const prisma = new PrismaClient({ adapter });

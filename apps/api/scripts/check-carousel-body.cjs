@@ -1,7 +1,8 @@
 const path = require('path');
 const pg = require(path.join(__dirname, '../../../node_modules/.pnpm/pg@8.20.0/node_modules/pg'));
 
-const PUBLIC_URL = 'postgresql://postgres:REDACTED_DB_PASS@trolley.proxy.rlwy.net:28192/railway';
+const PUBLIC_URL = process.env.DATABASE_PUBLIC_URL ?? process.env.DATABASE_URL;
+if (!PUBLIC_URL) throw new Error('Set DATABASE_PUBLIC_URL (run via: railway run --service Postgres <command>)');
 
 async function run() {
   const client = new pg.Client({ connectionString: PUBLIC_URL });

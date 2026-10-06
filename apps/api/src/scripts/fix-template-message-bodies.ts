@@ -6,7 +6,10 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-const DB = "postgresql://postgres:TWaGRPILYCQYOdRGipvyAtvpUfWRLSOK@trolley.proxy.rlwy.net:28192/railway";
+const DB: string =
+  process.env["DATABASE_PUBLIC_URL"] ??
+  process.env["DATABASE_URL"] ??
+  (() => { throw new Error("Set DATABASE_PUBLIC_URL (run via: railway run --service Postgres <command>)"); })();
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DB }) });
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const apply = process.argv.includes("--apply");
