@@ -69,13 +69,16 @@ export async function scheduleMessageCleanupCron() {
   );
 }
 
-/** Daily purge of raw public-API request logs past the retention. Scheduled only when PUBLIC_API_ENABLED=true (see index.ts). */
+/**
+ * Hourly purge of raw public-API request logs past the retention (time-budgeted, see cleanupApiRequestLogs). A separate job
+ * name on the shared queue; scheduled only when PUBLIC_API_ENABLED=true (see index.ts).
+ */
 export async function scheduleApiUsageCleanupCron() {
   await messageCleanupQueue.add(
     "api-usage-cleanup",
     {},
     {
-      repeat: { pattern: "30 3 * * *" }, // 03:30 daily
+      repeat: { pattern: "30 * * * *", tz: "UTC" }, // minute 30 of every hour, UTC
       jobId: "api-usage-cleanup-cron",
     }
   );

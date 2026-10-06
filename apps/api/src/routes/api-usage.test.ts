@@ -82,16 +82,26 @@ describe("api-usage routes", () => {
       expect(res.json()).toEqual(emptySummary);
       const [, org, opts] = h.summary.mock.calls[0]!;
       expect(org).toBe("org-1");
-      expect(opts.to.getTime() - opts.from.getTime()).toBe(7 * 86400000);
+      expect(opts.from.toISOString()).toBe(new Date(Date.UTC(opts.to.getUTCFullYear(), opts.to.getUTCMonth(), opts.to.getUTCDate() - 6)).toISOString());
       expect(opts.apiKeyId).toBeUndefined();
     });
 
-    it("supports 24h and 30d presets and the credential filter", async () => {
-      await summary("?range=24h");
-      expect(h.summary.mock.calls[0]![2].to.getTime() - h.summary.mock.calls[0]![2].from.getTime()).toBe(86400000);
-      await summary("?range=30d&apiKeyId=key-1");
-      expect(h.summary.mock.calls[1]![2].to.getTime() - h.summary.mock.calls[1]![2].from.getTime()).toBe(30 * 86400000);
-      expect(h.summary.mock.calls[1]![2].apiKeyId).toBe("key-1");
+    it("24h is a rolling window; 7d / 30d are WHOLE UTC days (today + the previous 6 / 29 days)", async () => {
+      vi.useFakeTimers({ now: new Date("2026-10-06T15:42:10Z"), toFake: ["Date"] });
+      try {
+        await summary("?range=24h");
+        let o = h.summary.mock.calls[0]![2];
+        expect(o.from.toISOString()).toBe("2026-10-05T15:42:10.000Z");
+        expect(o.to.toISOString()).toBe("2026-10-06T15:42:10.000Z");
+        await summary("?range=7d");
+        o = h.summary.mock.calls[1]![2];
+        expect(o.from.toISOString()).toBe("2026-09-30T00:00:00.000Z");
+        expect(o.to.toISOString()).toBe("2026-10-06T15:42:10.000Z");
+        await summary("?range=30d&apiKeyId=key-1");
+        o = h.summary.mock.calls[2]![2];
+        expect(o.from.toISOString()).toBe("2026-09-07T00:00:00.000Z");
+        expect(o.apiKeyId).toBe("key-1");
+      } finally { vi.useRealTimers(); }
     });
 
     it("custom range: dates inclusive of the end day, from < to, max 366 days", async () => {
@@ -99,7 +109,7 @@ describe("api-usage routes", () => {
       expect(ok.statusCode).toBe(200);
       const o = h.summary.mock.calls[0]![2];
       expect(o.from.toISOString()).toBe("2026-09-01T00:00:00.000Z");
-      expect(o.to.toISOString()).toBe("2026-10-01T00:00:00.000Z");
+      expect(o.to.toISOString()).toBe("2026-10-01T00:00:00.000Z"); // exclusive end = inclusive 09-30
       expect((await summary("?range=custom&from=2025-10-05&to=2026-10-05")).statusCode).toBe(200); // 365 days + inclusive day
       for (const qs of [
         "?range=custom", "?range=custom&from=2026-09-01", "?range=custom&from=nope&to=2026-09-30",
@@ -110,6 +120,28 @@ describe("api-usage routes", () => {
         expect(res.statusCode, qs).toBe(400);
         expect(res.json()).toMatchObject({ error: { code: "INVALID_QUERY" } });
       }
+    });
+
+    it("accepts ISO datetimes with Z or an explicit offset and uses them verbatim (to is exclusive)", async () => {
+      const ok = await summary("?range=custom&from=2026-09-01T10:00:00Z&to=" + encodeURIComponent("2026-09-05T10:00:00+05:30"));
+      expect(ok.statusCode).toBe(200);
+      const o = h.summary.mock.calls[0]![2];
+      expect(o.from.toISOString()).toBe("2026-09-01T10:00:00.000Z");
+      expect(o.to.toISOString()).toBe("2026-09-05T04:30:00.000Z");
+    });
+
+    it("rejects bounds that are not YYYY-MM-DD or an ISO datetime with Z/offset (no server-local parsing)", async () => {
+      for (const bad of [
+        "2026-09-01T10:00:00", "2026-09-01T10:00", "2026-09-01 10:00:00", "Sep 1 2026", "09/01/2026", "1788000000000",
+        "2026-9-1", "2026-02-31", "2026-13-01", "2026-09-01T25:00:00Z", "2026-09-01T10:00:00Zjunk", "2026-09-01T10:00:00+5",
+      ]) {
+        const res = await summary("?range=custom&from=" + encodeURIComponent(bad) + "&to=2026-09-30");
+        expect(res.statusCode, bad).toBe(400);
+        expect(res.json()).toMatchObject({ error: { code: "INVALID_QUERY" } });
+        const res2 = await summary("?range=custom&from=2026-08-01&to=" + encodeURIComponent(bad));
+        expect(res2.statusCode, "to " + bad).toBe(400);
+      }
+      expect(h.summary).not.toHaveBeenCalled();
     });
 
     it("400 INVALID_QUERY for unknown range and malformed apiKeyId", async () => {

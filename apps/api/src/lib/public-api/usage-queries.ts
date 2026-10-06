@@ -1,10 +1,20 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { utcDay } from "./usage.js";
+import { utcDay, successSampleRate } from "./usage.js";
 
 /**
  * Read layer over the public API usage tables. THE source for the usage dashboard today and for quota/billing checks later.
  * EVERY query is scoped by organizationId; a given apiKeyId must belong to that organization (otherwise `null` is returned
  * and nothing is read). Parameterized queries only. BigInt values are converted to Number.
+ *
+ * BILLABLE FORMULA (documented in the PRD, "Future billing readiness"):
+ *   billable_requests = requests - auth_failures - rate_limited
+ * Wrong-token requests (`knownAuthId:wrongToken`) are counted as requests / client_errors / auth_failures so total hits
+ * stay honest, but the auth id is effectively public, so they must never be billed (nor should throttled requests).
+ *   error_rate = (client_errors + server_errors - auth_failures) / (requests - auth_failures), 0 when the denominator is 0
+ * i.e. failed sign-ins are reported separately (`failedSignins`) and excluded from the error rate.
+ *
+ * Ranges are [from, to): `to` is EXCLUSIVE. Day granularity reads whole UTC days of the rollups, so the effective window
+ * is widened to UTC-day boundaries and every part of the summary (rollups, messagesByStatus, failure reasons) uses it.
  */
 
 export const HOURLY_MAX_MS = 48 * 3600 * 1000;
@@ -19,13 +29,18 @@ export interface UsageCounts {
   rateLimited: number;
   authFailures: number;
   errorRate: number;
+  /** = authFailures, reported separately (excluded from errorRate). */
+  failedSignins: number;
+  /** requests - authFailures - rateLimited. */
+  billableRequests: number;
   messages: number;
   avgLatencyMs: number;
   maxLatencyMs: number;
 }
 
 export interface UsageSummary {
-  range: { from: string; to: string; granularity: "hour" | "day" };
+  /** The EFFECTIVE window every part of the summary used. `approximate`: hourly numbers come from sampled raw logs. */
+  range: { from: string; to: string; granularity: "hour" | "day"; approximate: boolean };
   totals: UsageCounts;
   series: Array<{ t: string; requests: number; success: number; errors: number }>;
   byEndpoint: Array<{ endpoint: string } & UsageCounts>;
@@ -53,14 +68,19 @@ function toCounts(r: Partial<AggRow> | undefined): UsageCounts {
   const requests = n(r?.requests);
   const clientErrors = n(r?.client_errors);
   const serverErrors = n(r?.server_errors);
+  const authFailures = n(r?.auth_failures);
+  const rateLimited = n(r?.rate_limited);
+  const errorDenominator = requests - authFailures;
   return {
     requests,
     success: n(r?.success),
     clientErrors,
     serverErrors,
-    rateLimited: n(r?.rate_limited),
-    authFailures: n(r?.auth_failures),
-    errorRate: requests > 0 ? Math.round(((clientErrors + serverErrors) / requests) * 10000) / 10000 : 0,
+    rateLimited,
+    authFailures,
+    errorRate: errorDenominator > 0 ? Math.round((Math.max(0, clientErrors + serverErrors - authFailures) / errorDenominator) * 10000) / 10000 : 0,
+    failedSignins: authFailures,
+    billableRequests: Math.max(0, requests - authFailures - rateLimited),
     messages: n(r?.messages),
     avgLatencyMs: requests > 0 ? Math.round(n(r?.duration_ms_sum) / requests) : 0,
     maxLatencyMs: n(r?.duration_ms_max),
@@ -85,11 +105,11 @@ function startOfUtcHour(d: Date): Date {
   return new Date(Math.floor(d.getTime() / 3600000) * 3600000);
 }
 
-/** Zero-filled series buckets so charts have no gaps. */
+/** Zero-filled series buckets so charts have no gaps. `to` is EXCLUSIVE (day granularity: from/to are UTC-day aligned). */
 function bucketKeys(from: Date, to: Date, granularity: "hour" | "day"): string[] {
   const keys: string[] = [];
   if (granularity === "day") {
-    for (let t = Date.parse(`${utcDay(from)}T00:00:00Z`); t <= Date.parse(`${utcDay(to)}T00:00:00Z`) && keys.length < 400; t += DAY_MS) {
+    for (let t = from.getTime(); t < to.getTime() && keys.length < 400; t += DAY_MS) {
       keys.push(new Date(t).toISOString().slice(0, 10));
     }
   } else {
@@ -110,10 +130,15 @@ export async function getUsageSummary(
   organizationId: string,
   opts: { from: Date; to: Date; apiKeyId?: string }
 ): Promise<UsageSummary | null> {
-  const { from, to, apiKeyId } = opts;
+  const { apiKeyId } = opts;
   if (apiKeyId && !(await ownsKey(prisma, organizationId, apiKeyId))) return null;
 
-  const granularity: "hour" | "day" = to.getTime() - from.getTime() <= HOURLY_MAX_MS ? "hour" : "day";
+  const granularity: "hour" | "day" = opts.to.getTime() - opts.from.getTime() <= HOURLY_MAX_MS ? "hour" : "day";
+  // Effective window. Day granularity: whole UTC days, [00:00Z of from's day, 00:00Z after the last included day), where
+  // the last included day is the one containing `to - 1ms` (`to` is exclusive).
+  const from = granularity === "day" ? new Date(Date.parse(`${utcDay(opts.from)}T00:00:00Z`)) : opts.from;
+  const to = granularity === "day" ? new Date(Date.parse(`${utcDay(new Date(opts.to.getTime() - 1))}T00:00:00Z`) + DAY_MS) : opts.to;
+  const lastDay = utcDay(new Date(to.getTime() - 1));
   const keyFilter = apiKeyId ? Prisma.sql`AND api_key_id = ${apiKeyId}` : Prisma.empty;
 
   // Day granularity reads the rollups (exact, every request counted). Hourly granularity reads the raw log, because a
@@ -122,7 +147,7 @@ export async function getUsageSummary(
     ? {
         table: Prisma.raw("api_usage_daily"),
         agg: ROLLUP_AGG,
-        where: Prisma.sql`organization_id = ${organizationId} AND day >= ${utcDay(from)}::date AND day <= ${utcDay(to)}::date ${keyFilter}`,
+        where: Prisma.sql`organization_id = ${organizationId} AND day >= ${utcDay(from)}::date AND day <= ${lastDay}::date ${keyFilter}`,
         bucket: Prisma.raw("day::text"),
       }
     : {
@@ -179,7 +204,7 @@ export async function getUsageSummary(
   }
 
   return {
-    range: { from: from.toISOString(), to: to.toISOString(), granularity },
+    range: { from: from.toISOString(), to: to.toISOString(), granularity, approximate: granularity === "hour" && successSampleRate() < 1 },
     totals: toCounts(totalRows[0]),
     series,
     byEndpoint: endpointRows.filter((r) => r.k).map((r) => ({ endpoint: r.k as string, ...toCounts(r) })).sort((a, b) => b.requests - a.requests),

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { getUsageSummary, listRequests, encodeCursor, decodeCursor } from "./usage-queries.js";
 
@@ -44,9 +44,9 @@ describe("getUsageSummary", () => {
       failures: [{ code: "131047", title: "Re-engagement", count: 3n }],
     } });
     const s = (await getUsageSummary(prisma, "org-1", range30d))!;
-    expect(s.range.granularity).toBe("day");
+    expect(s.range).toEqual({ from: "2026-09-07T00:00:00.000Z", to: "2026-10-07T00:00:00.000Z", granularity: "day", approximate: false });
     expect(s.totals).toEqual({
-      requests: 10, success: 7, clientErrors: 2, serverErrors: 1, rateLimited: 1, authFailures: 1, errorRate: 0.3,
+      requests: 10, success: 7, clientErrors: 2, serverErrors: 1, rateLimited: 1, authFailures: 1, errorRate: 0.2222, failedSignins: 1, billableRequests: 8,
       messages: 5, avgLatencyMs: 100, maxLatencyMs: 400,
     });
     expect(s.totals.success + s.totals.clientErrors + s.totals.serverErrors).toBe(s.totals.requests);
@@ -75,7 +75,7 @@ describe("getUsageSummary", () => {
     const { prisma } = mockPrisma();
     const s = (await getUsageSummary(prisma, "org-1", range30d))!;
     expect(s.totals).toEqual({
-      requests: 0, success: 0, clientErrors: 0, serverErrors: 0, rateLimited: 0, authFailures: 0, errorRate: 0, messages: 0,
+      requests: 0, success: 0, clientErrors: 0, serverErrors: 0, rateLimited: 0, authFailures: 0, errorRate: 0, failedSignins: 0, billableRequests: 0, messages: 0,
       avgLatencyMs: 0, maxLatencyMs: 0,
     });
     expect(s.byEndpoint).toEqual([]);
@@ -117,6 +117,94 @@ describe("getUsageSummary", () => {
     await getUsageSummary(prisma, "org-1", { ...range30d, apiKeyId: "key-1" });
     for (const q of queries) expect(q.values).toContain("key-1");
     expect(p.apiMessageMeta.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ apiKeyId: "key-1" }) }));
+  });
+});
+
+describe("billable requests and error rate", () => {
+  const totalsOf = async (row: Record<string, unknown>) => (await getUsageSummary(mockPrisma({ rows: { totals: [agg(row)] } }).prisma, "org-1", range30d))!.totals;
+  it("billableRequests = requests - authFailures - rateLimited; failedSignins = authFailures", async () => {
+    const t = await totalsOf({ requests: 100n, success: 60n, client_errors: 40n, server_errors: 0n, auth_failures: 25n, rate_limited: 5n });
+    expect(t.billableRequests).toBe(70);
+    expect(t.failedSignins).toBe(25);
+    expect(t.requests).toBe(100);
+  });
+  it("errorRate excludes auth failures from numerator and denominator", async () => {
+    // (client 40 + server 10 - auth 25) / (100 - 25) = 25/75
+    const t = await totalsOf({ requests: 100n, success: 50n, client_errors: 40n, server_errors: 10n, auth_failures: 25n, rate_limited: 0n });
+    expect(t.errorRate).toBe(0.3333);
+  });
+  it("errorRate is 0 when every request was a failed sign-in, and never negative or NaN", async () => {
+    const t = await totalsOf({ requests: 10n, success: 0n, client_errors: 10n, server_errors: 0n, auth_failures: 10n, rate_limited: 0n });
+    expect(t.errorRate).toBe(0);
+    expect(t.billableRequests).toBe(0);
+    const empty = await totalsOf({ requests: 0n, success: 0n, client_errors: 0n, server_errors: 0n, auth_failures: 0n, rate_limited: 0n });
+    expect(empty.errorRate).toBe(0);
+  });
+  it("billableRequests is never negative", async () => {
+    const t = await totalsOf({ requests: 3n, success: 0n, client_errors: 3n, server_errors: 0n, auth_failures: 2n, rate_limited: 2n });
+    expect(t.billableRequests).toBe(0);
+  });
+  it("applies to byEndpoint and byCredential rows too", async () => {
+    const { prisma } = mockPrisma({ rows: { endpoint: [{ k: "message.send", ...agg() }], credential: [{ k: "key-1", ...agg() }] } });
+    const s = (await getUsageSummary(prisma, "org-1", range30d))!;
+    expect(s.byEndpoint[0]).toMatchObject({ billableRequests: 8, failedSignins: 1, errorRate: 0.2222 });
+    expect(s.byCredential[0]).toMatchObject({ billableRequests: 8, failedSignins: 1, errorRate: 0.2222 });
+  });
+});
+
+describe("range bounds (`to` is exclusive)", () => {
+  const dayParams = (queries: SqlLike[]) => queries.find((q) => q.sql.includes("api_usage_daily") && q.sql.includes("day >="))!.values;
+  it("a 00:00Z `to` does NOT include that day: 2026-09-01 .. 2026-10-01 has exactly 30 buckets and 09-30 is the last day", async () => {
+    const { prisma, queries } = mockPrisma();
+    const s = (await getUsageSummary(prisma, "org-1", { from: new Date("2026-09-01T00:00:00Z"), to: new Date("2026-10-01T00:00:00Z") }))!;
+    expect(s.series).toHaveLength(30);
+    expect(s.series[0]!.t).toBe("2026-09-01");
+    expect(s.series[29]!.t).toBe("2026-09-30");
+    expect(s.series.some((x) => x.t === "2026-10-01")).toBe(false);
+    expect(dayParams(queries)).toEqual(expect.arrayContaining(["2026-09-01", "2026-09-30"]));
+    expect(dayParams(queries)).not.toContain("2026-10-01");
+    expect(s.range).toMatchObject({ from: "2026-09-01T00:00:00.000Z", to: "2026-10-01T00:00:00.000Z" });
+  });
+  it("a `to` one millisecond past midnight includes that day", async () => {
+    const { prisma } = mockPrisma();
+    const s = (await getUsageSummary(prisma, "org-1", { from: new Date("2026-09-01T00:00:00Z"), to: new Date("2026-10-01T00:00:00.001Z") }))!;
+    expect(s.series).toHaveLength(31);
+    expect(s.series[30]!.t).toBe("2026-10-01");
+  });
+  it("a mid-day range is widened to whole UTC days and EVERY part uses the effective window", async () => {
+    const { prisma, p, queries } = mockPrisma();
+    const s = (await getUsageSummary(prisma, "org-1", { from: new Date("2026-09-01T15:30:00Z"), to: new Date("2026-09-10T08:00:00Z") }))!;
+    expect(s.range).toMatchObject({ from: "2026-09-01T00:00:00.000Z", to: "2026-09-11T00:00:00.000Z", granularity: "day" });
+    const where = (p.apiMessageMeta.groupBy.mock.calls as unknown as Array<[{ where: { queuedAt: { gte: Date; lt: Date } } }]>)[0]![0].where;
+    expect(where.queuedAt.gte.toISOString()).toBe(s.range.from);
+    expect(where.queuedAt.lt.toISOString()).toBe(s.range.to);
+    const failures = queries.find((q) => q.sql.includes("delivery_error"))!;
+    expect(failures.values.filter((v) => v instanceof Date).map((d) => (d as Date).toISOString())).toEqual([s.range.from, s.range.to]);
+    expect(s.series).toHaveLength(10);
+  });
+  it("hourly ranges keep their exact [from, to) bounds", async () => {
+    const { prisma, queries } = mockPrisma();
+    const s = (await getUsageSummary(prisma, "org-1", range24h))!;
+    expect(s.range).toMatchObject({ from: range24h.from.toISOString(), to: range24h.to.toISOString(), granularity: "hour" });
+    const q = queries.find((x) => x.sql.includes("api_request_logs"))!;
+    expect(q.values.filter((v) => v instanceof Date)).toEqual([range24h.from, range24h.to]);
+  });
+});
+
+describe("range.approximate", () => {
+  afterEach(() => { delete process.env["API_REQUEST_LOG_SUCCESS_SAMPLE_RATE"]; });
+  it("is false by default and for day granularity regardless of sampling", async () => {
+    expect((await getUsageSummary(mockPrisma().prisma, "org-1", range24h))!.range.approximate).toBe(false);
+    process.env["API_REQUEST_LOG_SUCCESS_SAMPLE_RATE"] = "0.1";
+    expect((await getUsageSummary(mockPrisma().prisma, "org-1", range30d))!.range.approximate).toBe(false);
+  });
+  it("is true for hourly granularity when the success sample rate is below 1", async () => {
+    process.env["API_REQUEST_LOG_SUCCESS_SAMPLE_RATE"] = "0.5";
+    expect((await getUsageSummary(mockPrisma().prisma, "org-1", range24h))!.range.approximate).toBe(true);
+    process.env["API_REQUEST_LOG_SUCCESS_SAMPLE_RATE"] = "0";
+    expect((await getUsageSummary(mockPrisma().prisma, "org-1", range24h))!.range.approximate).toBe(true);
+    process.env["API_REQUEST_LOG_SUCCESS_SAMPLE_RATE"] = "1";
+    expect((await getUsageSummary(mockPrisma().prisma, "org-1", range24h))!.range.approximate).toBe(false);
   });
 });
 

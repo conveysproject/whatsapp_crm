@@ -5,11 +5,14 @@ import { getUsageSummary, listRequests, type OutcomeFilter } from "../lib/public
 
 const DAY_MS = 86_400_000;
 const MAX_RANGE_MS = 366 * DAY_MS;
-const PRESETS: Record<string, number> = { "24h": DAY_MS, "7d": 7 * DAY_MS, "30d": 30 * DAY_MS };
+/** Preset day counts: whole UTC days, today included (7d = today + the previous 6 days). `24h` is a rolling hourly window. */
+const DAY_PRESETS: Record<string, number> = { "7d": 7, "30d": 30 };
 const ENDPOINTS = new Set(["message.send", "message.list", "message.get", "other"]);
 const OUTCOMES = new Set(["success", "client_error", "server_error", "error"]);
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+/** ISO datetime that carries its own offset (Z or +hh:mm); an offset-less datetime would be read in server-local time. */
+const DATETIME_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:?\d{2})$/;
 
 /** Normalizes a query value: Fastify yields an array for repeated keys; use the first string. */
 function qp(v: unknown): string | undefined {
@@ -21,11 +24,17 @@ function qp(v: unknown): string | undefined {
 const invalid = (reply: FastifyReply, message: string) => reply.status(400).send({ error: { code: "INVALID_QUERY", message } });
 const notFound = (reply: FastifyReply) => reply.status(404).send({ error: { code: "NOT_FOUND", message: "Credential not found" } });
 
-/** A date-only `to` is inclusive of that whole UTC day. Returns null when unparsable. */
+/**
+ * Accepts only `YYYY-MM-DD` (UTC midnight) or an ISO datetime with Z / an explicit offset; anything else is null.
+ * A date-only `to` is INCLUSIVE of that whole UTC day: it becomes the exclusive end, 00:00Z of the next day.
+ */
 function parseBound(v: string, isTo: boolean): Date | null {
-  const d = new Date(DATE_ONLY.test(v) ? `${v}T00:00:00.000Z` : v);
+  const dateOnly = DATE_ONLY.test(v);
+  if (!dateOnly && !DATETIME_WITH_OFFSET.test(v)) return null;
+  const d = new Date(dateOnly ? `${v}T00:00:00.000Z` : v);
   if (Number.isNaN(d.getTime())) return null;
-  return isTo && DATE_ONLY.test(v) ? new Date(d.getTime() + DAY_MS) : d;
+  if (dateOnly && d.toISOString().slice(0, 10) !== v) return null; // e.g. 2026-02-31
+  return isTo && dateOnly ? new Date(d.getTime() + DAY_MS) : d;
 }
 
 export const apiUsageRouter: FastifyPluginAsync = async (fastify) => {
@@ -55,13 +64,17 @@ export const apiUsageRouter: FastifyPluginAsync = async (fastify) => {
       if (!f || !t) return invalid(reply, "from and to are required for a custom range");
       const fd = parseBound(f, false);
       const td = parseBound(t, true);
-      if (!fd || !td) return invalid(reply, "from and to must be ISO dates");
+      if (!fd || !td) return invalid(reply, "from and to must be YYYY-MM-DD or an ISO datetime with Z or an offset");
       if (fd.getTime() >= td.getTime()) return invalid(reply, "from must be before to");
       if (td.getTime() - fd.getTime() > MAX_RANGE_MS) return invalid(reply, "range may span at most 366 days");
       from = fd; to = td;
-    } else if (range in PRESETS) {
+    } else if (range === "24h") {
       to = new Date();
-      from = new Date(to.getTime() - PRESETS[range]!);
+      from = new Date(to.getTime() - DAY_MS);
+    } else if (Object.hasOwn(DAY_PRESETS, range)) {
+      to = new Date();
+      const todayStart = Date.parse(`${to.toISOString().slice(0, 10)}T00:00:00.000Z`);
+      from = new Date(todayStart - (DAY_PRESETS[range]! - 1) * DAY_MS);
     } else {
       return invalid(reply, "range must be 24h, 7d, 30d or custom");
     }
