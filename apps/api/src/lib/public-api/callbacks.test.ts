@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 
 const add = vi.fn();
@@ -232,9 +232,40 @@ describe("forwardMetaStatusToApiClient", () => {
 });
 
 describe("forwardInboundToApiClient", () => {
+  const origFlag = process.env["PUBLIC_API_ENABLED"];
+  const origAllowed = process.env["PUBLIC_API_ALLOWED_ORGS"];
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env["PUBLIC_API_ENABLED"] = "true";
+    delete process.env["PUBLIC_API_ALLOWED_ORGS"];
     prisma.vendorSetting.findFirst.mockResolvedValue({ value: "+1 415-555-2671" });
+  });
+  afterEach(() => {
+    if (origFlag === undefined) delete process.env["PUBLIC_API_ENABLED"]; else process.env["PUBLIC_API_ENABLED"] = origFlag;
+    if (origAllowed === undefined) delete process.env["PUBLIC_API_ALLOWED_ORGS"]; else process.env["PUBLIC_API_ALLOWED_ORGS"] = origAllowed;
+  });
+
+  it("a blocked org's inbound message enqueues nothing", async () => {
+    prisma.vendorSetting.findFirst.mockImplementation(async ({ where }: { where: { key: string } }) =>
+      where.key === "plan_feature_public_api_blocked" ? { value: "1" } : { value: "+1 415-555-2671" });
+    prisma.apiKey.findMany.mockResolvedValue([{ id: "k1", inboundUrl: "https://c.example.com/in" }]);
+    await forwardInboundToApiClient(P, { organizationId: "org-1", messageId: "m9", fromPhone: "1", text: "x" });
+    expect(add).not.toHaveBeenCalled();
+    expect(prisma.apiKey.findMany).not.toHaveBeenCalled();
+  });
+
+  it("a not-allow-listed org's inbound message enqueues nothing", async () => {
+    process.env["PUBLIC_API_ALLOWED_ORGS"] = "someone-else";
+    prisma.apiKey.findMany.mockResolvedValue([{ id: "k1", inboundUrl: "https://c.example.com/in" }]);
+    await forwardInboundToApiClient(P, { organizationId: "org-1", messageId: "m9", fromPhone: "1", text: "x" });
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it("fails closed: a thrown access lookup propagates and nothing is enqueued", async () => {
+    prisma.vendorSetting.findFirst.mockRejectedValue(new Error("db down"));
+    prisma.apiKey.findMany.mockResolvedValue([{ id: "k1", inboundUrl: "https://c.example.com/in" }]);
+    await expect(forwardInboundToApiClient(P, { organizationId: "org-1", messageId: "m9", fromPhone: "1", text: "x" })).rejects.toThrow("db down");
+    expect(add).not.toHaveBeenCalled();
   });
 
   it("queues one inbound callback per active credential with an inbound URL, scoped to the org", async () => {

@@ -56,6 +56,8 @@ export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
     if (!canAccessSub(role, permissions, "settings_access", "settings_api_key")) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_api_key permission required" } });
     }
+    // Revoking stays available whatever the access state, so an org can always cut off its own credentials.
+    if (request.method === "DELETE") return;
     // Same body for "not allow-listed" and "blocked" so the reason is not revealed.
     const access = await checkPublicApiAccess(fastify.prisma, request.auth.organizationId);
     if (!access.allowed) {

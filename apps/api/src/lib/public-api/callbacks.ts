@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { publicApiCallbackQueue } from "./queues.js";
 import { plivoErrorFromMeta } from "./meta-errors.js";
+import { checkPublicApiAccess } from "./access.js";
 
 export type PlivoStatus = "queued" | "sent" | "delivered" | "read" | "failed" | "undelivered";
 
@@ -150,6 +151,8 @@ export async function forwardInboundToApiClient(
   prisma: PrismaClient,
   args: { organizationId: string; messageId: string; fromPhone: string; text: string | null }
 ): Promise<void> {
+  // Inbound customer messages stop flowing to an org that is blocked or not allow-listed (a thrown lookup propagates).
+  if (!(await checkPublicApiAccess(prisma, args.organizationId)).allowed) return;
   const keys = await prisma.apiKey.findMany({
     where: { organizationId: args.organizationId, revokedAt: null, inboundUrl: { not: null } },
     select: { id: true, inboundUrl: true },

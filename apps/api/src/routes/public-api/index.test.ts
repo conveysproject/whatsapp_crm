@@ -27,11 +27,14 @@ async function buildApp(): Promise<FastifyInstance> {
   return app;
 }
 
+const ORIG_FLAG = process.env["PUBLIC_API_ENABLED"];
+
 describe("publicApiRouter", () => {
   let app: FastifyInstance;
   beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks();
     process.env["PUBLIC_API_RATE_LIMIT"] = "3";
+    process.env["PUBLIC_API_ENABLED"] = "true";
     mockPrisma.apiKey.findUnique.mockResolvedValue({ id: ID, organizationId: "org-1", keyHash: hashToken("good"), revokedAt: null, lastUsedAt: new Date() });
     mockPrisma.organization.findUnique.mockResolvedValue({ status: "active" });
     mockPrisma.vendorSetting.findFirst.mockResolvedValue(null); // no kill switch
@@ -39,7 +42,7 @@ describe("publicApiRouter", () => {
     mockPrisma.apiMessageMeta.count.mockResolvedValue(0);
     app = await buildApp();
   });
-  afterEach(async () => { await app.close(); delete process.env["PUBLIC_API_RATE_LIMIT"]; delete process.env["PUBLIC_API_PREAUTH_RATE_LIMIT"]; });
+  afterEach(async () => { await app.close(); if (ORIG_FLAG === undefined) delete process.env["PUBLIC_API_ENABLED"]; else process.env["PUBLIC_API_ENABLED"] = ORIG_FLAG; delete process.env["PUBLIC_API_RATE_LIMIT"]; delete process.env["PUBLIC_API_PREAUTH_RATE_LIMIT"]; });
 
   const rebuild = async () => { await app.close(); vi.resetModules(); return buildApp(); };
   const list = (headers: Record<string, string> = { authorization: auth }) =>

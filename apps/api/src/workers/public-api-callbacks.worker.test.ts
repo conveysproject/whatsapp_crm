@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type * as SafeUrlModule from "../lib/public-api/safe-url.js";
 
-const { prisma } = vi.hoisted(() => ({ prisma: { apiKey: { findUnique: vi.fn() } } }));
+const { prisma, checkAccess } = vi.hoisted(() => ({ prisma: { apiKey: { findUnique: vi.fn() } }, checkAccess: vi.fn() }));
 vi.mock("../lib/prisma.js", () => ({ prisma }));
+vi.mock("../lib/public-api/access.js", () => ({ checkPublicApiAccess: (...a: unknown[]) => checkAccess(...a) }));
 vi.mock("../lib/queue.js", () => ({ redisConnection: {} }));
 vi.mock("../lib/public-api/queues.js", () => ({ publicApiCallbackQueue: {}, publicApiSendQueue: {} }));
 vi.mock("../lib/public-api/safe-url.js", async (orig) => {
@@ -22,6 +23,24 @@ describe("deliverCallback", () => {
     vi.clearAllMocks();
     process.env["PUBLIC_API_TOKEN_KEY"] = Buffer.alloc(32, 5).toString("base64");
     prisma.apiKey.findUnique.mockResolvedValue({ tokenEnc: encryptToken("secret-token"), revokedAt: null, organizationId: "org-1" });
+    checkAccess.mockResolvedValue({ allowed: true });
+  });
+
+  it.each(["blocked", "not_allowed"] as const)("access %s: throws UnrecoverableError (no retries, no secrets in the message) and never fetches", async (reason) => {
+    checkAccess.mockResolvedValue({ allowed: false, reason });
+    const fetchMock = vi.fn();
+    const err = await deliverCallback(data(), fetchMock as unknown as typeof fetch).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(UnrecoverableError);
+    expect((err as Error).message).toBe("access disabled");
+    expect(checkAccess).toHaveBeenCalledWith(prisma, "org-1");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("fails closed: a thrown access lookup propagates (retried) and nothing is fetched", async () => {
+    checkAccess.mockRejectedValue(new Error("db down"));
+    const fetchMock = vi.fn();
+    await expect(deliverCallback(data(), fetchMock as unknown as typeof fetch)).rejects.toThrow("db down");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("POSTs form-encoded fields with a valid V2 signature, nonce and no redirect following", async () => {
@@ -77,6 +96,7 @@ describe("deliverCallback", () => {
 describe("deliverCallback hardening", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    checkAccess.mockResolvedValue({ allowed: true });
     process.env["PUBLIC_API_TOKEN_KEY"] = Buffer.alloc(32, 5).toString("base64");
     prisma.apiKey.findUnique.mockResolvedValue({ tokenEnc: encryptToken("secret-token"), revokedAt: null, organizationId: "org-1" });
   });

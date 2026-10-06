@@ -54,6 +54,11 @@ const h = vi.hoisted(() => {
       create: async ({ data }: any) => { const m = { id: randomUUID(), whatsappMessageId: null, sentAt: null, ...data }; t.message.set(m.id, m); return m; },
       findFirst: async ({ where }: any) => [...t.message.values()].find((r) => matches(r, where)) ?? null,
       findUnique: async ({ where }: any) => t.message.get(where.id) ?? null,
+      updateMany: async ({ where, data }: any) => {
+        const rows = [...t.message.values()].filter((r) => r.id === where.id && (!where.organizationId || r.organizationId === where.organizationId) && (!where.status || r.status === where.status));
+        for (const r of rows) Object.assign(r, data);
+        return { count: rows.length };
+      },
       update: async ({ where, data }: any) => {
         const m = t.message.get(where.id);
         if (!m || (where.organizationId && m.organizationId !== where.organizationId)) throw new Error("not found");
@@ -118,6 +123,7 @@ import { WaApiError } from "../../lib/whatsapp.js";
 
 const ORIG_KEY = process.env["PUBLIC_API_TOKEN_KEY"];
 const ORIG_ALLOWED = process.env["PUBLIC_API_ALLOWED_ORGS"];
+const ORIG_FLAG = process.env["PUBLIC_API_ENABLED"];
 const CALLBACK_URL = "https://8.8.8.8/hooks/status"; // public IP literal: passes the SSRF guard with no DNS
 const SRC = "14155552671";
 const DST = "14155552672";
@@ -158,6 +164,7 @@ describe("public API end-to-end (real router + workers, in-memory Prisma)", () =
     process.env["PUBLIC_API_TOKEN_KEY"] = randomBytes(32).toString("base64");
     for (const m of Object.values(h.t)) Array.isArray(m) ? (m.length = 0) : m.clear();
     delete process.env["PUBLIC_API_ALLOWED_ORGS"];
+    process.env["PUBLIC_API_ENABLED"] = "true";
     h.sendJobs.length = 0; h.callbackJobs.length = 0; fetchCalls.length = 0;
     h.sendTextMessage.fn = async () => ({ messageId: "wamid.E2E" });
 
@@ -176,6 +183,7 @@ describe("public API end-to-end (real router + workers, in-memory Prisma)", () =
   });
   afterAll(() => {
     if (ORIG_KEY === undefined) delete process.env["PUBLIC_API_TOKEN_KEY"]; else process.env["PUBLIC_API_TOKEN_KEY"] = ORIG_KEY;
+    if (ORIG_FLAG === undefined) delete process.env["PUBLIC_API_ENABLED"]; else process.env["PUBLIC_API_ENABLED"] = ORIG_FLAG;
   });
 
   const form = (init: RequestInit) => new URLSearchParams(String(init.body));
@@ -279,5 +287,24 @@ describe("public API end-to-end (real router + workers, in-memory Prisma)", () =
     h.t.vendorSetting.push({ organizationId: "org-1", key: "plan_feature_public_api_blocked", value: "1" });
     expect((await post(cred1)).statusCode).toBe(403);
     expect((await post(cred2)).statusCode).toBe(202); // other orgs unaffected
+  });
+
+  it("blocking the org after acceptance stops the queued send and the callbacks", async () => {
+    const uuid = ((await post(cred1)).json() as { message_uuid: string[] }).message_uuid[0]!;
+    h.t.vendorSetting.push({ organizationId: "org-1", key: "plan_feature_public_api_blocked", value: "1" });
+
+    await processSendJob({ data: h.sendJobs[0]!.data });
+    expect(h.t.message.get(uuid)!.status).toBe("failed"); // never sent
+    expect(h.t.message.get(uuid)!.whatsappMessageId).toBeNull();
+
+    for (const job of h.callbackJobs) {
+      await expect(deliverCallback({ data: job.data }, fakeFetch)).rejects.toBeInstanceOf(UnrecoverableError);
+    }
+    expect(fetchCalls).toHaveLength(0);
+  });
+
+  it("the platform flag off refuses the public API", async () => {
+    process.env["PUBLIC_API_ENABLED"] = "false";
+    expect((await post(cred1)).statusCode).toBe(403);
   });
 });

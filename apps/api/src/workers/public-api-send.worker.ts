@@ -2,6 +2,7 @@ import { Worker, type Job } from "bullmq";
 import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
 import { getIo } from "../lib/io-ref.js";
+import { checkPublicApiAccess } from "../lib/public-api/access.js";
 import { enqueueStatusCallback } from "../lib/public-api/callbacks.js";
 import { plivoErrorFromMeta } from "../lib/public-api/meta-errors.js";
 import { inferMediaKind } from "../lib/public-api/send-mapping.js";
@@ -31,6 +32,13 @@ export async function processSendJob(job: Pick<Job<SendJob>, "data">): Promise<v
     return;
   }
   if (message.status !== "sending") return; // already handled
+
+  // The kill switch / allow-list also covers work accepted before it was flipped. A thrown lookup propagates: fail closed.
+  if (!(await checkPublicApiAccess(prisma, organizationId)).allowed) {
+    await prisma.message.updateMany({ where: { id: messageId, organizationId, status: "sending" }, data: { status: "failed" } });
+    await enqueueStatusCallback(prisma, messageId, "failed", { errorCode: null });
+    return;
+  }
 
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },

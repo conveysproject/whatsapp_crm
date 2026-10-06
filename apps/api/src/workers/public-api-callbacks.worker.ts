@@ -1,6 +1,7 @@
 import { Worker, UnrecoverableError, type Job } from "bullmq";
 import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
+import { checkPublicApiAccess } from "../lib/public-api/access.js";
 import { decryptToken } from "../lib/public-api/credentials.js";
 import { newNonce, signV2 } from "../lib/public-api/plivo-signature.js";
 import { assertSafeCallbackUrl, UnsafeUrlError } from "../lib/public-api/safe-url.js";
@@ -20,6 +21,8 @@ export async function deliverCallback(job: Pick<Job<CallbackJob>, "data">, fetch
   if (!key || key.organizationId !== organizationId || key.revokedAt || !key.tokenEnc) {
     throw new UnrecoverableError("credential unavailable");
   }
+  // Queued callbacks of a blocked / not-allowed org are dropped without retries. A thrown lookup is retried (fail closed).
+  if (!(await checkPublicApiAccess(prisma, organizationId)).allowed) throw new UnrecoverableError("access disabled");
   try { await assertSafeCallbackUrl(url); }
   catch (err) {
     if (err instanceof UnsafeUrlError) throw new UnrecoverableError(`unsafe callback URL: ${err.message}`);

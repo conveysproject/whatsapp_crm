@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { prisma, enqueueCb, wa, workerCtor } = vi.hoisted(() => ({
+const { prisma, enqueueCb, wa, workerCtor, checkAccess } = vi.hoisted(() => ({
+  checkAccess: vi.fn(),
   prisma: {
     message: { findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     organization: { findUnique: vi.fn() },
@@ -18,6 +19,7 @@ vi.mock("bullmq", () => {
 });
 vi.mock("../lib/prisma.js", () => ({ prisma }));
 vi.mock("../lib/public-api/callbacks.js", () => ({ enqueueStatusCallback: (...a: unknown[]) => enqueueCb(...a) }));
+vi.mock("../lib/public-api/access.js", () => ({ checkPublicApiAccess: (...a: unknown[]) => checkAccess(...a) }));
 vi.mock("../lib/public-api/queues.js", () => ({ publicApiSendQueue: {}, publicApiCallbackQueue: {} }));
 vi.mock("../lib/queue.js", () => ({ redisConnection: {} }));
 vi.mock("../lib/io-ref.js", () => ({ getIo: () => null }));
@@ -38,6 +40,31 @@ describe("processSendJob", () => {
     prisma.organization.findUnique.mockResolvedValue({ phoneNumberId: "pn-1", wabaAccessToken: "tok" });
     prisma.message.update.mockResolvedValue({});
     prisma.conversation.update.mockResolvedValue({});
+    prisma.message.updateMany.mockResolvedValue({ count: 1 });
+    checkAccess.mockResolvedValue({ allowed: true });
+  });
+
+  it.each(["blocked", "not_allowed"] as const)("access %s: never calls Meta, marks the message failed (conditional, org-scoped) and queues a failed callback", async (reason) => {
+    checkAccess.mockResolvedValue({ allowed: false, reason });
+    await processSendJob(job({ kind: "text", text: "hi" }));
+    expect(checkAccess).toHaveBeenCalledWith(prisma, "org-1");
+    for (const fn of Object.values(wa)) expect(fn).not.toHaveBeenCalled();
+    expect(prisma.organization.findUnique).not.toHaveBeenCalled();
+    expect(prisma.message.updateMany).toHaveBeenCalledWith({ where: { id: "m1", organizationId: "org-1", status: "sending" }, data: { status: "failed" } });
+    expect(enqueueCb).toHaveBeenCalledWith(expect.anything(), "m1", "failed", { errorCode: null });
+  });
+
+  it("fails closed: a thrown access lookup propagates and nothing is sent", async () => {
+    checkAccess.mockRejectedValue(new Error("db down"));
+    await expect(processSendJob(job({ kind: "text", text: "hi" }))).rejects.toThrow("db down");
+    expect(wa.sendTextMessage).not.toHaveBeenCalled();
+    expect(prisma.message.update).not.toHaveBeenCalled();
+  });
+
+  it("an expired or already-handled message does not need the access lookup", async () => {
+    prisma.message.findFirst.mockResolvedValue({ id: "m1", status: "expired", conversationId: "conv-1" });
+    await processSendJob(job({ kind: "text", text: "hi" }));
+    expect(checkAccess).not.toHaveBeenCalled();
   });
 
   it("sends text, marks the message sent with the wamid, queues a 'sent' callback (org-scoped lookups)", async () => {

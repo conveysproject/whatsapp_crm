@@ -8,8 +8,26 @@ const ENV = "PUBLIC_API_ALLOWED_ORGS";
 
 describe("checkPublicApiAccess", () => {
   const orig = process.env[ENV];
-  beforeEach(() => { vi.clearAllMocks(); delete process.env[ENV]; findFirst.mockResolvedValue(null); });
-  afterEach(() => { if (orig === undefined) delete process.env[ENV]; else process.env[ENV] = orig; });
+  const origFlag = process.env["PUBLIC_API_ENABLED"];
+  beforeEach(() => { vi.clearAllMocks(); delete process.env[ENV]; process.env["PUBLIC_API_ENABLED"] = "true"; findFirst.mockResolvedValue(null); });
+  afterEach(() => {
+    if (orig === undefined) delete process.env[ENV]; else process.env[ENV] = orig;
+    if (origFlag === undefined) delete process.env["PUBLIC_API_ENABLED"]; else process.env["PUBLIC_API_ENABLED"] = origFlag;
+  });
+
+  it.each([undefined, "", "false", "TRUE", "1"])("platform flag %j: not allowed, and the database is never queried", async (v) => {
+    if (v === undefined) delete process.env["PUBLIC_API_ENABLED"]; else process.env["PUBLIC_API_ENABLED"] = v;
+    expect(await checkPublicApiAccess(prisma, "org-1")).toEqual({ allowed: false, reason: "not_allowed" });
+    process.env[ENV] = "org-1";
+    expect(await checkPublicApiAccess(prisma, "org-1")).toEqual({ allowed: false, reason: "not_allowed" });
+    expect(findFirst).not.toHaveBeenCalled();
+  });
+
+  it("reads the platform flag on every call", async () => {
+    expect(await checkPublicApiAccess(prisma, "org-1")).toEqual({ allowed: true });
+    process.env["PUBLIC_API_ENABLED"] = "false";
+    expect(await checkPublicApiAccess(prisma, "org-1")).toEqual({ allowed: false, reason: "not_allowed" });
+  });
 
   it("caps active credentials at 10", () => { expect(MAX_ACTIVE_CREDENTIALS).toBe(10); });
 

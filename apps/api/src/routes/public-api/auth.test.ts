@@ -23,6 +23,8 @@ async function buildApp(): Promise<FastifyInstance> {
   return app;
 }
 
+const ORIG_FLAG = process.env["PUBLIC_API_ENABLED"];
+
 describe("publicApiAuth", () => {
   let app: FastifyInstance;
   beforeEach(async () => {
@@ -31,10 +33,14 @@ describe("publicApiAuth", () => {
     mockPrisma.apiKey.update.mockResolvedValue({});
     mockPrisma.organization.findUnique.mockResolvedValue({ status: "active" });
     delete process.env["PUBLIC_API_ALLOWED_ORGS"];
+    process.env["PUBLIC_API_ENABLED"] = "true";
     mockPrisma.vendorSetting.findFirst.mockResolvedValue(null); // no kill switch, no plan setting
     app = await buildApp();
   });
-  afterEach(async () => { await app.close(); delete process.env["PUBLIC_API_ALLOWED_ORGS"]; });
+  afterEach(async () => {
+    await app.close(); delete process.env["PUBLIC_API_ALLOWED_ORGS"];
+    if (ORIG_FLAG === undefined) delete process.env["PUBLIC_API_ENABLED"]; else process.env["PUBLIC_API_ENABLED"] = ORIG_FLAG;
+  });
 
   const get = (auth?: string, id = ID) =>
     app.inject({ method: "GET", url: `/v1/Account/${id}/ping`, headers: auth ? { authorization: auth } : {} });
@@ -84,6 +90,14 @@ describe("publicApiAuth", () => {
     }
     expect(JSON.parse(blocked.body).error).toBe(JSON.parse(notAllowed.body).error);
     expect(mockPrisma.apiKey.update).not.toHaveBeenCalled();
+  });
+
+  it("403 (same Plivo body) when the platform flag PUBLIC_API_ENABLED is off, without a database lookup for access", async () => {
+    process.env["PUBLIC_API_ENABLED"] = "false";
+    const res = await get(basic(ID, "good-token"));
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ api_id: expect.any(String), error: "API access is not available for this account" });
+    expect(mockPrisma.vendorSetting.findFirst).not.toHaveBeenCalled();
   });
 
   it("allows an org with no plan setting at all, and an allow-listed org", async () => {

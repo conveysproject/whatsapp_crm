@@ -25,17 +25,23 @@ async function buildApp(role = "admin", permissions: Record<string, string> = {}
   return app;
 }
 
+const ORIG_FLAG = process.env["PUBLIC_API_ENABLED"];
+
 describe("api-credentials", () => {
   let app: FastifyInstance;
   beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks();
     process.env["PUBLIC_API_TOKEN_KEY"] = Buffer.alloc(32, 9).toString("base64");
     delete process.env["PUBLIC_API_ALLOWED_ORGS"];
+    process.env["PUBLIC_API_ENABLED"] = "true";
     mockPrisma.vendorSetting.findFirst.mockResolvedValue(null); // no kill switch
     mockPrisma.apiKey.count.mockResolvedValue(0);
     app = await buildApp();
   });
-  afterEach(async () => { await app.close(); delete process.env["PUBLIC_API_ALLOWED_ORGS"]; });
+  afterEach(async () => {
+    await app.close(); delete process.env["PUBLIC_API_ALLOWED_ORGS"];
+    if (ORIG_FLAG === undefined) delete process.env["PUBLIC_API_ENABLED"]; else process.env["PUBLIC_API_ENABLED"] = ORIG_FLAG;
+  });
 
   it("creates a credential, returns the token once, stores hash + encrypted copy scoped to the org", async () => {
     mockPrisma.apiKey.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: "key-1", name: data["name"], createdAt: new Date() }));
@@ -105,10 +111,10 @@ describe("api-credentials", () => {
   const NOT_AVAILABLE = { error: { code: "API_NOT_AVAILABLE", message: "API access is not available for this organization." } };
   const calls: Array<[string, string, object?]> = [
     ["POST", "/v1/api-credentials", { name: "Prod" }], ["GET", "/v1/api-credentials"],
-    ["PATCH", "/v1/api-credentials/k", { name: "x" }], ["POST", "/v1/api-credentials/k/rotate"], ["DELETE", "/v1/api-credentials/k"],
+    ["PATCH", "/v1/api-credentials/k", { name: "x" }], ["POST", "/v1/api-credentials/k/rotate"],
   ];
 
-  it("403 API_NOT_AVAILABLE on every route when the org is blocked or not allow-listed, with an identical body", async () => {
+  it("403 API_NOT_AVAILABLE on every route except revoke when the org is blocked or not allow-listed, with an identical body", async () => {
     const bodies: string[] = [];
     mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "1" });
     for (const [method, url, payload] of calls) {
@@ -126,6 +132,48 @@ describe("api-credentials", () => {
     }
     expect(mockPrisma.apiKey.create).not.toHaveBeenCalled();
     expect(mockPrisma.apiKey.update).not.toHaveBeenCalled();
+  });
+
+  it("403 API_NOT_AVAILABLE on the four non-revoke routes when the platform flag is off (identical body, no kill-switch lookup)", async () => {
+    process.env["PUBLIC_API_ENABLED"] = "false";
+    for (const [method, url, payload] of calls) {
+      const res = await app.inject({ method: method as "GET", url, ...(payload ? { payload } : {}) });
+      expect(res.statusCode, `${method} ${url} flag off`).toBe(403);
+      expect(res.json()).toEqual(NOT_AVAILABLE);
+    }
+    expect(mockPrisma.vendorSetting.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("DELETE (revoke) still works when the org is blocked, not allow-listed, or the platform flag is off", async () => {
+    mockPrisma.apiKey.findFirst.mockResolvedValue({ id: "k" });
+    mockPrisma.apiKey.update.mockResolvedValue({});
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "1" });
+    expect((await app.inject({ method: "DELETE", url: "/v1/api-credentials/k" })).statusCode).toBe(204);
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue(null);
+    process.env["PUBLIC_API_ALLOWED_ORGS"] = "someone-else";
+    expect((await app.inject({ method: "DELETE", url: "/v1/api-credentials/k" })).statusCode).toBe(204);
+    delete process.env["PUBLIC_API_ALLOWED_ORGS"];
+    process.env["PUBLIC_API_ENABLED"] = "false";
+    expect((await app.inject({ method: "DELETE", url: "/v1/api-credentials/k" })).statusCode).toBe(204);
+    expect(mockPrisma.apiKey.update).toHaveBeenCalledTimes(3);
+    expect(mockPrisma.apiKey.findFirst.mock.calls[0]![0].where).toMatchObject({ id: "k", organizationId: "org-1", revokedAt: null });
+  });
+
+  it("DELETE for a blocked org is still org-scoped (404 for another org's credential)", async () => {
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "1" });
+    mockPrisma.apiKey.findFirst.mockResolvedValue(null);
+    expect((await app.inject({ method: "DELETE", url: "/v1/api-credentials/other" })).statusCode).toBe(404);
+    expect(mockPrisma.apiKey.update).not.toHaveBeenCalled();
+  });
+
+  it("DELETE without the permission is FORBIDDEN, even for a blocked org", async () => {
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "1" });
+    const denied = await buildApp("agent", { settings_access: "allow" });
+    const res = await denied.inject({ method: "DELETE", url: "/v1/api-credentials/k" });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ error: { code: "FORBIDDEN" } });
+    expect(mockPrisma.apiKey.update).not.toHaveBeenCalled();
+    await denied.close();
   });
 
   it("an org with no plan setting at all can use the routes", async () => {
