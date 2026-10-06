@@ -78,6 +78,8 @@ export const vendorSettingsRouter: FastifyPluginAsync = async (fastify) => {
     });
     const data: Record<string, unknown> = {};
     for (const row of rows) {
+      // Plan gates are platform-controlled: tenants neither write (PUT refuses) nor read them.
+      if (PLATFORM_CONTROLLED_PREFIXES.some((p) => row.key.trim().toLowerCase().startsWith(p))) continue;
       data[row.key] = castSetting(row.value, row.dataType);
     }
     return reply.send({ data });

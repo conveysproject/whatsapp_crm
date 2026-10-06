@@ -38,6 +38,17 @@ describe("GET /v1/vendor-settings", () => {
       expect.objectContaining({ where: { organizationId: "org-1" } })
     );
   });
+
+  it("does not reveal platform-controlled plan_feature_*/plan_limit_* keys to the tenant", async () => {
+    mockPrisma.vendorSetting.findMany.mockResolvedValue([
+      { key: "enable_vendor_webhook", value: "true", dataType: "boolean" },
+      { key: "plan_feature_public_api_blocked", value: "1", dataType: "string" },
+      { key: "PLAN_LIMIT_contacts", value: "50", dataType: "string" },
+      { key: "plan_notes_text", value: "hello", dataType: "string" },
+    ]);
+    const res = await app.inject({ method: "GET", url: "/v1/vendor-settings" });
+    expect(Object.keys(res.json<{ data: Record<string, unknown> }>().data).sort()).toEqual(["enable_vendor_webhook", "plan_notes_text"]);
+  });
 });
 
 describe("PUT /v1/vendor-settings", () => {
