@@ -2,15 +2,37 @@
 
 import type { JSX } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { chartData, formatCount, isChartEmpty, type Granularity, type SeriesPoint } from "@/lib/api-usage";
+import { chartData, formatCount, formatWindowStart, isChartEmpty, type ChartBucket, type Granularity, type SeriesPoint } from "@/lib/api-usage";
 
-const COLORS = { success: "#22c55e", errors: "#ef4444", failedSignins: "#f59e0b" } as const;
+const COLORS = { success: "#16a34a", errors: "#dc2626", failedSignins: "#d97706" } as const;
+const SERIES = [
+  { key: "success", name: "Success", fill: COLORS.success, pattern: null },
+  { key: "errors", name: "Errors", fill: "url(#usage-pattern-errors)", pattern: "errors" },
+  { key: "failedSignins", name: "Failed sign-ins", fill: "url(#usage-pattern-signins)", pattern: "signins" },
+] as const;
 
-export function UsageChart({ series, granularity }: { series: SeriesPoint[]; granularity: Granularity }): JSX.Element {
+interface TipEntry { dataKey?: string | number; name?: string; value?: number | string }
+
+/** Tooltip styled with the same `dark:` utility classes as the rest of the page (recharts' default is always light). */
+function UsageTooltip({ active, payload }: { active?: boolean; payload?: ReadonlyArray<{ payload?: ChartBucket } & TipEntry> }): JSX.Element | null {
+  if (!active || !payload || payload.length === 0) return null;
+  const bucket = payload[0]?.payload;
+  return (
+    <div className="rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-xs shadow">
+      <p className="font-medium mb-1">{bucket?.fullLabel ?? ""}</p>
+      {payload.map((e) => (
+        <p key={String(e.dataKey)} className="tabular-nums">{e.name}: {formatCount(Number(e.value ?? 0))}</p>
+      ))}
+    </div>
+  );
+}
+
+export function UsageChart({ series, granularity, windowStart }: { series: SeriesPoint[]; granularity: Granularity; windowStart?: string }): JSX.Element {
   const data = chartData(series, granularity);
   const empty = isChartEmpty(data);
   const total = data.reduce((s, b) => s + b.total, 0);
   const summary = `Requests per ${granularity}: ${formatCount(total)} in total across ${data.length} ${granularity === "hour" ? "hours" : "days"}.`;
+  const start = granularity === "hour" && windowStart ? formatWindowStart(windowStart) : "";
 
   return (
     <section aria-labelledby="usage-chart-heading" className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
@@ -25,20 +47,35 @@ export function UsageChart({ series, granularity }: { series: SeriesPoint[]; gra
           No requests in this period.
         </p>
       ) : (
-        <div role="group" aria-label={summary} data-testid="usage-chart">
+        <div role="group" aria-label={summary} data-testid="usage-chart" className="text-gray-500 dark:text-gray-400">
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={data} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip />
+              <defs>
+                <pattern id="usage-pattern-errors" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <rect width="6" height="6" fill={COLORS.errors} />
+                  <rect width="2.5" height="6" fill="#ffffff" fillOpacity={0.55} />
+                </pattern>
+                <pattern id="usage-pattern-signins" width="6" height="6" patternUnits="userSpaceOnUse">
+                  <rect width="6" height="6" fill={COLORS.failedSignins} />
+                  <circle cx="3" cy="3" r="1.4" fill="#ffffff" fillOpacity={0.7} />
+                </pattern>
+              </defs>
+              <CartesianGrid stroke="currentColor" strokeOpacity={0.2} strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "currentColor" }} stroke="currentColor" interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 11, fill: "currentColor" }} stroke="currentColor" allowDecimals={false} />
+              <Tooltip content={<UsageTooltip />} cursor={{ fill: "currentColor", fillOpacity: 0.1 }} />
               <Legend />
-              <Bar dataKey="success" name="Success" stackId="r" fill={COLORS.success} isAnimationActive={false} />
-              <Bar dataKey="errors" name="Errors" stackId="r" fill={COLORS.errors} isAnimationActive={false} />
-              <Bar dataKey="failedSignins" name="Failed sign-ins" stackId="r" fill={COLORS.failedSignins} isAnimationActive={false} />
+              {SERIES.map((x) => (
+                <Bar key={x.key} dataKey={x.key} name={x.name} stackId="r" fill={x.fill} isAnimationActive={false} />
+              ))}
             </BarChart>
           </ResponsiveContainer>
         </div>
+      )}
+      {granularity === "hour" && start && (
+        <p data-testid="window-start-note" className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          Window starts at {start}; the first bucket is partial.
+        </p>
       )}
       <table className="sr-only" data-testid="usage-chart-table">
         <caption>{summary}</caption>
@@ -53,7 +90,7 @@ export function UsageChart({ series, granularity }: { series: SeriesPoint[]; gra
         <tbody>
           {data.map((b) => (
             <tr key={b.t}>
-              <th scope="row">{b.label}</th>
+              <th scope="row">{b.fullLabel}</th>
               <td>{b.success}</td>
               <td>{b.errors}</td>
               <td>{b.failedSignins}</td>

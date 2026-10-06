@@ -17,15 +17,16 @@ import {
   type UsageRange,
   type UsageSummary,
 } from "@/lib/api-usage";
+import { listCredentials, type ApiCredential } from "@/lib/api-credentials";
 
 const selectCls = "border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500";
 
-function GettingStarted(): JSX.Element {
+function GettingStarted({ rangeLabel }: { rangeLabel: string }): JSX.Element {
   return (
     <div data-testid="usage-empty" className="rounded-xl border border-dashed border-gray-300 dark:border-gray-600 p-8 text-center space-y-2">
-      <p className="text-sm font-medium">No API requests in this period</p>
+      <p className="text-sm font-medium">No API requests in the last {rangeLabel}</p>
       <p className="text-sm text-gray-500 dark:text-gray-400">
-        Create an API credential and send your first request to the WBMSG API. Usage appears here within a few seconds.
+        New here? Create an API credential and send your first request to the WBMSG API. Usage appears here within a few seconds.
       </p>
       <Link href="/settings/vendor-settings" className="inline-block text-sm text-blue-600 hover:underline">
         Go to Advanced Settings → API Credentials
@@ -47,6 +48,9 @@ function ApiUsageBody(): JSX.Element {
     retry: false,
   });
 
+  // Names for ALL credentials (incl. revoked), same query key as the credentials page; `known` is only the fallback.
+  const creds = useQuery<ApiCredential[], Error>({ queryKey: ["api-credentials"], queryFn: listCredentials, retry: false });
+
   useEffect(() => {
     if (!q.data || q.data.byCredential.length === 0) return;
     setKnown((prev) => {
@@ -56,7 +60,11 @@ function ApiUsageBody(): JSX.Element {
     });
   }, [q.data]);
 
-  const names = useMemo(() => new Map([...known].map(([id, c]) => [id, c.name])), [known]);
+  const names = useMemo(() => {
+    const m = new Map<string, string>([...known].map(([id, c]) => [id, c.name]));
+    for (const c of creds.data ?? []) m.set(c.id, c.name);
+    return m;
+  }, [known, creds.data]);
   const options = useMemo(() => [...known].sort((a, b) => a[1].name.localeCompare(b[1].name)), [known]);
 
   if (isNotAvailable(q.error)) {
@@ -71,6 +79,7 @@ function ApiUsageBody(): JSX.Element {
   }
 
   const s = q.data;
+  const rangeLabel = USAGE_RANGES.find((r) => r.value === range)?.label ?? range;
   const showEmpty = s !== undefined && !apiKeyId && s.totals.requests === 0 && s.byCredential.length === 0;
 
   let content: JSX.Element;
@@ -82,12 +91,12 @@ function ApiUsageBody(): JSX.Element {
       </div>
     );
   } else if (!s) {
-    content = <p className="py-12 text-center text-sm text-gray-400">Loading…</p>;
+    content = <p role="status" className="py-12 text-center text-sm text-gray-500">Loading…</p>;
   } else if (showEmpty) {
-    content = <GettingStarted />;
+    content = <GettingStarted rangeLabel={rangeLabel} />;
   } else {
     content = (
-      <div className={`space-y-4 ${q.isPlaceholderData ? "opacity-60" : ""}`}>
+      <div aria-busy={q.isFetching} className={`space-y-4 ${q.isPlaceholderData ? "opacity-60" : ""}`}>
         {q.error && (
           <div role="alert" className="flex items-center justify-between gap-3 text-sm rounded-md bg-red-50 dark:bg-red-950 border border-red-200 px-3 py-2 text-red-700 dark:text-red-300">
             <span>{messageForUsageError(q.error)}</span>
@@ -100,7 +109,7 @@ function ApiUsageBody(): JSX.Element {
           </p>
         )}
         <UsageMetricCards totals={s.totals} />
-        <UsageChart series={s.series} granularity={s.range.granularity} />
+        <UsageChart series={s.series} granularity={s.range.granularity} windowStart={s.range.from} />
         {s.range.granularity === "hour" && (
           <p data-testid="hourly-note" className="text-xs text-gray-500 dark:text-gray-400">
             Failed sign-ins in the hourly view can be undercounted during a flood of wrong-token requests.
@@ -133,12 +142,17 @@ function ApiUsageBody(): JSX.Element {
             <option value="">All credentials</option>
             {options.map(([id, c]) => <option key={id} value={id}>{c.name}{c.revoked ? " (revoked)" : ""}</option>)}
           </select>
+          {apiKeyId && (
+            <button type="button" onClick={() => setApiKeyId(null)} className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-800">
+              Clear filter
+            </button>
+          )}
         </div>
       </div>
 
       {content}
 
-      {!showEmpty && !(q.error && !s) && s !== undefined && <RecentFailedRequests apiKeyId={apiKeyId} credentialNames={names} />}
+      {s !== undefined && <RecentFailedRequests apiKeyId={apiKeyId} range={range} credentialNames={names} />}
     </div>
   );
 }

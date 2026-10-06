@@ -93,7 +93,6 @@ export function CredentialTable({
                 <tr
                   key={r.apiKeyId}
                   data-testid="credential-usage-row"
-                  aria-selected={selectedId === r.apiKeyId}
                   className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 ${selectedId === r.apiKeyId ? "bg-green-50 dark:bg-green-950" : ""}`}
                   onClick={() => onSelect(r.apiKeyId)}
                 >
@@ -102,6 +101,7 @@ export function CredentialTable({
                       type="button"
                       className="font-medium text-left hover:underline focus:outline-none focus:ring-2 focus:ring-green-500 rounded"
                       aria-label={`Filter by ${r.name}`}
+                      aria-pressed={selectedId === r.apiKeyId}
                       onClick={(e) => { e.stopPropagation(); onSelect(r.apiKeyId); }}
                     >
                       {r.name}

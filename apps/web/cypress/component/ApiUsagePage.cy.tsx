@@ -38,6 +38,15 @@ function stubMe(): void {
   });
 }
 
+function stubCredentials(): void {
+  const cred = (id: string, name: string, revokedAt: string | null) => ({
+    id, name, callbackUrl: null, inboundUrl: null, lastUsedAt: null, revokedAt, createdAt: '2026-01-01T00:00:00.000Z',
+  });
+  cy.intercept('GET', '/api/v1/api-credentials', {
+    body: { data: [cred('k1', 'Production', null), cred('k2', 'Old key', '2026-02-01T00:00:00.000Z'), cred('k3', 'Archived key', '2026-03-01T00:00:00.000Z')] },
+  });
+}
+
 function stubRequests(): void {
   cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/requests' }, { body: { data: [failedRow('r1')], nextCursor: null } }).as('failed');
 }
@@ -52,10 +61,13 @@ function mountPage(): void {
 }
 
 describe('ApiUsagePage', () => {
-  beforeEach(() => stubMe());
+  beforeEach(() => {
+    stubMe();
+    stubCredentials();
+  });
 
   it('renders cards, chart table, tables and the failed request row', () => {
-    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: { data: summary() } }).as('summary');
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: summary() }).as('summary');
     stubRequests();
     mountPage();
     cy.wait('@summary').its('request.query').should('deep.include', { range: '7d' });
@@ -66,7 +78,12 @@ describe('ApiUsagePage', () => {
     cy.get('[data-testid="metric-failed-signins"]').should('contain', '5').and('contain', 'Requests with a wrong token');
     cy.get('[data-testid="metric-messages"]').should('contain', '42');
     cy.get('[data-testid="metric-latency"]').should('contain', '120 ms').and('contain', 'Max 900 ms');
-    cy.contains('billable').should('not.exist');
+    cy.get('body').invoke('text').should((text) => {
+      expect(text.toLowerCase()).not.to.contain('billable');
+      expect(text).not.to.match(/\b95\b/); // the billableRequests value from the fixture
+    });
+    cy.contains('error rate excludes failed sign-ins').should('be.visible');
+    cy.contains('Not counting failed sign-ins').should('be.visible');
     cy.get('[data-testid="usage-chart-table"] tbody tr').should('have.length', 2);
     cy.get('[data-testid="endpoint-table"]').should('contain', 'Send message');
     cy.get('[data-testid="status-chips"]').should('contain', 'Delivered').and('contain', '30');
@@ -78,17 +95,42 @@ describe('ApiUsagePage', () => {
   });
 
   it('shows the empty state with a link to API Credentials when there are no calls', () => {
-    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: { data: summary({ totals: counts, series: [], byEndpoint: [], byCredential: [] }) } });
-    mountPage();
-    cy.get('[data-testid="usage-empty"]').should('contain', 'No API requests');
-    cy.contains('a', 'API Credentials').should('have.attr', 'href', '/settings/vendor-settings');
-    cy.get('[data-testid="metric-requests"]').should('not.exist');
-  });
-
-  it('accepts a bare (un-enveloped) summary body', () => {
-    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: summary() });
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: summary({ totals: counts, series: [], byEndpoint: [], byCredential: [] }) });
     stubRequests();
     mountPage();
+    cy.get('[data-testid="usage-empty"]').should('contain', 'No API requests in the last 7 days');
+    cy.contains('a', 'API Credentials').should('have.attr', 'href', '/settings/vendor-settings');
+    cy.get('[data-testid="metric-requests"]').should('not.exist');
+    // the failed requests panel is NOT hidden by the empty state
+    cy.contains('h2', 'Recent failed requests').should('be.visible');
+    cy.contains('Failed requests in the selected period').should('be.visible');
+    cy.get('[data-testid="failed-request-row"]').should('have.length', 1);
+    cy.get('#usage-range').select('24h');
+    cy.get('[data-testid="usage-empty"]').should('contain', 'No API requests in the last 24 hours');
+    cy.get('#usage-range').select('30d');
+    cy.get('[data-testid="usage-empty"]').should('contain', 'No API requests in the last 30 days');
+  });
+
+  it('still accepts a { data } envelope around the summary', () => {
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: { data: summary() } });
+    stubRequests();
+    mountPage();
+    cy.get('[data-testid="metric-requests"]').should('contain', '100');
+  });
+
+  it('treats a body without totals/range/series as an error (inline alert + Retry), not the empty state', () => {
+    let calls = 0;
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, (req) => {
+      calls += 1;
+      req.reply({ body: calls === 1 ? {} : summary() });
+    });
+    stubRequests();
+    mountPage();
+    cy.get('[role="alert"]').should('contain', 'unexpected format');
+    cy.contains('button', 'Retry').should('be.visible');
+    cy.get('[data-testid="usage-empty"]').should('not.exist');
+    cy.get('[data-testid="metric-requests"]').should('not.exist');
+    cy.contains('button', 'Retry').click();
     cy.get('[data-testid="metric-requests"]').should('contain', '100');
   });
 
@@ -107,7 +149,7 @@ describe('ApiUsagePage', () => {
     cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, (req) => {
       calls += 1;
       if (calls === 1) req.reply({ statusCode: 500, body: { error: { code: 'INTERNAL', message: 'Boom happened' } } });
-      else req.reply({ body: { data: summary() } });
+      else req.reply({ body: summary() });
     });
     stubRequests();
     mountPage();
@@ -117,7 +159,7 @@ describe('ApiUsagePage', () => {
   });
 
   it('refetches with the new range', () => {
-    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: { data: summary() } }).as('summary');
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: summary() }).as('summary');
     stubRequests();
     mountPage();
     cy.wait('@summary');
@@ -131,11 +173,9 @@ describe('ApiUsagePage', () => {
     cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, (req) => {
       const id = req.query['apiKeyId'];
       req.reply({
-        body: {
-          data: id
-            ? summary({ byCredential: [{ apiKeyId: 'k2', name: 'Old key', revoked: true, lastUsedAt: null, ...counts, requests: 10 }] })
-            : summary(),
-        },
+        body: id
+          ? summary({ byCredential: [{ apiKeyId: 'k2', name: 'Old key', revoked: true, lastUsedAt: null, ...counts, requests: 10 }] })
+          : summary(),
       });
     }).as('summary');
     stubRequests();
@@ -145,7 +185,11 @@ describe('ApiUsagePage', () => {
     cy.get('#usage-credential option').eq(1).should('contain', 'Old key (revoked)');
     cy.get('#usage-credential').select('Production');
     cy.wait('@summary').its('request.query.apiKeyId').should('eq', 'k1');
-    cy.wait('@failed');
+    // the first /requests call (unfiltered) already happened; the filtered one must carry the credential AND the range
+    cy.get('@failed.all').should((calls) => {
+      const queries = (calls as unknown as Array<{ request: { query: Record<string, string> } }>).map((c) => c.request.query);
+      expect(queries).to.deep.include({ outcome: 'error', limit: '20', range: '7d', apiKeyId: 'k1' });
+    });
     cy.get('#usage-credential').select('All credentials');
     cy.wait('@summary').its('request.query').should('not.have.property', 'apiKeyId');
     cy.get('[data-testid="credential-usage-row"]').contains('Old key').click();
@@ -153,11 +197,109 @@ describe('ApiUsagePage', () => {
     // the dropdown keeps every credential seen even though the filtered summary lists one
     cy.get('#usage-credential option').should('have.length', 3);
     cy.get('#usage-credential').should('have.value', 'k2');
+    cy.get('[data-testid="credential-usage-row"]').should('have.length', 1);
+    cy.get('[data-testid="credential-usage-row"] button').should('have.attr', 'aria-pressed', 'true');
+    cy.get('[data-testid="credential-usage-row"]').should('not.have.attr', 'aria-selected');
+    cy.contains('button', 'Clear filter').click();
+    cy.get('#usage-credential').should('have.value', '');
+    cy.contains('button', 'Clear filter').should('not.exist');
+  });
+
+  it('sends the selected range to the failed requests list and re-queries when it changes', () => {
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: summary() });
+    stubRequests();
+    mountPage();
+    cy.wait('@failed').its('request.query.range').should('eq', '7d');
+    cy.get('#usage-range').select('24h');
+    cy.wait('@failed').its('request.query.range').should('eq', '24h');
+    cy.get('#usage-range').select('30d');
+    cy.wait('@failed').its('request.query.range').should('eq', '30d');
+  });
+
+  it('names credentials from the credentials query (incl. revoked), else "Other credential", else an em dash', () => {
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: summary() });
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/requests' }, {
+      body: { data: [failedRow('a', 'k3'), failedRow('b', 'zz'), failedRow('c', null)], nextCursor: null },
+    });
+    mountPage();
+    cy.get('[data-testid="failed-request-row"]').should('have.length', 3);
+    cy.get('[data-testid="failed-request-row"]').eq(0).should('contain', 'Archived key');
+    cy.get('[data-testid="failed-request-row"]').eq(1).should('contain', 'Other credential');
+    cy.get('[data-testid="failed-request-row"]').eq(2).should('not.contain', 'Other credential').and('contain', '—');
+  });
+
+  it('starts a NEW query from page 1 (no stale cursor) when the credential changes', () => {
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: summary() });
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/requests' }, (req) => {
+      const filtered = Boolean(req.query['apiKeyId']);
+      if (req.query['cursor'] === 'c1') req.reply({ body: { data: [failedRow('r3')], nextCursor: null } });
+      else req.reply({ body: { data: [failedRow(filtered ? 'only-k1' : 'r1')], nextCursor: filtered ? null : 'c1' } });
+    }).as('failed');
+    mountPage();
+    cy.contains('button', 'Load more').click();
+    cy.get('[data-testid="failed-request-row"]').should('have.length', 2);
+    cy.get('#usage-credential').select('Production');
+    cy.get('@failed.all').should((calls) => {
+      const last = (calls as unknown as Array<{ request: { query: Record<string, string> } }>).at(-1)!.request.query;
+      expect(last['apiKeyId']).to.eq('k1');
+      expect(last).not.to.have.property('cursor');
+    });
+    cy.get('[data-testid="failed-request-row"]').should('have.length', 1);
+    cy.contains('button', 'Load more').should('not.exist');
+  });
+
+  it('keeps the previous rows (dimmed, busy) while a new range loads, with no Loading flash', () => {
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: summary() });
+    let n = 0;
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/requests' }, (req) => {
+      n += 1;
+      req.reply({ delay: n === 1 ? 0 : 1200, body: { data: [failedRow(n === 1 ? 'old-row' : 'new-row')], nextCursor: null } });
+    });
+    mountPage();
+    cy.get('[data-testid="failed-request-row"]').should('have.length', 1);
+    cy.get('#usage-range').select('30d');
+    cy.get('[data-testid="failed-requests-table"]').closest('[aria-busy]').should('have.attr', 'aria-busy', 'true').and('have.class', 'opacity-60');
+    cy.get('[data-testid="failed-request-row"]').should('have.length', 1);
+    cy.get('#usage-recent-failed').parent().should('not.contain', 'Loading…');
+    cy.get('[data-testid="failed-requests-table"]').closest('[aria-busy]').should('have.attr', 'aria-busy', 'false');
+  });
+
+  it('shows an inline error with Retry when the failed requests list fails, then recovers', () => {
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: summary() });
+    let calls = 0;
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/requests' }, (req) => {
+      calls += 1;
+      if (calls === 1) req.reply({ statusCode: 500, body: { error: { code: 'INTERNAL', message: 'List broke' } } });
+      else req.reply({ body: { data: [failedRow('r1')], nextCursor: null } });
+    });
+    mountPage();
+    cy.get('#usage-recent-failed').parent().find('[role="alert"]').should('contain', 'List broke');
+    cy.get('[data-testid="metric-requests"]').should('contain', '100');
+    cy.get('#usage-recent-failed').parent().contains('button', 'Retry').click();
+    cy.get('[data-testid="failed-request-row"]').should('have.length', 1);
+  });
+
+  it('labels hourly buckets with the weekday and mentions the partial first bucket', () => {
+    const a = new Date(2026, 9, 6, 22, 0, 0).toISOString();
+    const b = new Date(2026, 9, 7, 3, 0, 0).toISOString();
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, {
+      body: {
+        ...summary({ series: [
+          { t: a, requests: 3, success: 3, errors: 0, failedSignins: 0 },
+          { t: b, requests: 1, success: 0, errors: 1, failedSignins: 0 },
+        ] }, 'hour'),
+        range: { from: new Date(2026, 9, 6, 21, 42, 0).toISOString(), to: b, granularity: 'hour', approximate: false },
+      },
+    });
+    stubRequests();
+    mountPage();
+    cy.get('[data-testid="usage-chart-table"] tbody th').first().invoke('text').should('match', /Tue/);
+    cy.get('[data-testid="window-start-note"]').should('contain', 'Window starts at').and('contain', 'first bucket is partial');
   });
 
   it('shows the approximate banner and the hourly note for hourly sampled data', () => {
     cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, {
-      body: { data: summary({ series: [{ t: '2026-10-06T10:00:00Z', requests: 3, success: 3, errors: 0, failedSignins: 0 }] }, 'hour', true) },
+      body: summary({ series: [{ t: '2026-10-06T10:00:00Z', requests: 3, success: 3, errors: 0, failedSignins: 0 }] }, 'hour', true),
     });
     stubRequests();
     mountPage();
@@ -167,7 +309,7 @@ describe('ApiUsagePage', () => {
 
   it('shows the chart empty state when every bucket is zero but there are credentials', () => {
     cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, {
-      body: { data: summary({ series: [{ t: '2026-10-06', requests: 0, success: 0, errors: 0, failedSignins: 0 }] }) },
+      body: summary({ series: [{ t: '2026-10-06', requests: 0, success: 0, errors: 0, failedSignins: 0 }] }),
     });
     stubRequests();
     mountPage();
@@ -175,14 +317,14 @@ describe('ApiUsagePage', () => {
   });
 
   it('shows the no-failures message for failure reasons', () => {
-    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: { data: summary({ topFailureReasons: [] }) } });
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: summary({ topFailureReasons: [] }) });
     stubRequests();
     mountPage();
     cy.contains('No failed messages in this period.').should('be.visible');
   });
 
   it('Load more appends the next page and disappears when nextCursor is null', () => {
-    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: { data: summary() } });
+    cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/summary' }, { body: summary() });
     cy.intercept({ method: 'GET', pathname: '/api/v1/api-usage/requests' }, (req) => {
       expect(req.query['outcome']).to.eq('error');
       expect(req.query['limit']).to.eq('20');
@@ -217,6 +359,33 @@ describe('ApiUsageLink (settings index)', () => {
     mountLink();
     cy.wait('@list');
     cy.contains('API Usage').should('not.exist');
+  });
+
+  it('is hidden on FORBIDDEN', () => {
+    cy.intercept('GET', '/api/v1/api-credentials', {
+      statusCode: 403, body: { error: { code: 'FORBIDDEN', message: 'settings_api_key permission required' } },
+    }).as('list');
+    mountLink();
+    cy.wait('@list');
+    cy.contains('API Usage').should('not.exist');
+  });
+
+  it('is hidden (and never probes the API) for a user without the permission', () => {
+    cy.intercept('GET', '/api/v1/users/me', {
+      body: { data: { id: 'u2', fullName: 'B', email: 'b@x.com', role: 'agent', permissions: {} } },
+    });
+    cy.intercept('GET', '/api/v1/api-credentials', { body: { data: [] } }).as('list');
+    mountLink();
+    cy.get('@list.all').should('have.length', 0);
+    cy.contains('API Usage').should('not.exist');
+  });
+
+  it('is hidden while the credentials query is still loading, then appears', () => {
+    cy.intercept('GET', '/api/v1/api-credentials', { delay: 800, body: { data: [] } }).as('list');
+    mountLink();
+    cy.contains('API Usage').should('not.exist');
+    cy.wait('@list');
+    cy.contains('a', 'API Usage').should('be.visible');
   });
 
   it('is shown when the credentials query succeeds', () => {

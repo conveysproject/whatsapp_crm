@@ -137,9 +137,17 @@ export function normalizeCounts(v: unknown): UsageCounts {
   };
 }
 
+/**
+ * Validates the shape of a summary response (the contract) and tolerantly normalises its numbers. A body without a
+ * `totals` object, a `range` object and a `series` array is NOT a summary (e.g. `{}` or an HTML error page): it throws
+ * so the page shows its error state instead of a misleading all-zero dashboard.
+ */
 export function normalizeSummary(raw: unknown): UsageSummary {
-  const o = isObj(raw) ? raw : {};
-  const range = isObj(o["range"]) ? o["range"] : {};
+  if (!isObj(raw) || !isObj(raw["totals"]) || !isObj(raw["range"]) || !Array.isArray(raw["series"])) {
+    throw new ApiUsageError("INVALID_RESPONSE", "The usage data came back in an unexpected format. Please try again.", 200);
+  }
+  const o = raw;
+  const range = raw["range"];
   const status = isObj(o["messagesByStatus"]) ? o["messagesByStatus"] : {};
   const messagesByStatus = Object.fromEntries(MESSAGE_STATUSES.map((s) => [s, num(status[s])])) as Record<MessageStatus, number>;
   return {
@@ -266,29 +274,60 @@ export function statusLabel(s: MessageStatus): string {
 
 export interface ChartBucket {
   t: string;
+  /** Axis label. Hourly buckets spanning two local days include the weekday ("Tue 3 PM"). */
   label: string;
+  /** Unambiguous label for tooltips and the screen-reader table (always has the weekday / date). */
+  fullLabel: string;
   success: number;
   errors: number;
   failedSignins: number;
   total: number;
 }
 
-function hourLabel(iso: string): string {
+function validDate(iso: string): Date | null {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** True when the hourly buckets cover more than one LOCAL calendar day. */
+export function spansLocalDays(series: SeriesPoint[]): boolean {
+  const days = new Set<string>();
+  for (const p of series) {
+    const d = validDate(p.t);
+    if (d) days.add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
+  }
+  return days.size > 1;
+}
+
+/** Local time of the first bucket / window start, e.g. "Tue, 3:42 PM". Empty string for an invalid date. */
+export function formatWindowStart(iso: string): string {
+  const d = validDate(iso);
+  return d ? d.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : "";
 }
 
 /** Day buckets are UTC dates (`2026-10-06` -> "10-06"); hour buckets are shown in the browser's local time. */
 export function chartData(series: SeriesPoint[], granularity: Granularity): ChartBucket[] {
-  return series.map((p) => ({
-    t: p.t,
-    label: granularity === "hour" ? hourLabel(p.t) : p.t.slice(5),
-    success: p.success,
-    errors: p.errors,
-    failedSignins: p.failedSignins,
-    total: p.success + p.errors + p.failedSignins,
-  }));
+  const multiDay = granularity === "hour" && spansLocalDays(series);
+  return series.map((p) => {
+    const d = granularity === "hour" ? validDate(p.t) : null;
+    let label: string;
+    let fullLabel: string;
+    if (granularity === "hour") {
+      if (!d) {
+        label = p.t;
+        fullLabel = p.t;
+      } else {
+        label = multiDay
+          ? d.toLocaleString([], { weekday: "short", hour: "numeric" })
+          : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+        fullLabel = d.toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+      }
+    } else {
+      label = p.t.slice(5);
+      fullLabel = p.t;
+    }
+    return { t: p.t, label, fullLabel, success: p.success, errors: p.errors, failedSignins: p.failedSignins, total: p.success + p.errors + p.failedSignins };
+  });
 }
 
 export function isChartEmpty(buckets: ChartBucket[]): boolean {
@@ -304,13 +343,20 @@ export function summaryQuery(range: UsageRange, apiKeyId?: string | null): strin
 }
 
 export function requestsQuery(
-  opts: { limit?: number; cursor?: string | null; apiKeyId?: string | null; endpoint?: string | null } = {},
+  opts: { limit?: number; cursor?: string | null; apiKeyId?: string | null; endpoint?: string | null; range?: UsageRange | null } = {},
 ): string {
   const p = new URLSearchParams({ outcome: "error", limit: String(opts.limit ?? REQUESTS_PAGE_SIZE) });
+  if (opts.range) p.set("range", opts.range);
   if (opts.cursor) p.set("cursor", opts.cursor);
   if (opts.apiKeyId) p.set("apiKeyId", opts.apiKeyId);
   if (opts.endpoint) p.set("endpoint", opts.endpoint);
   return p.toString();
+}
+
+/** Credential column text: "—" when the request is unattributed, "Other credential" when the id is not in the known names. */
+export function credentialDisplayName(apiKeyId: string | null, names: ReadonlyMap<string, string>): string {
+  if (!apiKeyId) return "—";
+  return names.get(apiKeyId) ?? "Other credential";
 }
 
 /** Appends a new page of rows, skipping ids already present. */
@@ -359,6 +405,6 @@ export async function fetchSummary(range: UsageRange, apiKeyId?: string | null):
   return normalizeSummary(unwrapSummary(body));
 }
 
-export async function fetchFailedRequests(opts: { cursor?: string | null; apiKeyId?: string | null } = {}): Promise<RequestsPage> {
+export async function fetchFailedRequests(opts: { cursor?: string | null; apiKeyId?: string | null; range?: UsageRange | null } = {}): Promise<RequestsPage> {
   return normalizeRequestsPage(await getBody(`/requests?${requestsQuery(opts)}`));
 }

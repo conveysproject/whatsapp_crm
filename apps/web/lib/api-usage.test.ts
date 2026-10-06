@@ -3,6 +3,9 @@ import {
   ApiUsageError,
   appendRows,
   chartData,
+  credentialDisplayName,
+  formatWindowStart,
+  spansLocalDays,
   endpointLabel,
   errorClassLabel,
   errorCount,
@@ -97,6 +100,27 @@ describe("chartData", () => {
     expect(d[0]!.label).toBe(new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
     expect(d[0]!.t).toBe(iso);
   });
+  it("hourly labels include the weekday and tooltips always do when buckets span two local days", () => {
+    const mk = (t: string) => ({ t, requests: 1, success: 1, errors: 0, failedSignins: 0 });
+    const a = new Date(2026, 9, 6, 22, 0, 0).toISOString();
+    const b = new Date(2026, 9, 7, 3, 0, 0).toISOString();
+    const multi = chartData([mk(a), mk(b)], "hour");
+    expect(spansLocalDays([mk(a), mk(b)])).toBe(true);
+    expect(multi[0]!.label).toBe(new Date(a).toLocaleString([], { weekday: "short", hour: "numeric" }));
+    expect(multi[0]!.label).toMatch(/Tue/);
+    expect(multi[0]!.label).not.toBe(multi[1]!.label);
+    expect(multi[0]!.fullLabel).toMatch(/Tue/);
+    const same = chartData([mk(new Date(2026, 9, 6, 10, 0).toISOString())], "hour");
+    expect(spansLocalDays([mk(a)])).toBe(false);
+    expect(same[0]!.label).not.toMatch(/Tue/);
+    expect(same[0]!.fullLabel).toMatch(/Tue/);
+    expect(chartData([mk("2026-10-06")], "day")[0]!.fullLabel).toBe("2026-10-06");
+  });
+  it("formats the window start in local time and tolerates garbage", () => {
+    const iso = new Date(2026, 9, 6, 15, 42).toISOString();
+    expect(formatWindowStart(iso)).toMatch(/Tue/);
+    expect(formatWindowStart("nope")).toBe("");
+  });
   it("detects an all-zero chart", () => {
     expect(isChartEmpty(chartData([series[1]!], "day"))).toBe(true);
     expect(isChartEmpty(chartData(series, "day"))).toBe(false);
@@ -115,6 +139,17 @@ describe("query strings and cursors", () => {
     expect(requestsQuery({ cursor: "abc_-", apiKeyId: "k1" })).toBe("outcome=error&limit=20&cursor=abc_-&apiKeyId=k1");
     expect(requestsQuery({ cursor: "a b&c" })).toBe("outcome=error&limit=20&cursor=a+b%26c");
     expect(requestsQuery({ cursor: null, endpoint: "message.send", limit: 5 })).toBe("outcome=error&limit=5&endpoint=message.send");
+  });
+  it("sends the range preset to the requests endpoint", () => {
+    expect(requestsQuery({ range: "24h" })).toBe("outcome=error&limit=20&range=24h");
+    expect(requestsQuery({ range: "7d", cursor: "c", apiKeyId: "k1" })).toBe("outcome=error&limit=20&range=7d&cursor=c&apiKeyId=k1");
+    expect(requestsQuery({ range: null })).toBe("outcome=error&limit=20");
+  });
+  it("names credentials: em dash when unattributed, 'Other credential' when unknown", () => {
+    const names = new Map([["k1", "Production"]]);
+    expect(credentialDisplayName("k1", names)).toBe("Production");
+    expect(credentialDisplayName("zz", names)).toBe("Other credential");
+    expect(credentialDisplayName(null, names)).toBe("—");
   });
   it("appends pages without duplicating rows", () => {
     expect(appendRows([row("a"), row("b")], [row("b"), row("c")]).map((r) => r.id)).toEqual(["a", "b", "c"]);
@@ -149,7 +184,19 @@ describe("normalisers", () => {
     expect(s.byCredential[0]).toMatchObject({ name: "Prod", revoked: true });
     expect(s.messagesByStatus).toEqual({ queued: 0, sent: 2, delivered: 0, read: 0, failed: 0, undelivered: 0 });
     expect(s.topFailureReasons).toEqual([{ code: "131049", title: null, count: 2 }, { code: null, title: "X", count: 1 }]);
-    expect(normalizeSummary(undefined).range.granularity).toBe("day");
+  });
+  it("tolerates missing OPTIONAL fields (zero-fills numbers/lists) when the three required parts are present", () => {
+    const s = normalizeSummary({ totals: {}, range: {}, series: [] });
+    expect(s.totals.requests).toBe(0);
+    expect(s.range.granularity).toBe("day");
+    expect(s.byCredential).toEqual([]);
+    expect(s.messagesByStatus.sent).toBe(0);
+  });
+  it("throws ApiUsageError when totals/range is not an object or series is not an array", () => {
+    const ok = { totals: {}, range: {}, series: [] };
+    for (const bad of [undefined, null, "x", [], {}, { ...ok, totals: null }, { ...ok, totals: [] }, { ...ok, range: "7d" }, { ...ok, series: {} }, { ...ok, series: undefined }]) {
+      expect(() => normalizeSummary(bad), JSON.stringify(bad)).toThrow(ApiUsageError);
+    }
   });
   it("unwraps either a bare summary or a { data } envelope", () => {
     const bare = { totals: {}, series: [] };
@@ -167,8 +214,18 @@ describe("errors and fetch wrappers", () => {
     expect(messageForUsageError(new ApiUsageError("FORBIDDEN", "x", 403))).toMatch(/permission/);
     expect(messageForUsageError("boom")).toBe("Something went wrong. Please try again.");
   });
+  it("fetchSummary rejects a 200 body that is not a summary ({} / empty envelope)", async () => {
+    for (const body of [{}, { data: {} }, null, { data: [] }]) {
+      mockFetch(200, body);
+      await expect(fetchSummary("7d")).rejects.toBeInstanceOf(ApiUsageError);
+    }
+  });
+  it("fetchSummary accepts the bare object the backend sends", async () => {
+    mockFetch(200, { totals: { requests: 4 }, range: { granularity: "hour" }, series: [] });
+    expect((await fetchSummary("24h")).totals.requests).toBe(4);
+  });
   it("fetchSummary calls the proxy URL and carries the server error code", async () => {
-    const fn = mockFetch(200, { data: { totals: { requests: 3 }, range: { granularity: "day" } } });
+    const fn = mockFetch(200, { data: { totals: { requests: 3 }, range: { granularity: "day" }, series: [] } });
     const s = await fetchSummary("30d", "k1");
     expect(fn).toHaveBeenCalledWith("/api/v1/api-usage/summary?range=30d&apiKeyId=k1");
     expect(s.totals.requests).toBe(3);
@@ -180,6 +237,8 @@ describe("errors and fetch wrappers", () => {
     const fn = mockFetch(200, { data: [row("a")], nextCursor: "n1" });
     const p = await fetchFailedRequests({ cursor: "c0", apiKeyId: "k1" });
     expect(fn).toHaveBeenCalledWith("/api/v1/api-usage/requests?outcome=error&limit=20&cursor=c0&apiKeyId=k1");
+    await fetchFailedRequests({ range: "30d" });
+    expect(fn).toHaveBeenLastCalledWith("/api/v1/api-usage/requests?outcome=error&limit=20&range=30d");
     expect(p.nextCursor).toBe("n1");
     expect(p.data).toHaveLength(1);
 
