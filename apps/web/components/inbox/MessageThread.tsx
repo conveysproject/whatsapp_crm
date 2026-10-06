@@ -276,8 +276,11 @@ export function MessageThread({ conversationId }: Props): JSX.Element {
 
   // Scroll to bottom on initial load (instant) and on new message (smooth)
   useEffect(() => {
-    if (!bottomRef.current) return;
-    bottomRef.current.scrollIntoView({ behavior: isFirstLoad.current ? "auto" : "smooth" });
+    // Scroll only the thread's own container: scrollIntoView also scrolls every scrollable ancestor (the app shell, the page),
+    // which could push the whole inbox up and leave a blank area under it.
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: isFirstLoad.current ? "auto" : "smooth" });
     isFirstLoad.current = false;
   }, [conversationId, lastMessageId]);
 
