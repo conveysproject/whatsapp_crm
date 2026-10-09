@@ -25,8 +25,15 @@ export function redactValue(v: unknown, depth = 0): unknown {
   return v;
 }
 
+/** Removes U+0000 and lone UTF-16 surrogates (Postgres text rejects NUL; lone surrogates break UTF-8 encoding). */
+export function stripUnsafeText(text: string): string {
+  // eslint-disable-next-line no-control-regex -- NUL is exactly what we strip
+  return text.replace(/\u0000/g, "").replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+}
+
+/** Caps, then strips unsafe characters (after the cut, so the cut cannot leave a lone surrogate). */
 export function capText(text: string, max = MAX_BODY_CHARS): { text: string; truncated: boolean } {
-  return text.length > max ? { text: text.slice(0, max), truncated: true } : { text, truncated: false };
+  return text.length > max ? { text: stripUnsafeText(text.slice(0, max)), truncated: true } : { text: stripUnsafeText(text), truncated: false };
 }
 
 export interface PayloadSnapshot {
@@ -63,7 +70,7 @@ export function buildPayloadSnapshot(input: { body: unknown; url: string; respon
   if (input.responseText !== undefined) {
     try {
       const parsed = JSON.parse(input.responseText) as unknown;
-      if (parsed && typeof parsed === "object" && typeof (parsed as { error_code?: unknown }).error_code === "string") errorCode = (parsed as { error_code: string }).error_code;
+      if (parsed && typeof parsed === "object" && typeof (parsed as { error_code?: unknown }).error_code === "string") errorCode = stripUnsafeText((parsed as { error_code: string }).error_code);
       resText = JSON.stringify(redactValue(parsed));
     } catch {
       resText = input.responseText;
@@ -76,7 +83,7 @@ export function buildPayloadSnapshot(input: { body: unknown; url: string; respon
     requestTruncated: req?.truncated ?? false,
     responseTruncated: res?.truncated ?? false,
     queryString: redactQuery(input.url),
-    clientIp: input.clientIp,
+    clientIp: input.clientIp ? stripUnsafeText(input.clientIp) : null,
     userAgent: input.userAgent ? capText(input.userAgent, 200).text : null,
     errorCode,
   };

@@ -74,6 +74,10 @@ const UNATTRIBUTED_KEY = "__unattributed__";
 const MAX_PAYLOAD_BUFFER_BYTES = 20 * 1024 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAYLOAD_CHUNK = 200;
+/**
+ * Counts CHARACTERS (payloadSize uses string length; a JS string can use 2 bytes per char), so real heap use can be
+ * about 2x this budget, and during a flush the batch is still referenced while new events buffer: worst case ~2x again.
+ */
 let payloadBytes = 0;
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,64}$/;
 
@@ -234,7 +238,8 @@ export function recordApiRequest(event: ApiRequestEvent): void {
       return;
     }
     const logId = typeof event.logId === "string" && UUID_RE.test(event.logId) ? event.logId : undefined;
-    let payload = raw && logId && event.organizationId ? event.payload : undefined;
+    // 401 bodies are never stored (credential-guessing noise); their metadata row stays.
+    let payload = raw && logId && event.organizationId && status !== 401 ? event.payload : undefined;
     if (payload) {
       const size = payloadSize(payload);
       if (payloadBytes + size > MAX_PAYLOAD_BUFFER_BYTES) payload = undefined;
@@ -320,6 +325,7 @@ async function flushBatch(prisma: PrismaClient, logger?: UsageLogger): Promise<v
   dropped = 0;
   const unattributedNow = unattributedDropped;
   unattributedDropped = 0;
+  let payloads: Prisma.ApiRequestPayloadCreateManyInput[] = [];
   try {
     const raws = batch.filter((e) => e.raw).map((e) => ({
       id: e.logId ?? randomUUID(),
@@ -335,7 +341,7 @@ async function flushBatch(prisma: PrismaClient, logger?: UsageLogger): Promise<v
       requestId: e.requestId,
       createdAt: e.at,
     }));
-    const payloads = batch.filter((e) => e.raw && e.payload && e.logId && e.organizationId).map((e) => ({
+    payloads = batch.filter((e) => e.raw && e.payload && e.logId && e.organizationId).map((e) => ({
       id: e.logId as string,
       organizationId: e.organizationId as string,
       apiKeyId: e.apiKeyId ?? null,
@@ -358,12 +364,27 @@ async function flushBatch(prisma: PrismaClient, logger?: UsageLogger): Promise<v
     const groups = sortGroups(aggregateEvents(batch));
     await prisma.$transaction(async (tx) => {
       for (let i = 0; i < raws.length; i += RAW_CHUNK) await tx.apiRequestLog.createMany({ data: raws.slice(i, i + RAW_CHUNK) });
-      for (let i = 0; i < payloads.length; i += PAYLOAD_CHUNK) await tx.apiRequestPayload.createMany({ data: payloads.slice(i, i + PAYLOAD_CHUNK), skipDuplicates: true });
       for (let i = 0; i < groups.length; i += UPSERT_CHUNK) await tx.$executeRaw(upsertStatement(groups.slice(i, i + UPSERT_CHUNK)));
     }, TX_OPTIONS);
   } catch (err) {
     warn(logger, { error: safeErr(err), lost: batch.length }, "api usage flush failed");
+    return finishFlush(logger, droppedNow, unattributedNow);
   }
+  // Payloads are written AFTER the metering transaction commits, in their own transaction: a payload failure
+  // (bad text, size, constraint) must never cost raw rows or rollups.
+  if (payloads.length > 0) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        for (let i = 0; i < payloads.length; i += PAYLOAD_CHUNK) await tx.apiRequestPayload.createMany({ data: payloads.slice(i, i + PAYLOAD_CHUNK), skipDuplicates: true });
+      }, TX_OPTIONS);
+    } catch (err) {
+      warn(logger, { error: safeErr(err), lostPayloads: payloads.length }, "api payload flush failed");
+    }
+  }
+  finishFlush(logger, droppedNow, unattributedNow);
+}
+
+function finishFlush(logger: UsageLogger | undefined, droppedNow: number, unattributedNow: number): void {
   if (droppedNow > 0) warn(logger, { dropped: droppedNow }, "api usage buffer overflowed; events dropped");
   if (unattributedNow > 0) warn(logger, { unattributedDropped: unattributedNow }, "unattributed api requests over the per-minute budget; events dropped");
 }

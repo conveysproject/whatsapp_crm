@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { buildPayloadSnapshot, capText, payloadLoggingEnabled, payloadSize, redactValue } from "./payload-capture.js";
+import { buildPayloadSnapshot, capText, payloadLoggingEnabled, payloadSize, redactValue, stripUnsafeText } from "./payload-capture.js";
 
 describe("redactValue", () => {
   it("redacts secret-looking keys at any depth and keeps normal fields", () => {
@@ -95,5 +95,26 @@ describe("privacy extras", () => {
     const s = buildPayloadSnapshot({ body: { n: BigInt(1) }, url: "/x", responseText: undefined, clientIp: null, userAgent: undefined });
     expect(s.requestBody).toBeNull();
     expect(s.requestTruncated).toBe(false);
+  });
+});
+
+describe("stripUnsafeText", () => {
+  it("removes NUL, keeps a valid surrogate pair, removes lone surrogates", () => {
+    expect(stripUnsafeText("a\u0000b")).toBe("ab");
+    expect(stripUnsafeText("x\u{1F600}y")).toBe("x\u{1F600}y");
+    expect(stripUnsafeText("a\uD83Db")).toBe("ab");
+    expect(stripUnsafeText("a\uDE00b")).toBe("ab");
+    expect(stripUnsafeText("\uD83D")).toBe("");
+  });
+  it("capText cannot leave a lone surrogate at the cut", () => {
+    expect(capText("ab\u{1F600}cd", 3)).toEqual({ text: "ab", truncated: true });
+  });
+  it("is applied to every snapshot string (response text, user agent, ip, query, error code)", () => {
+    const snap = buildPayloadSnapshot({ body: undefined, url: "/x?q=a%00b", responseText: "bad\u0000text\uD83D", clientIp: "1.2\u0000.3.4", userAgent: "u\u0000a\uDE00" });
+    expect(snap.responseBody).toBe("badtext");
+    expect(snap.userAgent).toBe("ua");
+    expect(snap.clientIp).toBe("1.2.3.4");
+    const withCode = buildPayloadSnapshot({ body: null, url: "/x", responseText: JSON.stringify({ error_code: "E\u0000X" }), clientIp: null, userAgent: undefined });
+    expect(withCode.errorCode).toBe("EX");
   });
 });
