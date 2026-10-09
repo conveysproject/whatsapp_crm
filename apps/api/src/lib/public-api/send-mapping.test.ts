@@ -211,3 +211,45 @@ describe("renderTemplateForInbox hardening", () => {
     expect(render("A {{1}} B {{2}}", ["x"])).toBe("A x B ");
   });
 });
+
+describe("named template parameters", () => {
+  it("passes parameter_name through to the Meta component", () => {
+    const out = toMetaTemplateComponents(cast([
+      { type: "body", parameters: [{ type: "text", parameter_name: "username", text: "Alex" }, { type: "text", parameter_name: "ra_name", text: "WB-1001" }] },
+    ]), null);
+    expect(out).toEqual([{ type: "body", parameters: [
+      { type: "text", text: "Alex", parameter_name: "username" },
+      { type: "text", text: "WB-1001", parameter_name: "ra_name" },
+    ] }]);
+  });
+
+  it("leaves positional parameters without a parameter_name key", () => {
+    const out = toMetaTemplateComponents(cast([{ type: "body", parameters: [{ type: "text", text: "Ann" }] }]), null);
+    expect(out[0]!.parameters![0]).toEqual({ type: "text", text: "Ann" });
+  });
+
+  it.each([
+    ["parameter_name not a string", [{ type: "body", parameters: [{ type: "text", text: "a", parameter_name: 5 }] }]],
+    ["parameter_name with spaces", [{ type: "body", parameters: [{ type: "text", text: "a", parameter_name: "user name" }] }]],
+    ["parameter_name too long", [{ type: "body", parameters: [{ type: "text", text: "a", parameter_name: "a".repeat(65) }] }]],
+    ["empty text value", [{ type: "body", parameters: [{ type: "text", text: "" }] }]],
+    ["whitespace-only text value", [{ type: "body", parameters: [{ type: "text", text: "   " }] }]],
+    ["two body components", [{ type: "body", parameters: [] }, { type: "body", parameters: [] }]],
+    ["two header components", [{ type: "header", parameters: [] }, { type: "header", parameters: [] }]],
+  ])("rejects %s", (_n, comps) => { expect(mapT(comps)).toThrow(SendValidationError); });
+
+  it("allows several button components", () => {
+    expect(mapT([
+      { type: "button", sub_type: "url", index: 0, parameters: [{ type: "text", text: "a" }] },
+      { type: "button", sub_type: "url", index: 1, parameters: [{ type: "text", text: "b" }] },
+    ])).not.toThrow();
+  });
+
+  it("renderTemplateForInbox fills named placeholders by parameter_name, in any order", () => {
+    const stored = [{ type: "BODY", text: "Hi {{username}}, approved by {{ra_name}}" }];
+    const json = renderTemplateForInbox("t", stored, cast([
+      { type: "body", parameters: [{ type: "text", parameter_name: "ra_name", text: "WB-1001" }, { type: "text", parameter_name: "username", text: "Alex" }] },
+    ]));
+    expect(JSON.parse(json).body).toBe("Hi Alex, approved by WB-1001");
+  });
+});

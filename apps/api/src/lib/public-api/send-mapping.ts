@@ -10,7 +10,7 @@ export interface PlivoTemplateComponent {
   type: string;
   sub_type?: string;
   index?: string | number;
-  parameters?: Array<{ type: string; text?: string; media?: string; payload?: string }>;
+  parameters?: Array<{ type: string; text?: string; media?: string; payload?: string; parameter_name?: string }>;
 }
 
 export interface PlivoInteractive {
@@ -119,7 +119,7 @@ const bad = (msg: string): never => { throw new SendValidationError(msg); };
 function validateComponents(raw: unknown): PlivoTemplateComponent[] {
   if (raw === undefined) return [];
   if (!Array.isArray(raw)) return bad("template.components must be an array");
-  return raw.map((c: unknown, ci): PlivoTemplateComponent => {
+  const out = raw.map((c: unknown, ci): PlivoTemplateComponent => {
     if (!isObj(c) || typeof c["type"] !== "string") return bad(`template.components[${ci}] must be an object with a string type`);
     const rawParams = c["parameters"];
     if (rawParams !== undefined && !Array.isArray(rawParams)) return bad(`template.components[${ci}].parameters must be an array`);
@@ -128,6 +128,12 @@ function validateComponents(raw: unknown): PlivoTemplateComponent[] {
       if (!isObj(p) || typeof p["type"] !== "string") return bad(`${at} must be an object with a string type`);
       if (p["type"] === "text") {
         if (typeof p["text"] !== "string") return bad(`${at}.text must be a string`);
+        if (p["text"].trim() === "") return bad(`${at}.text must not be empty`);
+        const pn = p["parameter_name"];
+        if (pn !== undefined) {
+          if (typeof pn !== "string" || !/^[A-Za-z0-9_]{1,64}$/.test(pn)) return bad(`${at}.parameter_name must be 1-64 letters, digits or underscores`);
+          return { type: "text", text: p["text"], parameter_name: pn };
+        }
         return { type: "text", text: p["text"] };
       }
       if (p["type"] === "payload") {
@@ -155,6 +161,10 @@ function validateComponents(raw: unknown): PlivoTemplateComponent[] {
     }
     return out;
   });
+  for (const t of ["header", "body"]) {
+    if (out.filter((c) => c.type.toLowerCase() === t).length > 1) return bad(`template.components has more than one ${t} component`);
+  }
+  return out;
 }
 
 export function toMetaTemplateComponents(components: PlivoTemplateComponent[], headerFormat: string | null): WaTemplateComponent[] {
@@ -170,7 +180,7 @@ export function toMetaTemplateComponents(components: PlivoTemplateComponent[], h
         return { type: kind, [kind]: { link: p.media as string } } as MetaParam;
       }
       if (p.type === "payload") return { type: "payload", payload: p.payload as string };
-      return { type: "text", text: p.text as string };
+      return { type: "text", text: p.text as string, ...(p.parameter_name ? { parameter_name: p.parameter_name } : {}) };
     });
     return {
       type,
@@ -262,7 +272,10 @@ export function renderTemplateForInbox(name: string, stored: unknown[], componen
   const find = (t: string) => comps.find((c) => c.type?.toUpperCase() === t);
   let body = find("BODY")?.text ?? "";
   const bodyParams = components.find((c) => c.type?.toLowerCase() === "body")?.parameters ?? [];
-  body = body.replace(/\{\{(\d+)\}\}/g, (_m, n: string) => bodyParams[Number(n) - 1]?.text ?? "");
+  body = body.replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (_m, key: string) => {
+    if (/^\d+$/.test(key)) return bodyParams[Number(key) - 1]?.text ?? "";
+    return bodyParams.find((p) => p.parameter_name === key)?.text ?? "";
+  });
   const header = find("HEADER");
   return JSON.stringify({
     templateName: name,

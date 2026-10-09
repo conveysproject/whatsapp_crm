@@ -118,6 +118,7 @@ export interface WaTemplateComponent {
     type: "text" | "image" | "video" | "document" | "payload";
     text?: string;
     payload?: string;
+    parameter_name?: string;
     image?: { link: string };
     video?: { link: string };
     document?: { link: string };
