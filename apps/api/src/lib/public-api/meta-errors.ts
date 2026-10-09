@@ -2,7 +2,7 @@
 // (https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes). Plivo codes come from Plivo's error-code page.
 const META_TO_PLIVO: Record<number, string> = {
   133010: "310", // phone number not registered
-  131031: "360", // business account locked / disabled
+  131031: "360", // business account restricted / failed verification
   131051: "330", // unsupported message type
   132001: "340", // template does not exist
   132015: "340", // template paused
@@ -35,7 +35,7 @@ const MESSAGES: Record<string, string> = {
   "340": "The template does not exist in this language, is not approved, or has been paused or disabled. Check its status in WBMSG.",
   "350": "The template parameters do not match the template (count, format or length). Send values for every parameter in the format the template defines.",
   "360": "The WhatsApp Business account is restricted or failed verification. Contact support.",
-  "370": "WhatsApp is limiting sending right now (throughput, messages to the same recipient, or a quality restriction). Slow down and retry later.",
+  "370": "WhatsApp is limiting sending from this number right now (too many messages too fast, too many to one recipient, or a spam/quality restriction). Retry later; if it persists, check your number's quality in WBMSG or contact support.",
   "380": "The customer has not replied in the last 24 hours, so only an approved template message can be sent.",
   "131047": "The customer has not replied in the last 24 hours, so only an approved template message can be sent.",
   "131049": "WhatsApp did not deliver this marketing message to this recipient to keep engagement healthy. Wait at least 24 hours before trying again.",

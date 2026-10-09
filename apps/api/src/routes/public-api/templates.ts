@@ -12,6 +12,7 @@ import { PUBLIC_EDITABLE_STATUSES } from "../../lib/template-status.js";
 
 const PUBLIC = { config: { public: true } } as const;
 const both = (p: string) => [p, p.replace(/\/$/, "")];
+const TEMPLATE_URL_HINT = "Check the waba_id and template_id in the URL.";
 // Identical for an unknown template and for a waba/template that belongs to another organization.
 
 type Components = Parameters<typeof submitTemplateToMeta>[0]["components"];
@@ -32,7 +33,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
       select: { whatsappBusinessAccountId: true, wabaAccessToken: true },
     });
     if (!org?.whatsappBusinessAccountId || org.whatsappBusinessAccountId !== wabaId) {
-      apiError(reply, 404, "TEMPLATE_NOT_FOUND");
+      apiError(reply, 404, "TEMPLATE_NOT_FOUND", { hint: TEMPLATE_URL_HINT });
       return null;
     }
     return {
@@ -156,7 +157,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
       const ctx = await resolveOrg(request, reply, request.params.wabaId);
       if (!ctx) return reply;
       const row = await fastify.prisma.template.findFirst({ where: { organizationId: ctx.organizationId, metaTemplateId: request.params.templateId } });
-      if (!row) return apiError(reply, 404, "TEMPLATE_NOT_FOUND");
+      if (!row) return apiError(reply, 404, "TEMPLATE_NOT_FOUND", { hint: TEMPLATE_URL_HINT });
       return reply.send(toRetrieveResponse(row as unknown as TemplateRow, request.apiId));
     });
   }
@@ -170,7 +171,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
       if (!ctx) return reply;
       const { organizationId } = ctx;
       const row = await fastify.prisma.template.findFirst({ where: { organizationId, metaTemplateId: request.params.templateId } });
-      if (!row?.metaTemplateId) return apiError(reply, 404, "TEMPLATE_NOT_FOUND");
+      if (!row?.metaTemplateId) return apiError(reply, 404, "TEMPLATE_NOT_FOUND", { hint: TEMPLATE_URL_HINT });
       if (!PUBLIC_EDITABLE_STATUSES.has(row.status)) return apiError(reply, 400, "VALIDATION_FAILED", { message: "Only approved, rejected or paused templates can be edited", hint: "Wait until the template has been reviewed, then edit it again." });
       if (parsed.name !== row.name || parsed.language !== row.language || parsed.category !== row.category) {
         return apiError(reply, 400, "VALIDATION_FAILED", { message: "name, language and category cannot be changed", hint: "Send the same name, language and category as the existing template; create a new template to change them." });
@@ -200,7 +201,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
       if (!ctx) return reply;
       const { organizationId } = ctx;
       const row = await fastify.prisma.template.findFirst({ where: { organizationId, metaTemplateId: request.params.templateId } });
-      if (!row?.metaTemplateId) return apiError(reply, 404, "TEMPLATE_NOT_FOUND");
+      if (!row?.metaTemplateId) return apiError(reply, 404, "TEMPLATE_NOT_FOUND", { hint: TEMPLATE_URL_HINT });
       const nameParam = request.query["name"];
       const name = typeof nameParam === "string" ? nameParam : Array.isArray(nameParam) && typeof nameParam[0] === "string" ? nameParam[0] : undefined;
       if (name !== row.name) return apiError(reply, 400, "VALIDATION_FAILED", { message: "name query parameter must match the template name", hint: "Add ?name=<template name> to confirm which template to delete." });

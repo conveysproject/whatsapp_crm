@@ -428,7 +428,7 @@ describe("GET /Message/:uuid/", () => {
   it("returns a readable error_message next to error_code for a failed message, null otherwise", async () => {
     mockPrisma.apiMessageMeta.findFirst.mockResolvedValue({ messageId: "m1", dst: "14155552672", lastStatus: "failed", errorCode: "380", queuedAt: new Date("2026-10-05T10:00:00Z"), message: { id: "m1", status: "failed" } });
     const res = await app.inject({ method: "GET", url: "/v1/Account/k1/Message/m1/" });
-    expect(res.json()).toMatchObject({ error_code: 380, error_message: expect.stringMatching(/24 hours/) });
+    expect(res.json()).toMatchObject({ error_code: 380, error_message: "The customer has not replied in the last 24 hours, so only an approved template message can be sent." });
     mockPrisma.apiMessageMeta.findFirst.mockResolvedValue({ messageId: "m1", dst: "14155552672", lastStatus: "sent", errorCode: null, queuedAt: new Date("2026-10-05T10:00:00Z"), message: { id: "m1", status: "sent" } });
     const ok = await app.inject({ method: "GET", url: "/v1/Account/k1/Message/m1/" });
     expect(ok.json()).toMatchObject({ error_code: null, error_message: null });

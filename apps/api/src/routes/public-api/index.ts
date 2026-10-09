@@ -4,6 +4,7 @@ import rateLimit from "@fastify/rate-limit";
 import { redisConnection } from "../../lib/queue.js";
 import { clientIp } from "../../lib/public-api/client-ip.js";
 import { apiErrorBody } from "../../lib/public-api/error-catalog.js";
+import { apiError } from "../../lib/public-api/responses.js";
 import { safeErr } from "../../lib/public-api/safe-err.js";
 import { recordApiRequest } from "../../lib/public-api/usage.js";
 import { publicApiAuth } from "./auth.js";
@@ -75,9 +76,11 @@ const throttled = (req: unknown, context: { ttl?: number }) => {
  */
 export const publicApiRouter: FastifyPluginAsync = async (fastify) => {
   fastify.setErrorHandler(publicApiErrorHandler);
+  // Unknown paths under this prefix get the same JSON body as every other error (same for unauthenticated callers: no existence info).
+  fastify.setNotFoundHandler({ config: { public: true } } as never, (_req, reply) => apiError(reply, 404, "NOT_FOUND"));
 
   // One id per request: used in every response body and (logging plan) as the request-log row id.
-  fastify.addHook("onRequest", (req, _reply, done) => { req.apiId = randomUUID(); done(); });
+  fastify.addHook("onRequest", (req, _reply, done) => { req.apiId = randomUUID(); req.log = req.log.child({ apiId: req.apiId }); done(); });
 
   // Usage metering: exactly one event per response of this plugin (incl. 4xx/5xx/429). Synchronous, in-memory, never throws.
   // The route PATTERN is recorded (never the URL, which carries the auth id and message ids).

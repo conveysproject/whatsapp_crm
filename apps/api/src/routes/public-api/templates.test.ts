@@ -134,7 +134,7 @@ describe("public API templates", () => {
     it("404 (same body as an unknown template) for a foreign waba_id; nothing written or sent", async () => {
       const res = await post(`${base}/waba-OTHER/`, goodBody());
       expect(res.statusCode).toBe(404);
-      expect(res.json()).toMatchObject({ api_id: expect.any(String), error: notFoundError, error_code: "TEMPLATE_NOT_FOUND" });
+      expect(res.json()).toMatchObject({ api_id: expect.any(String), error: notFoundError, error_code: "TEMPLATE_NOT_FOUND", hint: "Check the waba_id and template_id in the URL." });
       expect(rows).toHaveLength(0);
       expect(submit).not.toHaveBeenCalled();
     });
@@ -294,7 +294,7 @@ describe("public API templates", () => {
       const foreignWaba = await app.inject({ method: "GET", url: `${base}/waba-OTHER/7777/` });
       for (const r of [foreign, unknown, foreignWaba]) {
         expect(r.statusCode).toBe(404);
-        expect(r.json()).toMatchObject({ api_id: expect.any(String), error: notFoundError, error_code: "TEMPLATE_NOT_FOUND" });
+        expect(r.json()).toMatchObject({ api_id: expect.any(String), error: notFoundError, error_code: "TEMPLATE_NOT_FOUND", hint: "Check the waba_id and template_id in the URL." });
       }
     });
   });

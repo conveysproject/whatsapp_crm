@@ -62,13 +62,12 @@ describe("publicApiRouter", () => {
     mockPrisma.organization.findUnique.mockResolvedValue({ status: "active", whatsappBusinessAccountId: "waba-1", wabaAccessToken: "t" });
     const res = await app.inject({ method: "GET", url, headers: { authorization: auth } });
     expect(res.statusCode).toBe(404);
-    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "Template not found.", error_code: "TEMPLATE_NOT_FOUND" });
+    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "Template not found.", error_code: "TEMPLATE_NOT_FOUND", hint: "Check the waba_id and template_id in the URL." });
   });
 
   it("rate limits per client+credential with HTTP 429 and a Plivo-style body", async () => {
     for (let i = 0; i < 3; i++) expect((await list()).statusCode).toBe(200);
     const res = await list();
-    expect(res.statusCode).toBe(429);
     expect(res.statusCode).toBe(429);
     expect(res.headers["retry-after"]).toMatch(/^\d+$/);
     expect(Number(res.headers["retry-after"])).toBeGreaterThanOrEqual(1);
@@ -227,6 +226,41 @@ describe("publicApiRouter", () => {
     expect(res.statusCode).toBe(429);
     expect(res.headers["retry-after"]).toMatch(/^\d+$/);
     expect(res.json()).toMatchObject({ error_code: "RATE_LIMITED", api_id: expect.stringMatching(UUID), hint: expect.stringMatching(/\d+ second/) });
+  });
+
+  it("429 hint seconds equal the Retry-After header", async () => {
+    for (let i = 0; i < 3; i++) await list();
+    const res = await list();
+    expect(res.statusCode).toBe(429);
+    expect(res.json().hint).toBe(`Wait ${res.headers["retry-after"]} second(s) and retry.`);
+  });
+
+  it("log lines of a request (including the error handler's) carry apiId equal to the response api_id", async () => {
+    const { Writable } = await import("node:stream");
+    const lines: string[] = [];
+    const stream = new Writable({ write(chunk, _e, cb) { lines.push(String(chunk)); cb(); } });
+    await app.close();
+    app = Fastify({ logger: { level: "info", stream } });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    const { publicApiRouter } = await import("./index.js");
+    await app.register(publicApiRouter, { prefix: "/v1/Account/:authId" });
+    mockPrisma.apiKey.findUnique.mockRejectedValue(new Error("boom"));
+    const res = await list();
+    expect(res.statusCode).toBe(500);
+    const errLine = lines.map((l) => JSON.parse(l) as Record<string, unknown>).find((o) => o["level"] === 50);
+    expect(errLine).toBeDefined();
+    expect(errLine!["apiId"]).toBe(res.json().api_id);
+  });
+
+  it("unknown paths under the prefix get a 404 NOT_FOUND body with api_id when authenticated, and the same 401 as a real path when not (no existence info)", async () => {
+    const authed = await app.inject({ method: "GET", url: `/v1/Account/${ID}/Foo/`, headers: { authorization: auth } });
+    expect(authed.statusCode).toBe(404);
+    expect(authed.json()).toMatchObject({ api_id: expect.stringMatching(UUID), error_code: "NOT_FOUND", hint: "Check the URL path and the id in it." });
+    const bogus = await app.inject({ method: "GET", url: `/v1/Account/${ID}/Foo/` });
+    const real = await app.inject({ method: "GET", url: `/v1/Account/${ID}/Message/` });
+    expect(bogus.statusCode).toBe(401);
+    const strip = (r: typeof bogus) => { const b = r.json(); delete b.api_id; return b; };
+    expect(strip(bogus)).toEqual(strip(real));
   });
 
   it("429 api_id equals the request's id", async () => {

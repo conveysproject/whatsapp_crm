@@ -26,6 +26,9 @@ describe("errorMessageForCode", () => {
     expect(errorMessageForCode("380")).toMatch(/24 hours/);
     expect(errorMessageForCode("131047")).toMatch(/24 hours/);
   });
+  it("uses the exact reworded 370 sentence", () => {
+    expect(errorMessageForCode("370")).toBe("WhatsApp is limiting sending from this number right now (too many messages too fast, too many to one recipient, or a spam/quality restriction). Retry later; if it persists, check your number's quality in WBMSG or contact support.");
+  });
   it("gives a generic sentence that still contains an unknown Meta code", () => {
     expect(errorMessageForCode("139999")).toBe("WhatsApp could not deliver the message (code 139999).");
   });

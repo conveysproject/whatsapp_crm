@@ -17,7 +17,7 @@ An organization can hold up to 10 active credentials.
 - Authentication: HTTP Basic, user = Auth ID, password = Auth Token. The `{auth_id}` in the path must be the same credential.
 - Bodies are JSON (`Content-Type: application/json`).
 - Rate limit: 300 requests per minute per credential by default. Over the limit returns HTTP `429` with a `Retry-After` header (see section 7).
-- Error bodies: `{"api_id", "error", "error_code", "hint"}` (see section 7). Typical statuses: `400` validation, `401` bad credentials, `403` account not active or API not available, `404` unknown resource (also used for another account's resources), `429` throttled, `502` Meta unavailable.
+- Error bodies: `{"api_id", "error", "error_code", "hint"}` (see section 7). Typical statuses: `400` validation, `401` bad credentials, `403` account not active or API not available, `404` unknown resource (also used for another account's resources), `413` body too large, `415` unsupported Content-Type, `429` throttled, `500` error on our side (retry), `502` Meta unavailable.
 - Usage: Settings > API Usage shows your request counts, success and error rates, per credential and per endpoint.
 
 ## 3. Send a message
@@ -25,7 +25,7 @@ An organization can hold up to 10 active credentials.
 
 | Field | Notes |
 |---|---|
-| `src` | Your connected WhatsApp Business number, digits only (for example `918269150291`) |
+| `src` | Your connected WhatsApp Business number, digits only (for example `14155552671`) |
 | `dst` | One or more recipients in international format, separated by `<`. At most 20 per request; duplicates are removed. Phone numbers may contain digits, an optional leading `+`, spaces, dashes and parentheses only |
 | `type` | `whatsapp` |
 | exactly one of `text`, `media_urls`, `template`, `interactive`, `location` | see below |
@@ -43,7 +43,7 @@ Example:
 ```
 curl -u AUTH_ID:AUTH_TOKEN -H "Content-Type: application/json" \
   -X POST https://HOST/v1/Account/AUTH_ID/Message/ \
-  -d '{"src":"918269150291","dst":"919876543210","type":"whatsapp",
+  -d '{"src":"14155552671","dst":"919876543210","type":"whatsapp",
        "template":{"name":"welcome_new_customer_test","language":"en",
        "components":[{"type":"body","parameters":[{"type":"text","text":"Alex"},{"type":"text","text":"WB-1001"}]}]}}'
 ```
@@ -131,24 +131,25 @@ On HTTP `429` the response also carries a `Retry-After` header with the number o
 |---|---|---|---|
 | `INVALID_JSON` | 400 | The request body is not valid JSON. | Send a JSON object with `Content-Type: application/json`. |
 | `EMPTY_BODY` | 400 | The request body is empty. | Send a JSON object with `Content-Type: application/json`. |
-| `UNSUPPORTED_CONTENT_TYPE` | 415 | `Content-Type` is not `application/json`. | Add the header `Content-Type: application/json`. |
+| `UNSUPPORTED_CONTENT_TYPE` | 415 | Content-Type must be application/json. | Add the header `Content-Type: application/json`. A `text/plain` body is not rejected with 415: it is read as text and returns 400 `VALIDATION_FAILED` "Request body must be a JSON object" with a Content-Type hint. |
 | `BODY_TOO_LARGE` | 413 | The request body is too large. | Reduce the size of the request. |
-| `VALIDATION_FAILED` | 400 | A field is missing or invalid. The `error` text names it. Also used when WhatsApp rejects a template you create or edit. | Fix the field named in the message and send again. |
+| `VALIDATION_FAILED` | 400 | The request is invalid. | The `error` text names the missing or invalid field. Fix it and send again. Also used when WhatsApp rejects a template you create or edit. |
 | `TEMPLATE_PARAMS_MISMATCH` | 400 | The template parameters do not match the template. | Send one parameter for every variable in the template body and header, using the same names (or numbers) as the template. |
-| `TEMPLATE_NOT_FOUND` | 400 when sending, 404 on the template endpoints | No template with that name and language. | Check the template name and language in your WBMSG account. |
+| `TEMPLATE_NOT_FOUND` | 400 when sending, 404 on the template endpoints | Template not found. | When sending (400): check the template name and language in your WBMSG account. On the template endpoints (404): check the waba_id and template_id in the URL. |
 | `TEMPLATE_NOT_APPROVED` | 400 | The template is not approved. | Only approved templates can be sent. Check its status in your WBMSG account. |
 | `WHATSAPP_NOT_CONNECTED` | 400 | No WhatsApp number is connected to this account. | Connect a WhatsApp Business number in WBMSG first. |
 | `SRC_MISMATCH` | 400 | `src` is not the WhatsApp Business number connected to this account. | Set `src` to the connected number. |
 | `CALLBACK_URL_INVALID` | 400 | The callback `url` is not allowed. | Use a public `https` URL. |
-| `AUTH_MISSING` | 401 | The `Authorization` header is missing. | Use HTTP Basic auth: Auth ID as the username and the Auth Token as the password. |
-| `AUTH_MALFORMED` | 401 | The `Authorization` header is not valid Basic auth. | Use HTTP Basic auth: `base64(auth_id:auth_token)`. |
-| `AUTH_ID_MISMATCH` | 401 | The `auth_id` in the URL does not match the username in the `Authorization` header. | Use the same Auth ID in `/v1/Account/{auth_id}/` and as the Basic-auth username. |
-| `AUTH_INVALID` | 401 | The Auth ID or Auth Token is invalid, or the credential was revoked. | Check both values, or create a new credential in WBMSG under Settings > API. |
+| `AUTH_MISSING` | 401 | The Authorization header is missing. | Use HTTP Basic auth: auth_id as the username and the auth token as the password. |
+| `AUTH_MALFORMED` | 401 | The Authorization header is not valid Basic auth. | Use HTTP Basic auth: `base64(auth_id:auth_token)`. |
+| `AUTH_ID_MISMATCH` | 401 | The auth_id in the URL does not match the username in the Authorization header. | Use the same auth_id in `/v1/Account/{auth_id}/` and as the Basic-auth username. |
+| `AUTH_INVALID` | 401 | The auth_id or auth token is invalid, or the credential was revoked. | Check both values, or create a new credential in WBMSG under Settings > API Credentials. |
 | `ACCOUNT_INACTIVE` | 403 | This account is not active. | Contact WBMSG support. |
 | `API_NOT_AVAILABLE` | 403 | API access is not available for this account. | Contact WBMSG support to enable it. |
-| `MESSAGE_NOT_FOUND` | 404 | No message with that `message_uuid` on this account. | Check the `message_uuid`; it must belong to this account. |
+| `MESSAGE_NOT_FOUND` | 404 | Message not found. | Check the `message_uuid`; it must belong to this account. |
+| `NOT_FOUND` | 404 | The requested resource was not found. | Check the URL path and the id in it. Unknown paths under `/v1/Account/{auth_id}/` return this error. |
 | `RATE_LIMITED` | 429 | Too many requests. | Wait for the number of seconds in the `Retry-After` header, then retry. |
-| `QUEUE_FAILED` | 500 | We could not queue your message. Nothing was sent. | Retry in a few seconds. If it keeps failing, contact support and quote the `api_id`. |
+| `QUEUE_FAILED` | 500 | We could not queue your message. | Nothing was sent. Retry in a few seconds. If it keeps failing, contact support and quote the `api_id`. |
 | `INTERNAL_ERROR` | 500 | Something went wrong on our side. Your request was not processed. | Retry in a few seconds. If it keeps failing, contact support and quote the `api_id`. |
 | `META_UNAVAILABLE` | 502 | WhatsApp (Meta) did not accept the request right now. | Retry later. If it keeps failing, contact support and quote the `api_id`. |
 
@@ -167,12 +168,11 @@ A `202` means the message was queued, not delivered. If it later fails, the outc
 | 340 | The template does not exist in this language, is not approved, or has been paused or disabled. Check its status in WBMSG. |
 | 350 | The template parameters do not match the template (count, format or length). Send values for every parameter in the format the template defines. |
 | 360 | The WhatsApp Business account is restricted or failed verification. Contact support. |
-| 370 | WhatsApp is limiting sending right now (throughput, messages to the same recipient, or a quality restriction). Slow down and retry later. |
+| 370 | WhatsApp is limiting sending from this number right now (too many messages too fast, too many to one recipient, or a spam/quality restriction). Retry later; if it persists, check your number's quality in WBMSG or contact support. |
 | 380 | The customer has not replied in the last 24 hours, so only an approved template message can be sent. |
-| 131047 | The customer has not replied in the last 24 hours, so only an approved template message can be sent. |
 | 131049 | WhatsApp did not deliver this marketing message to this recipient to keep engagement healthy. Wait at least 24 hours before trying again. |
 | 131026 | WhatsApp could not deliver the message. The recipient may not be a WhatsApp user, may not have accepted WhatsApp's terms, or may be on an outdated WhatsApp version. |
-| any other 6-digit number | WhatsApp's own error code, passed through unchanged. `ErrorMessage` is "WhatsApp could not deliver the message (code N)." with the code in place of N. |
+| any other number | WhatsApp's own error code, passed through unchanged. `ErrorMessage` is "WhatsApp could not deliver the message (code N)." with the code in place of N. |
 
 `131049` means Meta chose not to deliver a marketing template to that person to protect user experience. Do not retry immediately; wait at least 24 hours, or use a utility template or an open 24-hour window. Details for any failure are visible in the WBMSG Message Log.
 

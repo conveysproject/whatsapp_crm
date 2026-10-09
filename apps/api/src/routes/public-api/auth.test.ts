@@ -90,6 +90,14 @@ describe("publicApiAuth", () => {
     expect(results[0]!.json().hint).toBeTruthy();
   });
 
+  it("an empty token with a matching id is AUTH_INVALID, identical to a wrong token", async () => {
+    const wrong = await get(basic(ID, "bad-token"));
+    const empty = await get(basic(ID, ""));
+    expect(empty.statusCode).toBe(401);
+    expect(empty.json()).toMatchObject({ error_code: "AUTH_INVALID" });
+    for (const f of ["error", "error_code", "hint"] as const) expect(empty.json()[f]).toBe(wrong.json()[f]);
+  });
+
   it("403 when the org is not active", async () => {
     mockPrisma.organization.findUnique.mockResolvedValueOnce({ status: "banned" });
     const res = await get(basic(ID, "good-token"));

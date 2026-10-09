@@ -60,8 +60,7 @@ describe("parseSendBody", () => {
 });
 
 describe("inferMediaKind", () => {
-  it.each([["https://x/a.JPG", "image"], ["https://x/a.mp4?s=1", "video"], ["https://x/a.pdf", "document"], ["https://x/a.mp3", "audio"], ["https://x/a", "image"]])
-    ("%s -> %s", (u, k) => { expect(inferMediaKind(u)).toBe(k); });
+  it.each([["https://x/a.JPG", "image"], ["https://x/a.mp4?s=1", "video"], ["https://x/a.pdf", "document"], ["https://x/a.mp3", "audio"], ["https://x/a", "image"]])("%s -> %s", (u, k) => { expect(inferMediaKind(u)).toBe(k); });
 });
 
 describe("toMetaTemplateComponents", () => {

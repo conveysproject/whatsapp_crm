@@ -25,6 +25,18 @@ function setMeta(m: ReturnType<typeof meta> | null, readBack?: number) {
     args.select?.sequence ? { sequence: readBack ?? (m ? (m.sequence as number) + 1 : 1) } : m);
 }
 
+const SENTENCE_380 = "The customer has not replied in the last 24 hours, so only an approved template message can be sent.";
+
+describe("callback ErrorMessage vs GET error_message", () => {
+  it("uses the same sentence the GET endpoints expose for the same code", async () => {
+    const { errorMessageForCode } = await import("./meta-errors.js");
+    const base = { messageId: "m1", from: "1", to: "2", sequence: 2, queuedAt: new Date(), sentAt: null, deliveryReportAt: null };
+    for (const code of ["310", "370", "380", "131047", "139999"]) {
+      expect(buildStatusFields({ ...base, status: "failed", errorCode: code })["ErrorMessage"]).toBe(errorMessageForCode(code));
+    }
+  });
+});
+
 describe("enqueueStatusCallback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -50,7 +62,7 @@ describe("enqueueStatusCallback", () => {
     const base = { messageId: "m1", from: "1", to: "2", sequence: 2, queuedAt: new Date(), sentAt: null, deliveryReportAt: null };
     const failed = buildStatusFields({ ...base, status: "failed", errorCode: "380" });
     expect(failed["ErrorCode"]).toBe("380");
-    expect(failed["ErrorMessage"]).toMatch(/24 hours/);
+    expect(failed["ErrorMessage"]).toBe(SENTENCE_380);
     expect(buildStatusFields({ ...base, status: "undelivered", errorCode: "139999" })["ErrorMessage"]).toContain("139999");
     expect("ErrorMessage" in buildStatusFields({ ...base, status: "delivered", errorCode: "380" })).toBe(false);
     expect("ErrorMessage" in buildStatusFields({ ...base, status: "failed", errorCode: null })).toBe(false);

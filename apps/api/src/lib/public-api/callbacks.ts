@@ -33,8 +33,9 @@ export function buildStatusFields(a: StatusFieldArgs): Record<string, string> {
   return {
     MessageUUID: a.messageId, To: a.to, From: a.from, Type: "whatsapp", Status: a.status,
     Units: "1", TotalRate: "0", TotalAmount: "0", MCC: "", MNC: "",
-    ...((a.status === "failed" || a.status === "undelivered") && a.errorCode ? { ErrorCode: a.errorCode } : {}),
-    ...((a.status === "failed" || a.status === "undelivered") && a.errorCode ? { ErrorMessage: errorMessageForCode(a.errorCode) ?? "" } : {}),
+    ...((a.status === "failed" || a.status === "undelivered") && a.errorCode
+      ? { ErrorCode: a.errorCode, ErrorMessage: errorMessageForCode(a.errorCode) as string }
+      : {}),
     Sequence: String(a.sequence),
     MessageTime: plivoTime(a.queuedAt), QueuedTime: plivoTime(a.queuedAt),
     ...(a.sentAt ? { SentTime: plivoTime(a.sentAt) } : {}),
