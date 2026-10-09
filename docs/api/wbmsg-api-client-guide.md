@@ -53,6 +53,30 @@ Response, HTTP 202:
 ```
 The call returns as soon as the message is queued; delivery is reported by callbacks or by retrieving the message.
 
+Template with named variables:
+```json
+{
+  "src": "918548829535",
+  "dst": "919902819754",
+  "type": "whatsapp",
+  "template": {
+    "name": "msg_user_kycapproved_v2",
+    "language": "en",
+    "components": [
+      { "type": "body", "parameters": [
+        { "type": "text", "parameter_name": "username", "text": "Alex" },
+        { "type": "text", "parameter_name": "ra_name", "text": "WB-1001" }
+      ] }
+    ]
+  }
+}
+```
+For templates with named variables (`{{username}}`) send `parameter_name` on every parameter; order does not matter. For numbered variables (`{{1}}`) omit `parameter_name`. Typical 400 errors:
+- `template parameters not matched for BODY: expected [username, ra_name]; got [username]`
+- `Template "x" not found`
+- `Template "x" has no language "en"; available: en_US`
+- `Template "x" (en) is not approved (status: pending)`
+
 WhatsApp rules still apply: free-form (`text`, `media_urls`, `interactive`, `location`) messages are only delivered inside the 24-hour window after the customer last wrote to you (otherwise the message ends as `failed`, `ErrorCode` `380`); outside it use an approved template. Marketing templates are subject to Meta's per-user limits (see section 7).
 
 ## 4. Read messages

@@ -164,6 +164,53 @@
           ]
         },
         {
+          "name": "Send template message with named parameters",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/Account/{{auth_id}}/Message/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "Account",
+                "{{auth_id}}",
+                "Message"
+              ]
+            },
+            "description": "For templates with named variables ({{username}}) send parameter_name on every parameter; order does not matter. For numbered variables ({{1}}) omit parameter_name.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"src\": \"{{src}}\",\n  \"dst\": \"{{dst}}\",\n  \"type\": \"whatsapp\",\n  \"template\": {\n    \"name\": \"{{template_name}}\",\n    \"language\": \"{{template_language}}\",\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          {\n            \"type\": \"text\",\n            \"parameter_name\": \"username\",\n            \"text\": \"Alex\"\n          },\n          {\n            \"type\": \"text\",\n            \"parameter_name\": \"ra_name\",\n            \"text\": \"WB-1001\"\n          }\n        ]\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Queued (202)', () => pm.response.to.have.status(202));",
+                  "const ids = pm.response.json().message_uuid;",
+                  "if (ids && ids.length) pm.collectionVariables.set('message_uuid', ids[0]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Send template message with image header",
           "request": {
             "method": "POST",

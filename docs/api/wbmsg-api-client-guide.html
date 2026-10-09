@@ -134,6 +134,29 @@
 }</code></pre>
 <p>One <code>message_uuid</code> is returned per recipient, in order. The call returns as soon as the message is queued. Delivery is reported by <a href="#callbacks">callbacks</a> or by <a href="#read">reading the message</a>.</p>
 <p><b>Template components.</b> <code>header</code> takes a media parameter when the template has an image, video or document header. <code>body</code> takes one text parameter per <code>{{1}}</code>, <code>{{2}}</code>, ... placeholder, in order. Button parameters use <code>"type": "button"</code> with <code>sub_type</code> (<code>quick_reply</code> or <code>url</code>) and <code>index</code>.</p>
+<h3>Example: template with named variables</h3>
+<pre><code>{
+  "src": "918548829535",
+  "dst": "919902819754",
+  "type": "whatsapp",
+  "template": {
+    "name": "msg_user_kycapproved_v2",
+    "language": "en",
+    "components": [
+      { "type": "body", "parameters": [
+        { "type": "text", "parameter_name": "username", "text": "Alex" },
+        { "type": "text", "parameter_name": "ra_name", "text": "WB-1001" }
+      ] }
+    ]
+  }
+}</code></pre>
+<p>For templates with named variables (<code>{{username}}</code>) send <code>parameter_name</code> on every parameter; order does not matter. For numbered variables (<code>{{1}}</code>) omit <code>parameter_name</code>. Typical <code>400</code> errors:</p>
+<ul>
+  <li><code>template parameters not matched for BODY: expected [username, ra_name]; got [username]</code></li>
+  <li><code>Template "x" not found</code></li>
+  <li><code>Template "x" has no language "en"; available: en_US</code></li>
+  <li><code>Template "x" (en) is not approved (status: pending)</code></li>
+</ul>
 
 <h2 id="read">4. Read messages</h2>
 <div class="ep"><span class="method get">GET</span>/Message/</div>
