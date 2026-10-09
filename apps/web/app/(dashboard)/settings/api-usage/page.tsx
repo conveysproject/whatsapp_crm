@@ -8,6 +8,8 @@ import { UsageMetricCards } from "@/components/settings/api-usage/UsageMetricCar
 import { UsageChart } from "@/components/settings/api-usage/UsageChart";
 import { CredentialTable, EndpointTable, FailureReasons, MessageStatusChips } from "@/components/settings/api-usage/UsageTables";
 import { RecentFailedRequests } from "@/components/settings/api-usage/RecentFailedRequests";
+import { RequestHistory } from "@/components/settings/api-usage/RequestHistory";
+import { CallbackAttempts } from "@/components/settings/api-usage/CallbackAttempts";
 import {
   DEFAULT_RANGE,
   fetchSummary,
@@ -153,6 +155,8 @@ function ApiUsageBody(): JSX.Element {
       {content}
 
       {s !== undefined && <RecentFailedRequests apiKeyId={apiKeyId} range={range} credentialNames={names} />}
+      {s !== undefined && <RequestHistory apiKeyId={apiKeyId} credentialNames={names} />}
+      {s !== undefined && <CallbackAttempts />}
     </div>
   );
 }

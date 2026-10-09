@@ -10,6 +10,12 @@ import {
   errorClassLabel,
   errorCount,
   fetchFailedRequests,
+  fetchPayloads,
+  fetchPayloadDetail,
+  fetchCallbackAttempts,
+  callbackOutcomeLabel,
+  prettyBody,
+  UUID_PATTERN,
   fetchSummary,
   formatCount,
   formatDuration,
@@ -244,5 +250,79 @@ describe("errors and fetch wrappers", () => {
 
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("down")));
     await expect(fetchFailedRequests()).rejects.toMatchObject({ code: "NETWORK" });
+  });
+});
+
+describe("payload history and callback attempts", () => {
+  const payloadRow = {
+    id: "p1", createdAt: "2026-10-08T10:11:36Z", method: "POST", endpoint: "message.send", statusCode: 400,
+    outcome: "client_error", errorClass: "validation", errorCode: "TEMPLATE_PARAMS_MISMATCH", durationMs: 66, apiKeyId: "k1",
+  };
+  const MSG = "11111111-1111-4111-8111-111111111111";
+
+  it("fetchPayloads builds the query and normalizes the page", async () => {
+    const fn = mockFetch(200, { enabled: true, data: [payloadRow], nextCursor: "n1" });
+    const page = await fetchPayloads({ cursor: "c0", apiKeyId: "k1" });
+    expect(fn).toHaveBeenCalledWith("/api/v1/api-usage/payloads?limit=20&cursor=c0&apiKeyId=k1");
+    expect(page).toMatchObject({ enabled: true, nextCursor: "n1" });
+    expect(page.data[0]).toMatchObject({ id: "p1", errorCode: "TEMPLATE_PARAMS_MISMATCH", statusCode: 400 });
+    await fetchPayloads();
+    expect(fn).toHaveBeenLastCalledWith("/api/v1/api-usage/payloads?limit=20");
+  });
+
+  it("fetchPayloads rejects malformed bodies", async () => {
+    for (const body of [null, {}, [], { data: [] }, { enabled: "yes", data: [] }, { enabled: true, data: "x" }]) {
+      mockFetch(200, body);
+      await expect(fetchPayloads()).rejects.toBeInstanceOf(ApiUsageError);
+    }
+  });
+
+  it("fetchPayloadDetail encodes the id and normalizes bodies and truncation flags", async () => {
+    const fn = mockFetch(200, { id: "p1", requestBody: '{"a":1}', responseBody: null, requestTruncated: true, queryString: "x=1", clientIp: "1.2.3.4", userAgent: "ua" });
+    const d = await fetchPayloadDetail("a/b");
+    expect(fn).toHaveBeenCalledWith("/api/v1/api-usage/payloads/a%2Fb");
+    expect(d).toMatchObject({ id: "p1", requestBody: '{"a":1}', responseBody: null, requestTruncated: true, responseTruncated: false, queryString: "x=1" });
+    for (const body of [null, {}, { id: "" }, { id: 5 }]) {
+      mockFetch(200, body);
+      await expect(fetchPayloadDetail("p1")).rejects.toBeInstanceOf(ApiUsageError);
+    }
+  });
+
+  it("fetchCallbackAttempts sends messageId and cursor and normalizes rows", async () => {
+    const fn = mockFetch(200, {
+      data: [{ id: "a1", createdAt: "2026-10-08T10:12:00Z", messageId: MSG, url: "https://c.example.com/cb", method: "POST", attempt: 1, outcome: "http_error", httpStatus: 500, reason: null, durationMs: 80, fields: {} }],
+      nextCursor: null,
+    });
+    const page = await fetchCallbackAttempts({ messageId: MSG, cursor: "c1" });
+    expect(fn).toHaveBeenCalledWith(`/api/v1/api-usage/callbacks?messageId=${MSG}&limit=20&cursor=c1`);
+    expect(page.data[0]).toMatchObject({ attempt: 1, outcome: "http_error", httpStatus: 500, reason: null });
+    expect(page.nextCursor).toBeNull();
+    mockFetch(200, { data: [{ id: "a2", outcome: "dropped", httpStatus: "x" }] });
+    expect((await fetchCallbackAttempts({ messageId: MSG })).data[0]!.httpStatus).toBeNull();
+    for (const body of [null, {}, { data: "x" }]) {
+      mockFetch(200, body);
+      await expect(fetchCallbackAttempts({ messageId: MSG })).rejects.toBeInstanceOf(ApiUsageError);
+    }
+  });
+
+  it("labels callback outcomes", () => {
+    expect(callbackOutcomeLabel("delivered")).toBe("Delivered");
+    expect(callbackOutcomeLabel("http_error")).toBe("HTTP error");
+    expect(callbackOutcomeLabel("network_error")).toBe("Network error");
+    expect(callbackOutcomeLabel("dropped")).toBe("Dropped");
+    expect(callbackOutcomeLabel("__proto__")).toBe("Unknown");
+  });
+
+  it("prettyBody pretty-prints JSON and leaves everything else raw", () => {
+    expect(prettyBody('{"a":1}')).toBe('{\n  "a": 1\n}');
+    expect(prettyBody("not json <b>")).toBe("not json <b>");
+    expect(prettyBody(null)).toBe("");
+    expect(prettyBody("")).toBe("");
+  });
+
+  it("UUID_PATTERN accepts UUIDs only", () => {
+    expect(UUID_PATTERN.test(MSG)).toBe(true);
+    expect(UUID_PATTERN.test("not-a-uuid")).toBe(false);
+    expect(UUID_PATTERN.test(`${MSG}x`)).toBe(false);
   });
 });

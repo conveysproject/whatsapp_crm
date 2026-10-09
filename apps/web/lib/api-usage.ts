@@ -413,3 +413,153 @@ export async function fetchSummary(range: UsageRange, apiKeyId?: string | null):
 export async function fetchFailedRequests(opts: { cursor?: string | null; apiKeyId?: string | null; range?: UsageRange | null } = {}): Promise<RequestsPage> {
   return normalizeRequestsPage(await getBody(`/requests?${requestsQuery(opts)}`));
 }
+
+// ---- stored request payloads and callback attempts ----
+
+export const PAYLOAD_PAGE_SIZE = 20;
+export const PAYLOAD_BODY_LIMIT_LABEL = "16 KB";
+
+export interface PayloadSummary {
+  id: string;
+  createdAt: string;
+  method: string;
+  endpoint: string;
+  statusCode: number;
+  outcome: string;
+  errorClass: string | null;
+  errorCode: string | null;
+  durationMs: number;
+  apiKeyId: string | null;
+}
+
+export interface PayloadsPage {
+  enabled: boolean;
+  data: PayloadSummary[];
+  nextCursor: string | null;
+}
+
+export interface PayloadDetail {
+  id: string;
+  requestBody: string | null;
+  responseBody: string | null;
+  requestTruncated: boolean;
+  responseTruncated: boolean;
+  queryString: string | null;
+  clientIp: string | null;
+  userAgent: string | null;
+}
+
+export interface CallbackAttemptRow {
+  id: string;
+  createdAt: string;
+  messageId: string;
+  url: string;
+  method: string;
+  attempt: number;
+  outcome: string;
+  httpStatus: number | null;
+  reason: string | null;
+  durationMs: number;
+}
+
+export interface CallbackAttemptsPage {
+  data: CallbackAttemptRow[];
+  nextCursor: string | null;
+}
+
+const malformed = (): ApiUsageError =>
+  new ApiUsageError("INVALID_RESPONSE", "The data came back in an unexpected format. Please try again.", 200);
+const cursorOf = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
+
+export function normalizePayloadsPage(raw: unknown): PayloadsPage {
+  if (!isObj(raw) || !Array.isArray(raw["data"]) || typeof raw["enabled"] !== "boolean") throw malformed();
+  return {
+    enabled: raw["enabled"],
+    data: raw["data"].filter(isObj).map((r) => ({
+      id: str(r["id"]),
+      createdAt: str(r["createdAt"]),
+      method: str(r["method"]),
+      endpoint: str(r["endpoint"], "other"),
+      statusCode: num(r["statusCode"]),
+      outcome: str(r["outcome"]),
+      errorClass: strOrNull(r["errorClass"]),
+      errorCode: strOrNull(r["errorCode"]),
+      durationMs: num(r["durationMs"]),
+      apiKeyId: strOrNull(r["apiKeyId"]),
+    })),
+    nextCursor: cursorOf(raw["nextCursor"]),
+  };
+}
+
+export function normalizePayloadDetail(raw: unknown): PayloadDetail {
+  if (!isObj(raw) || typeof raw["id"] !== "string" || raw["id"] === "") throw malformed();
+  return {
+    id: raw["id"],
+    requestBody: strOrNull(raw["requestBody"]),
+    responseBody: strOrNull(raw["responseBody"]),
+    requestTruncated: raw["requestTruncated"] === true,
+    responseTruncated: raw["responseTruncated"] === true,
+    queryString: strOrNull(raw["queryString"]),
+    clientIp: strOrNull(raw["clientIp"]),
+    userAgent: strOrNull(raw["userAgent"]),
+  };
+}
+
+export function normalizeCallbackAttemptsPage(raw: unknown): CallbackAttemptsPage {
+  if (!isObj(raw) || !Array.isArray(raw["data"])) throw malformed();
+  return {
+    data: raw["data"].filter(isObj).map((r) => ({
+      id: str(r["id"]),
+      createdAt: str(r["createdAt"]),
+      messageId: str(r["messageId"]),
+      url: str(r["url"]),
+      method: str(r["method"]),
+      attempt: num(r["attempt"]),
+      outcome: str(r["outcome"]),
+      httpStatus: typeof r["httpStatus"] === "number" && Number.isFinite(r["httpStatus"]) ? r["httpStatus"] : null,
+      reason: strOrNull(r["reason"]),
+      durationMs: num(r["durationMs"]),
+    })),
+    nextCursor: cursorOf(raw["nextCursor"]),
+  };
+}
+
+export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const CALLBACK_OUTCOME_LABELS: Record<string, string> = {
+  delivered: "Delivered",
+  http_error: "HTTP error",
+  network_error: "Network error",
+  dropped: "Dropped",
+};
+
+export function callbackOutcomeLabel(outcome: string): string {
+  return Object.hasOwn(CALLBACK_OUTCOME_LABELS, outcome) ? CALLBACK_OUTCOME_LABELS[outcome]! : "Unknown";
+}
+
+/** Pretty-prints a stored body when it is valid JSON; otherwise returns the raw text unchanged. Empty/null -> "". */
+export function prettyBody(body: string | null): string {
+  if (!body) return "";
+  try {
+    return JSON.stringify(JSON.parse(body), null, 2);
+  } catch {
+    return body;
+  }
+}
+
+export async function fetchPayloads(opts: { cursor?: string | null; apiKeyId?: string | null } = {}): Promise<PayloadsPage> {
+  const p = new URLSearchParams({ limit: String(PAYLOAD_PAGE_SIZE) });
+  if (opts.cursor) p.set("cursor", opts.cursor);
+  if (opts.apiKeyId) p.set("apiKeyId", opts.apiKeyId);
+  return normalizePayloadsPage(await getBody(`/payloads?${p.toString()}`));
+}
+
+export async function fetchPayloadDetail(id: string): Promise<PayloadDetail> {
+  return normalizePayloadDetail(await getBody(`/payloads/${encodeURIComponent(id)}`));
+}
+
+export async function fetchCallbackAttempts(opts: { messageId: string; cursor?: string | null }): Promise<CallbackAttemptsPage> {
+  const p = new URLSearchParams({ messageId: opts.messageId, limit: String(PAYLOAD_PAGE_SIZE) });
+  if (opts.cursor) p.set("cursor", opts.cursor);
+  return normalizeCallbackAttemptsPage(await getBody(`/callbacks?${p.toString()}`));
+}
