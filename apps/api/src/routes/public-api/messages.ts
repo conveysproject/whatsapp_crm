@@ -104,17 +104,19 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
       // Build the worker payload; template and interactive are resolved/mapped here so bad input fails fast with 400.
       let content: SendContentForWorker;
       let templateBody: string | null = null;
+      let templateIdForMessage: string | null = null;
       try {
         const c: SendContent = parsed.content;
         if (c.kind === "template") {
           // Org-scoped by name only: language and status are resolved below so the 400 can say what exists.
           const rows = await fastify.prisma.template.findMany({
             where: { organizationId, name: c.name },
-            select: { name: true, language: true, status: true, components: true, parameterFormat: true },
+            select: { id: true, name: true, language: true, status: true, components: true, parameterFormat: true },
             take: 50,
           });
           const tpl = resolveTemplate(rows, c.name, c.language);
           validateAgainstTemplate(tpl, c.components);
+          templateIdForMessage = tpl.id;
           const stored = (tpl.components ?? []) as unknown[];
           const headerFormat = (stored as Array<{ type?: string; format?: string }>).find((s) => s.type?.toUpperCase() === "HEADER")?.format ?? null;
           content = { kind: "template", name: c.name, language: c.language, components: toMetaTemplateComponents(c.components, headerFormat) };
@@ -151,6 +153,7 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
             data: {
               conversationId: conversation.id, organizationId, direction: "outbound",
               contentType: fields.contentType, body: fields.body, mediaUrl: fields.mediaUrl, status: "sending",
+              ...(templateIdForMessage ? { templateId: templateIdForMessage, source: "api" } : { source: "api" }),
             },
           });
           messageId = message.id;

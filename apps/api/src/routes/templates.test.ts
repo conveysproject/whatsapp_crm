@@ -141,6 +141,24 @@ describe("POST /v1/templates/:id/send-to-contact", () => {
     expect(body.data.message.id).toBe("msg-1");
   });
 
+  it("records the template id and source=test on the created message", async () => {
+    mockPrisma.template.findFirst.mockResolvedValue({
+      id: "t-1", organizationId: "org-1", name: "Welcome", status: "approved", metaTemplateId: "meta-t-1", language: "en_US",
+    });
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c-1", organizationId: "org-1", phoneNumber: "+919999999999", firstName: "Alice" });
+    mockPrisma.organization.findUnique.mockResolvedValue({ phoneNumberId: "phone-1", wabaAccessToken: "token-1" });
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1", contactId: "c-1" });
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-1" });
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/templates/t-1/send-to-contact",
+      payload: { contactId: "c-1", variables: [] },
+    });
+    expect(res.statusCode).toBe(200);
+    const data = (mockPrisma.message.create.mock.calls[0]![0] as { data: Record<string, unknown> }).data;
+    expect(data).toMatchObject({ contentType: "template", organizationId: "org-1", templateId: "t-1", source: "test" });
+  });
+
   it("returns 404 when template not found", async () => {
     mockPrisma.template.findFirst.mockResolvedValue(null);
     const res = await app.inject({

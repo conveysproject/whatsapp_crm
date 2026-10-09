@@ -133,7 +133,7 @@ describe("POST /Message/", () => {
     mockPrisma.template.findMany.mockResolvedValue([]);
     const r = await post(app, { ...body, text: undefined, template: { name: "nope", language: "en" } });
     expect(r.json()).toMatchObject({ error_code: "TEMPLATE_NOT_FOUND", error: 'Template "nope" not found' });
-    const tpl = { name: "welcome", language: "en_US", status: "pending", parameterFormat: "POSITIONAL", components: [{ type: "BODY", text: "Hi" }] };
+    const tpl = { id: "tpl-welcome", name: "welcome", language: "en_US", status: "pending", parameterFormat: "POSITIONAL", components: [{ type: "BODY", text: "Hi" }] };
     mockPrisma.template.findMany.mockResolvedValue([tpl]);
     const na = await post(app, { ...body, text: undefined, template: { name: "welcome", language: "en_US" } });
     expect(na.json()).toMatchObject({ error_code: "TEMPLATE_NOT_APPROVED" });
@@ -187,8 +187,23 @@ describe("POST /Message/", () => {
     expect((await post(app, { ...body, text: undefined, template: { name: "welcome", language: "en_US" } })).statusCode).toBe(400);
   });
 
+  it("records source=api on every send and templateId only for template sends", async () => {
+    await post(app, body);
+    const textData = mockPrisma.message.create.mock.calls[0]![0].data;
+    expect(textData).toMatchObject({ source: "api", contentType: "text" });
+    expect(textData).not.toHaveProperty("templateId");
+
+    mockPrisma.template.findMany.mockResolvedValue([{ id: "tpl-77", name: "welcome", language: "en_US", status: "approved", parameterFormat: "POSITIONAL",
+      components: [{ type: "BODY", text: "Hello" }] }]);
+    mockPrisma.message.create.mockClear();
+    const res = await post(app, { ...body, text: undefined, template: { name: "welcome", language: "en_US" } });
+    expect(res.statusCode).toBe(202);
+    expect(mockPrisma.template.findMany.mock.calls[0]![0].select).toMatchObject({ id: true });
+    expect(mockPrisma.message.create.mock.calls[0]![0].data).toMatchObject({ contentType: "template", templateId: "tpl-77", source: "api" });
+  });
+
   it("template: 400 'template parameters not matched' for wrong count or names, and nothing is written", async () => {
-    mockPrisma.template.findMany.mockResolvedValue([{ name: "kyc", language: "en", status: "approved", parameterFormat: "NAMED",
+    mockPrisma.template.findMany.mockResolvedValue([{ id: "tpl-kyc", name: "kyc", language: "en", status: "approved", parameterFormat: "NAMED",
       components: [{ type: "BODY", text: "Hi {{username}}, by {{ra_name}}" }] }]);
     sendAdd.mockClear(); mockPrisma.message.create.mockClear();
     const res = await post(app, { ...body, text: undefined, template: { name: "kyc", language: "en",

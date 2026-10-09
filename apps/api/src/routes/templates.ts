@@ -551,6 +551,8 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
           contentType: "template",
           body: renderedBody,
           whatsappMessageId: messageId,
+          templateId: template.id,
+          source: "test",
           status: "sent",
         },
       });
