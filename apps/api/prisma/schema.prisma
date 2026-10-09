@@ -1618,3 +1618,62 @@ model ApiUsageDaily {
   @@index([organizationId, day])
   @@map("api_usage_daily")
 }
+
+model ApiRequestPayload {
+  id                String   @id
+  organizationId    String   @map("organization_id")
+  apiKeyId          String?  @map("api_key_id")
+  method            String
+  endpoint          String
+  statusCode        Int      @map("status_code")
+  outcome           String
+  errorClass        String?  @map("error_class")
+  errorCode         String?  @map("error_code")
+  durationMs        Int      @map("duration_ms")
+  requestBody       String?  @map("request_body")
+  responseBody      String?  @map("response_body")
+  requestTruncated  Boolean  @default(false) @map("request_truncated")
+  responseTruncated Boolean  @default(false) @map("response_truncated")
+  queryString       String?  @map("query_string")
+  clientIp          String?  @map("client_ip")
+  userAgent         String?  @map("user_agent")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt], map: "api_request_payloads_org_created_idx")
+  @@index([apiKeyId, createdAt], map: "api_request_payloads_key_created_idx")
+  @@index([createdAt], map: "api_request_payloads_created_idx")
+  @@map("api_request_payloads")
+}
+
+model ApiCallbackAttempt {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  apiKeyId       String   @map("api_key_id")
+  messageId      String?  @map("message_id")
+  url            String
+  method         String
+  fields         Json
+  attempt        Int      @default(1)
+  outcome        String
+  httpStatus     Int?     @map("http_status")
+  reason         String?
+  durationMs     Int      @default(0) @map("duration_ms")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, createdAt], map: "api_callback_attempts_org_created_idx")
+  @@index([organizationId, messageId], map: "api_callback_attempts_message_idx")
+  @@index([createdAt], map: "api_callback_attempts_created_idx")
+  @@map("api_callback_attempts")
+}
+
+model ApiPayloadAccessAudit {
+  id             String   @id @default(uuid())
+  actor          String
+  organizationId String   @map("organization_id")
+  reason         String
+  query          String
+  rowsReturned   Int      @default(0) @map("rows_returned")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("api_payload_access_audit")
+}
