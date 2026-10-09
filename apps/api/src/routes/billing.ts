@@ -4,7 +4,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS, ZERO_DECIMAL_CURRENCIES } from "../lib/stripe.js";
 import { checkPlanLimit, isFeatureEnabled } from "../lib/plan-limits.js";
 import { canAccessSub } from "../lib/permissions.js";
-import { isBillableTier } from "../lib/billing/catalog.js";
+import { PLAN_CATALOG, isBillableTier } from "../lib/billing/catalog.js";
 import { isAllowedRedirect } from "../lib/billing/safe-redirect.js";
 import Razorpay from "razorpay";
 
@@ -295,20 +295,28 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── Razorpay ─────────────────────────────────────────────────────────────
-  fastify.post<{ Body: { planId: string; amount: number } }>(
+  fastify.post<{ Body: { planId: string; amount?: number } }>(
     "/billing/razorpay/create-order",
     { config: { public: false } },
     async (request, reply) => {
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "settings_access", "settings_billing")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+      }
+      const { planTier, interval } = parsePlanSelector(String(request.body.planId ?? ""));
+      if (!isBillableTier(planTier) || interval !== "monthly") {
+        return reply.status(400).send({ error: { code: "INVALID_PLAN", message: "Unknown or unsupported plan" } });
+      }
       // GAP-S60: DB credentials take precedence over env vars
-      const creds = await getGatewayCredentials(fastify.prisma, request.auth.organizationId, "razorpay");
+      const creds = await getGatewayCredentials(fastify.prisma, organizationId, "razorpay");
       const rzp = new Razorpay({
         key_id: creds["razorpay_key_id"] ?? process.env["RAZORPAY_KEY_ID"] ?? "",
         key_secret: creds["razorpay_key_secret"] ?? process.env["RAZORPAY_KEY_SECRET"] ?? "",
       });
       const order = await rzp.orders.create({
-        amount: request.body.amount,
+        amount: PLAN_CATALOG[planTier].priceInr * 100, // server-side price; client amount is ignored
         currency: "INR",
-        notes: { planId: request.body.planId, organizationId: request.auth.organizationId },
+        notes: { planId: planTier, organizationId },
       });
       return reply.send({ data: { orderId: order.id, amount: order.amount, currency: order.currency } });
     }

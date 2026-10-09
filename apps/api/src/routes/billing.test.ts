@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
-const { stripeSessionCreate } = vi.hoisted(() => ({ stripeSessionCreate: vi.fn() }));
+const { stripeSessionCreate, ordersCreate } = vi.hoisted(() => ({ stripeSessionCreate: vi.fn(), ordersCreate: vi.fn() }));
 vi.mock("../lib/stripe.js", () => ({
   getStripe: () => ({
     checkout: { sessions: { create: stripeSessionCreate } },
@@ -19,9 +19,7 @@ vi.mock("../lib/stripe.js", () => ({
 
 vi.mock("razorpay", () => ({
   default: vi.fn().mockImplementation(() => ({
-    orders: {
-      create: vi.fn().mockResolvedValue({ id: "order_test123", amount: 99900, currency: "INR" }),
-    },
+    orders: { create: ordersCreate },
   })),
 }));
 
@@ -68,17 +66,29 @@ describe("GET /v1/billing/usage", () => {
 
 describe("POST /v1/billing/razorpay/create-order", () => {
   let app: FastifyInstance;
-  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  beforeEach(async () => {
+    vi.resetModules(); vi.clearAllMocks();
+    ordersCreate.mockResolvedValue({ id: "order_test123", amount: 99900, currency: "INR" });
+    app = await buildApp();
+  });
   afterEach(async () => { await app.close(); });
 
-  it("creates a Razorpay order and returns order id", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/billing/razorpay/create-order",
-      payload: { planId: "plan-standard", amount: 99900 },
-    });
+  it("creates an order for the server-side price and ignores the client amount", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/create-order",
+      payload: { planId: "starter", amount: 1 } });
     expect(res.statusCode).toBe(200);
     expect(res.json<{ data: { orderId: string } }>().data.orderId).toBe("order_test123");
+    expect(ordersCreate).toHaveBeenCalledWith(expect.objectContaining({
+      amount: 99900, currency: "INR", notes: { planId: "starter", organizationId: "org-1" },
+    }));
+  });
+
+  it("rejects unknown and enterprise plans", async () => {
+    for (const planId of ["plan-standard", "enterprise", "starter___yearly"]) {
+      const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/create-order", payload: { planId } });
+      expect(res.statusCode, planId).toBe(400);
+    }
+    expect(ordersCreate).not.toHaveBeenCalled();
   });
 });
 
@@ -218,7 +228,7 @@ describe("manual subscription + read RBAC", () => {
   });
 
   it("superAdmin can approve", async () => {
-    mockPrisma.manualSubscription.findFirst.mockResolvedValue({ id: "ms-1", organizationId: "org-2", planTier: "growth" });
+    mockPrisma.manualSubscription.findFirst.mockResolvedValueOnce({ id: "ms-1", organizationId: "org-2", planTier: "growth" });
     const a = await buildAs("superAdmin");
     const res = await a.inject({ method: "POST", url: "/v1/billing/manual/ms-1/approve" });
     expect(res.statusCode).toBe(200);
