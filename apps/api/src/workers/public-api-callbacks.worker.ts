@@ -6,6 +6,7 @@ import { decryptToken } from "../lib/public-api/credentials.js";
 import { newNonce, signV2 } from "../lib/public-api/plivo-signature.js";
 import { assertSafeCallbackUrl, UnsafeUrlError } from "../lib/public-api/safe-url.js";
 import { safeErr } from "../lib/public-api/safe-err.js";
+import { recordCallbackAttempt, type CallbackAttempt } from "../lib/public-api/callback-attempts.js";
 import type { CallbackJob } from "../lib/public-api/queues.js";
 
 const TIMEOUT_MS = 10_000;
@@ -14,25 +15,34 @@ export function callbackBackoff(attemptsMade: number): number {
   return 60_000 * 2 ** (attemptsMade - 1); // 60 s, 120 s, 240 s
 }
 
-export async function deliverCallback(job: Pick<Job<CallbackJob>, "data">, fetchImpl: typeof fetch = fetch): Promise<void> {
+export async function deliverCallback(job: Pick<Job<CallbackJob>, "data"> & { attemptsMade?: number }, fetchImpl: typeof fetch = fetch): Promise<void> {
   const { apiKeyId, organizationId, url, method, fields } = job.data;
+  const attempt = (job.attemptsMade ?? 0) + 1;
+  const started = Date.now();
+  // Audit row per attempt (no-op unless payload logging is on; never throws). `reason` is always fixed text or an error name.
+  const log = (outcome: CallbackAttempt["outcome"], extra: { httpStatus?: number; reason?: string } = {}) =>
+    recordCallbackAttempt(prisma, { organizationId, apiKeyId, url, method, fields, attempt, outcome, durationMs: Date.now() - started, ...extra });
+  const drop = async (reason: string, message = reason): Promise<never> => {
+    await log("dropped", { reason });
+    throw new UnrecoverableError(message);
+  };
 
   const key = await prisma.apiKey.findUnique({ where: { id: apiKeyId }, select: { tokenEnc: true, revokedAt: true, organizationId: true } });
   if (!key || key.organizationId !== organizationId || key.revokedAt || !key.tokenEnc) {
-    throw new UnrecoverableError("credential unavailable");
+    return drop("credential unavailable");
   }
   // Queued callbacks of a blocked / not-allowed org are dropped without retries. A thrown lookup is retried (fail closed).
-  if (!(await checkPublicApiAccess(prisma, organizationId)).allowed) throw new UnrecoverableError("access disabled");
+  if (!(await checkPublicApiAccess(prisma, organizationId)).allowed) return drop("access disabled");
   try { await assertSafeCallbackUrl(url); }
   catch (err) {
-    if (err instanceof UnsafeUrlError) throw new UnrecoverableError(`unsafe callback URL: ${err.message}`);
+    if (err instanceof UnsafeUrlError) return drop("unsafe callback URL", `unsafe callback URL: ${err.message}`);
     throw err;
   }
 
   // A token that cannot be decrypted (missing/rotated key, corrupt row) will not decrypt on a retry either.
   let authToken: string;
   try { authToken = decryptToken(key.tokenEnc); }
-  catch { throw new UnrecoverableError("credential token cannot be decrypted"); }
+  catch { return drop("credential token cannot be decrypted"); }
 
   const nonce = newNonce();
   const signature = signV2(url, nonce, authToken);
@@ -46,16 +56,26 @@ export async function deliverCallback(job: Pick<Job<CallbackJob>, "data">, fetch
     "X-Plivo-Signature-V2-Nonce": nonce,
   };
   const isGet = method === "GET";
-  const res = await fetchImpl(isGet ? `${url}${url.includes("?") ? "&" : "?"}${form}` : url, {
-    method,
-    headers: isGet ? headers : { ...headers, "Content-Type": "application/x-www-form-urlencoded" },
-    ...(isGet ? {} : { body: form }),
-    redirect: "manual",
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
+  let res: Response;
+  try {
+    res = await fetchImpl(isGet ? `${url}${url.includes("?") ? "&" : "?"}${form}` : url, {
+      method,
+      headers: isGet ? headers : { ...headers, "Content-Type": "application/x-www-form-urlencoded" },
+      ...(isGet ? {} : { body: form }),
+      redirect: "manual",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (err) {
+    await log("network_error", { reason: err instanceof Error ? err.name : "fetch failed" });
+    throw err;
+  }
   // Drain the body we never read, so the undici socket is released (concurrency 10 would otherwise pin sockets).
   await res.body?.cancel().catch(() => {});
-  if (!res.ok) throw new Error(`callback endpoint answered HTTP ${res.status}`);
+  if (!res.ok) {
+    await log("http_error", { httpStatus: res.status });
+    throw new Error(`callback endpoint answered HTTP ${res.status}`);
+  }
+  await log("delivered", { httpStatus: res.status });
 }
 
 /** Worker `failed` handler: job id, attempt and a safe projection of the error only (never its message). */
