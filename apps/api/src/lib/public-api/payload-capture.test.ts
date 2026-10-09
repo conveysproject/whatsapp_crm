@@ -9,6 +9,15 @@ describe("redactValue", () => {
   it("strips query strings from URL values", () => {
     expect(redactValue({ media_urls: ["https://cdn.example.com/a.png?sig=SECRET&x=1"] })).toEqual({ media_urls: ["https://cdn.example.com/a.png?[redacted]"] });
   });
+  it("strips URL userinfo and matches the scheme case-insensitively", () => {
+    expect(redactValue({ url: "https://user:pw@host/cb" })).toEqual({ url: "https://[redacted]@host/cb" });
+    expect(redactValue({ url: "https://user:pw@host/cb?token=1" })).toEqual({ url: "https://[redacted]@host/cb?[redacted]" });
+    expect(redactValue({ url: "HTTPS://x/a?sig=SECRET" })).toEqual({ url: "HTTPS://x/a?[redacted]" });
+  });
+  it("leaves a string that merely contains a URL mid-text as is (customer content)", () => {
+    const t = "see https://user:pw@host/cb?sig=SECRET for details";
+    expect(redactValue({ text: t })).toEqual({ text: t });
+  });
   it("bounds depth and array size", () => {
     const deep: Record<string, unknown> = {}; let cur = deep;
     for (let i = 0; i < 20; i++) { const n = {}; cur["a"] = n; cur = n as Record<string, unknown>; }

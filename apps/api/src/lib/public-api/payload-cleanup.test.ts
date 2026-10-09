@@ -18,6 +18,8 @@ describe("payloadRetentionDays", () => {
     ["730", 730],
     ["1.5", 90], // parseInt semantics: "1.5" -> 1, then raised to the 90-day floor
     ["365.9", 365], // parseInt truncates
+    ["36500", 36500],
+    ["999999999999", 36500], // upper clamp: no Invalid Date cutoff
   ])("%j -> %i", (env, expected) => {
     if (env === undefined) delete process.env["API_PAYLOAD_RETENTION_DAYS"];
     else process.env["API_PAYLOAD_RETENTION_DAYS"] = env;

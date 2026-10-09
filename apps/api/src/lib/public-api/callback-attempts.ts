@@ -23,7 +23,7 @@ function sanitizeUrl(raw: string): string {
     u.hash = "";
     return u.toString();
   } catch {
-    return raw.split(/[?#]/)[0]!.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@]*@/i, "$1");
+    return "[unparseable url]";
   }
 }
 

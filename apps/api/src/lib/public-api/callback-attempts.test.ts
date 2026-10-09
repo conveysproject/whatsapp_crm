@@ -29,13 +29,11 @@ describe("recordCallbackAttempt", () => {
     expect(dataOf(create)["url"]).toBe("https://c.example.com:8443/cb");
   });
 
-  it("removes userinfo and query even from a url that does not parse", async () => {
+  it("stores a fixed placeholder for a url that does not parse", async () => {
     process.env["API_PAYLOAD_LOGGING_ENABLED"] = "true";
     const create = vi.fn().mockResolvedValue({});
     await recordCallbackAttempt(prismaWith(create), { ...attempt, url: "https://user:pa55@[bad/cb?token=abc" });
-    const stored = String(dataOf(create)["url"]);
-    expect(stored).not.toContain("pa55");
-    expect(stored).not.toContain("token");
+    expect(dataOf(create)["url"]).toBe("[unparseable url]");
   });
 
   it("strips NUL and lone surrogates from url, reason and field values", async () => {

@@ -53,7 +53,7 @@ export function recordUsageOnResponse(request: FastifyRequest, reply: FastifyRep
     // Payload only for authenticated callers and only when the flag is on. Never reads headers (no Authorization).
     // A failure here drops the payload, never the usage event or the response.
     let payload: ReturnType<typeof buildPayloadSnapshot> | undefined;
-    if (who?.organizationId && payloadLoggingEnabled()) {
+    if (who?.organizationId && reply.statusCode !== 401 && payloadLoggingEnabled()) {
       try {
         payload = buildPayloadSnapshot({
           body: request.body, url: request.url, responseText: request.apiResponseBody,

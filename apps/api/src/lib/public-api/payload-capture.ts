@@ -19,7 +19,9 @@ export function redactValue(v: unknown, depth = 0): unknown {
     return out;
   }
   if (typeof v === "string") {
-    const noQuery = /^https?:\/\/\S*\?/.test(v) ? v.replace(/\?.*$/s, "?[redacted]") : v;
+    const isUrl = /^https?:\/\//i.test(v);
+    const noUser = isUrl ? v.replace(/^(https?:\/\/)[^/?#\s]*@/i, "$1[redacted]@") : v;
+    const noQuery = isUrl && /^https?:\/\/\S*\?/i.test(noUser) ? noUser.replace(/\?.*$/s, "?[redacted]") : noUser;
     return noQuery.length > MAX_STRING ? `${noQuery.slice(0, MAX_STRING)}…` : noQuery;
   }
   return v;

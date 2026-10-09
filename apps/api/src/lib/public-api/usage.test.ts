@@ -484,6 +484,8 @@ describe("payload capture in the recorder", () => {
     expect(rowsOf(createMany)[0]!["id"]).toBe(LOG_ID);
     expect(payloadCreateMany).toHaveBeenCalledTimes(1);
     expect(payloadCreateMany.mock.calls[0]![0]).toMatchObject({ skipDuplicates: true });
+    expect(transaction.mock.calls[0]![1]).toEqual({ timeout: 30_000, maxWait: 5_000 });
+    expect(transaction.mock.calls[1]![1]).toEqual({ timeout: 10_000, maxWait: 5_000 });
     const rows = rowsOf(payloadCreateMany);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({

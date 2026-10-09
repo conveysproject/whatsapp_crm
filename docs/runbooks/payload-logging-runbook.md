@@ -1,6 +1,6 @@
 # Public API payload logging: runbook
 
-Applies to the public (Plivo-style) message API. Design and decisions: `docs/prd-public-api-request-payload-logging.md`.
+Applies to the public message API. Design and decisions: `docs/prd-public-api-request-payload-logging.md`.
 
 Payload logging stores a redacted copy of each API request and response, and one row per callback delivery attempt, so
 support can answer "what did we receive and what did we answer". It is controlled by `API_PAYLOAD_LOGGING_ENABLED`
@@ -10,10 +10,17 @@ support can answer "what did we receive and what did we answer". It is controlle
 
 ### The client (self-service)
 
-Settings > API Usage > Request history. Shows the organization's own stored requests (newest first, filters for outcome and
-endpoint), the redacted request and response bodies, and the callback attempts for a message. The client quotes the `api_id`
-from any response body; it is the id of the stored row. A request that is not listed was either made while the flag was off,
-was a 401, was sampled out of the raw log, or is older than the retention window.
+Settings > API Usage > Request history. Shows the organization's own stored requests (newest first; the only filter is the credential), and the redacted request
+and response bodies. Callback attempts are not part of the request list: they are in the separate "Callback attempts" panel. The client quotes the `api_id`
+from any response body; it is the id of the stored row. A request has no stored payload (and is not listed) when:
+
+- the flag `API_PAYLOAD_LOGGING_ENABLED` was off at the time;
+- the request had no organization (unknown credential, pre-auth 429);
+- the response was a 401;
+- the in-memory payload buffer budget was exceeded (the metadata row is kept, the payload is dropped);
+- the payload flush failed (logged as "api payload flush failed"; metering is unaffected);
+- the raw metadata row was sampled out or capped;
+- it is older than the retention window.
 
 ### Staff (audited)
 
@@ -82,9 +89,9 @@ DELETE FROM api_callback_attempts WHERE organization_id = '<ORG_ID>';
 
 -- B. One end customer inside an organization (phone number as digits, e.g. 14155552672; always keep the organization filter)
 SELECT count(*) FROM api_request_payloads
- WHERE organization_id = '<ORG_ID>' AND (request_body LIKE '%<PHONE_DIGITS>%' OR response_body LIKE '%<PHONE_DIGITS>%');
+ WHERE organization_id = '<ORG_ID>' AND (request_body LIKE '%<PHONE_DIGITS>%' OR response_body LIKE '%<PHONE_DIGITS>%' OR query_string LIKE '%<PHONE_DIGITS>%');
 DELETE FROM api_request_payloads
- WHERE organization_id = '<ORG_ID>' AND (request_body LIKE '%<PHONE_DIGITS>%' OR response_body LIKE '%<PHONE_DIGITS>%');
+ WHERE organization_id = '<ORG_ID>' AND (request_body LIKE '%<PHONE_DIGITS>%' OR response_body LIKE '%<PHONE_DIGITS>%' OR query_string LIKE '%<PHONE_DIGITS>%');
 DELETE FROM api_callback_attempts
  WHERE organization_id = '<ORG_ID>' AND fields::text LIKE '%<PHONE_DIGITS>%';
 
@@ -95,6 +102,9 @@ VALUES (gen_random_uuid()::text, '<your name>', '<ORG_ID>', 'ERASURE <ticket id>
 
 COMMIT;  -- or ROLLBACK if a count looks wrong
 ```
+
+List-endpoint responses embed OTHER customers' numbers of the same organization, so block B over-deletes those rows too;
+this is acceptable for an erasure.
 
 Run block A or block B, not both (delete the block you do not need before pasting). Numbers may be stored with a leading `+`
 or spaces in free-text bodies; also try the national format when the count looks too low. The metadata table
@@ -116,5 +126,5 @@ Steps marked **OWNER** can only be done by the owner (production variables and l
    Optionally set `API_PAYLOAD_RETENTION_DAYS` (default 365, never below 90).
 4. Verify: send one test message and one deliberately invalid request with a real credential, then open Settings > API Usage >
    Request history and confirm both rows show with redacted bodies; confirm a wrong-token request does not appear.
-5. Rollback: set the flag back to `false`. Existing rows stay until retention removes them (or erase them per section 4); the
+5. Rollback: set the flag back to `false`. The retention cleanup is scheduled only when `PUBLIC_API_ENABLED=true`, so turning the platform flag off stops deletion and rows will outlive 365 days until it is turned back on. Existing rows stay until retention removes them (or erase them per section 4); the
    tables are additive and can stay.

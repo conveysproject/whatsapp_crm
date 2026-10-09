@@ -1087,7 +1087,7 @@ git commit -m "feat(api): audited read-only staff lookup of stored API payloads"
 
 **Files:**
 - Modify: `.env.example`, `docs/prd-public-api-request-payload-logging.md`
-- Create: `docs/api/payload-logging-runbook.md`
+- Create: `docs/runbooks/payload-logging-runbook.md`
 
 - [ ] **Step 1: Real-Postgres smoke.** Extend `apps/api/scripts/smoke-usage-tracking.ts` (or add `smoke-payload-logging.ts` next to it, same docker `postgres:16` port 55432 `smoke*` database pattern, refusing non-local DBs) to: apply the Task 1 migration; with `API_PAYLOAD_LOGGING_ENABLED=true` send one 202, one 400 and one 401-with-credential request through the real app; flush; assert one `api_request_payloads` row per request whose `id` equals the response `api_id`, no row contains the Basic-auth header or the token string, a 17 KB body is truncated, cross-org `findFirst` returns null; run the Task 8 script and assert one audit row.
 
@@ -1103,7 +1103,7 @@ API_PAYLOAD_LOGGING_ENABLED=false
 API_PAYLOAD_RETENTION_DAYS=365
 ```
 
-- [ ] **Step 3: Runbook** `docs/api/payload-logging-runbook.md`: how to look up a request (client's own: API Usage > Request history; staff: the script with `--org` and `--reason`), what is redacted, retention, the erasure procedure (delete rows by `organization_id` and, for one customer, by searching the stored text for the phone number, run as an audited manual statement; owner decision pending on building a tool), and the release checklist: (1) deploy with the flag off (migration `20261009000000_api_payload_logging` runs via `start.sh`; if applied out-of-band run `prisma migrate resolve --applied 20261009000000_api_payload_logging`); (2) privacy policy and terms line published; (3) owner sets `API_PAYLOAD_LOGGING_ENABLED=true` on Railway production/api; (4) verify with one test send and the API Usage screen.
+- [ ] **Step 3: Runbook** `docs/runbooks/payload-logging-runbook.md`: how to look up a request (client's own: API Usage > Request history; staff: the script with `--org` and `--reason`), what is redacted, retention, the erasure procedure (delete rows by `organization_id` and, for one customer, by searching the stored text for the phone number, run as an audited manual statement; owner decision pending on building a tool), and the release checklist: (1) deploy with the flag off (migration `20261009000000_api_payload_logging` runs via `start.sh`; if applied out-of-band run `prisma migrate resolve --applied 20261009000000_api_payload_logging`); (2) privacy policy and terms line published; (3) owner sets `API_PAYLOAD_LOGGING_ENABLED=true` on Railway production/api; (4) verify with one test send and the API Usage screen.
 
 - [ ] **Step 4: Update the PRD** section 4 to say `api_request_payloads` is self-contained (own summary columns, id equals the `api_id`, no link to `api_request_logs`).
 

@@ -30,7 +30,7 @@ function qp(v: unknown): string | undefined {
 }
 
 const invalid = (reply: FastifyReply, message: string) => reply.status(400).send({ error: { code: "INVALID_QUERY", message } });
-const notFound = (reply: FastifyReply) => reply.status(404).send({ error: { code: "NOT_FOUND", message: "Credential not found" } });
+const notFound = (reply: FastifyReply, message = "Credential not found") => reply.status(404).send({ error: { code: "NOT_FOUND", message } });
 
 /**
  * Accepts only `YYYY-MM-DD` (UTC midnight) or an ISO datetime with Z / an explicit offset; anything else is null.
@@ -222,7 +222,7 @@ export const apiUsageRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { id: string } }>("/api-usage/payloads/:id", async (request, reply) => {
     if (!UUID_RE.test(request.params.id)) return invalid(reply, "id is invalid");
     const row = await fastify.prisma.apiRequestPayload.findFirst({ where: { id: request.params.id, organizationId: request.auth.organizationId } });
-    if (!row) return notFound(reply);
+    if (!row) return notFound(reply, "Request not found.");
     return reply.send(row);
   });
 

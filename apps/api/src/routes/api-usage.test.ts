@@ -359,7 +359,7 @@ describe("api-usage routes", () => {
       expect(foreign.statusCode).toBe(404);
       expect(missing.statusCode).toBe(404);
       expect(foreign.json()).toEqual(missing.json());
-      expect(foreign.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+      expect(foreign.json()).toMatchObject({ error: { code: "NOT_FOUND", message: "Request not found." } });
       for (const c of mockPrisma.apiRequestPayload.findFirst.mock.calls) expect(c[0].where.organizationId).toBe("org-1");
     });
 

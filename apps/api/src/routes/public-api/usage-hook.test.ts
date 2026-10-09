@@ -8,10 +8,10 @@ vi.mock("../../lib/queue.js", () => ({ redisConnection: undefined }));
 vi.mock("../../lib/public-api/queues.js", () => ({
   publicApiSendQueue: { add: vi.fn(async () => undefined) }, publicApiCallbackQueue: { add: vi.fn() },
 }));
-const snapshotThrows = vi.hoisted(() => ({ on: false }));
+const snapshotThrows = vi.hoisted(() => ({ on: false, calls: 0 }));
 vi.mock("../../lib/public-api/payload-capture.js", async (orig) => {
   const real = await orig<{ buildPayloadSnapshot: (i: unknown) => unknown }>();
-  return { ...real, buildPayloadSnapshot: (i: unknown) => { if (snapshotThrows.on) throw new Error("snapshot down"); return real.buildPayloadSnapshot(i); } };
+  return { ...real, buildPayloadSnapshot: (i: unknown) => { snapshotThrows.calls++; if (snapshotThrows.on) throw new Error("snapshot down"); return real.buildPayloadSnapshot(i); } };
 });
 vi.mock("../../lib/public-api/usage.js", async (orig) => {
   const real = await orig<Record<string, unknown>>();
@@ -159,6 +159,16 @@ describe("public API usage hook", () => {
       const e = h.record.mock.calls[0]![0];
       expect(e.logId).toBe(res.json().api_id);
       expect(e).not.toHaveProperty("payload");
+    });
+
+    it("attributed 401 (wrong token, real credential): the snapshot is not even built", async () => {
+      process.env["API_PAYLOAD_LOGGING_ENABLED"] = "true";
+      snapshotThrows.calls = 0;
+      const res = await get(`/v1/Account/${ID}/Message/`, auth("wrong"));
+      expect(res.statusCode).toBe(401);
+      expect(h.record.mock.calls[0]![0]).toMatchObject({ statusCode: 401, organizationId: "org-1" });
+      expect(h.record.mock.calls[0]![0]).not.toHaveProperty("payload");
+      expect(snapshotThrows.calls).toBe(0);
     });
 
     it("flag unset: no payload, but the event still has logId", async () => {

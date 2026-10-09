@@ -3,6 +3,7 @@ import { CLEANUP_BUDGET_MS, DELETE_BATCH } from "./usage-cleanup.js";
 
 const DEFAULT_DAYS = 365;
 const MIN_DAYS = 90; // owner requirement: keep at least 3 months
+const MAX_DAYS = 36_500; // upper clamp: a huge env typo must not yield an Invalid Date cutoff
 
 /**
  * API_PAYLOAD_RETENTION_DAYS as an integer >= 90 (parseInt semantics: "1.5" -> 1 -> raised to 90). Missing, non-numeric, zero or
@@ -11,7 +12,7 @@ const MIN_DAYS = 90; // owner requirement: keep at least 3 months
 export function payloadRetentionDays(): number {
   const n = Number.parseInt(process.env["API_PAYLOAD_RETENTION_DAYS"] ?? "", 10);
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_DAYS;
-  return Math.max(MIN_DAYS, n);
+  return Math.min(MAX_DAYS, Math.max(MIN_DAYS, n));
 }
 
 /**

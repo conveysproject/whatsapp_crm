@@ -16,9 +16,11 @@
  *   docker exec -i pg-smoke-paylog psql -U postgres -d smoke_paylog_mig -v ON_ERROR_STOP=1 < prisma/migrations/20261009000000_api_payload_logging/migration.sql
  *   export SMOKE_MIGRATION_DATABASE_URL=postgresql://postgres:smoke@127.0.0.1:$SMOKE_PG_PORT/smoke_paylog_mig
  *   pnpm tsx scripts/smoke-payload-logging.ts
+ *   # cleanup when done
+ *   docker rm -f pg-smoke-paylog redis-smoke-paylog
  *
- * SMOKE_PG_PORT (default 55432) is only used when DATABASE_URL is not set. On Windows the range 55423-56022 can be excluded
- * by Hyper-V/WSL; pick another port such as 15432.
+ * SMOKE_PG_PORT (default 15432) is only used when DATABASE_URL is not set. On Windows the range 55423-56022 can be excluded
+ * by Hyper-V/WSL, so avoid ports in it.
  *
  * HARD GUARDS: DATABASE_URL (and SMOKE_MIGRATION_DATABASE_URL, REDIS_URL) must point at 127.0.0.1/localhost, and the
  * database names must start with "smoke". The script TRUNCATES the three payload-logging tables at the start. It prints
@@ -29,7 +31,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 // ---- environment + hard guard (must run before the app modules are imported: they read env at import time) ----
-const pgPort = process.env["SMOKE_PG_PORT"] ?? "55432";
+const pgPort = process.env["SMOKE_PG_PORT"] ?? "15432";
 const redisPort = process.env["SMOKE_REDIS_PORT"] ?? "16379";
 const DATABASE_URL = process.env["DATABASE_URL"] ?? `postgresql://postgres:smoke@127.0.0.1:${pgPort}/smoke_paylog`;
 const MIGRATION_DATABASE_URL = process.env["SMOKE_MIGRATION_DATABASE_URL"] ?? "";
@@ -39,6 +41,8 @@ const isLocal = (host: string) => host === "127.0.0.1" || host === "localhost";
 function guardDb(raw: string): boolean {
   try {
     const u = new URL(raw);
+    // A host/hostaddr search parameter can override the URL host in libpq-style drivers: refuse it.
+    if (u.searchParams.has("host") || u.searchParams.has("hostaddr")) return false;
     return isLocal(u.hostname) && decodeURIComponent(u.pathname.replace(/^\//, "")).startsWith("smoke");
   } catch { return false; }
 }

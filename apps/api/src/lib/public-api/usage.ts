@@ -60,6 +60,8 @@ const UPSERT_CHUNK = 500;
 /** flushApiUsage keeps flushing while events keep arriving, but never loops forever (shutdown must stay bounded). */
 const MAX_DRAIN_LOOPS = 5;
 const TX_OPTIONS = { timeout: 30_000, maxWait: 5_000 } as const;
+/** Payload writes are best-effort and must not hold a connection as long as metering. */
+const PAYLOAD_TX_OPTIONS = { timeout: 10_000, maxWait: 5_000 } as const;
 /** At most this many RAW rows per credential per minute for 401s (anyone can send `knownId:wrong`). Rollups count all. */
 const AUTH_RAW_PER_MINUTE = 30;
 const AUTH_RAW_MAP_MAX = 5000;
@@ -376,7 +378,7 @@ async function flushBatch(prisma: PrismaClient, logger?: UsageLogger): Promise<v
     try {
       await prisma.$transaction(async (tx) => {
         for (let i = 0; i < payloads.length; i += PAYLOAD_CHUNK) await tx.apiRequestPayload.createMany({ data: payloads.slice(i, i + PAYLOAD_CHUNK), skipDuplicates: true });
-      }, TX_OPTIONS);
+      }, PAYLOAD_TX_OPTIONS);
     } catch (err) {
       warn(logger, { error: safeErr(err), lostPayloads: payloads.length }, "api payload flush failed");
     }
