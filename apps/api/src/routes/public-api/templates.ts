@@ -115,7 +115,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
         data: { metaTemplateId, status: "pending" },
         select: { metaTemplateId: true, name: true, language: true, category: true, status: true },
       });
-      return reply.send(toSubmitResponse(row));
+      return reply.send(toSubmitResponse(row, request.apiId));
     });
   }
 
@@ -144,7 +144,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
         return `${base}?${sp.toString()}`;
       };
       return reply.send({
-        api_id: newApiId(),
+        api_id: request.apiId ?? newApiId(),
         status: "success",
         meta: { limit, offset, next: found.length > limit ? link(offset + limit) : null, previous: offset > 0 ? link(Math.max(offset - limit, 0)) : null },
         objects: found.slice(0, limit).map(toListObject),
@@ -159,7 +159,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
       if (!ctx) return reply;
       const row = await fastify.prisma.template.findFirst({ where: { organizationId: ctx.organizationId, metaTemplateId: request.params.templateId } });
       if (!row) return plivoError(reply, 404, NOT_FOUND);
-      return reply.send(toRetrieveResponse(row as unknown as TemplateRow));
+      return reply.send(toRetrieveResponse(row as unknown as TemplateRow, request.apiId));
     });
   }
 
@@ -191,7 +191,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
         },
         select: { metaTemplateId: true, name: true, language: true, category: true, status: true },
       });
-      return reply.send(toSubmitResponse(updated));
+      return reply.send(toSubmitResponse(updated, request.apiId));
     });
   }
 

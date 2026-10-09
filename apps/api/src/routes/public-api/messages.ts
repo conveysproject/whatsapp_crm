@@ -172,7 +172,7 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
 
       if (uuids.length === 0) return plivoError(reply, 500, "Failed to queue message");
       request.usageMessages = uuids.length;
-      return reply.status(202).send({ api_id: newApiId(), message: "message(s) queued", message_uuid: uuids });
+      return reply.status(202).send({ api_id: request.apiId ?? newApiId(), message: "message(s) queued", message_uuid: uuids });
     });
   }
 
@@ -211,7 +211,7 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
       });
 
       if (direction === "inbound" || (type && type !== "whatsapp")) {
-        return reply.send({ api_id: newApiId(), meta: meta(0), objects: [] });
+        return reply.send({ api_id: request.apiId ?? newApiId(), meta: meta(0), objects: [] });
       }
 
       const where = {
@@ -228,7 +228,7 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
         fastify.prisma.apiMessageMeta.count({ where }),
         businessNumberDigits(fastify.prisma, organizationId),
       ]);
-      return reply.send({ api_id: newApiId(), meta: meta(total), objects: rows.map((r) => toMessageObject(r, from)) });
+      return reply.send({ api_id: request.apiId ?? newApiId(), meta: meta(total), objects: rows.map((r) => toMessageObject(r, from)) });
     });
   }
 
@@ -241,7 +241,7 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
       });
       if (!row) return plivoError(reply, 404, "not found");
       const from = await businessNumberDigits(fastify.prisma, organizationId);
-      return reply.send({ api_id: newApiId(), ...toMessageObject(row, from) });
+      return reply.send({ api_id: request.apiId ?? newApiId(), ...toMessageObject(row, from) });
     });
   }
 };

@@ -16,6 +16,8 @@ declare module "fastify" {
     publicApi?: { apiKeyId: string; organizationId: string };
     /** Set as soon as the public API credential row is found (before the token check); used only for usage attribution. */
     publicApiAttempt?: { apiKeyId: string; organizationId: string };
+    /** One id per public API request; used in every response body. */
+    apiId?: string;
     /** Messages accepted by this request (set by POST /Message/); read by the usage recorder. */
     usageMessages?: number;
   }

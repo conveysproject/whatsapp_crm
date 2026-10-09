@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import { randomUUID } from "node:crypto";
 import rateLimit from "@fastify/rate-limit";
 import { redisConnection } from "../../lib/queue.js";
 import { clientIp } from "../../lib/public-api/client-ip.js";
@@ -59,6 +60,9 @@ const throttled = () => ({ statusCode: 429, ...plivoErrorBody("Request was throt
  */
 export const publicApiRouter: FastifyPluginAsync = async (fastify) => {
   fastify.setErrorHandler(publicApiErrorHandler);
+
+  // One id per request: used in every response body and (logging plan) as the request-log row id.
+  fastify.addHook("onRequest", (req, _reply, done) => { req.apiId = randomUUID(); done(); });
 
   // Usage metering: exactly one event per response of this plugin (incl. 4xx/5xx/429). Synchronous, in-memory, never throws.
   // The route PATTERN is recorded (never the URL, which carries the auth id and message ids).

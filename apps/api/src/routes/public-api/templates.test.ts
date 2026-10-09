@@ -134,7 +134,7 @@ describe("public API templates", () => {
     it("404 (same body as an unknown template) for a foreign waba_id; nothing written or sent", async () => {
       const res = await post(`${base}/waba-OTHER/`, goodBody());
       expect(res.statusCode).toBe(404);
-      expect(res.json()).toEqual({ api_id: expect.any(String), error: notFoundError });
+      expect(res.json()).toMatchObject({ api_id: expect.any(String), error: notFoundError });
       expect(rows).toHaveLength(0);
       expect(submit).not.toHaveBeenCalled();
     });
@@ -149,7 +149,7 @@ describe("public API templates", () => {
       for (const components of [[{ type: "HEADER", format: "TEXT", text: "h" }], [{ type: "BODY", text: 42 }], [{ type: "BODY", text: "x" }, { type: "BUTTONS", buttons }]]) {
         const res = await post(`${base}/waba-1/`, { ...goodBody(), components });
         expect(res.statusCode).toBe(400);
-        expect(res.json()).toEqual({ api_id: expect.any(String), error: expect.any(String) });
+        expect(res.json()).toMatchObject({ api_id: expect.any(String), error: expect.any(String) });
       }
       expect(submit).not.toHaveBeenCalled();
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
@@ -284,7 +284,7 @@ describe("public API templates", () => {
       const foreignWaba = await app.inject({ method: "GET", url: `${base}/waba-OTHER/7777/` });
       for (const r of [foreign, unknown, foreignWaba]) {
         expect(r.statusCode).toBe(404);
-        expect(r.json()).toEqual({ api_id: expect.any(String), error: notFoundError });
+        expect(r.json()).toMatchObject({ api_id: expect.any(String), error: notFoundError });
       }
     });
   });

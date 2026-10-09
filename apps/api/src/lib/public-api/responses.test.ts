@@ -11,9 +11,9 @@ import { publicApiErrorHandler } from "../../routes/public-api/index.js";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe("plivoErrorBody (S9: the single producer of the provisional error body)", () => {
-  it("builds { api_id: <uuid>, error } and nothing else", () => {
+  it("builds { api_id: <uuid>, error, error_code } and nothing else", () => {
     const b = plivoErrorBody("Nope");
-    expect(Object.keys(b).sort()).toEqual(["api_id", "error"]);
+    expect(Object.keys(b).sort()).toEqual(["api_id", "error", "error_code"]);
     expect(b.api_id).toMatch(UUID);
     expect(b.error).toBe("Nope");
   });
@@ -30,7 +30,7 @@ describe("plivoErrorBody (S9: the single producer of the provisional error body)
       bodies.push(r.send.mock.calls[0]![0]);
     }
     for (const b of bodies) {
-      expect(Object.keys(b as object).sort()).toEqual(["api_id", "error"]);
+      expect(Object.keys(b as object).sort()).toEqual(["api_id", "error", "error_code"]);
       expect((b as { api_id: string }).api_id).toMatch(UUID);
     }
   });
@@ -41,7 +41,7 @@ describe("plivoErrorBody (S9: the single producer of the provisional error body)
     const offenders: string[] = [];
     for (const dir of dirs) {
       for (const f of readdirSync(dir)) {
-        if (!f.endsWith(".ts") || f.endsWith(".test.ts") || f === "responses.ts") continue;
+        if (!f.endsWith(".ts") || f.endsWith(".test.ts") || f === "responses.ts" || f === "error-catalog.ts") continue;
         if (/api_id\s*:[^}\n]*\berror\s*:/.test(readFileSync(join(dir, f), "utf8"))) offenders.push(f);
       }
     }

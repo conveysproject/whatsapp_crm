@@ -117,9 +117,9 @@ export interface TemplateRow {
   components: unknown;
 }
 
-export function toSubmitResponse(row: Pick<TemplateRow, "metaTemplateId" | "name" | "language" | "category" | "status">) {
+export function toSubmitResponse(row: Pick<TemplateRow, "metaTemplateId" | "name" | "language" | "category" | "status">, apiId: string = newApiId()) {
   return {
-    api_id: newApiId(),
+    api_id: apiId,
     status: "success",
     message: "template submitted to meta for review",
     template_id: row.metaTemplateId ?? "",
@@ -140,9 +140,9 @@ export function toListObject(row: Pick<TemplateRow, "metaTemplateId" | "name" | 
   };
 }
 
-export function toRetrieveResponse(row: TemplateRow) {
+export function toRetrieveResponse(row: TemplateRow, apiId: string = newApiId()) {
   return {
-    api_id: newApiId(),
+    api_id: apiId,
     ...toListObject(row),
     quality_score: { score: row.qualityScore ?? "UNKNOWN" },
     rejected_reason: row.rejectedReason ?? "NONE",

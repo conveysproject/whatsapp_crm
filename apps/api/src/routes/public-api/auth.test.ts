@@ -86,7 +86,7 @@ describe("publicApiAuth", () => {
     const notAllowed = await get(basic(ID, "good-token"));
     for (const res of [blocked, notAllowed]) {
       expect(res.statusCode).toBe(403);
-      expect(res.json()).toEqual({ api_id: expect.any(String), error: "API access is not available for this account" });
+      expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "API access is not available for this account" });
     }
     expect(JSON.parse(blocked.body).error).toBe(JSON.parse(notAllowed.body).error);
     expect(mockPrisma.apiKey.update).not.toHaveBeenCalled();
@@ -96,7 +96,7 @@ describe("publicApiAuth", () => {
     process.env["PUBLIC_API_ENABLED"] = "false";
     const res = await get(basic(ID, "good-token"));
     expect(res.statusCode).toBe(403);
-    expect(res.json()).toEqual({ api_id: expect.any(String), error: "API access is not available for this account" });
+    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "API access is not available for this account" });
     expect(mockPrisma.vendorSetting.findFirst).not.toHaveBeenCalled();
   });
 

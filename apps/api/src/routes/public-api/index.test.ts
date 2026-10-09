@@ -62,14 +62,14 @@ describe("publicApiRouter", () => {
     mockPrisma.organization.findUnique.mockResolvedValue({ status: "active", whatsappBusinessAccountId: "waba-1", wabaAccessToken: "t" });
     const res = await app.inject({ method: "GET", url, headers: { authorization: auth } });
     expect(res.statusCode).toBe(404);
-    expect(res.json()).toEqual({ api_id: expect.any(String), error: "Resource not found" });
+    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "Resource not found" });
   });
 
   it("rate limits per client+credential with HTTP 429 and a Plivo-style body", async () => {
     for (let i = 0; i < 3; i++) expect((await list()).statusCode).toBe(200);
     const res = await list();
     expect(res.statusCode).toBe(429);
-    expect(res.json()).toEqual({ api_id: expect.any(String), error: "Request was throttled." });
+    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "Request was throttled." });
   });
 
   it("keeps per-credential buckets independent", async () => {
@@ -99,7 +99,7 @@ describe("publicApiRouter", () => {
     for (let i = 0; i < 3; i++) expect((await list({})).statusCode).toBe(401);
     const res = await list({});
     expect(res.statusCode).toBe(429);
-    expect(res.json()).toEqual({ api_id: expect.any(String), error: "Request was throttled." });
+    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "Request was throttled." });
     delete process.env["PUBLIC_API_PREAUTH_RATE_LIMIT"];
   });
 
@@ -167,14 +167,14 @@ describe("publicApiRouter", () => {
       payload: "{not json",
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ api_id: expect.any(String), error: expect.any(String) });
+    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: expect.any(String) });
   });
 
   it("answers an unexpected failure with a 500 Plivo-style body that never echoes the raw message", async () => {
     mockPrisma.apiKey.findUnique.mockRejectedValue(new Error("connection to db-host-secret:5432 refused"));
     const res = await list();
     expect(res.statusCode).toBe(500);
-    expect(res.json()).toEqual({ api_id: expect.any(String), error: "Internal server error" });
+    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "Internal server error" });
     expect(res.body).not.toContain("db-host-secret");
   });
 });
