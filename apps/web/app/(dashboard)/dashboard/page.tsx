@@ -1,4 +1,4 @@
-import { JSX } from "react";
+import { JSX, Suspense } from "react";
 import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import { OrgMetricCards } from "@/components/analytics/OrgMetricCards";
@@ -8,6 +8,9 @@ import { TeamLeaderboard } from "@/components/analytics/TeamLeaderboard";
 import { ActivityFeed } from "@/components/analytics/ActivityFeed";
 import { QuickActions } from "@/components/analytics/QuickActions";
 import { MyWorkSection } from "@/components/analytics/MyWorkSection";
+import { DashboardView } from "@/components/dashboard/DashboardView";
+import { DashboardSkeleton } from "@/components/dashboard/DashboardStates";
+import { Greeting } from "@/components/dashboard/Greeting";
 
 interface OverviewMetrics {
   openConversations: number;
@@ -149,7 +152,27 @@ function PlanUsageWidget({ usage }: { usage: UsageData }): JSX.Element {
   );
 }
 
+// Dashboard v2 (docs/prd-dashboard-v2.md). Read at build time; default off.
+const DASHBOARD_V2 = process.env["NEXT_PUBLIC_DASHBOARD_V2"] === "true";
+
+async function DashboardV2Page(): Promise<JSX.Element> {
+  const { getToken } = await auth.protect();
+  const currentUser = await getCurrentUser(await getToken() ?? "");
+  return (
+    <div className="space-y-6">
+      <Greeting fullName={currentUser?.fullName ?? "there"} />
+      <Suspense fallback={<DashboardSkeleton />}>
+        <DashboardView />
+      </Suspense>
+    </div>
+  );
+}
+
 export default async function DashboardPage(): Promise<JSX.Element> {
+  return DASHBOARD_V2 ? DashboardV2Page() : LegacyDashboardPage();
+}
+
+async function LegacyDashboardPage(): Promise<JSX.Element> {
   const { getToken } = await auth.protect();
   const token = await getToken() ?? "";
 
