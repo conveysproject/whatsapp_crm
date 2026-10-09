@@ -27,7 +27,7 @@ Non-goals
 ## 3. Architecture fit
 
 - Part A: pure mapping change in `send-mapping.ts` plus `WaTemplateComponent` type in `lib/whatsapp.ts:113`.
-- Part B reuses the existing buffered, single-flight, never-throws recorder (`lib/public-api/usage.ts:203-328`) and the hourly cleanup job (`usage-cleanup.ts`). Payloads ride on the same raw event, so they share the `api_request_logs.id` (a UUID generated at flush; `request_id` is a per-process counter and is NOT unique).
+- Part B reuses the existing buffered, single-flight, never-throws recorder (`lib/public-api/usage.ts:203-328`) and the hourly cleanup job (`usage-cleanup.ts`). Payloads ride on the same raw event and share its id, which is the `api_id` (`request.apiId`) sent to the client and used as the `api_request_logs.id` (`request_id` is a per-process counter and is NOT unique). The payload rows are written in a separate transaction AFTER the metering transaction commits, so a payload failure never costs raw rows or rollups (duplicates are skipped, `skipDuplicates`).
 - Capture points: request body from `request.body` and response body from an `onSend` hook inside the public API plugin (`routes/public-api/index.ts:60`), handed to `recordUsageOnResponse`.
 
 ## 4. Data model (hand-authored additive SQL; local DB is drifted)
@@ -46,7 +46,7 @@ Non-goals
 - `outcome` TEXT (`delivered` | `http_error` | `network_error` | `dropped`), `http_status` INT NULL, `reason` TEXT NULL (safe projection only), `duration_ms` INT, `created_at`
 
 `api_payload_access_audit`
-- `id` UUID PK, `actor` TEXT, `organization_id` TEXT, `query` TEXT, `rows_returned` INT, `created_at`
+- `id` UUID PK, `actor` TEXT, `organization_id` TEXT, `reason` TEXT, `query` TEXT, `rows_returned` INT, `created_at`
 
 Rollback: set the flag off; the tables are additive and can stay empty.
 
@@ -82,7 +82,7 @@ Part B dashboard API (same `settings_api_key` gate and API-availability check as
 ## 6. Security and privacy
 
 - Never store: `Authorization` header, any key matching `/token|secret|authorization|password|api[_-]?key/i` (recursive redaction before truncation), callback signatures.
-- Bodies contain end-customer phone numbers and message text. Mitigations: org-scoped reads only, retention 365 days per owner decision 2026-10-09 (`API_PAYLOAD_RETENTION_DAYS`, default 365; callback attempts follow the same setting) deleted by a separate batched step of the hourly job, payloads skipped when the request has no org (unauthenticated floods), flag default OFF (`API_PAYLOAD_LOGGING_ENABLED`).
+- Bodies contain end-customer phone numbers and message text. Mitigations: org-scoped reads only, retention 365 days per owner decision 2026-10-09 (`API_PAYLOAD_RETENTION_DAYS`, default 365; callback attempts follow the same setting) deleted by a separate batched step of the hourly job, payloads skipped when the request has no org (unauthenticated floods) and never stored for 401 responses (credential-guessing noise; their metadata row stays), flag default OFF (`API_PAYLOAD_LOGGING_ENABLED`).
 - Privacy policy and ToS need a line covering API payload retention (owner action, release checklist).
 - Staff lookup via `apps/api/scripts/lookup-api-request.ts`: read-only, refuses to run without `--org` and `--reason`, writes `api_payload_access_audit`.
 - Org scoping: every query filters by `organization_id`; RBAC unchanged (`settings_api_key`).
@@ -97,7 +97,7 @@ Part B dashboard API (same `settings_api_key` gate and API-availability check as
 ## 8. Acceptance criteria
 
 - A send with `parameter_name` reaches Meta with the same names; positional unchanged; named template without names -> 400.
-- With the flag on, every public API response (200, 4xx, 5xx, 429 with an org) has a payload row with redacted, capped bodies; with the flag off, none.
+- With the flag on, every public API response (200, 4xx except 401, 5xx, 429 with an org) whose raw metadata row is written has a payload row with redacted, capped bodies; with the flag off, none.
 - Records of org A are never returned to org B (test).
 - A recorder or DB failure never changes an API response.
 - Cleanup removes payloads older than retention.

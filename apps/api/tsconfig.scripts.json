@@ -1,0 +1,7 @@
+{
+  // Type-check of apps/api/scripts (*.ts only; the .mjs/.cjs one-off scripts are plain JS and not checked).
+  // The two src includes carry the Fastify type augmentation (request.auth, fastify.prisma, ...) the imported routes rely on.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": ".", "incremental": false },
+  "include": ["scripts", "src/types/**/*.d.ts", "src/plugins/prisma.ts"]
+}
