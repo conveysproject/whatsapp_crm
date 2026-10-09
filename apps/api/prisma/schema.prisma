@@ -279,6 +279,8 @@ model Message {
   isSystemMessage   Boolean          @default(false) @map("is_system_message") // bot/SLA notifications, hidden in inbox
   senderName        String?          @map("sender_name")
   isForwarded       Boolean          @default(false) @map("is_forwarded")
+  templateId        String?          @map("template_id") // which template this outbound template message used (no FK: history survives template deletion)
+  source            String?          // api | dashboard | campaign | flow | test (NULL = unknown/legacy)
   replyToId         String?          @map("reply_to_id")
   replyTo           Message?         @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies           Message[]        @relation("MessageReplies")
@@ -293,6 +295,7 @@ model Message {
   @@index([organizationId])
   @@index([organizationId, direction, status]) // analytics
   @@index([organizationId, isSystemMessage])   // filter system messages from inbox
+  @@index([organizationId, templateId, sentAt], map: "messages_org_template_sent_idx") // template analytics
   @@map("messages")
 }
 
