@@ -16,8 +16,8 @@ An organization can hold up to 10 active credentials.
 - Base URL: `https://<your-WBMSG-API-host>/v1/Account/{auth_id}/` (we give you the host).
 - Authentication: HTTP Basic, user = Auth ID, password = Auth Token. The `{auth_id}` in the path must be the same credential.
 - Bodies are JSON (`Content-Type: application/json`).
-- Rate limit: 300 requests per minute per credential by default. Over the limit returns HTTP `429` with `{"api_id": "...", "error": "Request was throttled."}`.
-- Error bodies: `{"api_id": "<uuid>", "error": "<message>"}` **(confirm)**. Typical statuses: `400` validation, `401` bad credentials, `403` account not active or API not available, `404` unknown resource (also used for another account's resources), `429` throttled, `502` Meta unavailable.
+- Rate limit: 300 requests per minute per credential by default. Over the limit returns HTTP `429` with a `Retry-After` header (see section 7).
+- Error bodies: `{"api_id", "error", "error_code", "hint"}` (see section 7). Typical statuses: `400` validation, `401` bad credentials, `403` account not active or API not available, `404` unknown resource (also used for another account's resources), `429` throttled, `502` Meta unavailable.
 - Usage: Settings > API Usage shows your request counts, success and error rates, per credential and per endpoint.
 
 ## 3. Send a message
@@ -86,10 +86,10 @@ WhatsApp rules still apply: free-form (`text`, `media_urls`, `interactive`, `loc
 
 ## 4. Read messages
 - `GET /Message/` list. Query: `limit` (max 20), `offset`, `message_direction`, `message_state`, `message_type`, `error_code`. Response has `meta` (`limit`, `offset`, `total_count`, `previous`, `next`) and `objects`.
-- `GET /Message/{message_uuid}/` one message: `message_uuid`, `message_state` (`queued`, `sent`, `delivered`, `read`, `failed`, `undelivered`), `to_number`, `from_number`, `error_code`, `message_time`.
+- `GET /Message/{message_uuid}/` one message: `message_uuid`, `message_state` (`queued`, `sent`, `delivered`, `read`, `failed`, `undelivered`), `to_number`, `from_number`, `error_code`, `error_message`, `message_time`. `error_message` is a readable sentence for `error_code` (`null` when there is no error); see section 7.
 
 ## 5. Callbacks
-**Status callbacks** are sent to your callback URL as a form-encoded `POST` (or query-string `GET`) on every status change: `MessageUUID`, `To`, `From`, `Type`, `Status`, `ErrorCode`, `Sequence`, `MessageTime`, plus billing-style fields we fill with fixed placeholder values **(confirm)**. Respond with any 2xx within a few seconds. Failed deliveries are retried after 60, 120 and 240 seconds.
+**Status callbacks** are sent to your callback URL as a form-encoded `POST` (or query-string `GET`) on every status change: `MessageUUID`, `To`, `From`, `Type`, `Status`, `ErrorCode`, `ErrorMessage`, `Sequence`, `MessageTime`, plus billing-style fields we fill with fixed placeholder values **(confirm)**. Respond with any 2xx within a few seconds. `ErrorCode` and `ErrorMessage` are only present when `Status` is `failed` or `undelivered` (see section 7). Failed deliveries are retried after 60, 120 and 240 seconds.
 
 **Inbound messages** from your customers are forwarded to your inbound URL with `From`, `To`, `Text`, `Type`, `MessageUUID` **(confirm; media, location and button replies are being aligned with your samples)**.
 
@@ -108,19 +108,71 @@ All under `/WhatsApp/Template/{waba_id}/`; `waba_id` is your WhatsApp Business A
 
 `template_id` is Meta's template ID. Status values you will see: `PENDING`, `APPROVED`, `REJECTED` (paused and disabled templates are not reported yet). Meta usually reviews utility templates within minutes, other categories can take up to 24 hours.
 
-## 7. Error codes
-`ErrorCode` on a failed or undelivered message:
+## 7. Errors
+Every failed API call returns a JSON body with the same four fields:
 
-| Code | Meaning |
+```json
+{
+  "api_id": "3f1c2a9e-5b7d-4e0a-9c11-2d8f6a4b7e90",
+  "error": "Template \"order_confirmation\" not found",
+  "error_code": "TEMPLATE_NOT_FOUND",
+  "hint": "Check the template name and language in your WBMSG account."
+}
+```
+
+- `api_id`: identifies this exact request on our side. **Quote it when you contact support**; it lets us find the request immediately.
+- `error`: what went wrong, in a sentence. For validation errors it names the field to fix.
+- `error_code`: a stable code (table below). Branch your code on this, not on the `error` text, which can change.
+- `hint`: a suggestion for fixing the problem. It is advice and may be absent.
+
+On HTTP `429` the response also carries a `Retry-After` header with the number of seconds to wait before retrying.
+
+| error_code | HTTP | Meaning | What to do |
+|---|---|---|---|
+| `INVALID_JSON` | 400 | The request body is not valid JSON. | Send a JSON object with `Content-Type: application/json`. |
+| `EMPTY_BODY` | 400 | The request body is empty. | Send a JSON object with `Content-Type: application/json`. |
+| `UNSUPPORTED_CONTENT_TYPE` | 415 | `Content-Type` is not `application/json`. | Add the header `Content-Type: application/json`. |
+| `BODY_TOO_LARGE` | 413 | The request body is too large. | Reduce the size of the request. |
+| `VALIDATION_FAILED` | 400 | A field is missing or invalid. The `error` text names it. Also used when WhatsApp rejects a template you create or edit. | Fix the field named in the message and send again. |
+| `TEMPLATE_PARAMS_MISMATCH` | 400 | The template parameters do not match the template. | Send one parameter for every variable in the template body and header, using the same names (or numbers) as the template. |
+| `TEMPLATE_NOT_FOUND` | 400 when sending, 404 on the template endpoints | No template with that name and language. | Check the template name and language in your WBMSG account. |
+| `TEMPLATE_NOT_APPROVED` | 400 | The template is not approved. | Only approved templates can be sent. Check its status in your WBMSG account. |
+| `WHATSAPP_NOT_CONNECTED` | 400 | No WhatsApp number is connected to this account. | Connect a WhatsApp Business number in WBMSG first. |
+| `SRC_MISMATCH` | 400 | `src` is not the WhatsApp Business number connected to this account. | Set `src` to the connected number. |
+| `CALLBACK_URL_INVALID` | 400 | The callback `url` is not allowed. | Use a public `https` URL. |
+| `AUTH_MISSING` | 401 | The `Authorization` header is missing. | Use HTTP Basic auth: Auth ID as the username and the Auth Token as the password. |
+| `AUTH_MALFORMED` | 401 | The `Authorization` header is not valid Basic auth. | Use HTTP Basic auth: `base64(auth_id:auth_token)`. |
+| `AUTH_ID_MISMATCH` | 401 | The `auth_id` in the URL does not match the username in the `Authorization` header. | Use the same Auth ID in `/v1/Account/{auth_id}/` and as the Basic-auth username. |
+| `AUTH_INVALID` | 401 | The Auth ID or Auth Token is invalid, or the credential was revoked. | Check both values, or create a new credential in WBMSG under Settings > API. |
+| `ACCOUNT_INACTIVE` | 403 | This account is not active. | Contact WBMSG support. |
+| `API_NOT_AVAILABLE` | 403 | API access is not available for this account. | Contact WBMSG support to enable it. |
+| `MESSAGE_NOT_FOUND` | 404 | No message with that `message_uuid` on this account. | Check the `message_uuid`; it must belong to this account. |
+| `RATE_LIMITED` | 429 | Too many requests. | Wait for the number of seconds in the `Retry-After` header, then retry. |
+| `QUEUE_FAILED` | 500 | We could not queue your message. Nothing was sent. | Retry in a few seconds. If it keeps failing, contact support and quote the `api_id`. |
+| `INTERNAL_ERROR` | 500 | Something went wrong on our side. Your request was not processed. | Retry in a few seconds. If it keeps failing, contact support and quote the `api_id`. |
+| `META_UNAVAILABLE` | 502 | WhatsApp (Meta) did not accept the request right now. | Retry later. If it keeps failing, contact support and quote the `api_id`. |
+
+Any other `4xx` status not listed above is returned as `VALIDATION_FAILED`.
+
+### Failures after a message is accepted
+A `202` means the message was queued, not delivered. If it later fails, the outcome is reported on the message itself:
+
+- In the status callback: `ErrorCode` plus a readable `ErrorMessage` (only when `Status` is `failed` or `undelivered`).
+- In `GET /Message/{message_uuid}/` and the list: `error_code` plus `error_message`.
+
+| ErrorCode | ErrorMessage |
 |---|---|
-| 310 | Phone number not registered on WhatsApp |
-| 330 | Message type not supported |
-| 340 | Template does not exist, is paused or disabled |
-| 350 | Template parameters do not match the template |
-| 360 | WhatsApp Business account locked or disabled |
-| 370 | WhatsApp throughput or rate limit reached |
-| 380 | More than 24 hours since the customer last wrote: use a template |
-| 6-digit number | Meta's own error code, passed through unchanged (for example `131049`) |
+| 310 | The sending phone number is not registered on the WhatsApp Business Platform. |
+| 330 | WhatsApp does not support this message type. Check the message type and try again. |
+| 340 | The template does not exist in this language, is not approved, or has been paused or disabled. Check its status in WBMSG. |
+| 350 | The template parameters do not match the template (count, format or length). Send values for every parameter in the format the template defines. |
+| 360 | The WhatsApp Business account is restricted or failed verification. Contact support. |
+| 370 | WhatsApp is limiting sending right now (throughput, messages to the same recipient, or a quality restriction). Slow down and retry later. |
+| 380 | The customer has not replied in the last 24 hours, so only an approved template message can be sent. |
+| 131047 | The customer has not replied in the last 24 hours, so only an approved template message can be sent. |
+| 131049 | WhatsApp did not deliver this marketing message to this recipient to keep engagement healthy. Wait at least 24 hours before trying again. |
+| 131026 | WhatsApp could not deliver the message. The recipient may not be a WhatsApp user, may not have accepted WhatsApp's terms, or may be on an outdated WhatsApp version. |
+| any other 6-digit number | WhatsApp's own error code, passed through unchanged. `ErrorMessage` is "WhatsApp could not deliver the message (code N)." with the code in place of N. |
 
 `131049` means Meta chose not to deliver a marketing template to that person to protect user experience. Do not retry immediately; wait at least 24 hours, or use a utility template or an open 24-hour window. Details for any failure are visible in the WBMSG Message Log.
 

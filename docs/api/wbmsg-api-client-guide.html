@@ -57,7 +57,7 @@
   <li><a href="#read">Read messages</a></li>
   <li><a href="#callbacks">Callbacks: delivery status and inbound messages</a></li>
   <li><a href="#templates">Templates</a></li>
-  <li><a href="#errors">Error codes</a></li>
+  <li><a href="#errors">Errors</a></li>
   <li><a href="#whatsapp">WhatsApp rules to know</a></li>
   <li><a href="#support">Support checklist</a></li>
 </ol>
@@ -77,8 +77,8 @@
   <tr><td>Base URL</td><td><code>https://wbmsg-production.up.railway.app/v1/Account/{auth_id}/</code></td></tr>
   <tr><td>Authentication</td><td>HTTP Basic. User = Auth ID, password = Auth Token. The <code>{auth_id}</code> in the path must be the same credential.</td></tr>
   <tr><td>Request body</td><td>JSON, <code>Content-Type: application/json</code></td></tr>
-  <tr><td>Rate limit</td><td>300 requests per minute per credential. Exceeding it returns HTTP <code>429</code>.</td></tr>
-  <tr><td>Error body</td><td><code>{"api_id": "&lt;uuid&gt;", "error": "&lt;message&gt;"}</code></td></tr>
+  <tr><td>Rate limit</td><td>300 requests per minute per credential. Exceeding it returns HTTP <code>429</code> with a <code>Retry-After</code> header.</td></tr>
+  <tr><td>Error body</td><td><code>{"api_id", "error", "error_code", "hint"}</code>. See <a href="#errors">Errors</a>.</td></tr>
 </table>
 <table>
   <tr><th style="width:14%">HTTP</th><th>Meaning</th></tr>
@@ -176,7 +176,7 @@
 </table>
 <p>The response contains <code>meta</code> (<code>limit</code>, <code>offset</code>, <code>total_count</code>, <code>previous</code>, <code>next</code>) and <code>objects</code>.</p>
 <div class="ep"><span class="method get">GET</span>/Message/{message_uuid}/</div>
-<p>Returns one message: <code>message_uuid</code>, <code>message_state</code>, <code>message_direction</code>, <code>message_type</code>, <code>to_number</code>, <code>from_number</code>, <code>error_code</code> and <code>message_time</code>.</p>
+<p>Returns one message: <code>message_uuid</code>, <code>message_state</code>, <code>message_direction</code>, <code>message_type</code>, <code>to_number</code>, <code>from_number</code>, <code>error_code</code>, <code>error_message</code> and <code>message_time</code>. <code>error_message</code> is a readable sentence for <code>error_code</code> (<code>null</code> when there is no error). See <a href="#errors">Errors</a>.</p>
 <table>
   <tr><th style="width:20%">message_state</th><th>Meaning</th></tr>
   <tr><td>queued</td><td>Accepted by WBMSG, not yet sent to WhatsApp.</td></tr>
@@ -197,6 +197,7 @@
   <tr><td><code>Type</code></td><td><code>whatsapp</code></td></tr>
   <tr><td><code>Status</code></td><td><code>queued</code>, <code>sent</code>, <code>delivered</code>, <code>read</code>, <code>failed</code> or <code>undelivered</code></td></tr>
   <tr><td><code>ErrorCode</code></td><td>Only present when <code>Status</code> is <code>failed</code> or <code>undelivered</code>. See <a href="#errors">error codes</a>.</td></tr>
+  <tr><td><code>ErrorMessage</code></td><td>A readable sentence explaining <code>ErrorCode</code>. Present together with it.</td></tr>
   <tr><td><code>Sequence</code></td><td>Increases with each status change of the same message. Use it to ignore out-of-order calls.</td></tr>
   <tr><td><code>MessageTime</code></td><td>Time of the status change.</td></tr>
 </table>
@@ -268,20 +269,68 @@ function valid(url, nonce, signature, authToken) {
   <tr><td>ARCHIVED</td><td>Removed from use.</td></tr>
 </table>
 
-<h2 id="errors">7. Error codes</h2>
-<p><code>ErrorCode</code> appears on failed and undelivered messages, in callbacks and when reading a message.</p>
+<h2 id="errors">7. Errors</h2>
+<p>Every failed API call returns a JSON body with the same four fields:</p>
+<pre>{
+  "api_id": "3f1c2a9e-5b7d-4e0a-9c11-2d8f6a4b7e90",
+  "error": "Template \"order_confirmation\" not found",
+  "error_code": "TEMPLATE_NOT_FOUND",
+  "hint": "Check the template name and language in your WBMSG account."
+}</pre>
+<ul>
+  <li><code>api_id</code>: identifies this exact request on our side. <b>Quote it when you contact support</b>; it lets us find the request immediately.</li>
+  <li><code>error</code>: what went wrong, in a sentence. For validation errors it names the field to fix.</li>
+  <li><code>error_code</code>: a stable code (table below). Branch your code on this, not on the <code>error</code> text, which can change.</li>
+  <li><code>hint</code>: a suggestion for fixing the problem. It is advice and may be absent.</li>
+</ul>
+<p>On HTTP <code>429</code> the response also carries a <code>Retry-After</code> header with the number of seconds to wait before retrying.</p>
 <table>
-  <tr><th style="width:18%">Code</th><th>Meaning</th></tr>
-  <tr><td>310</td><td>The phone number is not registered on WhatsApp.</td></tr>
-  <tr><td>330</td><td>The message type is not supported.</td></tr>
-  <tr><td>340</td><td>The template does not exist, is paused or is disabled.</td></tr>
-  <tr><td>350</td><td>Template parameters do not match the template (wrong count or format).</td></tr>
-  <tr><td>360</td><td>The WhatsApp Business account is locked or disabled.</td></tr>
-  <tr><td>370</td><td>WhatsApp throughput or rate limit reached. Slow down and retry.</td></tr>
-  <tr><td>380</td><td>More than 24 hours since the customer last wrote to you. Send an approved template instead.</td></tr>
-  <tr><td>6-digit number</td><td>WhatsApp's own error code, passed through unchanged (for example <code>131049</code>). Details for any failure are in the WBMSG Message Log.</td></tr>
+  <tr><th style="width:24%">error_code</th><th style="width:12%">HTTP</th><th>Meaning</th><th>What to do</th></tr>
+  <tr><td><code>INVALID_JSON</code></td><td>400</td><td>The request body is not valid JSON.</td><td>Send a JSON object with <code>Content-Type: application/json</code>.</td></tr>
+  <tr><td><code>EMPTY_BODY</code></td><td>400</td><td>The request body is empty.</td><td>Send a JSON object with <code>Content-Type: application/json</code>.</td></tr>
+  <tr><td><code>UNSUPPORTED_CONTENT_TYPE</code></td><td>415</td><td><code>Content-Type</code> is not <code>application/json</code>.</td><td>Add the header <code>Content-Type: application/json</code>.</td></tr>
+  <tr><td><code>BODY_TOO_LARGE</code></td><td>413</td><td>The request body is too large.</td><td>Reduce the size of the request.</td></tr>
+  <tr><td><code>VALIDATION_FAILED</code></td><td>400</td><td>A field is missing or invalid. The <code>error</code> text names it. Also used when WhatsApp rejects a template you create or edit.</td><td>Fix the field named in the message and send again.</td></tr>
+  <tr><td><code>TEMPLATE_PARAMS_MISMATCH</code></td><td>400</td><td>The template parameters do not match the template.</td><td>Send one parameter for every variable in the template body and header, using the same names (or numbers) as the template.</td></tr>
+  <tr><td><code>TEMPLATE_NOT_FOUND</code></td><td>400 when sending, 404 on the template endpoints</td><td>No template with that name and language.</td><td>Check the template name and language in your WBMSG account.</td></tr>
+  <tr><td><code>TEMPLATE_NOT_APPROVED</code></td><td>400</td><td>The template is not approved.</td><td>Only approved templates can be sent. Check its status in your WBMSG account.</td></tr>
+  <tr><td><code>WHATSAPP_NOT_CONNECTED</code></td><td>400</td><td>No WhatsApp number is connected to this account.</td><td>Connect a WhatsApp Business number in WBMSG first.</td></tr>
+  <tr><td><code>SRC_MISMATCH</code></td><td>400</td><td><code>src</code> is not the WhatsApp Business number connected to this account.</td><td>Set <code>src</code> to the connected number.</td></tr>
+  <tr><td><code>CALLBACK_URL_INVALID</code></td><td>400</td><td>The callback <code>url</code> is not allowed.</td><td>Use a public <code>https</code> URL.</td></tr>
+  <tr><td><code>AUTH_MISSING</code></td><td>401</td><td>The <code>Authorization</code> header is missing.</td><td>Use HTTP Basic auth: Auth ID as the username and the Auth Token as the password.</td></tr>
+  <tr><td><code>AUTH_MALFORMED</code></td><td>401</td><td>The <code>Authorization</code> header is not valid Basic auth.</td><td>Use HTTP Basic auth: <code>base64(auth_id:auth_token)</code>.</td></tr>
+  <tr><td><code>AUTH_ID_MISMATCH</code></td><td>401</td><td>The <code>auth_id</code> in the URL does not match the username in the <code>Authorization</code> header.</td><td>Use the same Auth ID in <code>/v1/Account/{auth_id}/</code> and as the Basic-auth username.</td></tr>
+  <tr><td><code>AUTH_INVALID</code></td><td>401</td><td>The Auth ID or Auth Token is invalid, or the credential was revoked.</td><td>Check both values, or create a new credential in WBMSG under Settings &gt; API.</td></tr>
+  <tr><td><code>ACCOUNT_INACTIVE</code></td><td>403</td><td>This account is not active.</td><td>Contact WBMSG support.</td></tr>
+  <tr><td><code>API_NOT_AVAILABLE</code></td><td>403</td><td>API access is not available for this account.</td><td>Contact WBMSG support to enable it.</td></tr>
+  <tr><td><code>MESSAGE_NOT_FOUND</code></td><td>404</td><td>No message with that <code>message_uuid</code> on this account.</td><td>Check the <code>message_uuid</code>; it must belong to this account.</td></tr>
+  <tr><td><code>RATE_LIMITED</code></td><td>429</td><td>Too many requests.</td><td>Wait for the number of seconds in the <code>Retry-After</code> header, then retry.</td></tr>
+  <tr><td><code>QUEUE_FAILED</code></td><td>500</td><td>We could not queue your message. Nothing was sent.</td><td>Retry in a few seconds. If it keeps failing, contact support and quote the <code>api_id</code>.</td></tr>
+  <tr><td><code>INTERNAL_ERROR</code></td><td>500</td><td>Something went wrong on our side. Your request was not processed.</td><td>Retry in a few seconds. If it keeps failing, contact support and quote the <code>api_id</code>.</td></tr>
+  <tr><td><code>META_UNAVAILABLE</code></td><td>502</td><td>WhatsApp (Meta) did not accept the request right now.</td><td>Retry later. If it keeps failing, contact support and quote the <code>api_id</code>.</td></tr>
 </table>
-<div class="note warn"><b>Error 131049.</b> WhatsApp limits how many marketing templates one person receives from businesses in a period, and may decline to deliver the message. Do not retry immediately. Wait at least 24 hours before resending a marketing template to the same person. Utility templates are not affected, and messages sent inside an open 24-hour window are not counted.</div>
+<p>Any other <code>4xx</code> status not listed above is returned as <code>VALIDATION_FAILED</code>.</p>
+<h3>Failures after a message is accepted</h3>
+<p>A <code>202</code> means the message was queued, not delivered. If it later fails, the outcome is reported on the message itself:</p>
+<ul>
+  <li>In the status callback: <code>ErrorCode</code> plus a readable <code>ErrorMessage</code> (only when <code>Status</code> is <code>failed</code> or <code>undelivered</code>).</li>
+  <li>In <code>GET /Message/{message_uuid}/</code> and the list: <code>error_code</code> plus <code>error_message</code>.</li>
+</ul>
+<table>
+  <tr><th style="width:18%">ErrorCode</th><th>ErrorMessage</th></tr>
+  <tr><td>310</td><td>The sending phone number is not registered on the WhatsApp Business Platform.</td></tr>
+  <tr><td>330</td><td>WhatsApp does not support this message type. Check the message type and try again.</td></tr>
+  <tr><td>340</td><td>The template does not exist in this language, is not approved, or has been paused or disabled. Check its status in WBMSG.</td></tr>
+  <tr><td>350</td><td>The template parameters do not match the template (count, format or length). Send values for every parameter in the format the template defines.</td></tr>
+  <tr><td>360</td><td>The WhatsApp Business account is restricted or failed verification. Contact support.</td></tr>
+  <tr><td>370</td><td>WhatsApp is limiting sending right now (throughput, messages to the same recipient, or a quality restriction). Slow down and retry later.</td></tr>
+  <tr><td>380</td><td>The customer has not replied in the last 24 hours, so only an approved template message can be sent.</td></tr>
+  <tr><td>131047</td><td>The customer has not replied in the last 24 hours, so only an approved template message can be sent.</td></tr>
+  <tr><td>131049</td><td>WhatsApp did not deliver this marketing message to this recipient to keep engagement healthy. Wait at least 24 hours before trying again.</td></tr>
+  <tr><td>131026</td><td>WhatsApp could not deliver the message. The recipient may not be a WhatsApp user, may not have accepted WhatsApp's terms, or may be on an outdated WhatsApp version.</td></tr>
+  <tr><td>any other 6-digit number</td><td>WhatsApp's own error code, passed through unchanged. <code>ErrorMessage</code> is "WhatsApp could not deliver the message (code N)." with the code in place of N.</td></tr>
+</table>
+<div class="note warn"><b>Error 131049.</b> WhatsApp limits how many marketing templates one person receives from businesses in a period, and may decline to deliver the message. Do not retry immediately. Wait at least 24 hours before resending a marketing template to the same person. Utility templates are not affected, and messages sent inside an open 24-hour window are not counted. Details for any failure are in the WBMSG Message Log.</div>
 
 <h2 id="whatsapp">8. WhatsApp rules to know</h2>
 <ul>
