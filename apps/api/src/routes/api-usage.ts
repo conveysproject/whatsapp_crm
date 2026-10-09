@@ -11,6 +11,7 @@ const ENDPOINTS = new Set(["message.send", "message.list", "message.get", "templ
 const OUTCOMES = new Set(["success", "client_error", "server_error", "error"]);
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CURSOR_ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 /** ISO datetime that carries its own offset (Z or +hh:mm); an offset-less datetime would be read in server-local time. */
 const DATETIME_WITH_OFFSET = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-](\d{2}):?(\d{2}))$/;
@@ -165,10 +166,13 @@ export const apiUsageRouter: FastifyPluginAsync = async (fastify) => {
   const encodeCursor = (d: Date, id: string) => Buffer.from(`${d.toISOString()}|${id}`).toString("base64url");
   const decodeCursor = (c: string): { at: Date; id: string } | null => {
     if (c.length > 200 || !/^[A-Za-z0-9_-]+$/.test(c)) return null;
-    const [iso, id] = Buffer.from(c, "base64url").toString("utf8").split("|");
-    if (!iso || !id || !UUID_RE.test(id)) return null;
+    const parts = Buffer.from(c, "base64url").toString("utf8").split("|");
+    if (parts.length !== 2) return null;
+    const [iso, id] = parts as [string, string];
+    if (!CURSOR_ISO_RE.test(iso) || !UUID_RE.test(id)) return null;
     const at = new Date(iso);
-    return Number.isNaN(at.getTime()) ? null : { at, id };
+    const year = at.getUTCFullYear();
+    return Number.isNaN(at.getTime()) || year < 2000 || year > 2100 ? null : { at, id };
   };
   const pageLimit = (q: Record<string, unknown>): number | null => {
     const raw = qp(q["limit"]);
@@ -235,6 +239,7 @@ export const apiUsageRouter: FastifyPluginAsync = async (fastify) => {
       where: { organizationId: request.auth.organizationId, ...(messageId ? { messageId } : {}), ...(cursor ? before(cursor) : {}) },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
+      select: { id: true, createdAt: true, messageId: true, url: true, method: true, attempt: true, outcome: true, httpStatus: true, reason: true, durationMs: true, fields: true },
     });
     const page = rows.slice(0, limit);
     const last = page[page.length - 1];

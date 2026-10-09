@@ -430,6 +430,7 @@ describe("api-usage routes", () => {
       });
       expect(arg.orderBy).toEqual([{ createdAt: "desc" }, { id: "desc" }]);
       expect(arg.take).toBe(2);
+      expect(arg.select).toEqual({ id: true, createdAt: true, messageId: true, url: true, method: true, attempt: true, outcome: true, httpStatus: true, reason: true, durationMs: true, fields: true });
       mockPrisma.apiCallbackAttempt.findMany.mockResolvedValue([
         { id: UUID_B, createdAt: new Date("2026-10-09T10:00:00.000Z") },
         { id: UUID_A, createdAt: new Date("2026-10-09T09:00:00.000Z") },
@@ -443,8 +444,12 @@ describe("api-usage routes", () => {
       const badCursors = [
         "%%%", "abc", cursorOf("not-a-date", UUID_A), cursorOf("2026-10-09T09:00:00.000Z", "not-a-uuid"),
         cursorOf("2026-10-09T09:00:00.000Z", ""), "a".repeat(300),
+        cursorOf("+275760-09-13T00:00:00.000Z", UUID_A), cursorOf("-271821-04-20T00:00:00.000Z", UUID_A),
+        cursorOf("1999-12-31T23:59:59.999Z", UUID_A), cursorOf("2101-01-01T00:00:00.000Z", UUID_A),
+        cursorOf("2026-10-09T09:00:00Z", UUID_A), Buffer.from(`2026-10-09T09:00:00.000Z|${UUID_A}|extra`).toString("base64url"),
       ];
       const bad = [
+        "/api-usage/payloads?limit=1e2", "/api-usage/payloads?limit=-1", "/api-usage/callbacks?limit=1e2", "/api-usage/callbacks?limit=-1",
         "/api-usage/payloads?limit=0", "/api-usage/payloads?limit=101", "/api-usage/payloads?limit=x", "/api-usage/payloads?limit=1.5",
         "/api-usage/payloads?outcome=bad", "/api-usage/payloads?endpoint=nope",
         "/api-usage/payloads?apiKeyId=a%20b", `/api-usage/payloads?apiKeyId=${"a".repeat(80)}`,
@@ -462,6 +467,11 @@ describe("api-usage routes", () => {
       expect(mockPrisma.apiRequestPayload.findMany).not.toHaveBeenCalled();
       expect(mockPrisma.apiRequestPayload.findFirst).not.toHaveBeenCalled();
       expect(mockPrisma.apiCallbackAttempt.findMany).not.toHaveBeenCalled();
+    });
+
+    it("limit=010 is accepted as 10 (take 11)", async () => {
+      expect((await getUrl("/api-usage/payloads?limit=010")).statusCode).toBe(200);
+      expect(mockPrisma.apiRequestPayload.findMany.mock.calls[0]![0].take).toBe(11);
     });
 
     it("repeated params do not 500 (first value wins)", async () => {
