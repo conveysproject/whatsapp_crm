@@ -163,3 +163,52 @@ export async function getAttentionCounts(
   ]);
   return { unanswered, sla_at_risk, failed_messages, templates };
 }
+
+export interface Funnel {
+  id: string;
+  name: string;
+  sentAt: string;
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+}
+
+const SENT_STATUSES = new Set(["sent", "accepted", "delivered", "played", "read"]);
+const DELIVERED_STATUSES = new Set(["delivered", "played", "read"]);
+const READ_STATUSES = new Set(["read", "played"]);
+const FAILED_STATUSES = new Set(["failed", "expired"]);
+
+export async function getCampaignFunnel(
+  prisma: PrismaClient,
+  organizationId: string
+): Promise<{ current: Funnel | null; previous: Funnel | null }> {
+  const campaigns = await prisma.campaign.findMany({
+    where: { organizationId, status: "completed", sentAt: { not: null } },
+    orderBy: { sentAt: "desc" },
+    take: 2,
+    select: { id: true, name: true, sentAt: true },
+  });
+  if (campaigns.length === 0) return { current: null, previous: null };
+
+  const groups = await prisma.campaignRecipient.groupBy({
+    by: ["campaignId", "status"],
+    where: { organizationId, campaignId: { in: campaigns.map((c) => c.id) } },
+    _count: true,
+  });
+
+  const build = (c: (typeof campaigns)[number]): Funnel => {
+    const f: Funnel = { id: c.id, name: c.name, sentAt: (c.sentAt as Date).toISOString(), sent: 0, delivered: 0, read: 0, failed: 0 };
+    for (const g of groups) {
+      if (g.campaignId !== c.id) continue;
+      const n = g._count;
+      if (SENT_STATUSES.has(g.status)) f.sent += n;
+      if (DELIVERED_STATUSES.has(g.status)) f.delivered += n;
+      if (READ_STATUSES.has(g.status)) f.read += n;
+      if (FAILED_STATUSES.has(g.status)) f.failed += n;
+    }
+    return f;
+  };
+
+  return { current: build(campaigns[0]), previous: campaigns[1] ? build(campaigns[1]) : null };
+}

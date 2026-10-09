@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
-import { deltaPct, getDashboardKpis, getAttentionCounts, type AttentionKey } from "./dashboard-queries.js";
+import { deltaPct, getDashboardKpis, getAttentionCounts, getCampaignFunnel, type AttentionKey } from "./dashboard-queries.js";
 import { windowFor } from "./dashboard-range.js";
 
 const mockPrisma = {
@@ -191,5 +191,48 @@ describe("getAttentionCounts", () => {
     expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
     expect(mockPrisma.message.count).not.toHaveBeenCalled();
     expect(mockPrisma.conversation.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("getCampaignFunnel", () => {
+  const camp = (id: string, day: number) => ({ id, name: `C${id}`, sentAt: new Date(Date.UTC(2026, 9, day)) });
+  const grp = (campaignId: string, status: string, n: number) => ({ campaignId, status, _count: n });
+
+  it("returns nulls when there are no completed campaigns", async () => {
+    mockPrisma.campaign.findMany.mockResolvedValue([]);
+    const r = await getCampaignFunnel(prisma, "org-1");
+    expect(r).toEqual({ current: null, previous: null });
+    expect(mockPrisma.campaignRecipient.groupBy).not.toHaveBeenCalled();
+  });
+
+  it("previous is null with a single campaign", async () => {
+    mockPrisma.campaign.findMany.mockResolvedValue([camp("a", 9)]);
+    mockPrisma.campaignRecipient.groupBy.mockResolvedValue([grp("a", "sent", 2)]);
+    const r = await getCampaignFunnel(prisma, "org-1");
+    expect(r.current?.id).toBe("a");
+    expect(r.current?.sentAt).toBe("2026-10-09T00:00:00.000Z");
+    expect(r.previous).toBeNull();
+  });
+
+  it("buckets recipient statuses cumulatively and scopes by org", async () => {
+    mockPrisma.campaign.findMany.mockResolvedValue([camp("a", 9), camp("b", 2)]);
+    mockPrisma.campaignRecipient.groupBy.mockResolvedValue([
+      grp("a", "pending", 5), grp("a", "cancelled", 1),
+      grp("a", "sent", 1), grp("a", "accepted", 2), grp("a", "delivered", 3), grp("a", "played", 1), grp("a", "read", 4),
+      grp("a", "failed", 2), grp("a", "expired", 1),
+      grp("b", "read", 2), grp("b", "failed", 1),
+    ]);
+    const r = await getCampaignFunnel(prisma, "org-1");
+    expect(r.current).toMatchObject({ id: "a", name: "Ca", sent: 11, delivered: 8, read: 5, failed: 3 });
+    expect(r.previous).toMatchObject({ id: "b", sent: 2, delivered: 2, read: 2, failed: 1 });
+
+    const f = mockPrisma.campaign.findMany.mock.calls[0][0];
+    expect(f.where).toMatchObject({ organizationId: "org-1", status: "completed" });
+    expect(f.where.isArchived).toBeUndefined();
+    expect(f.orderBy).toEqual({ sentAt: "desc" });
+    expect(f.take).toBe(2);
+    const g = mockPrisma.campaignRecipient.groupBy.mock.calls[0][0];
+    expect(g.where.organizationId).toBe("org-1");
+    expect(g.where.campaignId).toEqual({ in: ["a", "b"] });
   });
 });
