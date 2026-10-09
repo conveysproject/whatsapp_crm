@@ -84,7 +84,7 @@ Reuse: `/admin` area + `superAdmin` gating (`admin.ts:14`), admin audit log, `Tr
 
 ## 6. Rollout and rollback
 
-Phase 0 (ship first, independent): security fixes P3-P8, page fix P1, upgrade flow P2, brand text P11. Rollback: revert PR; no schema change except `WebhookEvent`.
+Phase 0 (ship first, independent): security fixes P3-P8, page fix P1, upgrade flow P2, brand text P11. Rollback: revert PR; no schema change (`WebhookEvent` idempotency and Stripe `Transaction` rows moved to Phase 1). Added during execution: platform plan-payment webhooks (Razorpay, Paystack, YooMoney) verify only against platform env secrets, never tenant-writable VendorSetting credentials (tenants can write arbitrary keys via `vendor-settings`, so a tenant-set secret would let them forge a payment).
 Phase 1: plans and entitlements as single source of truth; unified activation pipeline; Stripe lifecycle events; webhook URL fix. Flag: `BILLING_V2_ENABLED` (off by default).
 Phase 2: metering + capped pricing + customer projected-bill UI, in **shadow mode** first (compute and display, do not charge) for one full month, compare against flat plans.
 Phase 3: `/admin/billing` editor (can begin in parallel with Phase 2 on config side).
@@ -112,7 +112,7 @@ TDD per task. API (Vitest): pricing calculator table tests, metering counts, act
 Unknowns (not verified)
 - Which table/fields record outbound messages and their type, and whether they suffice for metering.
 - Real production gateway usage and tier distribution (needs approved read-only prod query).
-- Whether `role === "admin"` is ever held by customer users (decides severity of P3).
+- Resolved: `role === "admin"` is the ordinary customer org-admin role (`apps/api/src/lib/permissions.ts:20`), so P3 was exploitable by any customer org admin. Whether it was actually exploited is not verified.
 - Exact Meta rates are irrelevant to our bill but needed for customer-facing explanations; use Meta's official page, not search snippets.
 
 Owner decisions needed (recommended default)
