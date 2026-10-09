@@ -62,7 +62,7 @@ describe("publicApiRouter", () => {
     mockPrisma.organization.findUnique.mockResolvedValue({ status: "active", whatsappBusinessAccountId: "waba-1", wabaAccessToken: "t" });
     const res = await app.inject({ method: "GET", url, headers: { authorization: auth } });
     expect(res.statusCode).toBe(404);
-    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "Resource not found" });
+    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "Template not found.", error_code: "TEMPLATE_NOT_FOUND" });
   });
 
   it("rate limits per client+credential with HTTP 429 and a Plivo-style body", async () => {

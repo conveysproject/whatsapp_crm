@@ -374,7 +374,7 @@ describe("GET /Message/:uuid/", () => {
     mockPrisma.apiMessageMeta.findFirst.mockResolvedValue(null);
     const res = await app.inject({ method: "GET", url: "/v1/Account/k1/Message/other-org-msg/" });
     expect(res.statusCode).toBe(404);
-    expect(res.json()).toMatchObject({ error: expect.any(String), api_id: expect.any(String) });
+    expect(res.json()).toMatchObject({ error: "Message not found.", error_code: "MESSAGE_NOT_FOUND", hint: expect.any(String), api_id: expect.any(String) });
   });
 
   it("unknown-uuid and cross-org 404 bodies are identical except api_id", async () => {

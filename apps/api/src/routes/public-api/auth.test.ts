@@ -51,31 +51,50 @@ describe("publicApiAuth", () => {
     expect(res.json()).toEqual({ apiKeyId: ID, organizationId: "org-1" });
   });
 
-  it("401 with no header, wrong token, or garbage header", async () => {
-    for (const h of [undefined, basic(ID, "bad"), "Basic !!!", "Bearer x"]) {
-      const res = await get(h);
-      expect(res.statusCode).toBe(401);
-      expect(res.json()).toMatchObject({ error: expect.any(String), api_id: expect.any(String) });
-    }
-  });
-
-  it("401 when the URL auth id differs from the Basic username (no lookup of the URL id)", async () => {
-    const other = "22222222-2222-2222-2222-222222222222";
-    const res = await get(basic(ID, "good-token"), other);
+  it.each([
+    ["no Authorization header", undefined, "AUTH_MISSING"],
+    ["not Basic", "Bearer abc", "AUTH_MALFORMED"],
+    ["undecodable Basic", "Basic !!!", "AUTH_MALFORMED"],
+    ["Basic without a colon", `Basic ${Buffer.from("nocolon").toString("base64")}`, "AUTH_MALFORMED"],
+  ])("401 %s -> %s with a hint and no lookup", async (_n, header, code) => {
+    const res = await get(header);
     expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: expect.any(String), error_code: code, hint: expect.any(String) });
     expect(mockPrisma.apiKey.findUnique).not.toHaveBeenCalled();
   });
 
-  it("401 for an unknown or revoked credential", async () => {
+  it("401 AUTH_ID_MISMATCH when the URL auth id differs from the Basic username (no lookup of the URL id)", async () => {
+    const other = "22222222-2222-2222-2222-222222222222";
+    const res = await get(basic(ID, "good-token"), other);
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ error_code: "AUTH_ID_MISMATCH", hint: expect.any(String) });
+    expect(mockPrisma.apiKey.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("wrong token, unknown id and revoked credential are indistinguishable (AUTH_INVALID)", async () => {
+    const revoked = { id: ID, organizationId: "org-1", keyHash: hashToken("good-token"), revokedAt: new Date(), lastUsedAt: null };
+    const wrongToken = await get(basic(ID, "bad-token"));
     mockPrisma.apiKey.findUnique.mockResolvedValueOnce(null);
-    expect((await get(basic(ID, "good-token"))).statusCode).toBe(401);
-    mockPrisma.apiKey.findUnique.mockResolvedValueOnce({ id: ID, organizationId: "org-1", keyHash: hashToken("good-token"), revokedAt: new Date(), lastUsedAt: null });
-    expect((await get(basic(ID, "good-token"))).statusCode).toBe(401);
+    const unknown = await get(basic(ID, "good-token"));
+    mockPrisma.apiKey.findUnique.mockResolvedValueOnce(revoked);
+    const revokedRes = await get(basic(ID, "good-token"));
+    const results = [wrongToken, unknown, revokedRes];
+    for (const r of results) {
+      expect(r.statusCode).toBe(401);
+      expect(r.json()).toMatchObject({ error_code: "AUTH_INVALID" });
+    }
+    for (const field of ["error", "error_code", "hint"] as const) {
+      expect(new Set(results.map((r) => r.json()[field])).size).toBe(1);
+    }
+    expect(results[0]!.json().error).toBeTruthy();
+    expect(results[0]!.json().hint).toBeTruthy();
   });
 
   it("403 when the org is not active", async () => {
     mockPrisma.organization.findUnique.mockResolvedValueOnce({ status: "banned" });
-    expect((await get(basic(ID, "good-token"))).statusCode).toBe(403);
+    const res = await get(basic(ID, "good-token"));
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ error_code: "ACCOUNT_INACTIVE", hint: expect.any(String) });
   });
 
   it("403 with the Plivo error body and no handler run when the org is blocked or not allow-listed (same body)", async () => {
@@ -86,7 +105,7 @@ describe("publicApiAuth", () => {
     const notAllowed = await get(basic(ID, "good-token"));
     for (const res of [blocked, notAllowed]) {
       expect(res.statusCode).toBe(403);
-      expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "API access is not available for this account" });
+      expect(res.json()).toMatchObject({ api_id: expect.any(String), error_code: "API_NOT_AVAILABLE" });
     }
     expect(JSON.parse(blocked.body).error).toBe(JSON.parse(notAllowed.body).error);
     expect(mockPrisma.apiKey.update).not.toHaveBeenCalled();
@@ -96,7 +115,7 @@ describe("publicApiAuth", () => {
     process.env["PUBLIC_API_ENABLED"] = "false";
     const res = await get(basic(ID, "good-token"));
     expect(res.statusCode).toBe(403);
-    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "API access is not available for this account" });
+    expect(res.json()).toMatchObject({ api_id: expect.any(String), error_code: "API_NOT_AVAILABLE" });
     expect(mockPrisma.vendorSetting.findFirst).not.toHaveBeenCalled();
   });
 

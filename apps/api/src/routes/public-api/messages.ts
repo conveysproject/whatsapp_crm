@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { newApiId, plivoError } from "../../lib/public-api/responses.js";
+import { newApiId, plivoError, apiError } from "../../lib/public-api/responses.js";
 import {
   parseSendBody, SendValidationError, toMetaInteractive, toMetaTemplateComponents, renderTemplateForInbox, inferMediaKind,
   type SendContent,
@@ -239,7 +239,7 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
         where: { messageId: request.params.uuid, organizationId },
         include: { message: { select: { id: true, status: true } } },
       });
-      if (!row) return plivoError(reply, 404, "not found");
+      if (!row) return apiError(reply, 404, "MESSAGE_NOT_FOUND");
       const from = await businessNumberDigits(fastify.prisma, organizationId);
       return reply.send({ api_id: request.apiId ?? newApiId(), ...toMessageObject(row, from) });
     });

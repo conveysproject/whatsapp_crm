@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import type { Prisma } from "@prisma/client";
-import { newApiId, plivoError } from "../../lib/public-api/responses.js";
+import { newApiId, plivoError, apiError } from "../../lib/public-api/responses.js";
 import {
   parseTemplateBody, parseListQuery, toSubmitResponse, toListObject, toRetrieveResponse, TemplateValidationError,
   type ParsedTemplate, type TemplateRow,
@@ -13,7 +13,6 @@ import { PUBLIC_EDITABLE_STATUSES } from "../../lib/template-status.js";
 const PUBLIC = { config: { public: true } } as const;
 const both = (p: string) => [p, p.replace(/\/$/, "")];
 // Identical for an unknown template and for a waba/template that belongs to another organization.
-const NOT_FOUND = "Resource not found";
 
 type Components = Parameters<typeof submitTemplateToMeta>[0]["components"];
 
@@ -33,7 +32,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
       select: { whatsappBusinessAccountId: true, wabaAccessToken: true },
     });
     if (!org?.whatsappBusinessAccountId || org.whatsappBusinessAccountId !== wabaId) {
-      plivoError(reply, 404, NOT_FOUND);
+      apiError(reply, 404, "TEMPLATE_NOT_FOUND");
       return null;
     }
     return {
@@ -158,7 +157,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
       const ctx = await resolveOrg(request, reply, request.params.wabaId);
       if (!ctx) return reply;
       const row = await fastify.prisma.template.findFirst({ where: { organizationId: ctx.organizationId, metaTemplateId: request.params.templateId } });
-      if (!row) return plivoError(reply, 404, NOT_FOUND);
+      if (!row) return apiError(reply, 404, "TEMPLATE_NOT_FOUND");
       return reply.send(toRetrieveResponse(row as unknown as TemplateRow, request.apiId));
     });
   }
@@ -172,7 +171,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
       if (!ctx) return reply;
       const { organizationId } = ctx;
       const row = await fastify.prisma.template.findFirst({ where: { organizationId, metaTemplateId: request.params.templateId } });
-      if (!row?.metaTemplateId) return plivoError(reply, 404, NOT_FOUND);
+      if (!row?.metaTemplateId) return apiError(reply, 404, "TEMPLATE_NOT_FOUND");
       if (!PUBLIC_EDITABLE_STATUSES.has(row.status)) return plivoError(reply, 400, "Only approved, rejected or paused templates can be edited");
       if (parsed.name !== row.name || parsed.language !== row.language || parsed.category !== row.category) {
         return plivoError(reply, 400, "name, language and category cannot be changed");
@@ -202,7 +201,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
       if (!ctx) return reply;
       const { organizationId } = ctx;
       const row = await fastify.prisma.template.findFirst({ where: { organizationId, metaTemplateId: request.params.templateId } });
-      if (!row?.metaTemplateId) return plivoError(reply, 404, NOT_FOUND);
+      if (!row?.metaTemplateId) return apiError(reply, 404, "TEMPLATE_NOT_FOUND");
       const nameParam = request.query["name"];
       const name = typeof nameParam === "string" ? nameParam : Array.isArray(nameParam) && typeof nameParam[0] === "string" ? nameParam[0] : undefined;
       if (name !== row.name) return plivoError(reply, 400, "name query parameter must match the template name");
