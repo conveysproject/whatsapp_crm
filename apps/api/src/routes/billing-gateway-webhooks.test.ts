@@ -150,3 +150,59 @@ describe("paystack webhook", () => {
     expect(mockPrisma.organization.update).not.toHaveBeenCalled();
   });
 });
+
+describe("yoomoney webhook", () => {
+  let app: FastifyInstance;
+  let restores: Array<() => void>;
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    mockPrisma.vendorSetting.findMany.mockResolvedValue([]);
+    restores = [setEnv("YOOMONEY_SHOP_ID", "shop"), setEnv("YOOMONEY_SECRET_KEY", "sk")];
+    app = await build();
+  });
+  afterEach(async () => { await app.close(); vi.unstubAllGlobals(); restores.forEach((r) => r()); });
+  const hook = JSON.stringify({ event: "payment.succeeded", object: { id: "pay-1", metadata: { organizationId: "org-1", planId: "starter" } } });
+  const send = () => app.inject({ method: "POST", url: "/v1/billing/yoomoney/webhook", headers: { "content-type": "application/json" }, payload: hook });
+  const gw = (currency: string, value: string) => vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "pay-1", status: "succeeded", paid: true, amount: { value, currency }, metadata: { organizationId: "org-1", planId: "starter" } }) });
+
+  it("ignores a forged notification when the gateway does not confirm the payment", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({}) }));
+    const res = await send();
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+  });
+  it("activates when gateway confirms a paid, sufficient INR payment", async () => {
+    vi.stubGlobal("fetch", gw("INR", "999.00"));
+    const res = await send();
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.organization.update).toHaveBeenCalledWith(expect.objectContaining({ data: { planTier: "starter" } }));
+  });
+  it("does not auto-activate RUB payments (no catalog price)", async () => {
+    vi.stubGlobal("fetch", gw("RUB", "99999.00"));
+    const res = await send();
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+  });
+  it("ignores tenant-set gateway credentials and uses only env credentials", async () => {
+    mockPrisma.vendorSetting.findMany.mockResolvedValue([
+      { key: "yoomoney_shop_id", value: "evil-shop" },
+      { key: "yoomoney_secret_key", value: "evil-secret" },
+    ]);
+    const fetchMock = gw("INR", "999.00");
+    vi.stubGlobal("fetch", fetchMock);
+    await send();
+    expect(mockPrisma.vendorSetting.findMany).not.toHaveBeenCalled();
+    const headers = (fetchMock.mock.calls[0]![1] as { headers: Record<string, string> }).headers;
+    expect(headers["Authorization"]).toBe(`Basic ${Buffer.from("shop:sk").toString("base64")}`);
+  });
+  it("does nothing when env credentials are missing", async () => {
+    delete process.env["YOOMONEY_SHOP_ID"];
+    const fetchMock = gw("INR", "999.00");
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await send();
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+  });
+});

@@ -274,3 +274,32 @@ describe("manual subscription + read RBAC", () => {
     await a.close();
   });
 });
+
+describe("POST /v1/billing/yoomoney/checkout", () => {
+  async function buildAs(role: string, permissions: Record<string, string>): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions, teamId: null, teamRole: null };
+    });
+    const { billingRouter } = await import("./billing.js");
+    await app.register(billingRouter, { prefix: "/v1" });
+    return app;
+  }
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); mockPrisma.vendorSetting.findMany.mockResolvedValue([]); });
+
+  it("returns 403 without settings_billing", async () => {
+    const app = await buildAs("manager", { settings_access: "allow" });
+    const res = await app.inject({ method: "POST", url: "/v1/billing/yoomoney/checkout", payload: { amount: 99900, planId: "starter" } });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("returns 400 for a non-billable plan id", async () => {
+    const app = await buildAs("admin", {});
+    const res = await app.inject({ method: "POST", url: "/v1/billing/yoomoney/checkout", payload: { amount: 99900, planId: "plan-standard" } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("INVALID_PLAN");
+    await app.close();
+  });
+});

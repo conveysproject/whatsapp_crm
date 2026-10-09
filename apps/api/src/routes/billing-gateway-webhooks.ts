@@ -79,4 +79,44 @@ export const billingGatewayWebhooksRouter: FastifyPluginAsync = async (fastify) 
     }
     return reply.send({ received: true });
   });
+
+  // ── YooMoney / YooKassa (notifications are unsigned: confirm with the gateway) ──
+  type YmEvent = { event?: string; object?: { id?: string; metadata?: { organizationId?: string } } };
+  type YmPayment = { id?: string; status?: string; paid?: boolean; amount?: { value?: string; currency?: string }; metadata?: { organizationId?: string; planId?: string; manualSubId?: string } };
+  fastify.post("/billing/yoomoney/webhook", { config: { public: true } }, async (request, reply) => {
+    const event = parse<YmEvent>(request.body);
+    const paymentId = event?.object?.id;
+    const orgHint = event?.object?.metadata?.organizationId;
+    if (event?.event !== "payment.succeeded" || !paymentId || !orgHint) return reply.send({ received: true });
+
+    // Platform credentials only: tenant-supplied credentials must never drive plan changes.
+    const shopId = process.env["YOOMONEY_SHOP_ID"] ?? "";
+    const secretKey = process.env["YOOMONEY_SECRET_KEY"] ?? "";
+    if (!shopId || !secretKey) return reply.send({ received: true });
+
+    let payment: YmPayment | null = null;
+    try {
+      const res = await fetch(`https://api.yookassa.ru/v3/payments/${encodeURIComponent(paymentId)}`, {
+        headers: { Authorization: `Basic ${Buffer.from(`${shopId}:${secretKey}`).toString("base64")}` },
+      });
+      if (res.ok) payment = (await res.json()) as YmPayment;
+    } catch { /* gateway unreachable: treat as unconfirmed */ }
+    if (!payment || payment.status !== "succeeded" || payment.paid !== true) return reply.send({ received: true });
+
+    const orgId = payment.metadata?.organizationId;
+    const { planId, manualSubId } = payment.metadata ?? {};
+    if (!orgId || orgId !== orgHint) return reply.send({ received: true });
+    if (manualSubId) {
+      const sub = await fastify.prisma.manualSubscription.findFirst({ where: { id: manualSubId, organizationId: orgId } });
+      if (sub) await activateManualSubscription(fastify.prisma, orgId, sub.id, sub.planTier as PlanTier);
+    } else {
+      const minor = Math.round(Number(payment.amount?.value ?? "NaN") * 100);
+      if (isBillableTier(planId) && isPaidAmountSufficient(planId, payment.amount?.currency ?? "", minor)) {
+        await fastify.prisma.organization.update({ where: { id: orgId }, data: { planTier: planId as PlanTier } });
+      } else if (planId) {
+        fastify.log.warn({ orgId, planId, currency: payment.amount?.currency }, "yoomoney payment not activated: unknown plan, currency or insufficient amount (manual review)");
+      }
+    }
+    return reply.send({ received: true });
+  });
 };

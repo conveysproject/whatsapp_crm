@@ -364,16 +364,21 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { amount: number; planId: string; currency?: string; description?: string } }>(
     "/billing/yoomoney/checkout",
     async (request, reply) => {
-      const { organizationId } = request.auth;
-      // GAP-S60: DB credentials first
-      const creds = await getGatewayCredentials(fastify.prisma, organizationId, "yoomoney");
-      const shopId = creds["yoomoney_shop_id"] ?? process.env["YOOMONEY_SHOP_ID"] ?? "";
-      const secretKey = creds["yoomoney_secret_key"] ?? process.env["YOOMONEY_SECRET_KEY"] ?? "";
-      const isTest = creds["use_test_yoomoney"] === "true" || !shopId;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "settings_access", "settings_billing")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+      }
+      if (!isBillableTier(request.body.planId)) {
+        return reply.status(400).send({ error: { code: "INVALID_PLAN", message: "Unknown plan tier" } });
+      }
+      // Platform credentials only: tenant-supplied gateway settings must not drive platform billing.
+      const shopId = process.env["YOOMONEY_SHOP_ID"] ?? "";
+      const secretKey = process.env["YOOMONEY_SECRET_KEY"] ?? "";
+      const isTest = !shopId || !secretKey;
 
       // Quickpay fallback for test mode (no shop credentials needed)
       if (isTest) {
-        const receiver = creds["yoomoney_wallet"] ?? process.env["YOOMONEY_WALLET"] ?? "";
+        const receiver = process.env["YOOMONEY_WALLET"] ?? "";
         const label = `${organizationId}:${request.body.planId}`;
         const quickpayCurrency = request.body.currency ?? "RUB";
         const quickpayIsZero = ZERO_DECIMAL_CURRENCIES.has(quickpayCurrency.toUpperCase());
@@ -391,7 +396,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       const amountValue = isZeroDecimal
         ? Math.round(request.body.amount).toString()
         : (request.body.amount / 100).toFixed(2);
-      const description = request.body.description ?? `TrustCRM Subscription — ${request.body.planId}`;
+      const description = request.body.description ?? `WBMSG Subscription — ${request.body.planId}`;
       const label = `${organizationId}:${request.body.planId}`;
       const returnUrl = `${(process.env["WEB_PUBLIC_URL"] ?? process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/settings/billing?status=success`;
 
@@ -432,25 +437,6 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       return reply.send({ data: { checkoutUrl: json.confirmation.confirmation_url, paymentId: json.id, mode: "live" } });
     }
   );
-
-  // GAP-S61: YooMoney payment.succeeded webhook
-  fastify.post("/billing/yoomoney/webhook", { config: { public: true } }, async (request, reply) => {
-    const event = request.body as { event?: string; object?: { metadata?: { organizationId?: string; planId?: string; manualSubId?: string } } };
-    if (event.event === "payment.succeeded") {
-      const orgId = event.object?.metadata?.organizationId;
-      const planId = event.object?.metadata?.planId;
-      const manualSubId = event.object?.metadata?.manualSubId;
-      if (orgId) {
-        if (manualSubId) {
-          const sub = await fastify.prisma.manualSubscription.findFirst({ where: { id: manualSubId, organizationId: orgId } });
-          if (sub) await activateManualSubscription(fastify.prisma, orgId, sub.id, sub.planTier as PlanTier);
-        } else if (planId) {
-          await fastify.prisma.organization.update({ where: { id: orgId }, data: { planTier: planId as PlanTier } });
-        }
-      }
-    }
-    return reply.send({ received: true });
-  });
 
   // ── Manual payment proof ─────────────────────────────────────────────────
   fastify.post<{ Body: { planId: string | undefined; planSelector?: string; proofUrl: string; transactionRef: string; interval?: "monthly" | "yearly" } }>(
