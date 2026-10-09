@@ -25,6 +25,7 @@ function kpi(value: number | null, previous: number | null): Kpi {
 // Average seconds from the first inbound to the first non-system outbound message,
 // over conversations created in [start, end) that have both.
 async function firstReplySecs(prisma: PrismaClient, organizationId: string, start: Date, end: Date): Promise<number | null> {
+  // Conversations whose first message is outbound are intentionally excluded via `first_out >= first_in`.
   const rows = await prisma.$queryRaw<{ secs: number | null }[]>`
     SELECT AVG(EXTRACT(EPOCH FROM (x.first_out - x.first_in)))::float AS secs
     FROM (
@@ -185,7 +186,7 @@ export async function getCampaignFunnel(
 ): Promise<{ current: Funnel | null; previous: Funnel | null }> {
   const campaigns = await prisma.campaign.findMany({
     where: { organizationId, status: "completed", sentAt: { not: null } },
-    orderBy: { sentAt: "desc" },
+    orderBy: [{ sentAt: "desc" }, { id: "desc" }],
     take: 2,
     select: { id: true, name: true, sentAt: true },
   });

@@ -229,7 +229,7 @@ describe("getCampaignFunnel", () => {
     const f = mockPrisma.campaign.findMany.mock.calls[0][0];
     expect(f.where).toMatchObject({ organizationId: "org-1", status: "completed" });
     expect(f.where.isArchived).toBeUndefined();
-    expect(f.orderBy).toEqual({ sentAt: "desc" });
+    expect(f.orderBy).toEqual([{ sentAt: "desc" }, { id: "desc" }]);
     expect(f.take).toBe(2);
     const g = mockPrisma.campaignRecipient.groupBy.mock.calls[0][0];
     expect(g.where.organizationId).toBe("org-1");
