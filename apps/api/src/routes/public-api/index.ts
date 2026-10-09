@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import rateLimit from "@fastify/rate-limit";
 import { redisConnection } from "../../lib/queue.js";
 import { clientIp } from "../../lib/public-api/client-ip.js";
-import { plivoErrorBody } from "../../lib/public-api/responses.js";
+import { apiErrorBody } from "../../lib/public-api/error-catalog.js";
 import { safeErr } from "../../lib/public-api/safe-err.js";
 import { recordApiRequest } from "../../lib/public-api/usage.js";
 import { publicApiAuth } from "./auth.js";
@@ -17,20 +17,31 @@ export function positiveIntEnv(name: string, fallback: number): number {
 }
 
 /**
- * Plivo-style bodies for errors raised outside `plivoError` (rate limit, body parsing, unexpected failures).
+ * Clear error bodies for errors raised outside `apiError` (rate limit, body parsing, unexpected failures).
  * Tolerates a non-Error / null throw and never throws itself.
  */
 export function publicApiErrorHandler(error: unknown, request: FastifyRequest, reply: FastifyReply) {
+  const apiId = request.apiId;
   const status = (error as { statusCode?: number } | null | undefined)?.statusCode;
-  if (status === 429) return reply.status(429).send(plivoErrorBody("Request was throttled."));
-  if (typeof status === "number" && status >= 400 && status < 500) {
-    // Client errors (malformed JSON, payload too large, ...): safe, generic message only.
-    const message = status === 413 ? "Request body is too large" : "Invalid request";
-    return reply.status(status).send(plivoErrorBody(message));
+  const code = (error as { code?: string } | null | undefined)?.code ?? "";
+  const send = (s: number, c: Parameters<typeof apiErrorBody>[0], hint?: string) =>
+    reply.status(s).send(apiErrorBody(c, { ...(hint ? { hint } : {}), ...(apiId ? { apiId } : {}) }));
+
+  if (status === 429) {
+    // The rate limiter normally sets Retry-After itself; fall back to 60s if it did not.
+    const existing = Number.parseInt(String(reply.getHeader?.("retry-after") ?? ""), 10);
+    const seconds = Number.isFinite(existing) && existing > 0 ? existing : 60;
+    reply.header("retry-after", String(seconds));
+    return send(429, "RATE_LIMITED", `Wait ${seconds} second(s) and retry.`);
   }
+  if (status === 413) return send(413, "BODY_TOO_LARGE");
+  if (status === 415) return send(415, "UNSUPPORTED_CONTENT_TYPE");
+  if (status === 400 && /EMPTY_JSON_BODY/.test(code)) return send(400, "EMPTY_BODY");
+  if (status === 400) return send(400, "INVALID_JSON");
+  if (typeof status === "number" && status >= 400 && status < 500) return send(status, "VALIDATION_FAILED");
   // Name/code and request id only: error messages (e.g. Prisma validation errors) can echo phone numbers and text.
-  request.log.error({ error: safeErr(error), reqId: request.id }, "public API unhandled error");
-  return reply.status(500).send(plivoErrorBody("Internal server error"));
+  request.log.error({ error: safeErr(error), reqId: request.id, apiId }, "public API unhandled error");
+  return send(500, "INTERNAL_ERROR");
 }
 
 /** Records one usage event for a finished response. Never throws (the hook must not affect a response). */
@@ -50,7 +61,11 @@ export function recordUsageOnResponse(request: FastifyRequest, reply: FastifyRep
   } catch { /* usage recording must never affect a response */ }
 }
 
-const throttled = () => ({ statusCode: 429, ...plivoErrorBody("Request was throttled.") });
+const throttled = (req: unknown, context: { ttl?: number }) => {
+  const seconds = Math.max(1, Math.ceil((context?.ttl ?? 60_000) / 1000));
+  const apiId = (req as { apiId?: string } | undefined)?.apiId;
+  return { statusCode: 429, headers: { "retry-after": String(seconds) }, ...apiErrorBody("RATE_LIMITED", { hint: `Wait ${seconds} second(s) and retry.`, ...(apiId ? { apiId } : {}) }) };
+};
 
 /**
  * Registered at prefix `/v1/Account/:authId`. Encapsulated: the rate limiters, auth hook and error handler apply only to these routes.

@@ -19,7 +19,7 @@ describe("plivoErrorBody (S9: the single producer of the provisional error body)
   });
 
   it("plivoError and the plugin error handler (429/4xx/500) all send exactly that shape", () => {
-    const reply = () => ({ status: vi.fn().mockReturnThis(), send: vi.fn().mockReturnThis() });
+    const reply = () => ({ status: vi.fn().mockReturnThis(), send: vi.fn().mockReturnThis(), header: vi.fn().mockReturnThis(), getHeader: vi.fn() });
     const r1 = reply();
     plivoError(r1 as never, 400, "bad");
     const request = { id: "r", log: { error: vi.fn() } };
@@ -30,7 +30,9 @@ describe("plivoErrorBody (S9: the single producer of the provisional error body)
       bodies.push(r.send.mock.calls[0]![0]);
     }
     for (const b of bodies) {
-      expect(Object.keys(b as object).sort()).toEqual(["api_id", "error", "error_code"]);
+      const keys = Object.keys(b as object);
+      expect(keys).toEqual(expect.arrayContaining(["api_id", "error", "error_code"]));
+      expect(keys.every((k) => ["api_id", "error", "error_code", "hint"].includes(k))).toBe(true);
       expect((b as { api_id: string }).api_id).toMatch(UUID);
     }
   });

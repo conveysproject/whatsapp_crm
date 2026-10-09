@@ -69,7 +69,10 @@ describe("publicApiRouter", () => {
     for (let i = 0; i < 3; i++) expect((await list()).statusCode).toBe(200);
     const res = await list();
     expect(res.statusCode).toBe(429);
-    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "Request was throttled." });
+    expect(res.statusCode).toBe(429);
+    expect(res.headers["retry-after"]).toMatch(/^\d+$/);
+    expect(Number(res.headers["retry-after"])).toBeGreaterThanOrEqual(1);
+    expect(res.json()).toMatchObject({ api_id: expect.any(String), error_code: "RATE_LIMITED", hint: expect.stringMatching(/Wait \d+ second/) });
   });
 
   it("keeps per-credential buckets independent", async () => {
@@ -99,7 +102,8 @@ describe("publicApiRouter", () => {
     for (let i = 0; i < 3; i++) expect((await list({})).statusCode).toBe(401);
     const res = await list({});
     expect(res.statusCode).toBe(429);
-    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "Request was throttled." });
+    expect(res.headers["retry-after"]).toMatch(/^\d+$/);
+    expect(res.json()).toMatchObject({ api_id: expect.any(String), error_code: "RATE_LIMITED", hint: expect.stringMatching(/Wait \d+ second/) });
     delete process.env["PUBLIC_API_PREAUTH_RATE_LIMIT"];
   });
 
@@ -159,22 +163,80 @@ describe("publicApiRouter", () => {
     expect(logged).not.toContain("secret");
   });
 
-  it("answers a malformed JSON body with a 400 Plivo-style body", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/Account/${ID}/Message/`,
-      headers: { authorization: auth, "content-type": "application/json" },
-      payload: "{not json",
-    });
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  // Captures the request's apiId (set by the plugin's onRequest hook) at response time, via a hook registered after the plugin.
+  async function buildCapturingApp(ids: string[]): Promise<FastifyInstance> {
+    const a = Fastify({ logger: false });
+    a.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    a.addHook("onSend", async (request, _reply, payload) => { ids.push((request as { apiId?: string }).apiId ?? ""); return payload; });
+    const { publicApiRouter } = await import("./index.js");
+    await a.register(publicApiRouter, { prefix: "/v1/Account/:authId" });
+    return a;
+  }
+
+  it("malformed JSON gets a clear INVALID_JSON message whose api_id is the request's id", async () => {
+    const ids: string[] = [];
+    await app.close();
+    app = await buildCapturingApp(ids);
+    const res = await app.inject({ method: "POST", url: `/v1/Account/${ID}/Message/`, headers: { authorization: auth, "content-type": "application/json" }, payload: "{not json" });
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: expect.any(String) });
+    expect(res.json()).toMatchObject({ error_code: "INVALID_JSON", error: expect.stringContaining("not valid JSON"), hint: expect.any(String), api_id: expect.stringMatching(UUID) });
+    expect(ids).toHaveLength(1);
+    expect(res.json().api_id).toBe(ids[0]);
   });
 
-  it("answers an unexpected failure with a 500 Plivo-style body that never echoes the raw message", async () => {
+  it("an empty JSON body gets EMPTY_BODY", async () => {
+    const res = await app.inject({ method: "POST", url: `/v1/Account/${ID}/Message/`, headers: { authorization: auth, "content-type": "application/json" }, payload: "" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error_code: "EMPTY_BODY", api_id: expect.any(String) });
+  });
+
+  it("wrong Content-Type gets UNSUPPORTED_CONTENT_TYPE (415)", async () => {
+    const res = await app.inject({ method: "POST", url: `/v1/Account/${ID}/Message/`, headers: { authorization: auth, "content-type": "application/xml" }, payload: "<a/>" });
+    expect(res.statusCode).toBe(415);
+    expect(res.json()).toMatchObject({ error_code: "UNSUPPORTED_CONTENT_TYPE", api_id: expect.any(String) });
+  });
+
+  it("an oversized body gets BODY_TOO_LARGE (413)", async () => {
+    await app.close();
+    app = Fastify({ logger: false, bodyLimit: 10 });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    const { publicApiRouter } = await import("./index.js");
+    await app.register(publicApiRouter, { prefix: "/v1/Account/:authId" });
+    const res = await app.inject({ method: "POST", url: `/v1/Account/${ID}/Message/`, headers: { authorization: auth, "content-type": "application/json" }, payload: JSON.stringify({ a: "x".repeat(100) }) });
+    expect(res.statusCode).toBe(413);
+    expect(res.json()).toMatchObject({ error_code: "BODY_TOO_LARGE" });
+  });
+
+  it("an unexpected failure returns INTERNAL_ERROR with a retry/api_id hint, the request's api_id, and never echoes the raw message", async () => {
+    const ids: string[] = [];
+    await app.close();
+    app = await buildCapturingApp(ids);
     mockPrisma.apiKey.findUnique.mockRejectedValue(new Error("connection to db-host-secret:5432 refused"));
     const res = await list();
     expect(res.statusCode).toBe(500);
-    expect(res.json()).toMatchObject({ api_id: expect.any(String), error: "Internal server error" });
+    expect(res.json()).toMatchObject({ error_code: "INTERNAL_ERROR", api_id: expect.stringMatching(UUID), hint: expect.stringContaining("api_id") });
+    expect(res.json().hint).toMatch(/[Rr]etry/);
+    expect(res.json().api_id).toBe(ids[0]);
     expect(res.body).not.toContain("db-host-secret");
+  });
+
+  it("429 carries Retry-After and a wait hint", async () => {
+    for (let i = 0; i < 3; i++) expect((await list()).statusCode).toBe(200);
+    const res = await list();
+    expect(res.statusCode).toBe(429);
+    expect(res.headers["retry-after"]).toMatch(/^\d+$/);
+    expect(res.json()).toMatchObject({ error_code: "RATE_LIMITED", api_id: expect.stringMatching(UUID), hint: expect.stringMatching(/\d+ second/) });
+  });
+
+  it("429 api_id equals the request's id", async () => {
+    const ids: string[] = [];
+    await app.close();
+    app = await buildCapturingApp(ids);
+    for (let i = 0; i < 3; i++) await list();
+    ids.length = 0;
+    const res = await list();
+    expect(res.statusCode).toBe(429);
+    expect(res.json().api_id).toBe(ids[0]);
   });
 });
