@@ -271,3 +271,37 @@ describe("text-parameter checks are scoped to header and body", () => {
     expect(mapT([{ type: t, parameters: [{ type: "text", text: "a", parameter_name: "bad name!" }] }])).toThrow(SendValidationError);
   });
 });
+
+describe("parseSendBody: strict input checks", () => {
+  it.each([
+    ["letters around src", { src: "abc14155552671xyz" }],
+    ["letters in dst", { dst: "abc14155552672xyz" }],
+    ["symbols in dst", { dst: "+14155552672#1" }],
+    ["letters in a second dst", { dst: "+14155552672<4155x50000" }],
+  ])("rejects phone strings with %s", (_n, over) => { bad({ ...base, ...over, text: "x" }); });
+
+  it("accepts +, spaces, dashes and parentheses in phone numbers", () => {
+    const p = parseSendBody({ ...base, src: "+1 (415) 555-2671", dst: "+1 415-555-2672", text: "x" });
+    expect(p.src).toBe("14155552671");
+    expect(p.dsts).toEqual(["14155552672"]);
+  });
+
+  it.each([["UPPER"], ["has space"], ["has-dash"], [""], ["a".repeat(513)]])("rejects template name %j", (name) => {
+    bad({ ...base, template: { name, language: "en" } });
+  });
+  it.each([["english"], ["EN"], ["en-US"], ["e"], ["en_us_x"]])("rejects template language %j", (language) => {
+    bad({ ...base, template: { name: "t", language } });
+  });
+  it.each([["en"], ["en_US"], ["pt_BR"], ["fil"], ["zh_CN"]])("accepts template language %j", (language) => {
+    expect(() => parseSendBody({ ...base, template: { name: "t", language } })).not.toThrow();
+  });
+
+  it("rejects a callback method other than GET or POST, accepts either case", () => {
+    bad({ ...base, text: "x", method: "PUT" });
+    expect(parseSendBody({ ...base, text: "x", method: "get" }).callbackMethod).toBe("GET");
+    expect(parseSendBody({ ...base, text: "x" }).callbackMethod).toBe("POST");
+  });
+  it("rejects a callback url over 2000 characters", () => {
+    bad({ ...base, text: "x", url: "https://c.example.com/" + "a".repeat(2000) });
+  });
+});

@@ -45,6 +45,11 @@ type Raw = Record<string, unknown>;
 const isObj = (v: unknown): v is Raw => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
 
+const PHONE_CHARS = /^\+?[0-9 ()-]+$/;
+const TEMPLATE_NAME = /^[a-z0-9_]{1,512}$/;
+const TEMPLATE_LANG = /^[a-z]{2,3}(_[A-Za-z]{2,4})?$/;
+const MAX_CALLBACK_URL = 2000;
+
 export function inferMediaKind(url: string): "image" | "video" | "document" | "audio" {
   const ext = (/\.([a-z0-9]+)(?:$|[?#])/i.exec(url)?.[1] ?? "").toLowerCase();
   if (["mp4", "3gp", "mov"].includes(ext)) return "video";
@@ -57,13 +62,16 @@ export function parseSendBody(body: unknown): ParsedSend {
   if (!isObj(body)) throw new SendValidationError("Request body must be a JSON object");
   if (body["type"] !== "whatsapp") throw new SendValidationError("Only type=whatsapp is supported");
 
-  const src = normalizeFullPhone(str(body["src"]) ?? "");
+  const srcRaw = str(body["src"]) ?? "";
+  if (srcRaw && !PHONE_CHARS.test(srcRaw)) throw new SendValidationError("src contains invalid characters");
+  const src = normalizeFullPhone(srcRaw);
   if (!src) throw new SendValidationError("src must be a valid WhatsApp Business number");
 
   const rawDst = str(body["dst"]);
   if (!rawDst) throw new SendValidationError("dst is required");
   const dsts: string[] = [];
   for (const part of rawDst.split("<")) {
+    if (part.trim() && !PHONE_CHARS.test(part.trim())) throw new SendValidationError(`Invalid destination number: ${part.trim()}`);
     const n = normalizeFullPhone(part.trim());
     if (!n) throw new SendValidationError(`Invalid destination number: ${part.trim() || "(empty)"}`);
     if (!dsts.includes(n)) dsts.push(n);
@@ -71,7 +79,10 @@ export function parseSendBody(body: unknown): ParsedSend {
   if (dsts.length > MAX_DST) throw new SendValidationError(`At most ${MAX_DST} destinations per request`);
 
   const callbackUrl = str(body["url"]);
-  const callbackMethod = String(body["method"] ?? "POST").toUpperCase() === "GET" ? "GET" : "POST";
+  if (callbackUrl && callbackUrl.length > MAX_CALLBACK_URL) throw new SendValidationError(`url must be at most ${MAX_CALLBACK_URL} characters`);
+  const methodRaw = body["method"] == null ? "POST" : String(body["method"]).toUpperCase();
+  if (methodRaw !== "GET" && methodRaw !== "POST") throw new SendValidationError("method must be GET or POST");
+  const callbackMethod: "GET" | "POST" = methodRaw;
 
   const text = typeof body["text"] === "string" ? body["text"] : null;
   const mediaRaw = body["media_urls"];
@@ -87,6 +98,8 @@ export function parseSendBody(body: unknown): ParsedSend {
     const t = body["template"];
     const name = str(t["name"]); const language = str(t["language"]);
     if (!name || !language) throw new SendValidationError("template.name and template.language are required");
+    if (!TEMPLATE_NAME.test(name)) throw new SendValidationError("template.name may contain only lowercase letters, digits and underscores (max 512)");
+    if (!TEMPLATE_LANG.test(language)) throw new SendValidationError("template.language must look like en or en_US");
     content = { kind: "template", name, language, components: validateComponents(t["components"]) };
   } else if (isObj(body["interactive"])) {
     content = { kind: "interactive", interactive: validateInteractive(body["interactive"]) };
