@@ -4,6 +4,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS, ZERO_DECIMAL_CURRENCIES } from "../lib/stripe.js";
 import { checkPlanLimit, isFeatureEnabled } from "../lib/plan-limits.js";
 import { canAccessSub } from "../lib/permissions.js";
+import { isAllowedRedirect } from "../lib/billing/safe-redirect.js";
 import Razorpay from "razorpay";
 
 // GAP-S60: load gateway credentials from VendorSettings, fallback to env vars
@@ -240,8 +241,14 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { planTier: PlanTier | string; successUrl: string; cancelUrl: string } }>(
     "/billing/checkout",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "settings_access", "settings_billing")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+      }
       const { successUrl, cancelUrl } = request.body;
+      if (!isAllowedRedirect(successUrl) || !isAllowedRedirect(cancelUrl)) {
+        return reply.status(400).send({ error: { code: "INVALID_REDIRECT", message: "Redirect URL is not allowed" } });
+      }
       // GAP-S56: support "{planTier}___monthly" / "{planTier}___yearly" selectors
       const { planTier } = parsePlanSelector(request.body.planTier as string);
       const priceId = PLAN_PRICE_IDS[planTier];

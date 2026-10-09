@@ -2,17 +2,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
+const { stripeSessionCreate } = vi.hoisted(() => ({ stripeSessionCreate: vi.fn() }));
 vi.mock("../lib/stripe.js", () => ({
-  stripe: {
-    checkout: { sessions: { create: vi.fn() } },
+  getStripe: () => ({
+    checkout: { sessions: { create: stripeSessionCreate } },
     billingPortal: { sessions: { create: vi.fn() } },
-    webhooks: { constructEvent: vi.fn() },
-  },
+    subscriptions: { list: vi.fn().mockResolvedValue({ data: [] }) },
+  }),
   PLAN_PRICE_IDS: { starter: "price_starter", growth: "price_growth" },
   PLAN_LIMITS: {
     starter: { contacts: 500, messages: 1000 },
     growth: { contacts: 5000, messages: 20000 },
   },
+  ZERO_DECIMAL_CURRENCIES: new Set<string>(),
 }));
 
 vi.mock("razorpay", () => ({
@@ -147,5 +149,41 @@ describe("settings_billing sub gate", () => {
     // admin bypasses — response may be 200 or depends on stripe mock; just not 403
     expect(res.statusCode).not.toBe(403);
     await app.close();
+  });
+});
+
+describe("POST /v1/billing/checkout", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    vi.resetModules(); vi.clearAllMocks();
+    process.env["WEB_PUBLIC_URL"] = "https://wbmsg.com";
+    stripeSessionCreate.mockResolvedValue({ url: "https://checkout.stripe.test/s" });
+    app = await buildApp();
+  });
+  afterEach(async () => { await app.close(); });
+
+  it("creates a session for allowed redirect urls", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/billing/checkout",
+      payload: { planTier: "starter", successUrl: "https://wbmsg.com/settings/billing", cancelUrl: "https://wbmsg.com/settings/billing" } });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("rejects redirect urls on other origins", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/billing/checkout",
+      payload: { planTier: "starter", successUrl: "https://evil.com/x", cancelUrl: "https://wbmsg.com/settings/billing" } });
+    expect(res.statusCode).toBe(400);
+    expect(stripeSessionCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 without settings_billing", async () => {
+    const other = Fastify({ logger: false });
+    other.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    other.addHook("onRequest", async (r) => { r.auth = { ...mockAuth, role: "agent" as never, permissions: {} }; });
+    const { billingRouter } = await import("./billing.js");
+    await other.register(billingRouter, { prefix: "/v1" });
+    const res = await other.inject({ method: "POST", url: "/v1/billing/checkout",
+      payload: { planTier: "starter", successUrl: "https://wbmsg.com/a", cancelUrl: "https://wbmsg.com/a" } });
+    expect(res.statusCode).toBe(403);
+    await other.close();
   });
 });
