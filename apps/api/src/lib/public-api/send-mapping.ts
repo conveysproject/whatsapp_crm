@@ -5,6 +5,8 @@ import type { WaInteractivePayload, WaTemplateComponent } from "../whatsapp.js";
 export const MAX_DST = 20;
 export const MAX_TEXT = 4096;
 
+export const NOT_AN_OBJECT_MESSAGE = "Request body must be a JSON object";
+
 export class SendValidationError extends Error {
   constructor(message: string, readonly code: ApiErrorCode = "VALIDATION_FAILED") { super(message); }
 }
@@ -62,7 +64,7 @@ export function inferMediaKind(url: string): "image" | "video" | "document" | "a
 }
 
 export function parseSendBody(body: unknown): ParsedSend {
-  if (!isObj(body)) throw new SendValidationError("Request body must be a JSON object");
+  if (!isObj(body)) throw new SendValidationError(NOT_AN_OBJECT_MESSAGE);
   if (body["type"] !== "whatsapp") throw new SendValidationError("Only type=whatsapp is supported");
 
   const srcRaw = str(body["src"]) ?? "";

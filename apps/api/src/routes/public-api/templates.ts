@@ -52,7 +52,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
   function metaFailure(request: FastifyRequest, reply: FastifyReply, err: unknown, op: string) {
     request.log.error({ error: safeErr(err), op, organizationId: request.publicApi!.organizationId }, "public API template Meta call failed");
     // A refused delete is always a 502 (the template still exists at Meta); create/update refusals are the caller's input (400).
-    if (op !== "delete" && err instanceof MetaTemplateError && !isMetaOutage(err)) return apiError(reply, 400, "VALIDATION_FAILED", { message: metaMessage(err), hint: "Meta rejected the template. Fix the issue named in the message and send again." });
+    if (op !== "delete" && err instanceof MetaTemplateError && !isMetaOutage(err)) return apiError(reply, 400, "VALIDATION_FAILED", { message: metaMessage(err), hint: "Meta rejected the template. Check the template content against WhatsApp's template guidelines, then send again." });
     return apiError(reply, 502, "META_UNAVAILABLE");
   }
 

@@ -94,9 +94,11 @@ describe("POST /Message/", () => {
 
   it("send errors carry error_code and a hint", async () => {
     const r1 = await post(app, { ...body, dst: "+14155552672<abc" });
-    expect(r1.json()).toMatchObject({ error_code: "VALIDATION_FAILED", hint: expect.any(String) });
+    expect(r1.json()).toMatchObject({ error_code: "VALIDATION_FAILED", error: "Invalid destination number: abc", hint: "Fix the field named in the message and send again." });
     mockPrisma.organization.findUnique.mockResolvedValue({ phoneNumberId: null, wabaAccessToken: null });
-    expect((await post(app, body)).json().error_code).toBe("WHATSAPP_NOT_CONNECTED");
+    expect((await post(app, body)).json()).toMatchObject({
+      error_code: "WHATSAPP_NOT_CONNECTED", error: "No WhatsApp number is connected to this account.", hint: "Connect a WhatsApp Business number in WBMSG first.",
+    });
   });
 
   it("src mismatch tells the client which number is connected (masked)", async () => {
@@ -110,7 +112,7 @@ describe("POST /Message/", () => {
     mockPrisma.vendorSetting.findFirst.mockResolvedValue(null);
     const r = await post(app, body);
     expect(r.statusCode).toBe(400);
-    expect(r.json().error_code).toBe("WHATSAPP_NOT_CONNECTED");
+    expect(r.json()).toMatchObject({ error_code: "WHATSAPP_NOT_CONNECTED", error: "No WhatsApp number is connected to this account." });
   });
 
   it("an unsafe callback URL gets CALLBACK_URL_INVALID", async () => {
@@ -331,7 +333,12 @@ describe("GET /Message/", () => {
   });
 
   it("400 for a bad time filter", async () => {
-    expect((await app.inject({ method: "GET", url: "/v1/Account/k1/Message/?message_time__gt=garbage" })).statusCode).toBe(400);
+    const bad = await app.inject({ method: "GET", url: "/v1/Account/k1/Message/?message_time__gt=garbage" });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json()).toMatchObject({
+      error_code: "VALIDATION_FAILED", error: "message_time filters must be yyyy-MM-dd HH:mm:ss",
+      hint: "Send message_time__gt and message_time__lt as yyyy-MM-dd HH:mm:ss, for example 2026-10-05 00:00:00.",
+    });
   });
 
   const list = (qs: string) => app.inject({ method: "GET", url: `/v1/Account/k1/Message/?${qs}` });

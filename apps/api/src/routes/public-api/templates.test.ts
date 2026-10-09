@@ -149,8 +149,10 @@ describe("public API templates", () => {
       for (const components of [[{ type: "HEADER", format: "TEXT", text: "h" }], [{ type: "BODY", text: 42 }], [{ type: "BODY", text: "x" }, { type: "BUTTONS", buttons }]]) {
         const res = await post(`${base}/waba-1/`, { ...goodBody(), components });
         expect(res.statusCode).toBe(400);
-        expect(res.json()).toMatchObject({ api_id: expect.any(String), error: expect.any(String) });
+        expect(res.json()).toMatchObject({ api_id: expect.any(String), error_code: "VALIDATION_FAILED", error: expect.any(String) });
       }
+      const nb = await post(`${base}/waba-1/`, { ...goodBody(), components: [{ type: "HEADER", format: "TEXT", text: "h" }] });
+      expect(nb.json().error).toMatch(/BODY/i);
       expect(submit).not.toHaveBeenCalled();
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
       expect(rows).toHaveLength(0);
@@ -160,6 +162,10 @@ describe("public API templates", () => {
       seed({ name: "promo_one", language: "en_US", status: "pending", metaTemplateId: "1" });
       const res = await post(`${base}/waba-1/`, goodBody());
       expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({
+        error_code: "VALIDATION_FAILED", error: "A template with this name and language already exists",
+        hint: "Use a different name or language, or update the existing template.",
+      });
       expect(rows).toHaveLength(1);
       expect(submit).not.toHaveBeenCalled();
       expect(templateApi.findFirst.mock.calls[0]![0].where).toMatchObject({ organizationId: "org-1", name: "promo_one", language: "en_US" });
@@ -183,7 +189,10 @@ describe("public API templates", () => {
       submit.mockRejectedValue(new MetaTemplateError(`Meta template submission failed (code 100) ${TOKEN}`, 100, 400));
       const res = await post(`${base}/waba-1/`, goodBody());
       expect(res.statusCode).toBe(400);
-      expect(res.json().error).toBe("Meta rejected the template (code 100)");
+      expect(res.json()).toMatchObject({
+        error_code: "VALIDATION_FAILED", error: "Meta rejected the template (code 100)",
+        hint: "Meta rejected the template. Check the template content against WhatsApp's template guidelines, then send again.",
+      });
       expect(res.body).not.toContain(TOKEN);
       expect(rows).toHaveLength(0);
       expect(templateApi.deleteMany.mock.calls[0]![0].where).toMatchObject({ organizationId: "org-1" });
@@ -322,7 +331,12 @@ describe("public API templates", () => {
       expect((await post(`${base}/waba-1/9001/`, editBody())).statusCode).toBe(200);
       rows[0]!.status = "pending";
       edit.mockClear();
-      expect((await post(`${base}/waba-1/9001/`, editBody())).statusCode).toBe(400);
+      const pend = await post(`${base}/waba-1/9001/`, editBody());
+      expect(pend.statusCode).toBe(400);
+      expect(pend.json()).toMatchObject({
+        error_code: "VALIDATION_FAILED", error: "Only approved, rejected or paused templates can be edited",
+        hint: "Wait until the template has been reviewed, then edit it again.",
+      });
       expect(edit).not.toHaveBeenCalled();
     });
 
@@ -338,6 +352,10 @@ describe("public API templates", () => {
       for (const patch of [{ name: "other" }, { language: "fr" }, { category: "UTILITY" }]) {
         const res = await post(`${base}/waba-1/9001/`, { ...editBody(), ...patch });
         expect(res.statusCode).toBe(400);
+        expect(res.json()).toMatchObject({
+          error_code: "VALIDATION_FAILED", error: "name, language and category cannot be changed",
+          hint: "Send the same name, language and category as the existing template; create a new template to change them.",
+        });
       }
       expect(edit).not.toHaveBeenCalled();
     });
@@ -398,7 +416,12 @@ describe("public API templates", () => {
     it("400 when ?name is missing or differs from the stored name; nothing deleted", async () => {
       seed();
       expect((await app.inject({ method: "DELETE", url: `${base}/waba-1/9001/` })).statusCode).toBe(400);
-      expect((await app.inject({ method: "DELETE", url: delUrl("9001", "wrong") })).statusCode).toBe(400);
+      const wrong = await app.inject({ method: "DELETE", url: delUrl("9001", "wrong") });
+      expect(wrong.statusCode).toBe(400);
+      expect(wrong.json()).toMatchObject({
+        error_code: "VALIDATION_FAILED", error: "name query parameter must match the template name",
+        hint: "Add ?name=<template name> to confirm which template to delete.",
+      });
       expect(del).not.toHaveBeenCalled();
       expect(rows).toHaveLength(1);
     });

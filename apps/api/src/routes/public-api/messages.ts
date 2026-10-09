@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
-import { newApiId, plivoError, apiError } from "../../lib/public-api/responses.js";
+import { newApiId, apiError } from "../../lib/public-api/responses.js";
 import {
-  parseSendBody, SendValidationError, toMetaInteractive, toMetaTemplateComponents, renderTemplateForInbox, inferMediaKind,
+  parseSendBody, SendValidationError, NOT_AN_OBJECT_MESSAGE, toMetaInteractive, toMetaTemplateComponents, renderTemplateForInbox, inferMediaKind,
   type SendContent,
 } from "../../lib/public-api/send-mapping.js";
 import { assertSafeCallbackUrl, UnsafeUrlError } from "../../lib/public-api/safe-url.js";
@@ -24,7 +24,6 @@ function inboxFields(content: SendContentForWorker, templateBody: string | null)
   }
 }
 
-const NOT_AN_OBJECT = "Request body must be a JSON object";
 const MAX_LIMIT = 20;
 // Prisma `skip` must fit in int32; anything beyond this simply yields an empty page.
 const MAX_OFFSET = 2_000_000_000;
@@ -77,7 +76,7 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
       catch (err) {
         if (err instanceof SendValidationError) {
           // A non-object body (e.g. Content-Type text/plain is parsed to a string) is almost always a wrong Content-Type.
-          const hint = err.message === NOT_AN_OBJECT ? "Send a JSON object with the header Content-Type: application/json." : undefined;
+          const hint = err.message === NOT_AN_OBJECT_MESSAGE ? "Send a JSON object with the header Content-Type: application/json." : undefined;
           return apiError(reply, 400, err.code, { message: err.message, ...(hint ? { hint } : {}) });
         }
         throw err;
@@ -196,7 +195,7 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
       const ltRaw = qp(q["message_time__lt"]);
       const gt = parseTime(gtRaw);
       const lt = parseTime(ltRaw);
-      if (gt === "invalid" || lt === "invalid") return plivoError(reply, 400, "message_time filters must be yyyy-MM-dd HH:mm:ss");
+      if (gt === "invalid" || lt === "invalid") return apiError(reply, 400, "VALIDATION_FAILED", { message: "message_time filters must be yyyy-MM-dd HH:mm:ss", hint: "Send message_time__gt and message_time__lt as yyyy-MM-dd HH:mm:ss, for example 2026-10-05 00:00:00." });
 
       const base = `/v1/Account/${request.params.authId}/Message/`;
       const link = (newOffset: number) => {
