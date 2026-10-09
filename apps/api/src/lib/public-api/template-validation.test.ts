@@ -33,6 +33,24 @@ describe("resolveTemplate", () => {
   });
 });
 
+describe("error codes", () => {
+  const rows = [row({ language: "en_US" }), row({ language: "hi", status: "pending" })];
+  const code = (c: string) => expect.objectContaining({ code: c, constructor: SendValidationError });
+  it("TEMPLATE_NOT_FOUND for no rows and for a missing language", () => {
+    expect(() => resolveTemplate([], "kyc", "en")).toThrow(code("TEMPLATE_NOT_FOUND"));
+    expect(() => resolveTemplate(rows, "kyc", "en")).toThrow(code("TEMPLATE_NOT_FOUND"));
+  });
+  it("TEMPLATE_NOT_APPROVED when the language exists but is not approved", () => {
+    expect(() => resolveTemplate(rows, "kyc", "hi")).toThrow(code("TEMPLATE_NOT_APPROVED"));
+  });
+  it("VALIDATION_FAILED when more than one template matches", () => {
+    expect(() => resolveTemplate([row(), row()], "kyc", "en")).toThrow(code("VALIDATION_FAILED"));
+  });
+  it("TEMPLATE_PARAMS_MISMATCH for a parameter mismatch", () => {
+    expect(() => validateAgainstTemplate(row(), body(t("username")))).toThrow(code("TEMPLATE_PARAMS_MISMATCH"));
+  });
+});
+
 describe("validateAgainstTemplate: named", () => {
   it("accepts any order", () => { expect(() => validateAgainstTemplate(row(), body(t("ra_name"), t("username")))).not.toThrow(); });
   it("rejects a missing name", () => { fails(row(), body(t("username")), /not matched for BODY: expected \[username, ra_name\]; got \[username\]/); });

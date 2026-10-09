@@ -22,20 +22,20 @@ export function placeholders(text: string | undefined): string[] {
 
 /** Picks the one approved template for name+language from every row of that name in the org; specific 400 messages otherwise. */
 export function resolveTemplate(rows: TemplateRow[], name: string, language: string): TemplateRow {
-  if (rows.length === 0) throw new SendValidationError(`Template "${name}" not found`);
+  if (rows.length === 0) throw new SendValidationError(`Template "${name}" not found`, "TEMPLATE_NOT_FOUND");
   const sameLang = rows.filter((r) => r.language === language);
   if (sameLang.length === 0) {
     const langs = [...new Set(rows.map((r) => r.language))].sort().join(", ");
-    throw new SendValidationError(`Template "${name}" has no language "${language}"; available: ${langs}`);
+    throw new SendValidationError(`Template "${name}" has no language "${language}"; available: ${langs}`, "TEMPLATE_NOT_FOUND");
   }
   const approved = sameLang.filter((r) => r.status === "approved");
-  if (approved.length === 0) throw new SendValidationError(`Template "${name}" (${language}) is not approved (status: ${sameLang[0]!.status})`);
-  if (approved.length > 1) throw new SendValidationError("Template name and language match more than one template");
+  if (approved.length === 0) throw new SendValidationError(`Template "${name}" (${language}) is not approved (status: ${sameLang[0]!.status})`, "TEMPLATE_NOT_APPROVED");
+  if (approved.length > 1) throw new SendValidationError("Template name and language match more than one template", "VALIDATION_FAILED");
   return approved[0]!;
 }
 
 const notMatched = (part: string, detail: string): never => {
-  throw new SendValidationError(`template parameters not matched for ${part}: ${detail}`);
+  throw new SendValidationError(`template parameters not matched for ${part}: ${detail}`, "TEMPLATE_PARAMS_MISMATCH");
 };
 
 function checkTextPart(part: "BODY" | "HEADER", text: string | undefined, named: boolean, sent: Params): void {

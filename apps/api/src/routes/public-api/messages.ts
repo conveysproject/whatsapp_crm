@@ -24,6 +24,7 @@ function inboxFields(content: SendContentForWorker, templateBody: string | null)
   }
 }
 
+const NOT_AN_OBJECT = "Request body must be a JSON object";
 const MAX_LIMIT = 20;
 // Prisma `skip` must fit in int32; anything beyond this simply yields an empty page.
 const MAX_OFFSET = 2_000_000_000;
@@ -74,7 +75,11 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
       let parsed;
       try { parsed = parseSendBody(request.body); }
       catch (err) {
-        if (err instanceof SendValidationError) return plivoError(reply, 400, err.message);
+        if (err instanceof SendValidationError) {
+          // A non-object body (e.g. Content-Type text/plain is parsed to a string) is almost always a wrong Content-Type.
+          const hint = err.message === NOT_AN_OBJECT ? "Send a JSON object with the header Content-Type: application/json." : undefined;
+          return apiError(reply, 400, err.code, { message: err.message, ...(hint ? { hint } : {}) });
+        }
         throw err;
       }
 
@@ -82,14 +87,15 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
         fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { phoneNumberId: true, wabaAccessToken: true } }),
         fastify.prisma.vendorSetting.findFirst({ where: { organizationId, key: "current_phone_number_number" }, select: { value: true } }),
       ]);
-      if (!org?.phoneNumberId || !org.wabaAccessToken) return plivoError(reply, 400, "WhatsApp number is not connected");
+      if (!org?.phoneNumberId || !org.wabaAccessToken) return apiError(reply, 400, "WHATSAPP_NOT_CONNECTED");
       const connected = (numberRow?.value ?? "").replace(/\D/g, "");
-      if (!connected || connected !== parsed.src) return plivoError(reply, 400, "src is not the WhatsApp Business number of this account");
+      if (!connected) return apiError(reply, 400, "WHATSAPP_NOT_CONNECTED");
+      if (connected !== parsed.src) return apiError(reply, 400, "SRC_MISMATCH", { hint: `Set src to the connected number (ends in ${connected.slice(-4)}).` });
 
       if (parsed.callbackUrl) {
         try { await assertSafeCallbackUrl(parsed.callbackUrl); }
         catch (err) {
-          if (err instanceof UnsafeUrlError) return plivoError(reply, 400, `url: ${err.message}`);
+          if (err instanceof UnsafeUrlError) return apiError(reply, 400, "CALLBACK_URL_INVALID", { message: `url: ${err.message}` });
           throw err;
         }
       }
@@ -118,7 +124,7 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
           content = c;
         }
       } catch (err) {
-        if (err instanceof SendValidationError) return plivoError(reply, 400, err.message);
+        if (err instanceof SendValidationError) return apiError(reply, 400, err.code, { message: err.message });
         throw err;
       }
 
@@ -170,7 +176,7 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
         uuids.push(messageId);
       }
 
-      if (uuids.length === 0) return plivoError(reply, 500, "Failed to queue message");
+      if (uuids.length === 0) return apiError(reply, 500, "QUEUE_FAILED");
       request.usageMessages = uuids.length;
       return reply.status(202).send({ api_id: request.apiId ?? newApiId(), message: "message(s) queued", message_uuid: uuids });
     });

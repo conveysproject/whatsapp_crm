@@ -1,10 +1,13 @@
 import { normalizeFullPhone } from "../phone-normalize.js";
+import type { ApiErrorCode } from "./error-catalog.js";
 import type { WaInteractivePayload, WaTemplateComponent } from "../whatsapp.js";
 
 export const MAX_DST = 20;
 export const MAX_TEXT = 4096;
 
-export class SendValidationError extends Error {}
+export class SendValidationError extends Error {
+  constructor(message: string, readonly code: ApiErrorCode = "VALIDATION_FAILED") { super(message); }
+}
 
 export interface PlivoTemplateComponent {
   type: string;

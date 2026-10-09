@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import type { Prisma } from "@prisma/client";
-import { newApiId, plivoError, apiError } from "../../lib/public-api/responses.js";
+import { newApiId, apiError } from "../../lib/public-api/responses.js";
 import {
   parseTemplateBody, parseListQuery, toSubmitResponse, toListObject, toRetrieveResponse, TemplateValidationError,
   type ParsedTemplate, type TemplateRow,
@@ -46,21 +46,20 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
     };
   }
 
-  const notConnected = (reply: FastifyReply) => plivoError(reply, 400, "WhatsApp is not connected");
+  const notConnected = (reply: FastifyReply) => apiError(reply, 400, "WHATSAPP_NOT_CONNECTED");
 
   /** Maps a Meta failure to a response. Logs name/code only: never Meta's text, the token or the request. */
   function metaFailure(request: FastifyRequest, reply: FastifyReply, err: unknown, op: string) {
     request.log.error({ error: safeErr(err), op, organizationId: request.publicApi!.organizationId }, "public API template Meta call failed");
     // A refused delete is always a 502 (the template still exists at Meta); create/update refusals are the caller's input (400).
-    if (op !== "delete" && err instanceof MetaTemplateError && !isMetaOutage(err)) return plivoError(reply, 400, metaMessage(err));
-    const code = err instanceof MetaTemplateError ? err.code : null;
-    return plivoError(reply, 502, code === null ? "Meta request failed" : `Meta request failed (code ${code})`);
+    if (op !== "delete" && err instanceof MetaTemplateError && !isMetaOutage(err)) return apiError(reply, 400, "VALIDATION_FAILED", { message: metaMessage(err), hint: "Meta rejected the template. Fix the issue named in the message and send again." });
+    return apiError(reply, 502, "META_UNAVAILABLE");
   }
 
   function parseOr400(request: FastifyRequest, reply: FastifyReply): ParsedTemplate | null {
     try { return parseTemplateBody(request.body); }
     catch (err) {
-      if (err instanceof TemplateValidationError) { plivoError(reply, 400, err.message); return null; }
+      if (err instanceof TemplateValidationError) { apiError(reply, 400, "VALIDATION_FAILED", { message: err.message }); return null; }
       throw err;
     }
   }
@@ -90,7 +89,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
           select: { id: true },
         });
       });
-      if (!created) return plivoError(reply, 400, "A template with this name and language already exists");
+      if (!created) return apiError(reply, 400, "VALIDATION_FAILED", { message: "A template with this name and language already exists", hint: "Use a different name or language, or update the existing template." });
 
       const dropDraft = async () => {
         try { await fastify.prisma.template.deleteMany({ where: { id: created.id, organizationId } }); }
@@ -172,9 +171,9 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
       const { organizationId } = ctx;
       const row = await fastify.prisma.template.findFirst({ where: { organizationId, metaTemplateId: request.params.templateId } });
       if (!row?.metaTemplateId) return apiError(reply, 404, "TEMPLATE_NOT_FOUND");
-      if (!PUBLIC_EDITABLE_STATUSES.has(row.status)) return plivoError(reply, 400, "Only approved, rejected or paused templates can be edited");
+      if (!PUBLIC_EDITABLE_STATUSES.has(row.status)) return apiError(reply, 400, "VALIDATION_FAILED", { message: "Only approved, rejected or paused templates can be edited", hint: "Wait until the template has been reviewed, then edit it again." });
       if (parsed.name !== row.name || parsed.language !== row.language || parsed.category !== row.category) {
-        return plivoError(reply, 400, "name, language and category cannot be changed");
+        return apiError(reply, 400, "VALIDATION_FAILED", { message: "name, language and category cannot be changed", hint: "Send the same name, language and category as the existing template; create a new template to change them." });
       }
       const accessToken = await ctx.accessToken();
       if (!accessToken) return notConnected(reply);
@@ -204,7 +203,7 @@ export const publicApiTemplatesRouter: FastifyPluginAsync = async (fastify) => {
       if (!row?.metaTemplateId) return apiError(reply, 404, "TEMPLATE_NOT_FOUND");
       const nameParam = request.query["name"];
       const name = typeof nameParam === "string" ? nameParam : Array.isArray(nameParam) && typeof nameParam[0] === "string" ? nameParam[0] : undefined;
-      if (name !== row.name) return plivoError(reply, 400, "name query parameter must match the template name");
+      if (name !== row.name) return apiError(reply, 400, "VALIDATION_FAILED", { message: "name query parameter must match the template name", hint: "Add ?name=<template name> to confirm which template to delete." });
       const accessToken = await ctx.accessToken();
       if (!accessToken) return notConnected(reply);
 

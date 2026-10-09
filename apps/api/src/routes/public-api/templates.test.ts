@@ -126,7 +126,7 @@ describe("public API templates", () => {
       rows = []; submit.mockClear();
       const res = await post(`${base}/waba-1/`, { ...goodBody(), name: "other" });
       expect(res.statusCode).toBe(400);
-      expect(res.json().error).toBe("WhatsApp is not connected");
+      expect(res.json()).toMatchObject({ error_code: "WHATSAPP_NOT_CONNECTED", hint: expect.any(String) });
       expect(submit).not.toHaveBeenCalled();
       expect(rows).toHaveLength(0);
     });
@@ -194,6 +194,7 @@ describe("public API templates", () => {
       submit.mockRejectedValue(new MetaTemplateError("Meta template submission failed: network error", null, 0));
       const res = await post(`${base}/waba-1/`, goodBody());
       expect(res.statusCode).toBe(502);
+      expect(res.json()).toMatchObject({ error_code: "META_UNAVAILABLE", hint: expect.any(String) });
       expect(rows).toHaveLength(0);
     });
 

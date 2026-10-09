@@ -92,6 +92,54 @@ describe("POST /Message/", () => {
     expect(sendAdd).not.toHaveBeenCalled();
   });
 
+  it("send errors carry error_code and a hint", async () => {
+    const r1 = await post(app, { ...body, dst: "+14155552672<abc" });
+    expect(r1.json()).toMatchObject({ error_code: "VALIDATION_FAILED", hint: expect.any(String) });
+    mockPrisma.organization.findUnique.mockResolvedValue({ phoneNumberId: null, wabaAccessToken: null });
+    expect((await post(app, body)).json().error_code).toBe("WHATSAPP_NOT_CONNECTED");
+  });
+
+  it("src mismatch tells the client which number is connected (masked)", async () => {
+    const r = await post(app, { ...body, src: "+14155551234" });
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toMatchObject({ error_code: "SRC_MISMATCH", hint: "Set src to the connected number (ends in 2671)." });
+    expect(r.body).not.toContain("14155552671");
+  });
+
+  it("an empty connected number is reported as not connected", async () => {
+    mockPrisma.vendorSetting.findFirst.mockResolvedValue(null);
+    const r = await post(app, body);
+    expect(r.statusCode).toBe(400);
+    expect(r.json().error_code).toBe("WHATSAPP_NOT_CONNECTED");
+  });
+
+  it("an unsafe callback URL gets CALLBACK_URL_INVALID", async () => {
+    const r = await post(app, { ...body, url: "https://bad.example.com/cb" });
+    expect(r.json()).toMatchObject({ error_code: "CALLBACK_URL_INVALID", error: "url: unsafe" });
+  });
+
+  it("a non-JSON-object body keeps its message and says to send application/json", async () => {
+    const r = await app.inject({ method: "POST", url: "/v1/Account/k1/Message/", payload: "hello", headers: { "content-type": "text/plain" } });
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toMatchObject({
+      error: "Request body must be a JSON object", error_code: "VALIDATION_FAILED",
+      hint: "Send a JSON object with the header Content-Type: application/json.",
+    });
+  });
+
+  it("template errors use TEMPLATE_* codes", async () => {
+    mockPrisma.template.findMany.mockResolvedValue([]);
+    const r = await post(app, { ...body, text: undefined, template: { name: "nope", language: "en" } });
+    expect(r.json()).toMatchObject({ error_code: "TEMPLATE_NOT_FOUND", error: 'Template "nope" not found' });
+    const tpl = { name: "welcome", language: "en_US", status: "pending", parameterFormat: "POSITIONAL", components: [{ type: "BODY", text: "Hi" }] };
+    mockPrisma.template.findMany.mockResolvedValue([tpl]);
+    const na = await post(app, { ...body, text: undefined, template: { name: "welcome", language: "en_US" } });
+    expect(na.json()).toMatchObject({ error_code: "TEMPLATE_NOT_APPROVED" });
+    mockPrisma.template.findMany.mockResolvedValue([{ ...tpl, status: "approved" }]);
+    const pm = await post(app, { ...body, text: undefined, template: { name: "welcome", language: "en_US", components: [{ type: "body", parameters: [{ type: "text", text: "x" }] }] } });
+    expect(pm.json()).toMatchObject({ error_code: "TEMPLATE_PARAMS_MISMATCH" });
+  });
+
   it("400 when src is not the org's connected number", async () => {
     const res = await post(app, { ...body, src: "+14155551234" });
     expect(res.statusCode).toBe(400);
@@ -177,7 +225,7 @@ describe("POST /Message/", () => {
     mockPrisma.message.create.mockRejectedValue(new Error("db down"));
     const res = await post(app, { ...body, dst: "+14155552672<+14155550000" });
     expect(res.statusCode).toBe(500);
-    expect(res.json()).toMatchObject({ error: "Failed to queue message", api_id: expect.any(String) });
+    expect(res.json()).toMatchObject({ error_code: "QUEUE_FAILED", error: "We could not queue your message.", hint: expect.any(String), api_id: expect.any(String) });
     expect(sendAdd).not.toHaveBeenCalled();
   });
 
