@@ -303,6 +303,33 @@ describe("GET /v1/analytics/dashboard", () => {
     await app.close();
   });
 
+  it("treats an empty tz as UTC", async () => {
+    await mocks();
+    const app = await appAs({}, "admin");
+    const res = await app.inject({ method: "GET", url: "/v1/analytics/dashboard?tz=" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.tz).toBe("UTC");
+    await app.close();
+  });
+
+  it("returns 400 INVALID_TZ for a repeated tz param", async () => {
+    await mocks();
+    const app = await appAs({}, "admin");
+    const res = await app.inject({ method: "GET", url: "/v1/analytics/dashboard?tz=UTC&tz=Asia/Kolkata" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("INVALID_TZ");
+    await app.close();
+  });
+
+  it("returns 400 INVALID_RANGE for a repeated range param", async () => {
+    await mocks();
+    const app = await appAs({}, "admin");
+    const res = await app.inject({ method: "GET", url: "/v1/analytics/dashboard?range=7d&range=30d" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("INVALID_RANGE");
+    await app.close();
+  });
+
   it("returns 403 without analytics_access", async () => {
     await mocks();
     const app = await appAs({ inbox_access: "allow" }, "agent");

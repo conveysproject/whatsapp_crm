@@ -40,12 +40,18 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
 
   fastify.get("/analytics/dashboard", async (request, reply) => {
     const { organizationId, role, permissions } = request.auth;
-    const query = request.query as Record<string, string | undefined>;
-    const range = parseRange(query["range"] ?? "7d");
+    // Query values may be arrays (repeated param); only a plain string is valid input.
+    const query = request.query as Record<string, unknown>;
+    const rawRange = query["range"];
+    const range = rawRange === undefined ? parseRange(undefined) : typeof rawRange === "string" ? parseRange(rawRange) : null;
     if (!range) {
       return reply.status(400).send({ error: { code: "INVALID_RANGE", message: "range must be today, 7d or 30d" } });
     }
-    const tz = query["tz"] ?? "UTC";
+    const rawTz = query["tz"];
+    if (rawTz !== undefined && typeof rawTz !== "string") {
+      return reply.status(400).send({ error: { code: "INVALID_TZ", message: "tz must be a valid IANA timezone" } });
+    }
+    const tz = rawTz === undefined || rawTz === "" ? "UTC" : rawTz;
     if (!isValidTz(tz)) {
       return reply.status(400).send({ error: { code: "INVALID_TZ", message: "tz must be a valid IANA timezone" } });
     }
