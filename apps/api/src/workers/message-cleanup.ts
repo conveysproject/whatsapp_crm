@@ -2,6 +2,7 @@ import { Queue, Worker } from "bullmq";
 import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
 import { cleanupApiRequestLogs } from "../lib/public-api/usage-cleanup.js";
+import { cleanupApiPayloads } from "../lib/public-api/payload-cleanup.js";
 
 export const messageCleanupQueue = new Queue("message-cleanup", { connection: redisConnection });
 messageCleanupQueue.on("error", (err) => console.error(`[message-cleanup] queue error: ${err.message}`));
@@ -17,6 +18,13 @@ export function startMessageCleanupWorker() {
       if (job.name === "api-usage-cleanup") {
         const deleted = await cleanupApiRequestLogs(prisma);
         if (deleted > 0) console.log(`[message-cleanup] deleted ${deleted} expired API request log rows`);
+        // Payload/attempt retention is independent and runs after the request-log purge; its failure must not fail the job.
+        try {
+          const deletedPayloads = await cleanupApiPayloads(prisma);
+          if (deletedPayloads > 0) console.log(`[message-cleanup] deleted ${deletedPayloads} expired API payload rows`);
+        } catch (err) {
+          console.error(`[message-cleanup] api payload cleanup failed: ${err instanceof Error ? err.name : "UnknownError"}`);
+        }
         return;
       }
       const settings = await prisma.vendorSetting.findMany({
