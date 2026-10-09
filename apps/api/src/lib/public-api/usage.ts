@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { safeErr } from "./safe-err.js";
+import { payloadSize, type PayloadSnapshot } from "./payload-capture.js";
 
 /**
  * Public API usage recorder. One event per HTTP response, buffered in memory and flushed in batches so the response
@@ -24,6 +25,10 @@ export interface ApiRequestEvent {
   messages: number;
   organizationId?: string | null;
   apiKeyId?: string | null;
+  /** Public API request id (request.apiId); becomes the raw row id so the payload row can share it. */
+  logId?: string;
+  /** Redacted, capped request/response snapshot; only stored for attributed events whose raw row is written. */
+  payload?: PayloadSnapshot;
 }
 
 type BufferedEvent = ApiRequestEvent & { at: Date; raw: boolean };
@@ -65,6 +70,11 @@ const AUTH_RAW_MAP_MAX = 5000;
  */
 const DEFAULT_UNATTRIBUTED_PER_MINUTE = 300;
 const UNATTRIBUTED_KEY = "__unattributed__";
+/** In-memory cap on buffered payload text; over it events keep their metadata and only lose the payload. */
+const MAX_PAYLOAD_BUFFER_BYTES = 20 * 1024 * 1024;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PAYLOAD_CHUNK = 200;
+let payloadBytes = 0;
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,64}$/;
 
 // ---- pure helpers ----
@@ -168,7 +178,7 @@ export const droppedCount = () => dropped;
 export const unattributedDroppedCount = () => unattributedDropped;
 
 export function resetApiUsageForTests(): void {
-  buffer = []; dropped = 0; unattributedDropped = 0; flushQueued = false; inFlight = null; authRawCounts.clear();
+  buffer = []; payloadBytes = 0; dropped = 0; unattributedDropped = 0; flushQueued = false; inFlight = null; authRawCounts.clear();
 }
 
 const num = (v: unknown, fallback = 0) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
@@ -223,6 +233,13 @@ export function recordApiRequest(event: ApiRequestEvent): void {
       dropped += 1;
       return;
     }
+    const logId = typeof event.logId === "string" && UUID_RE.test(event.logId) ? event.logId : undefined;
+    let payload = raw && logId && event.organizationId ? event.payload : undefined;
+    if (payload) {
+      const size = payloadSize(payload);
+      if (payloadBytes + size > MAX_PAYLOAD_BUFFER_BYTES) payload = undefined;
+      else payloadBytes += size;
+    }
     buffer.push({
       method: sanitizeMethod(event.method),
       routeUrl: typeof event.routeUrl === "string" ? event.routeUrl : undefined,
@@ -232,6 +249,8 @@ export function recordApiRequest(event: ApiRequestEvent): void {
       messages: Math.max(0, Math.trunc(num(event.messages))),
       organizationId: event.organizationId ?? null,
       apiKeyId,
+      ...(logId ? { logId } : {}),
+      ...(payload ? { payload } : {}),
       at,
       raw,
     });
@@ -296,13 +315,14 @@ async function flushBatch(prisma: PrismaClient, logger?: UsageLogger): Promise<v
   if (buffer.length === 0) return;
   const batch = buffer;
   buffer = [];
+  payloadBytes = 0;
   const droppedNow = dropped;
   dropped = 0;
   const unattributedNow = unattributedDropped;
   unattributedDropped = 0;
   try {
     const raws = batch.filter((e) => e.raw).map((e) => ({
-      id: randomUUID(),
+      id: e.logId ?? randomUUID(),
       organizationId: e.organizationId ?? null,
       apiKeyId: e.apiKeyId ?? null,
       method: e.method,
@@ -315,9 +335,30 @@ async function flushBatch(prisma: PrismaClient, logger?: UsageLogger): Promise<v
       requestId: e.requestId,
       createdAt: e.at,
     }));
+    const payloads = batch.filter((e) => e.raw && e.payload && e.logId && e.organizationId).map((e) => ({
+      id: e.logId as string,
+      organizationId: e.organizationId as string,
+      apiKeyId: e.apiKeyId ?? null,
+      method: e.method,
+      endpoint: endpointKey(e.method, e.routeUrl),
+      statusCode: e.statusCode,
+      outcome: outcomeFor(e.statusCode),
+      errorClass: errorClassFor(e.statusCode),
+      errorCode: e.payload!.errorCode,
+      durationMs: e.durationMs,
+      requestBody: e.payload!.requestBody,
+      responseBody: e.payload!.responseBody,
+      requestTruncated: e.payload!.requestTruncated,
+      responseTruncated: e.payload!.responseTruncated,
+      queryString: e.payload!.queryString,
+      clientIp: e.payload!.clientIp,
+      userAgent: e.payload!.userAgent,
+      createdAt: e.at,
+    }));
     const groups = sortGroups(aggregateEvents(batch));
     await prisma.$transaction(async (tx) => {
       for (let i = 0; i < raws.length; i += RAW_CHUNK) await tx.apiRequestLog.createMany({ data: raws.slice(i, i + RAW_CHUNK) });
+      for (let i = 0; i < payloads.length; i += PAYLOAD_CHUNK) await tx.apiRequestPayload.createMany({ data: payloads.slice(i, i + PAYLOAD_CHUNK), skipDuplicates: true });
       for (let i = 0; i < groups.length; i += UPSERT_CHUNK) await tx.$executeRaw(upsertStatement(groups.slice(i, i + UPSERT_CHUNK)));
     }, TX_OPTIONS);
   } catch (err) {

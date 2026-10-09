@@ -18,6 +18,8 @@ declare module "fastify" {
     publicApiAttempt?: { apiKeyId: string; organizationId: string };
     /** One id per public API request; used in every response body. */
     apiId?: string;
+    /** Serialized response body (string payloads only), captured by onSend when payload logging is on. */
+    apiResponseBody?: string;
     /** Messages accepted by this request (set by POST /Message/); read by the usage recorder. */
     usageMessages?: number;
   }

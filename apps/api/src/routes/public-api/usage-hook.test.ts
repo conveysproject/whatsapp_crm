@@ -8,6 +8,11 @@ vi.mock("../../lib/queue.js", () => ({ redisConnection: undefined }));
 vi.mock("../../lib/public-api/queues.js", () => ({
   publicApiSendQueue: { add: vi.fn(async () => undefined) }, publicApiCallbackQueue: { add: vi.fn() },
 }));
+const snapshotThrows = vi.hoisted(() => ({ on: false }));
+vi.mock("../../lib/public-api/payload-capture.js", async (orig) => {
+  const real = await orig<{ buildPayloadSnapshot: (i: unknown) => unknown }>();
+  return { ...real, buildPayloadSnapshot: (i: unknown) => { if (snapshotThrows.on) throw new Error("snapshot down"); return real.buildPayloadSnapshot(i); } };
+});
 vi.mock("../../lib/public-api/usage.js", async (orig) => {
   const real = await orig<Record<string, unknown>>();
   return { ...real, recordApiRequest: (e: unknown) => h.record(e) };
@@ -125,5 +130,54 @@ describe("public API usage hook", () => {
   it("passes the raw request id through; sanitising happens in recordApiRequest", async () => {
     await app.inject({ method: "GET", url: `/v1/Account/${ID}/Message/`, headers: { authorization: auth(), "request-id": "x y z" } });
     expect(h.record.mock.calls[0]![0].requestId).toBe("x y z");
+  });
+
+  describe("payload logging", () => {
+    const ORIG = process.env["API_PAYLOAD_LOGGING_ENABLED"];
+    afterEach(() => {
+      snapshotThrows.on = false;
+      if (ORIG === undefined) delete process.env["API_PAYLOAD_LOGGING_ENABLED"]; else process.env["API_PAYLOAD_LOGGING_ENABLED"] = ORIG;
+    });
+
+    it("flag on: the event carries logId == response api_id and a payload whose responseBody contains it", async () => {
+      process.env["API_PAYLOAD_LOGGING_ENABLED"] = "true";
+      const res = await get(`/v1/Account/${ID}/Message/abc-123/?token=s3cret&limit=5`);
+      const apiId = res.json().api_id as string;
+      expect(apiId).toMatch(/^[0-9a-f-]{36}$/);
+      const e = h.record.mock.calls[0]![0];
+      expect(e.logId).toBe(apiId);
+      expect(e.payload.responseBody).toContain(apiId);
+      expect(e.payload.queryString).toBe("token=[redacted]&limit=5");
+      expect(JSON.stringify(e)).not.toMatch(/Basic |authorization/i);
+    });
+
+    it("flag on but unauthenticated (no organization): logId is set, no payload is built", async () => {
+      process.env["API_PAYLOAD_LOGGING_ENABLED"] = "true";
+      const other = "22222222-2222-2222-2222-222222222222";
+      const res = await get(`/v1/Account/${other}/Message/`, auth("x", other));
+      expect(res.statusCode).toBe(401);
+      const e = h.record.mock.calls[0]![0];
+      expect(e.logId).toBe(res.json().api_id);
+      expect(e).not.toHaveProperty("payload");
+    });
+
+    it("flag unset: no payload, but the event still has logId", async () => {
+      delete process.env["API_PAYLOAD_LOGGING_ENABLED"];
+      const res = await get(`/v1/Account/${ID}/Message/`);
+      const e = h.record.mock.calls[0]![0];
+      expect(e).not.toHaveProperty("payload");
+      expect(e.logId).toBe(res.json().api_id);
+    });
+
+    it("a throwing snapshot builder still yields the normal response, and the event is still recorded (without payload)", async () => {
+      process.env["API_PAYLOAD_LOGGING_ENABLED"] = "true";
+      snapshotThrows.on = true;
+      const res = await get(`/v1/Account/${ID}/Message/`);
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toHaveProperty("api_id");
+      expect(h.record).toHaveBeenCalledTimes(1);
+      expect(h.record.mock.calls[0]![0]).toMatchObject({ statusCode: 200, organizationId: "org-1" });
+      expect(h.record.mock.calls[0]![0]).not.toHaveProperty("payload");
+    });
   });
 });

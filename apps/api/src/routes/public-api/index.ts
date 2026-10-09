@@ -6,6 +6,7 @@ import { clientIp } from "../../lib/public-api/client-ip.js";
 import { apiErrorBody } from "../../lib/public-api/error-catalog.js";
 import { apiError } from "../../lib/public-api/responses.js";
 import { safeErr } from "../../lib/public-api/safe-err.js";
+import { buildPayloadSnapshot, payloadLoggingEnabled } from "../../lib/public-api/payload-capture.js";
 import { recordApiRequest } from "../../lib/public-api/usage.js";
 import { publicApiAuth } from "./auth.js";
 import { publicApiMessagesRouter } from "./messages.js";
@@ -49,6 +50,18 @@ export function publicApiErrorHandler(error: unknown, request: FastifyRequest, r
 export function recordUsageOnResponse(request: FastifyRequest, reply: FastifyReply): void {
   try {
     const who = request.publicApi ?? request.publicApiAttempt;
+    // Payload only for authenticated callers and only when the flag is on. Never reads headers (no Authorization).
+    // A failure here drops the payload, never the usage event or the response.
+    let payload: ReturnType<typeof buildPayloadSnapshot> | undefined;
+    if (who?.organizationId && payloadLoggingEnabled()) {
+      try {
+        payload = buildPayloadSnapshot({
+          body: request.body, url: request.url, responseText: request.apiResponseBody,
+          clientIp: clientIp(request.ip, request.headers["x-forwarded-for"], request.headers["x-real-ip"]),
+          userAgent: request.headers["user-agent"],
+        });
+      } catch { payload = undefined; }
+    }
     recordApiRequest({
       method: request.method,
       routeUrl: request.routeOptions?.url,
@@ -58,6 +71,8 @@ export function recordUsageOnResponse(request: FastifyRequest, reply: FastifyRep
       messages: request.usageMessages ?? 0,
       organizationId: who?.organizationId ?? null,
       apiKeyId: who?.apiKeyId ?? null,
+      ...(request.apiId ? { logId: request.apiId } : {}),
+      ...(payload ? { payload } : {}),
     });
   } catch { /* usage recording must never affect a response */ }
 }
@@ -81,6 +96,14 @@ export const publicApiRouter: FastifyPluginAsync = async (fastify) => {
 
   // One id per request: used in every response body and (logging plan) as the request-log row id.
   fastify.addHook("onRequest", (req, _reply, done) => { req.apiId = randomUUID(); req.log = req.log.child({ apiId: req.apiId }); done(); });
+
+  // Capture the serialized response body for payload logging (string payloads only; zero work unless the flag is on).
+  fastify.addHook("onSend", (req, _reply, payload, done) => {
+    try {
+      if (payloadLoggingEnabled() && typeof payload === "string") req.apiResponseBody = payload;
+    } catch { /* capture must never affect a response */ }
+    done(null, payload);
+  });
 
   // Usage metering: exactly one event per response of this plugin (incl. 4xx/5xx/429). Synchronous, in-memory, never throws.
   // The route PATTERN is recorded (never the URL, which carries the auth id and message ids).

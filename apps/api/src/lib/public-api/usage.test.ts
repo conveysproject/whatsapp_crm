@@ -4,6 +4,7 @@ import {
   endpointKey, outcomeFor, errorClassFor, utcDay, recordApiRequest, flushApiUsage, aggregateEvents,
   startApiUsageFlusher, stopApiUsageFlusher, bufferedCount, droppedCount, unattributedDroppedCount, drainUsageOnShutdown, resetApiUsageForTests, type ApiRequestEvent,
 } from "./usage.js";
+import { buildPayloadSnapshot, payloadSize, type PayloadSnapshot } from "./payload-capture.js";
 
 const ev = (over: Partial<ApiRequestEvent> = {}): ApiRequestEvent => ({
   method: "POST", routeUrl: "/v1/Account/:authId/Message/", statusCode: 202, durationMs: 10, requestId: "req-1",
@@ -13,7 +14,8 @@ const ev = (over: Partial<ApiRequestEvent> = {}): ApiRequestEvent => ({
 function fakePrisma(opts: { failTx?: boolean; delayMs?: number } = {}) {
   const createMany = vi.fn(async (_a: unknown) => ({ count: 0 }));
   const executeRaw = vi.fn(async (..._a: unknown[]) => 1);
-  const tx = { apiRequestLog: { createMany }, $executeRaw: executeRaw };
+  const payloadCreateMany = vi.fn(async (_a: unknown) => ({ count: 0 }));
+  const tx = { apiRequestLog: { createMany }, apiRequestPayload: { createMany: payloadCreateMany }, $executeRaw: executeRaw };
   let active = 0;
   let maxActive = 0;
   const transaction = vi.fn(async (fn: (t: typeof tx) => Promise<unknown>, _options?: unknown) => {
@@ -27,7 +29,7 @@ function fakePrisma(opts: { failTx?: boolean; delayMs?: number } = {}) {
       active -= 1;
     }
   });
-  return { prisma: { $transaction: transaction } as unknown as PrismaClient, createMany, executeRaw, transaction, maxActive: () => maxActive };
+  return { prisma: { $transaction: transaction } as unknown as PrismaClient, createMany, payloadCreateMany, executeRaw, transaction, maxActive: () => maxActive };
 }
 
 describe("pure helpers", () => {
@@ -459,6 +461,87 @@ describe("recorder and flush", () => {
       await flushApiUsage(prisma);
       expect(rowsOf(createMany)).toHaveLength(60);
     });
+  });
+});
+
+describe("payload capture in the recorder", () => {
+  const LOG_ID = "11111111-1111-4111-8111-111111111111";
+  const snap = (over: Partial<PayloadSnapshot> = {}): PayloadSnapshot => ({
+    ...buildPayloadSnapshot({ body: { a: 1 }, url: "/x", responseText: '{"error_code":"BAD","ok":1}', clientIp: "1.2.3.4", userAgent: "ua" }), ...over,
+  });
+  const idOf = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`;
+  beforeEach(() => { resetApiUsageForTests(); delete process.env["API_REQUEST_LOG_SUCCESS_SAMPLE_RATE"]; });
+  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); resetApiUsageForTests(); });
+
+  it("writes a payload row with the event's logId in the same transaction as the raw row", async () => {
+    const { prisma, createMany, payloadCreateMany, transaction } = fakePrisma();
+    recordApiRequest(ev({ statusCode: 400, durationMs: 5, logId: LOG_ID, payload: snap() }));
+    await flushApiUsage(prisma);
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(rowsOf(createMany)[0]!["id"]).toBe(LOG_ID);
+    expect(payloadCreateMany).toHaveBeenCalledTimes(1);
+    expect(payloadCreateMany.mock.calls[0]![0]).toMatchObject({ skipDuplicates: true });
+    const rows = rowsOf(payloadCreateMany);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: LOG_ID, organizationId: "org-1", apiKeyId: "key-1", method: "POST", endpoint: "message.send", statusCode: 400,
+      outcome: "client_error", errorClass: "validation", errorCode: "BAD", durationMs: 5, requestBody: '{"a":1}',
+      responseBody: '{"error_code":"BAD","ok":1}', requestTruncated: false, responseTruncated: false, queryString: null,
+      clientIp: "1.2.3.4", userAgent: "ua",
+    });
+    expect(rows[0]!["createdAt"]).toBeInstanceOf(Date);
+  });
+
+  it("ignores a logId that is not a UUID (fresh raw id, no payload row)", async () => {
+    const { prisma, createMany, payloadCreateMany } = fakePrisma();
+    recordApiRequest(ev({ logId: "not-a-uuid", payload: snap() }));
+    await flushApiUsage(prisma);
+    expect(rowsOf(createMany)[0]!["id"]).not.toBe("not-a-uuid");
+    expect(rowsOf(payloadCreateMany)).toHaveLength(0);
+  });
+
+  it("stores no payload for an event without an organization", async () => {
+    const { prisma, createMany, payloadCreateMany } = fakePrisma();
+    recordApiRequest(ev({ organizationId: null, apiKeyId: null, statusCode: 401, logId: LOG_ID, payload: snap() }));
+    await flushApiUsage(prisma);
+    expect(rowsOf(createMany)).toHaveLength(1);
+    expect(rowsOf(payloadCreateMany)).toHaveLength(0);
+  });
+
+  it("stores no payload when the raw row is not written (401 over the per-credential cap, sampled-out success)", async () => {
+    vi.useFakeTimers({ now: new Date("2026-10-06T10:00:10Z"), toFake: ["Date"] });
+    const { prisma, createMany, payloadCreateMany } = fakePrisma();
+    const ids = Array.from({ length: 32 }, (_, i) => idOf(i));
+    ids.forEach((logId) => recordApiRequest(ev({ statusCode: 401, logId, payload: snap() })));
+    await flushApiUsage(prisma);
+    expect(rowsOf(createMany)).toHaveLength(30);
+    expect(rowsOf(payloadCreateMany).map((r) => r["id"])).toEqual(ids.slice(0, 30));
+
+    process.env["API_REQUEST_LOG_SUCCESS_SAMPLE_RATE"] = "0";
+    recordApiRequest(ev({ statusCode: 202, logId: LOG_ID, payload: snap() }));
+    await flushApiUsage(prisma);
+    expect(rowsOf(createMany)).toHaveLength(30);
+    expect(rowsOf(payloadCreateMany)).toHaveLength(30);
+  });
+
+  it("drops payloads (not events) once the 20 MB in-memory budget is spent, and the budget resets after a flush", async () => {
+    const big = snap({ requestBody: "x".repeat(16384), responseBody: "y".repeat(16384) });
+    const fit = Math.floor((20 * 1024 * 1024) / payloadSize(big));
+    const { prisma, createMany, payloadCreateMany } = fakePrisma();
+    for (let i = 0; i < 700; i++) recordApiRequest(ev({ requestId: `r${i}`, logId: idOf(i), payload: big }));
+    expect(bufferedCount()).toBe(700);
+    await flushApiUsage(prisma);
+    expect(rowsOf(createMany)).toHaveLength(700);
+    expect(fit).toBeLessThan(700);
+    expect(fit).toBeGreaterThan(0);
+    expect(rowsOf(payloadCreateMany)).toHaveLength(fit);
+    expect(rowsOf(payloadCreateMany)[0]!["id"]).toBe(idOf(0));
+    expect(rowsOf(createMany)[699]!["id"]).toBe(idOf(699));
+
+    payloadCreateMany.mockClear();
+    for (let i = 0; i < 5; i++) recordApiRequest(ev({ logId: idOf(1000 + i), payload: big }));
+    await flushApiUsage(prisma);
+    expect(rowsOf(payloadCreateMany)).toHaveLength(5);
   });
 });
 
