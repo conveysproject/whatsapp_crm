@@ -5,6 +5,8 @@ import { useAuth } from "@clerk/nextjs";
 import { useConversations, useSearchConversations } from "@/hooks/useConversations";
 import { useInboxLabels } from "@/hooks/useInboxLabels";
 import { IntentBadge } from "@/components/intent-badge";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { applyQuickFilter, type InboxQuickFilter } from "@/lib/inbox-params";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 const STATUS_TABS = ["all", "open", "pending", "closed"] as const;
@@ -13,6 +15,8 @@ type StatusTab = typeof STATUS_TABS[number];
 interface Props {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Quick filter requested via the URL (?filter=). Applied when it changes; the user can then toggle freely. */
+  urlFilter?: InboxQuickFilter | null;
 }
 
 function formatTime(iso: string | null): string {
@@ -24,13 +28,19 @@ function formatTime(iso: string | null): string {
   return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
-export function ConversationList({ selectedId, onSelect }: Props): JSX.Element {
+export function ConversationList({ selectedId, onSelect, urlFilter = null }: Props): JSX.Element {
   const [activeTab, setActiveTab] = useState<StatusTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeLabelId, setActiveLabelId] = useState<string | undefined>(undefined);
   const [labelFilterOpen, setLabelFilterOpen] = useState(false);
   const labelFilterRef = useRef<HTMLDivElement>(null);
+  const [quickFilter, setQuickFilter] = useState<InboxQuickFilter | null>(urlFilter);
   const { getToken } = useAuth();
+  const { user: currentUser } = useCurrentUser();
+
+  useEffect(() => {
+    setQuickFilter(urlFilter);
+  }, [urlFilter]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -50,7 +60,9 @@ export function ConversationList({ selectedId, onSelect }: Props): JSX.Element {
   );
   const { data: searchResults, isLoading: searchLoading } = useSearchConversations(searchQuery);
 
-  const items = isSearching ? (searchResults ?? []) : (conversations ?? []);
+  const items = isSearching
+    ? (searchResults ?? [])
+    : applyQuickFilter(conversations ?? [], quickFilter, currentUser?.id ?? null);
   const isLoading = isSearching ? searchLoading : listLoading;
 
   const activeLabel = allLabels.find((l) => l.id === activeLabelId);
@@ -110,6 +122,27 @@ export function ConversationList({ selectedId, onSelect }: Props): JSX.Element {
               ].join(" ")}
             >
               {tab}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Quick filters (also driven by ?filter=) — hidden while searching */}
+      {!isSearching && (
+        <div className="flex gap-2 px-3 py-1.5 border-b border-gray-100 shrink-0">
+          {(["unread", "assigned"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setQuickFilter((cur) => (cur === f ? null : f))}
+              aria-pressed={quickFilter === f}
+              className={[
+                "px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+                quickFilter === f
+                  ? "bg-brand-50 text-brand-600 border-brand-600"
+                  : "text-gray-500 border-gray-200 hover:text-gray-700",
+              ].join(" ")}
+            >
+              {f === "unread" ? "Unread" : "Assigned to me"}
             </button>
           ))}
         </div>
