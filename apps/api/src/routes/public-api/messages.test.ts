@@ -425,6 +425,15 @@ describe("GET /Message/:uuid/", () => {
     expect(mockPrisma.apiMessageMeta.findFirst.mock.calls[0]![0].where).toEqual({ messageId: "m1", organizationId: "org-1" });
   });
 
+  it("returns a readable error_message next to error_code for a failed message, null otherwise", async () => {
+    mockPrisma.apiMessageMeta.findFirst.mockResolvedValue({ messageId: "m1", dst: "14155552672", lastStatus: "failed", errorCode: "380", queuedAt: new Date("2026-10-05T10:00:00Z"), message: { id: "m1", status: "failed" } });
+    const res = await app.inject({ method: "GET", url: "/v1/Account/k1/Message/m1/" });
+    expect(res.json()).toMatchObject({ error_code: 380, error_message: expect.stringMatching(/24 hours/) });
+    mockPrisma.apiMessageMeta.findFirst.mockResolvedValue({ messageId: "m1", dst: "14155552672", lastStatus: "sent", errorCode: null, queuedAt: new Date("2026-10-05T10:00:00Z"), message: { id: "m1", status: "sent" } });
+    const ok = await app.inject({ method: "GET", url: "/v1/Account/k1/Message/m1/" });
+    expect(ok.json()).toMatchObject({ error_code: null, error_message: null });
+  });
+
   it("404 (same body as unknown) for another org's message", async () => {
     mockPrisma.apiMessageMeta.findFirst.mockResolvedValue(null);
     const res = await app.inject({ method: "GET", url: "/v1/Account/k1/Message/other-org-msg/" });

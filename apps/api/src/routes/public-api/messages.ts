@@ -9,6 +9,7 @@ import { publicApiSendQueue, type SendContentForWorker } from "../../lib/public-
 import { enqueueStatusCallback, businessNumberDigits } from "../../lib/public-api/callbacks.js";
 import { resolveTemplate, validateAgainstTemplate } from "../../lib/public-api/template-validation.js";
 import { safeErr } from "../../lib/public-api/safe-err.js";
+import { errorMessageForCode } from "../../lib/public-api/meta-errors.js";
 
 const PUBLIC = { config: { public: true } } as const;
 const both = (p: string) => [p, p.replace(/\/$/, "")];
@@ -61,6 +62,7 @@ function toMessageObject(
     total_rate: "0",
     total_amount: "0",
     error_code: row.errorCode ? Number(row.errorCode) : null,
+    error_message: errorMessageForCode(row.errorCode ?? null),
     conversation_id: null,
     conversation_origin: null,
   };

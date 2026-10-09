@@ -25,3 +25,25 @@ export function plivoErrorFromMeta(metaCode: number | null | undefined): string 
   if (metaCode == null || !Number.isInteger(metaCode) || metaCode <= 0) return null;
   return META_TO_PLIVO[metaCode] ?? String(metaCode);
 }
+
+// Sentences checked against Meta's Cloud API error-code reference (see task-5 report). Codes not confirmed there
+// (e.g. Meta 200, whose meaning on that page is an access-token error, not a send-permission error) are left out
+// and fall through to the generic sentence.
+const MESSAGES: Record<string, string> = {
+  "310": "The sending phone number is not registered on the WhatsApp Business Platform.",
+  "330": "WhatsApp does not support this message type. Check the message type and try again.",
+  "340": "The template does not exist in this language, is not approved, or has been paused or disabled. Check its status in WBMSG.",
+  "350": "The template parameters do not match the template (count, format or length). Send values for every parameter in the format the template defines.",
+  "360": "The WhatsApp Business account is restricted or failed verification. Contact support.",
+  "370": "WhatsApp is limiting sending right now (throughput, messages to the same recipient, or a quality restriction). Slow down and retry later.",
+  "380": "The customer has not replied in the last 24 hours, so only an approved template message can be sent.",
+  "131047": "The customer has not replied in the last 24 hours, so only an approved template message can be sent.",
+  "131049": "WhatsApp did not deliver this marketing message to this recipient to keep engagement healthy. Wait at least 24 hours before trying again.",
+  "131026": "WhatsApp could not deliver the message. The recipient may not be a WhatsApp user, may not have accepted WhatsApp's terms, or may be on an outdated WhatsApp version.",
+};
+
+/** Readable sentence for the ErrorCode we report to the client (a 3xx status code or a passed-through Meta code). */
+export function errorMessageForCode(code: string | null): string | null {
+  if (!code) return null;
+  return MESSAGES[code] ?? `WhatsApp could not deliver the message (code ${code}).`;
+}

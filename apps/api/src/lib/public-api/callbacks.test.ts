@@ -43,6 +43,17 @@ describe("enqueueStatusCallback", () => {
     expect(data).toMatchObject({ apiKeyId: "k1", organizationId: "org-1", url: "https://c.example.com/cb", method: "POST" });
     expect(data.fields).toMatchObject({ MessageUUID: "m1", To: "14155552672", From: "14155552671", Type: "whatsapp", Status: "queued", Sequence: "1" });
     expect(data.fields["ErrorCode"]).toBeUndefined();
+    expect(data.fields["ErrorMessage"]).toBeUndefined();
+  });
+
+  it("adds a readable ErrorMessage next to ErrorCode only for failed/undelivered", () => {
+    const base = { messageId: "m1", from: "1", to: "2", sequence: 2, queuedAt: new Date(), sentAt: null, deliveryReportAt: null };
+    const failed = buildStatusFields({ ...base, status: "failed", errorCode: "380" });
+    expect(failed["ErrorCode"]).toBe("380");
+    expect(failed["ErrorMessage"]).toMatch(/24 hours/);
+    expect(buildStatusFields({ ...base, status: "undelivered", errorCode: "139999" })["ErrorMessage"]).toContain("139999");
+    expect("ErrorMessage" in buildStatusFields({ ...base, status: "delivered", errorCode: "380" })).toBe(false);
+    expect("ErrorMessage" in buildStatusFields({ ...base, status: "failed", errorCode: null })).toBe(false);
   });
 
   it("per-message URL overrides the credential default", async () => {

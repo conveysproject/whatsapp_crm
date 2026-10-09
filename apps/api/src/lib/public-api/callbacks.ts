@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { publicApiCallbackQueue } from "./queues.js";
-import { plivoErrorFromMeta } from "./meta-errors.js";
+import { plivoErrorFromMeta, errorMessageForCode } from "./meta-errors.js";
 import { checkPublicApiAccess } from "./access.js";
 
 export type PlivoStatus = "queued" | "sent" | "delivered" | "read" | "failed" | "undelivered";
@@ -34,6 +34,7 @@ export function buildStatusFields(a: StatusFieldArgs): Record<string, string> {
     MessageUUID: a.messageId, To: a.to, From: a.from, Type: "whatsapp", Status: a.status,
     Units: "1", TotalRate: "0", TotalAmount: "0", MCC: "", MNC: "",
     ...((a.status === "failed" || a.status === "undelivered") && a.errorCode ? { ErrorCode: a.errorCode } : {}),
+    ...((a.status === "failed" || a.status === "undelivered") && a.errorCode ? { ErrorMessage: errorMessageForCode(a.errorCode) ?? "" } : {}),
     Sequence: String(a.sequence),
     MessageTime: plivoTime(a.queuedAt), QueuedTime: plivoTime(a.queuedAt),
     ...(a.sentAt ? { SentTime: plivoTime(a.sentAt) } : {}),

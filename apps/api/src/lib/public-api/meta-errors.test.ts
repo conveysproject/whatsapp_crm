@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { plivoErrorFromMeta } from "./meta-errors.js";
+import { plivoErrorFromMeta, errorMessageForCode } from "./meta-errors.js";
 
 describe("plivoErrorFromMeta", () => {
   it.each([
@@ -18,5 +18,21 @@ describe("plivoErrorFromMeta", () => {
   });
   it("mapped codes still win over the passthrough", () => {
     expect(plivoErrorFromMeta(131047)).toBe("380");
+  });
+});
+
+describe("errorMessageForCode", () => {
+  it("maps the 24-hour window code to a sentence that tells the client what to do", () => {
+    expect(errorMessageForCode("380")).toMatch(/24 hours/);
+    expect(errorMessageForCode("131047")).toMatch(/24 hours/);
+  });
+  it("gives a generic sentence that still contains an unknown Meta code", () => {
+    expect(errorMessageForCode("139999")).toBe("WhatsApp could not deliver the message (code 139999).");
+  });
+  it("returns null for no code", () => { expect(errorMessageForCode(null)).toBeNull(); });
+  it("never mentions the competitor name", () => {
+    for (const c of ["310", "330", "340", "350", "360", "370", "380", "131047", "131049", "131026"]) {
+      expect(errorMessageForCode(c)).not.toMatch(/plivo/i);
+    }
   });
 });
