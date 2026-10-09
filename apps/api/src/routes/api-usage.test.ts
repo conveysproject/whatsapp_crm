@@ -8,7 +8,11 @@ vi.mock("../lib/public-api/usage-queries.js", async (orig) => {
   return { ...real, getUsageSummary: (...a: unknown[]) => h.summary(...a), listRequests: (...a: unknown[]) => h.list(...a) };
 });
 
-const mockPrisma = { vendorSetting: { findFirst: vi.fn() } };
+const mockPrisma = {
+  vendorSetting: { findFirst: vi.fn() },
+  apiRequestPayload: { findMany: vi.fn(), findFirst: vi.fn() },
+  apiCallbackAttempt: { findMany: vi.fn() },
+};
 
 async function buildApp(role = "admin", permissions: Record<string, string> = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -31,6 +35,9 @@ describe("api-usage routes", () => {
     delete process.env["PUBLIC_API_ALLOWED_ORGS"];
     process.env["PUBLIC_API_ENABLED"] = "true";
     mockPrisma.vendorSetting.findFirst.mockResolvedValue(null);
+    mockPrisma.apiRequestPayload.findMany.mockResolvedValue([]);
+    mockPrisma.apiRequestPayload.findFirst.mockResolvedValue(null);
+    mockPrisma.apiCallbackAttempt.findMany.mockResolvedValue([]);
     h.summary.mockResolvedValue(emptySummary);
     h.list.mockResolvedValue({ data: [], nextCursor: null });
     app = await buildApp();
@@ -290,6 +297,176 @@ describe("api-usage routes", () => {
     it("repeated params do not 500", async () => {
       expect((await requests("?limit=5&limit=7&outcome=success&outcome=error")).statusCode).toBe(200);
       expect(h.list.mock.calls[0]![2]).toMatchObject({ limit: 5, outcome: "success" });
+    });
+  });
+
+  describe("payload and callback history", () => {
+    const UUID_A = "11111111-1111-4111-8111-111111111111";
+    const UUID_B = "22222222-2222-4222-8222-222222222222";
+    const getUrl = (u: string) => app.inject({ method: "GET", url: `/v1${u}` });
+    const NEW_ROUTES = ["/api-usage/payloads", `/api-usage/payloads/${UUID_A}`, "/api-usage/callbacks"];
+    const cursorOf = (iso: string, id: string) => Buffer.from(`${iso}|${id}`).toString("base64url");
+    const ORIG_LOG = process.env["API_PAYLOAD_LOGGING_ENABLED"];
+    afterEach(() => {
+      if (ORIG_LOG === undefined) delete process.env["API_PAYLOAD_LOGGING_ENABLED"]; else process.env["API_PAYLOAD_LOGGING_ENABLED"] = ORIG_LOG;
+    });
+
+    /** organizationId must be a top-level key of where; any OR is a sibling AND-ed with it, never a replacement for it. */
+    const assertOrgAnded = (where: Record<string, unknown>) => {
+      expect(where["organizationId"]).toBe("org-1");
+      expect(Object.keys(where)).not.toContain("AND");
+      for (const clause of (where["OR"] as Record<string, unknown>[] | undefined) ?? []) expect(clause).not.toHaveProperty("organizationId");
+    };
+
+    it("403 FORBIDDEN on all three new routes without settings_api_key, and no query runs", async () => {
+      await app.close();
+      app = await buildApp("agent", { settings_access: "none" });
+      for (const u of NEW_ROUTES) {
+        const res = await getUrl(u);
+        expect(res.statusCode, u).toBe(403);
+        expect(res.json()).toEqual({ error: { code: "FORBIDDEN", message: "settings_api_key permission required" } });
+      }
+      expect(mockPrisma.apiRequestPayload.findMany).not.toHaveBeenCalled();
+      expect(mockPrisma.apiRequestPayload.findFirst).not.toHaveBeenCalled();
+      expect(mockPrisma.apiCallbackAttempt.findMany).not.toHaveBeenCalled();
+    });
+
+    it("403 API_NOT_AVAILABLE on all three new routes for a blocked org, and no query runs", async () => {
+      mockPrisma.vendorSetting.findFirst.mockResolvedValue({ value: "1" });
+      for (const u of NEW_ROUTES) {
+        const res = await getUrl(u);
+        expect(res.statusCode, u).toBe(403);
+        expect(res.json()).toEqual({ error: { code: "API_NOT_AVAILABLE", message: "API access is not available for this organization." } });
+      }
+      expect(mockPrisma.apiRequestPayload.findMany).not.toHaveBeenCalled();
+      expect(mockPrisma.apiRequestPayload.findFirst).not.toHaveBeenCalled();
+      expect(mockPrisma.apiCallbackAttempt.findMany).not.toHaveBeenCalled();
+    });
+
+    it("payload detail: scoped findFirst({ id, organizationId }); 200 with bodies for the caller's own row", async () => {
+      const row = { id: UUID_A, organizationId: "org-1", requestBody: '{"a":1}', responseBody: "{}", createdAt: new Date("2026-10-09T00:00:00Z") };
+      mockPrisma.apiRequestPayload.findFirst.mockResolvedValue(row);
+      const ok = await getUrl(`/api-usage/payloads/${UUID_A}`);
+      expect(ok.statusCode).toBe(200);
+      expect(ok.json().requestBody).toBe('{"a":1}');
+      expect(mockPrisma.apiRequestPayload.findFirst.mock.calls[0]![0].where).toEqual({ id: UUID_A, organizationId: "org-1" });
+    });
+
+    it("payload detail: another org's id returns a 404 identical to a nonexistent id", async () => {
+      mockPrisma.apiRequestPayload.findFirst.mockResolvedValue(null); // the scoped query finds nothing for a foreign row
+      const foreign = await getUrl(`/api-usage/payloads/${UUID_A}`);
+      const missing = await getUrl(`/api-usage/payloads/${UUID_B}`);
+      expect(foreign.statusCode).toBe(404);
+      expect(missing.statusCode).toBe(404);
+      expect(foreign.json()).toEqual(missing.json());
+      expect(foreign.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+      for (const c of mockPrisma.apiRequestPayload.findFirst.mock.calls) expect(c[0].where.organizationId).toBe("org-1");
+    });
+
+    it("payload list: org-scoped, newest first, take limit+1, summary columns only, enabled flag from env", async () => {
+      process.env["API_PAYLOAD_LOGGING_ENABLED"] = "true";
+      const res = await getUrl("/api-usage/payloads?limit=2");
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ enabled: true, data: [], nextCursor: null });
+      const arg = mockPrisma.apiRequestPayload.findMany.mock.calls[0]![0];
+      expect(arg.where).toEqual({ organizationId: "org-1" });
+      expect(arg.orderBy).toEqual([{ createdAt: "desc" }, { id: "desc" }]);
+      expect(arg.take).toBe(3);
+      expect(arg.select).toEqual({ id: true, createdAt: true, method: true, endpoint: true, statusCode: true, outcome: true, errorClass: true, errorCode: true, durationMs: true, apiKeyId: true });
+      process.env["API_PAYLOAD_LOGGING_ENABLED"] = "false";
+      expect((await getUrl("/api-usage/payloads")).json().enabled).toBe(false);
+      delete process.env["API_PAYLOAD_LOGGING_ENABLED"];
+      expect((await getUrl("/api-usage/payloads")).json().enabled).toBe(false);
+    });
+
+    it("payload list: default limit 50 (take 51); nextCursor is built from the last page row only when more exist", async () => {
+      await getUrl("/api-usage/payloads");
+      expect(mockPrisma.apiRequestPayload.findMany.mock.calls[0]![0].take).toBe(51);
+      const mk = (id: string, iso: string) => ({ id, createdAt: new Date(iso) });
+      mockPrisma.apiRequestPayload.findMany.mockResolvedValue([mk(UUID_B, "2026-10-09T10:00:00.000Z"), mk(UUID_A, "2026-10-09T09:00:00.000Z"), mk("33333333-3333-4333-8333-333333333333", "2026-10-09T08:00:00.000Z")]);
+      const body = (await getUrl("/api-usage/payloads?limit=2")).json();
+      expect(body.data).toHaveLength(2);
+      expect(body.nextCursor).toBe(cursorOf("2026-10-09T09:00:00.000Z", UUID_A));
+      mockPrisma.apiRequestPayload.findMany.mockResolvedValue([mk(UUID_B, "2026-10-09T10:00:00.000Z")]);
+      expect((await getUrl("/api-usage/payloads?limit=2")).json().nextCursor).toBeNull();
+    });
+
+    it("payload list: filters and the cursor clause are AND-ed with a top-level organizationId", async () => {
+      const at = "2026-10-09T09:00:00.000Z";
+      const res = await getUrl(`/api-usage/payloads?outcome=error&endpoint=message.send&apiKeyId=key-1&cursor=${cursorOf(at, UUID_A)}`);
+      expect(res.statusCode).toBe(200);
+      const where = mockPrisma.apiRequestPayload.findMany.mock.calls[0]![0].where;
+      assertOrgAnded(where);
+      expect(where).toEqual({
+        organizationId: "org-1",
+        outcome: { in: ["client_error", "server_error"] },
+        endpoint: "message.send",
+        apiKeyId: "key-1",
+        OR: [{ createdAt: { lt: new Date(at) } }, { createdAt: new Date(at), id: { lt: UUID_A } }],
+      });
+      mockPrisma.apiRequestPayload.findMany.mockClear();
+      await getUrl("/api-usage/payloads?outcome=success");
+      expect(mockPrisma.apiRequestPayload.findMany.mock.calls[0]![0].where).toEqual({ organizationId: "org-1", outcome: "success" });
+    });
+
+    it("a client-supplied organizationId param never reaches the where; a foreign apiKeyId stays under the caller's org", async () => {
+      await getUrl("/api-usage/payloads?organizationId=org-2&apiKeyId=foreign-key");
+      await getUrl(`/api-usage/callbacks?organizationId=org-2&messageId=${UUID_A}`);
+      expect(mockPrisma.apiRequestPayload.findMany.mock.calls[0]![0].where).toEqual({ organizationId: "org-1", apiKeyId: "foreign-key" });
+      expect(mockPrisma.apiCallbackAttempt.findMany.mock.calls[0]![0].where).toEqual({ organizationId: "org-1", messageId: UUID_A });
+    });
+
+    it("callbacks list: org-scoped, filterable by messageId, paginated with the same cursor scheme", async () => {
+      const at = "2026-10-09T09:00:00.000Z";
+      const res = await getUrl(`/api-usage/callbacks?messageId=${UUID_A}&limit=1&cursor=${cursorOf(at, UUID_B)}`);
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ data: [], nextCursor: null });
+      const arg = mockPrisma.apiCallbackAttempt.findMany.mock.calls[0]![0];
+      assertOrgAnded(arg.where);
+      expect(arg.where).toEqual({
+        organizationId: "org-1",
+        messageId: UUID_A,
+        OR: [{ createdAt: { lt: new Date(at) } }, { createdAt: new Date(at), id: { lt: UUID_B } }],
+      });
+      expect(arg.orderBy).toEqual([{ createdAt: "desc" }, { id: "desc" }]);
+      expect(arg.take).toBe(2);
+      mockPrisma.apiCallbackAttempt.findMany.mockResolvedValue([
+        { id: UUID_B, createdAt: new Date("2026-10-09T10:00:00.000Z") },
+        { id: UUID_A, createdAt: new Date("2026-10-09T09:00:00.000Z") },
+      ]);
+      const page = (await getUrl("/api-usage/callbacks?limit=1")).json();
+      expect(page.data).toHaveLength(1);
+      expect(page.nextCursor).toBe(cursorOf("2026-10-09T10:00:00.000Z", UUID_B));
+    });
+
+    it("400 INVALID_QUERY for each bad input and no query runs", async () => {
+      const badCursors = [
+        "%%%", "abc", cursorOf("not-a-date", UUID_A), cursorOf("2026-10-09T09:00:00.000Z", "not-a-uuid"),
+        cursorOf("2026-10-09T09:00:00.000Z", ""), "a".repeat(300),
+      ];
+      const bad = [
+        "/api-usage/payloads?limit=0", "/api-usage/payloads?limit=101", "/api-usage/payloads?limit=x", "/api-usage/payloads?limit=1.5",
+        "/api-usage/payloads?outcome=bad", "/api-usage/payloads?endpoint=nope",
+        "/api-usage/payloads?apiKeyId=a%20b", `/api-usage/payloads?apiKeyId=${"a".repeat(80)}`,
+        ...badCursors.map((c) => `/api-usage/payloads?cursor=${c}`),
+        ...badCursors.map((c) => `/api-usage/callbacks?cursor=${c}`),
+        "/api-usage/callbacks?limit=0", "/api-usage/callbacks?limit=101",
+        "/api-usage/callbacks?messageId=not-a-uuid", `/api-usage/callbacks?messageId=${UUID_A}x`,
+        "/api-usage/payloads/not%20valid", "/api-usage/payloads/abc", `/api-usage/payloads/${UUID_A}x`,
+      ];
+      for (const u of bad) {
+        const res = await getUrl(u);
+        expect(res.statusCode, u).toBe(400);
+        expect(res.json(), u).toMatchObject({ error: { code: "INVALID_QUERY" } });
+      }
+      expect(mockPrisma.apiRequestPayload.findMany).not.toHaveBeenCalled();
+      expect(mockPrisma.apiRequestPayload.findFirst).not.toHaveBeenCalled();
+      expect(mockPrisma.apiCallbackAttempt.findMany).not.toHaveBeenCalled();
+    });
+
+    it("repeated params do not 500 (first value wins)", async () => {
+      expect((await getUrl("/api-usage/payloads?limit=5&limit=7&outcome=success&outcome=error")).statusCode).toBe(200);
+      expect(mockPrisma.apiRequestPayload.findMany.mock.calls[0]![0].take).toBe(6);
     });
   });
 

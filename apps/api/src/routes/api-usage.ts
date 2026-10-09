@@ -10,6 +10,7 @@ const DAY_PRESETS: Record<string, number> = { "7d": 7, "30d": 30 };
 const ENDPOINTS = new Set(["message.send", "message.list", "message.get", "template.create", "template.list", "template.get", "template.update", "template.delete", "other"]);
 const OUTCOMES = new Set(["success", "client_error", "server_error", "error"]);
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 /** ISO datetime that carries its own offset (Z or +hh:mm); an offset-less datetime would be read in server-local time. */
 const DATETIME_WITH_OFFSET = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-](\d{2}):?(\d{2}))$/;
@@ -158,5 +159,85 @@ export const apiUsageRouter: FastifyPluginAsync = async (fastify) => {
     if (res === "invalid_cursor") return invalid(reply, "cursor is invalid");
     if (!res) return notFound(reply);
     return reply.send(res);
+  });
+
+  // Stored payload / callback history. All routes sit under the preHandler gate above and every query is scoped to the session org.
+  const encodeCursor = (d: Date, id: string) => Buffer.from(`${d.toISOString()}|${id}`).toString("base64url");
+  const decodeCursor = (c: string): { at: Date; id: string } | null => {
+    if (c.length > 200 || !/^[A-Za-z0-9_-]+$/.test(c)) return null;
+    const [iso, id] = Buffer.from(c, "base64url").toString("utf8").split("|");
+    if (!iso || !id || !UUID_RE.test(id)) return null;
+    const at = new Date(iso);
+    return Number.isNaN(at.getTime()) ? null : { at, id };
+  };
+  const pageLimit = (q: Record<string, unknown>): number | null => {
+    const raw = qp(q["limit"]);
+    if (raw === undefined) return 50;
+    if (!/^\d{1,3}$/.test(raw)) return null;
+    const n = Number(raw);
+    return n >= 1 && n <= 100 ? n : null;
+  };
+  /** Sibling key of organizationId in the same where object, so it is AND-ed with it and never replaces it. */
+  const before = (c: { at: Date; id: string }) => ({ OR: [{ createdAt: { lt: c.at } }, { createdAt: c.at, id: { lt: c.id } }] });
+
+  fastify.get<{ Querystring: Record<string, unknown> }>("/api-usage/payloads", async (request, reply) => {
+    const q = request.query ?? {};
+    const limit = pageLimit(q);
+    if (limit === null) return invalid(reply, "limit must be an integer between 1 and 100");
+    const outcome = qp(q["outcome"]);
+    if (outcome !== undefined && !OUTCOMES.has(outcome)) return invalid(reply, "outcome must be success, client_error, server_error or error");
+    const endpoint = qp(q["endpoint"]);
+    if (endpoint !== undefined && !ENDPOINTS.has(endpoint)) return invalid(reply, "endpoint is not a known endpoint");
+    const apiKeyId = qp(q["apiKeyId"]);
+    if (apiKeyId !== undefined && !ID_RE.test(apiKeyId)) return invalid(reply, "apiKeyId is invalid");
+    const cursorRaw = qp(q["cursor"]);
+    const cursor = cursorRaw === undefined ? null : decodeCursor(cursorRaw);
+    if (cursorRaw !== undefined && !cursor) return invalid(reply, "cursor is invalid");
+
+    const rows = await fastify.prisma.apiRequestPayload.findMany({
+      where: {
+        organizationId: request.auth.organizationId,
+        ...(outcome ? { outcome: outcome === "error" ? { in: ["client_error", "server_error"] } : outcome } : {}),
+        ...(endpoint ? { endpoint } : {}),
+        ...(apiKeyId ? { apiKeyId } : {}),
+        ...(cursor ? before(cursor) : {}),
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+      select: { id: true, createdAt: true, method: true, endpoint: true, statusCode: true, outcome: true, errorClass: true, errorCode: true, durationMs: true, apiKeyId: true },
+    });
+    const page = rows.slice(0, limit);
+    const last = page[page.length - 1];
+    return reply.send({
+      enabled: process.env["API_PAYLOAD_LOGGING_ENABLED"] === "true",
+      data: page,
+      nextCursor: rows.length > limit && last ? encodeCursor(last.createdAt, last.id) : null,
+    });
+  });
+
+  fastify.get<{ Params: { id: string } }>("/api-usage/payloads/:id", async (request, reply) => {
+    if (!UUID_RE.test(request.params.id)) return invalid(reply, "id is invalid");
+    const row = await fastify.prisma.apiRequestPayload.findFirst({ where: { id: request.params.id, organizationId: request.auth.organizationId } });
+    if (!row) return notFound(reply);
+    return reply.send(row);
+  });
+
+  fastify.get<{ Querystring: Record<string, unknown> }>("/api-usage/callbacks", async (request, reply) => {
+    const q = request.query ?? {};
+    const limit = pageLimit(q);
+    if (limit === null) return invalid(reply, "limit must be an integer between 1 and 100");
+    const messageId = qp(q["messageId"]);
+    if (messageId !== undefined && !UUID_RE.test(messageId)) return invalid(reply, "messageId is invalid");
+    const cursorRaw = qp(q["cursor"]);
+    const cursor = cursorRaw === undefined ? null : decodeCursor(cursorRaw);
+    if (cursorRaw !== undefined && !cursor) return invalid(reply, "cursor is invalid");
+    const rows = await fastify.prisma.apiCallbackAttempt.findMany({
+      where: { organizationId: request.auth.organizationId, ...(messageId ? { messageId } : {}), ...(cursor ? before(cursor) : {}) },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+    });
+    const page = rows.slice(0, limit);
+    const last = page[page.length - 1];
+    return reply.send({ data: page, nextCursor: rows.length > limit && last ? encodeCursor(last.createdAt, last.id) : null });
   });
 };
