@@ -127,7 +127,7 @@ export function ConversationList({ selectedId, onSelect, urlFilter = null }: Pro
         </div>
       )}
 
-      {/* Quick filters (also driven by ?filter=) — hidden while searching */}
+      {/* Quick filters (also driven by ?filter=) - hidden while searching */}
       {!isSearching && (
         <div className="flex gap-2 px-3 py-1.5 border-b border-gray-100 shrink-0">
           {(["unread", "assigned"] as const).map((f) => (

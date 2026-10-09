@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseInboxParams, applyQuickFilter } from "./inbox-params";
+import { parseInboxParams, applyQuickFilter, resolveDeepLinkSelection } from "./inbox-params";
 
 describe("parseInboxParams", () => {
   it("parses conversation and filter", () => {
@@ -28,4 +28,24 @@ describe("applyQuickFilter", () => {
   it("filters assigned to current user", () => expect(applyQuickFilter(items, "assigned", "me").map((c) => c.id)).toEqual(["1", "2"]));
   it("assigned with unknown user yields none", () => expect(applyQuickFilter(items, "assigned", null)).toEqual([]));
   it("null filter passes through", () => expect(applyQuickFilter(items, null, "me")).toHaveLength(4));
+});
+
+describe("resolveDeepLinkSelection", () => {
+  it("does not consume when id is not in the list, selects once it appears", () => {
+    let consumed: string | null = null;
+    const step = (ids: string[] | undefined, url: string | null) => {
+      const r = resolveDeepLinkSelection(url, consumed, ids);
+      if (r) consumed = r;
+      return r;
+    };
+    expect(step(["x"], "a")).toBeNull();
+    expect(consumed).toBeNull();
+    expect(step(["x", "a"], "a")).toBe("a");
+    expect(step(["x", "a"], "a")).toBeNull();
+    expect(step(["x", "a", "b"], "b")).toBe("b");
+  });
+  it("waits for the list and ignores missing url id", () => {
+    expect(resolveDeepLinkSelection("a", null, undefined)).toBeNull();
+    expect(resolveDeepLinkSelection(null, null, ["a"])).toBeNull();
+  });
 });

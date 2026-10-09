@@ -36,3 +36,17 @@ export function applyQuickFilter<T extends Filterable>(
   }
   return items;
 }
+
+/**
+ * Decides whether a ?conversation= deep link should be selected now.
+ * Returns the id to select, or null. The caller records the id as consumed only when this returns it,
+ * so a link whose conversation is not yet in the list is retried when the list changes.
+ */
+export function resolveDeepLinkSelection(
+  urlId: string | null,
+  consumedId: string | null,
+  visibleIds: readonly string[] | undefined,
+): string | null {
+  if (!urlId || !visibleIds || urlId === consumedId) return null;
+  return visibleIds.includes(urlId) ? urlId : null;
+}

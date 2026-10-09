@@ -16,7 +16,7 @@ import { useConversations } from "@/hooks/useConversations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { CreateOfferModal } from "@/components/deals/CreateOfferModal";
 import { clientFetch } from "@/lib/client-fetch";
-import { parseInboxParams } from "@/lib/inbox-params";
+import { parseInboxParams, resolveDeepLinkSelection } from "@/lib/inbox-params";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -46,12 +46,10 @@ function InboxPageInner(): JSX.Element {
   const { conversationId: urlConversationId, filter: urlFilter } = parseInboxParams(searchParams);
   const appliedConversationRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!urlConversationId || !conversations) return;
-    if (appliedConversationRef.current === urlConversationId) return;
-    appliedConversationRef.current = urlConversationId;
-    if (conversations.some((c) => c.id === urlConversationId)) {
-      setSelectedConversationId(urlConversationId);
-    }
+    const id = resolveDeepLinkSelection(urlConversationId, appliedConversationRef.current, conversations?.map((c) => c.id));
+    if (!id) return;
+    appliedConversationRef.current = id;
+    setSelectedConversationId(id);
   }, [urlConversationId, conversations]);
 
   // Fetch all org members for assignee dropdown
