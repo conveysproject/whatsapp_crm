@@ -2,6 +2,7 @@
 
 import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { formatDurationCoarse } from "@/lib/format";
 
 interface AgentStats {
   userId: string;
@@ -14,13 +15,6 @@ interface AgentStats {
 
 type SortKey = keyof Omit<AgentStats, "userId" | "displayName">;
 
-function formatDuration(secs: number): string {
-  if (secs === 0) return "—";
-  if (secs < 60) return `${secs}s`;
-  const m = Math.floor(secs / 60);
-  if (m < 60) return `${m}m`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
-}
 
 interface TeamLeaderboardProps {
   days?: number;
@@ -104,7 +98,7 @@ export function TeamLeaderboard({ days = 30, onAgentClick }: TeamLeaderboardProp
                   <td className="px-5 py-2.5 font-medium text-gray-900 whitespace-nowrap">{agent.displayName}</td>
                   <td className="px-4 py-2.5 text-right text-gray-700">{agent.openConversations}</td>
                   <td className="px-4 py-2.5 text-right font-semibold text-green-700">{agent.resolvedToday}</td>
-                  <td className="px-4 py-2.5 text-right text-gray-700">{formatDuration(agent.avgFirstResponseSecs)}</td>
+                  <td className="px-4 py-2.5 text-right text-gray-700">{formatDurationCoarse(agent.avgFirstResponseSecs)}</td>
                   <td className={`px-4 py-2.5 text-right font-medium ${agent.slaBreaches > 0 ? "text-red-600" : "text-gray-400"}`}>
                     {agent.slaBreaches}
                   </td>

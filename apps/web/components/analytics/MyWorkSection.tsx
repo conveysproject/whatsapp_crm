@@ -3,6 +3,7 @@
 import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
+import { formatDuration, relativeTime } from "@/lib/format";
 
 interface ConversationPreview {
   id: string;
@@ -22,26 +23,7 @@ interface MyWorkData {
   topConversations: ConversationPreview[];
 }
 
-function formatDuration(secs: number): string {
-  if (secs === 0) return "—";
-  if (secs < 60) return `${secs}s`;
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  if (m < 60) return s > 0 ? `${m}m ${s}s` : `${m}m`;
-  const h = Math.floor(m / 60);
-  const rem = m % 60;
-  return rem > 0 ? `${h}h ${rem}m` : `${h}h`;
-}
 
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
 
 const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
