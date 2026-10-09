@@ -7,6 +7,7 @@ import {
 import { assertSafeCallbackUrl, UnsafeUrlError } from "../../lib/public-api/safe-url.js";
 import { publicApiSendQueue, type SendContentForWorker } from "../../lib/public-api/queues.js";
 import { enqueueStatusCallback, businessNumberDigits } from "../../lib/public-api/callbacks.js";
+import { resolveTemplate, validateAgainstTemplate } from "../../lib/public-api/template-validation.js";
 import { safeErr } from "../../lib/public-api/safe-err.js";
 
 const PUBLIC = { config: { public: true } } as const;
@@ -99,14 +100,15 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
       try {
         const c: SendContent = parsed.content;
         if (c.kind === "template") {
-          const found = await fastify.prisma.template.findMany({
-            where: { organizationId, name: c.name, language: c.language, status: "approved" },
-            select: { name: true, language: true, components: true },
-            take: 2,
+          // Org-scoped by name only: language and status are resolved below so the 400 can say what exists.
+          const rows = await fastify.prisma.template.findMany({
+            where: { organizationId, name: c.name },
+            select: { name: true, language: true, status: true, components: true, parameterFormat: true },
+            take: 50,
           });
-          if (found.length === 0) throw new SendValidationError("Template not found or not approved");
-          if (found.length > 1) throw new SendValidationError("Template name and language match more than one template");
-          const stored = (found[0]!.components ?? []) as unknown[];
+          const tpl = resolveTemplate(rows, c.name, c.language);
+          validateAgainstTemplate(tpl, c.components);
+          const stored = (tpl.components ?? []) as unknown[];
           const headerFormat = (stored as Array<{ type?: string; format?: string }>).find((s) => s.type?.toUpperCase() === "HEADER")?.format ?? null;
           content = { kind: "template", name: c.name, language: c.language, components: toMetaTemplateComponents(c.components, headerFormat) };
           templateBody = renderTemplateForInbox(c.name, stored, c.components);

@@ -108,17 +108,52 @@ describe("POST /Message/", () => {
     expect(mockPrisma.message.create).not.toHaveBeenCalled();
   });
 
-  it("template: resolves by org+name+language+approved; 400 when missing or ambiguous", async () => {
-    const tpl = { name: "welcome", language: "en_US", components: [{ type: "HEADER", format: "IMAGE" }, { type: "BODY", text: "Hi {{1}}" }] };
+  it("template: org-scoped lookup by name, picks the approved row of the exact language; specific 400s otherwise", async () => {
+    const tpl = { name: "welcome", language: "en_US", status: "approved", parameterFormat: "POSITIONAL",
+      components: [{ type: "HEADER", format: "IMAGE" }, { type: "BODY", text: "Hi {{1}}" }] };
+    const comps = [
+      { type: "header", parameters: [{ type: "media", media: "https://x/a.png" }] },
+      { type: "body", parameters: [{ type: "text", text: "Ann" }] },
+    ];
     mockPrisma.template.findMany.mockResolvedValue([tpl]);
-    const ok = await post(app, { ...body, text: undefined, template: { name: "welcome", language: "en_US", components: [{ type: "body", parameters: [{ type: "text", text: "Ann" }] }] } });
+    const ok = await post(app, { ...body, text: undefined, template: { name: "welcome", language: "en_US", components: comps } });
     expect(ok.statusCode).toBe(202);
-    expect(mockPrisma.template.findMany.mock.calls[0]![0].where).toMatchObject({ organizationId: "org-1", name: "welcome", language: "en_US", status: "approved" });
-    expect(sendAdd.mock.calls[0]![1].content).toMatchObject({ kind: "template", name: "welcome", language: "en_US", components: [{ type: "body", parameters: [{ type: "text", text: "Ann" }] }] });
+    expect(mockPrisma.template.findMany.mock.calls[0]![0].where).toEqual({ organizationId: "org-1", name: "welcome" });
+    expect(sendAdd.mock.calls[0]![1].content).toMatchObject({ kind: "template", name: "welcome", language: "en_US" });
+
     mockPrisma.template.findMany.mockResolvedValue([]);
-    expect((await post(app, { ...body, text: undefined, template: { name: "nope", language: "en" } })).statusCode).toBe(400);
+    const nf = await post(app, { ...body, text: undefined, template: { name: "nope", language: "en" } });
+    expect(nf.statusCode).toBe(400);
+    expect(nf.json().error).toMatch(/not found/);
+
+    mockPrisma.template.findMany.mockResolvedValue([tpl]);
+    const lang = await post(app, { ...body, text: undefined, template: { name: "welcome", language: "en" } });
+    expect(lang.json().error).toMatch(/available: en_US/);
+
+    mockPrisma.template.findMany.mockResolvedValue([{ ...tpl, status: "pending" }]);
+    expect((await post(app, { ...body, text: undefined, template: { name: "welcome", language: "en_US" } })).json().error).toMatch(/not approved \(status: pending\)/);
+
     mockPrisma.template.findMany.mockResolvedValue([tpl, tpl]);
     expect((await post(app, { ...body, text: undefined, template: { name: "welcome", language: "en_US" } })).statusCode).toBe(400);
+  });
+
+  it("template: 400 'template parameters not matched' for wrong count or names, and nothing is written", async () => {
+    mockPrisma.template.findMany.mockResolvedValue([{ name: "kyc", language: "en", status: "approved", parameterFormat: "NAMED",
+      components: [{ type: "BODY", text: "Hi {{username}}, by {{ra_name}}" }] }]);
+    sendAdd.mockClear(); mockPrisma.message.create.mockClear();
+    const res = await post(app, { ...body, text: undefined, template: { name: "kyc", language: "en",
+      components: [{ type: "body", parameters: [{ type: "text", parameter_name: "username", text: "Alex" }] }] } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("template parameters not matched for BODY: expected [username, ra_name]; got [username]");
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    expect(sendAdd).not.toHaveBeenCalled();
+
+    const ok = await post(app, { ...body, text: undefined, template: { name: "kyc", language: "en",
+      components: [{ type: "body", parameters: [
+        { type: "text", parameter_name: "ra_name", text: "WB-1001" }, { type: "text", parameter_name: "username", text: "Alex" }] }] } });
+    expect(ok.statusCode).toBe(202);
+    expect(sendAdd.mock.calls[0]![1].content.components[0].parameters).toEqual([
+      { type: "text", text: "WB-1001", parameter_name: "ra_name" }, { type: "text", text: "Alex", parameter_name: "username" }]);
   });
 
   it("maps location and interactive content into the queued job", async () => {
