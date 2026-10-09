@@ -537,7 +537,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     const apiUrl = process.env["API_PUBLIC_URL"] ?? process.env["RAILWAY_PUBLIC_DOMAIN"] ?? "";
     if (!apiUrl) return reply.status(400).send({ error: { code: "NO_API_URL", message: "API_PUBLIC_URL env var not set" } });
     const endpoint = await getStripe().webhookEndpoints.create({
-      url: `${apiUrl.replace(/\/$/, "")}/v1/billing/stripe/webhook`,
+      url: `${apiUrl.replace(/\/$/, "")}/v1/billing/webhook`,
       enabled_events: [
         "checkout.session.completed",
         "customer.subscription.created",
@@ -562,8 +562,8 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     const QRCode = await import("qrcode");
     const upiId = process.env.UPI_ID ?? "";
     const amount = ((parseInt(request.query.amount ?? "0", 10)) / 100).toFixed(2);
-    const label = `TrustCRM ${request.query.planId ?? "Subscription"}`;
-    const upiUrl = `upi://pay?pa=${upiId}&pn=TrustCRM&am=${amount}&cu=INR&tn=${encodeURIComponent(label)}`;
+    const label = `WBMSG ${request.query.planId ?? "Subscription"}`;
+    const upiUrl = `upi://pay?pa=${upiId}&pn=WBMSG&am=${amount}&cu=INR&tn=${encodeURIComponent(label)}`;
     const buffer = await QRCode.toBuffer(upiUrl, { type: "png", width: 300, margin: 2 });
     reply.header("Content-Type", "image/png");
     reply.header("Content-Disposition", "inline; filename=upi-qr.png");

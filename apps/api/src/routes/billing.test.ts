@@ -303,3 +303,18 @@ describe("POST /v1/billing/yoomoney/checkout", () => {
     await app.close();
   });
 });
+
+describe("billing branding and webhook url", () => {
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+  it("setup-webhook registers the real stripe webhook path", async () => {
+    const { readFileSync } = await import("fs");
+    const src = readFileSync(new URL("./billing.ts", import.meta.url), "utf8");
+    expect(src).toContain("/v1/billing/webhook`");
+    expect(src).not.toContain("/v1/billing/stripe/webhook");
+  });
+  it("has no TrustCRM text left in customer-facing billing strings", async () => {
+    const { readFileSync } = await import("fs");
+    const src = readFileSync(new URL("./billing.ts", import.meta.url), "utf8");
+    expect(src).not.toMatch(/TrustCRM/);
+  });
+});
