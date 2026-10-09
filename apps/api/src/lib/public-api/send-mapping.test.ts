@@ -253,3 +253,21 @@ describe("named template parameters", () => {
     expect(JSON.parse(json).body).toBe("Hi Alex, approved by WB-1001");
   });
 });
+
+describe("text-parameter checks are scoped to header and body", () => {
+  it("accepts an empty text on a button parameter", () => {
+    expect(mapT([{ type: "button", sub_type: "url", index: 0, parameters: [{ type: "text", text: "" }] }])).not.toThrow();
+  });
+
+  it("ignores parameter_name on a button parameter", () => {
+    const out = toMetaTemplateComponents(cast([
+      { type: "button", sub_type: "url", index: 0, parameters: [{ type: "text", text: "x", parameter_name: "bad name!" }] },
+    ]), null);
+    expect(out[0]!.parameters![0]).toEqual({ type: "text", text: "x" });
+  });
+
+  it.each(["header", "body"])("%s still rejects empty text and a bad parameter_name", (t) => {
+    expect(mapT([{ type: t, parameters: [{ type: "text", text: "" }] }])).toThrow(SendValidationError);
+    expect(mapT([{ type: t, parameters: [{ type: "text", text: "a", parameter_name: "bad name!" }] }])).toThrow(SendValidationError);
+  });
+});

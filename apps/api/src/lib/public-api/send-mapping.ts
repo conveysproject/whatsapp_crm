@@ -123,11 +123,13 @@ function validateComponents(raw: unknown): PlivoTemplateComponent[] {
     if (!isObj(c) || typeof c["type"] !== "string") return bad(`template.components[${ci}] must be an object with a string type`);
     const rawParams = c["parameters"];
     if (rawParams !== undefined && !Array.isArray(rawParams)) return bad(`template.components[${ci}].parameters must be an array`);
+    const strict = ["header", "body"].includes(c["type"].toLowerCase());
     const parameters = ((rawParams ?? []) as unknown[]).map((p, pi) => {
       const at = `template.components[${ci}].parameters[${pi}]`;
       if (!isObj(p) || typeof p["type"] !== "string") return bad(`${at} must be an object with a string type`);
       if (p["type"] === "text") {
         if (typeof p["text"] !== "string") return bad(`${at}.text must be a string`);
+        if (!strict) return { type: "text", text: p["text"] };
         if (p["text"].trim() === "") return bad(`${at}.text must not be empty`);
         const pn = p["parameter_name"];
         if (pn !== undefined) {
