@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { PlanTier } from "@WBMSG/shared";
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS, ZERO_DECIMAL_CURRENCIES } from "../lib/stripe.js";
 import { checkPlanLimit, isFeatureEnabled } from "../lib/plan-limits.js";
 import { canAccessSub } from "../lib/permissions.js";
@@ -9,7 +9,7 @@ import { isAllowedRedirect } from "../lib/billing/safe-redirect.js";
 import Razorpay from "razorpay";
 
 // GAP-S60: load gateway credentials from VendorSettings, fallback to env vars
-async function getGatewayCredentials(prisma: PrismaClient, organizationId: string, gateway: string): Promise<Record<string, string>> {
+export async function getGatewayCredentials(prisma: PrismaClient, organizationId: string, gateway: string): Promise<Record<string, string>> {
   const keys = [
     `${gateway}_key_id`, `${gateway}_key_secret`, `${gateway}_webhook_secret`,
     `${gateway}_publishable_key`, `${gateway}_secret_key`, `use_test_${gateway}`,
@@ -37,7 +37,7 @@ function calcEndsAt(interval: "monthly" | "yearly", proratedDays: number): Date 
 }
 
 // GAP-S53: activate a manual subscription and cancel all previously active ones
-async function activateManualSubscription(prisma: PrismaClient, organizationId: string, manualSubId: string, planTier: PlanTier): Promise<void> {
+export async function activateManualSubscription(prisma: PrismaClient, organizationId: string, manualSubId: string, planTier: PlanTier): Promise<void> {
   await prisma.$transaction([
     prisma.manualSubscription.updateMany({ where: { organizationId, status: "active" }, data: { status: "cancelled" } }),
     prisma.manualSubscription.update({ where: { id: manualSubId }, data: { status: "active" } }),
@@ -322,42 +322,6 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  fastify.post("/billing/razorpay/webhook", { config: { public: true } }, async (request, reply) => {
-    const signature = request.headers["x-razorpay-signature"] as string;
-    const body = JSON.stringify(request.body);
-    const { createHmac } = await import("crypto");
-    // GAP-S60: try DB secret first, fallback to env
-    const event = request.body as { event: string; payload: { payment: { entity: { notes: { organizationId?: string; planId?: string; manualSubId?: string } } } } };
-    const orgId = event.payload?.payment?.entity?.notes?.organizationId;
-    let webhookSecret = process.env["RAZORPAY_WEBHOOK_SECRET"] ?? "";
-    if (orgId) {
-      const creds = await getGatewayCredentials(fastify.prisma, orgId, "razorpay");
-      webhookSecret = creds["razorpay_webhook_secret"] ?? webhookSecret;
-    }
-    const expected = createHmac("sha256", webhookSecret).update(body).digest("hex");
-    if (signature && signature !== expected) return reply.status(400).send({ error: "Invalid signature" });
-    // GAP-S61: only process payment.captured
-    if (event.event === "payment.captured" && orgId) {
-      const { planId, manualSubId } = event.payload.payment.entity.notes;
-      if (manualSubId) {
-        // Activate manual subscription (GAP-S53)
-        const sub = await fastify.prisma.manualSubscription.findFirst({ where: { id: manualSubId, organizationId: orgId } });
-        if (sub) await activateManualSubscription(fastify.prisma, orgId, sub.id, sub.planTier as PlanTier);
-      } else if (planId) {
-        const org = await fastify.prisma.organization.findUnique({ where: { id: orgId }, select: { settings: true } });
-        const existing = (org?.settings as Record<string, unknown>) ?? {};
-        await fastify.prisma.organization.update({
-          where: { id: orgId },
-          data: {
-            planTier: planId as PlanTier,
-            settings: ({ ...existing, razorpayPlanId: planId, activatedAt: new Date().toISOString() } as Record<string, unknown>) as Prisma.InputJsonValue,
-          },
-        });
-      }
-    }
-    return reply.send({ received: true });
-  });
-
   // ── Paystack ──────────────────────────────────────────────────────────────
   fastify.post<{ Body: { reference: string } }>("/billing/paystack/verify", async (request, reply) => {
     const { organizationId } = request.auth;
@@ -370,31 +334,6 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     const json = await res.json() as { status: boolean; data: { status: string } };
     if (!json.status || json.data.status !== "success") return reply.status(400).send({ error: "Payment not verified" });
     return reply.send({ data: { verified: true } });
-  });
-
-  fastify.post("/billing/paystack/webhook", { config: { public: true } }, async (request, reply) => {
-    const hash = request.headers["x-paystack-signature"] as string;
-    const { createHmac } = await import("crypto");
-    // GAP-S61: Paystack uses charge.success event with HMAC-SHA512 via X-Paystack-Signature
-    const event = request.body as { event: string; data: { metadata?: { organizationId?: string; planId?: string; manualSubId?: string }; customer?: { metadata?: Record<string, string> } } };
-    const orgId = event.data?.metadata?.organizationId;
-    let secretKey = process.env["PAYSTACK_SECRET_KEY"] ?? "";
-    if (orgId) {
-      const creds = await getGatewayCredentials(fastify.prisma, orgId, "paystack");
-      secretKey = creds["paystack_secret_key"] ?? secretKey;
-    }
-    const expected = createHmac("sha512", secretKey).update(JSON.stringify(request.body)).digest("hex");
-    if (hash !== expected) return reply.status(400).send({ error: "Invalid signature" });
-    if (event.event === "charge.success" && orgId) {
-      const { planId, manualSubId } = event.data.metadata ?? {};
-      if (manualSubId) {
-        const sub = await fastify.prisma.manualSubscription.findFirst({ where: { id: manualSubId, organizationId: orgId } });
-        if (sub) await activateManualSubscription(fastify.prisma, orgId, sub.id, sub.planTier as PlanTier);
-      } else if (planId) {
-        await fastify.prisma.organization.update({ where: { id: orgId }, data: { planTier: planId as PlanTier } });
-      }
-    }
-    return reply.send({ received: true });
   });
 
   // ── PhonePe ───────────────────────────────────────────────────────────────
