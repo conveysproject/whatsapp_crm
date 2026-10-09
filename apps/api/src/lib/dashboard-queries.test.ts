@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
-import { deltaPct, getDashboardKpis } from "./dashboard-queries.js";
+import { deltaPct, getDashboardKpis, getAttentionCounts, type AttentionKey } from "./dashboard-queries.js";
 import { windowFor } from "./dashboard-range.js";
 
 const mockPrisma = {
@@ -101,5 +101,95 @@ describe("getDashboardKpis", () => {
     mockPrisma.$queryRaw.mockResolvedValue([]);
     const k = await getDashboardKpis(prisma, "org-1", w);
     expect(k.firstReplySecs.value).toBeNull();
+  });
+});
+
+describe("getAttentionCounts", () => {
+  const now = new Date("2026-10-10T12:00:00Z");
+
+  it("runs no queries when nothing is requested", async () => {
+    const r = await getAttentionCounts(prisma, "org-1", now, new Set());
+    expect(r).toEqual({ unanswered: 0, sla_at_risk: 0, failed_messages: 0, templates: 0 });
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+    expect(mockPrisma.conversation.findMany).not.toHaveBeenCalled();
+    expect(mockPrisma.message.count).not.toHaveBeenCalled();
+    expect(mockPrisma.template.count).not.toHaveBeenCalled();
+  });
+
+  it("unanswered: 60-minute threshold param, org scoped, bot excluded, outbound clears it", async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([{ n: 3 }]);
+    const r = await getAttentionCounts(prisma, "org-1", now, new Set<AttentionKey>(["unanswered"]));
+    expect(r.unanswered).toBe(3);
+    const [strings, ...values] = mockPrisma.$queryRaw.mock.calls[0] as [string[], ...unknown[]];
+    const sql = strings.join("?");
+    expect(values).toContain("org-1");
+    const threshold = values.find((v) => v instanceof Date) as Date;
+    expect(threshold.toISOString()).toBe("2026-10-10T11:00:00.000Z"); // 60 min before now: 59 min old is excluded, 61 min old is included
+    expect(sql).toContain("c.status IN ('open','pending')");
+    expect(sql).not.toContain("'bot'");
+    expect(sql).toContain("ct.deleted_at IS NULL");
+    expect(sql).toContain("NOT EXISTS");
+    expect(sql).toContain("m.direction = 'outbound'");
+    expect(sql).toContain("m.is_system_message = false");
+    expect(sql).toContain("m.created_at > c.last_inbound_at");
+  });
+
+  it("sla_at_risk: counts overdue conversations with no outbound, org scoped", async () => {
+    mockPrisma.conversation.findMany.mockResolvedValue([
+      { id: "c1", createdAt: new Date(now.getTime() - 2 * 3600_000), sla: { firstResponseSecs: 3600 } }, // overdue
+      { id: "c2", createdAt: new Date(now.getTime() - 2 * 3600_000), sla: { firstResponseSecs: 3600 } }, // has reply
+      { id: "c3", createdAt: new Date(now.getTime() - 30 * 60_000), sla: { firstResponseSecs: 3600 } }, // not due yet
+      { id: "c4", createdAt: new Date(now.getTime() - 2 * 3600_000), sla: null }, // defensive
+    ]);
+    mockPrisma.message.groupBy.mockResolvedValue([{ conversationId: "c2" }]);
+    const r = await getAttentionCounts(prisma, "org-1", now, new Set<AttentionKey>(["sla_at_risk"]));
+    expect(r.sla_at_risk).toBe(1);
+    const where = mockPrisma.conversation.findMany.mock.calls[0][0].where;
+    expect(where.organizationId).toBe("org-1");
+    expect(where.slaId).toEqual({ not: null });
+    expect(where.status).toEqual({ in: ["open", "pending"] });
+    expect(where.contact).toEqual({ deletedAt: null });
+    const g = mockPrisma.message.groupBy.mock.calls[0][0];
+    expect(g.where.organizationId).toBe("org-1");
+    expect(g.where.direction).toBe("outbound");
+    expect(g.where.isSystemMessage).toBe(false);
+    expect(g.where.conversationId).toEqual({ in: ["c1", "c2", "c3", "c4"] });
+  });
+
+  it("sla_at_risk: skips the message query when no SLA conversations exist", async () => {
+    mockPrisma.conversation.findMany.mockResolvedValue([]);
+    const r = await getAttentionCounts(prisma, "org-1", now, new Set<AttentionKey>(["sla_at_risk"]));
+    expect(r.sla_at_risk).toBe(0);
+    expect(mockPrisma.message.groupBy).not.toHaveBeenCalled();
+  });
+
+  it("failed_messages: outbound failed/expired/aborted in last 24h, non-system, org scoped", async () => {
+    mockPrisma.message.count.mockResolvedValue(4);
+    const r = await getAttentionCounts(prisma, "org-1", now, new Set<AttentionKey>(["failed_messages"]));
+    expect(r.failed_messages).toBe(4);
+    const where = mockPrisma.message.count.mock.calls[0][0].where;
+    expect(where.organizationId).toBe("org-1");
+    expect(where.direction).toBe("outbound");
+    expect(where.status).toEqual({ in: ["failed", "expired", "aborted"] });
+    expect(where.isSystemMessage).toBe(false);
+    expect((where.sentAt.gte as Date).toISOString()).toBe("2026-10-09T12:00:00.000Z");
+    expect(where.conversation).toEqual({ contact: { deletedAt: null } });
+  });
+
+  it("templates: problem statuses only, org scoped", async () => {
+    mockPrisma.template.count.mockResolvedValue(2);
+    const r = await getAttentionCounts(prisma, "org-1", now, new Set<AttentionKey>(["templates"]));
+    expect(r.templates).toBe(2);
+    const where = mockPrisma.template.count.mock.calls[0][0].where;
+    expect(where.organizationId).toBe("org-1");
+    expect(where.status).toEqual({ in: ["rejected", "paused", "flagged", "limit_exceeded", "disabled"] });
+  });
+
+  it("only queries the requested keys", async () => {
+    mockPrisma.template.count.mockResolvedValue(1);
+    await getAttentionCounts(prisma, "org-1", now, new Set<AttentionKey>(["templates"]));
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+    expect(mockPrisma.message.count).not.toHaveBeenCalled();
+    expect(mockPrisma.conversation.findMany).not.toHaveBeenCalled();
   });
 });

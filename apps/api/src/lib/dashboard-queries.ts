@@ -92,3 +92,74 @@ export async function getDashboardKpis(
     campaignsSent: kpi(campCur, campPrev),
   };
 }
+
+export type AttentionKey = "unanswered" | "sla_at_risk" | "failed_messages" | "templates";
+
+const UNANSWERED_AFTER_MS = 60 * 60_000;
+const FAILED_WINDOW_MS = 24 * 3600_000;
+
+async function countUnanswered(prisma: PrismaClient, organizationId: string, now: Date): Promise<number> {
+  const threshold = new Date(now.getTime() - UNANSWERED_AFTER_MS);
+  const rows = await prisma.$queryRaw<{ n: number }[]>`
+    SELECT COUNT(*)::int AS n FROM conversations c
+    JOIN contacts ct ON ct.id = c.contact_id AND ct.deleted_at IS NULL
+    WHERE c.organization_id = ${organizationId}
+      AND c.status IN ('open','pending')
+      AND c.last_inbound_at IS NOT NULL AND c.last_inbound_at < ${threshold}
+      AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id
+                      AND m.direction = 'outbound' AND m.is_system_message = false
+                      AND m.created_at > c.last_inbound_at)`;
+  return Number(rows[0]?.n ?? 0);
+}
+
+async function countSlaAtRisk(prisma: PrismaClient, organizationId: string, now: Date): Promise<number> {
+  const convs = await prisma.conversation.findMany({
+    where: { organizationId, slaId: { not: null }, status: { in: ["open", "pending"] }, ...LIVE_CONTACT },
+    select: { id: true, createdAt: true, sla: { select: { firstResponseSecs: true } } },
+  });
+  if (convs.length === 0) return 0;
+  const replied = await prisma.message.groupBy({
+    by: ["conversationId"],
+    where: {
+      organizationId,
+      conversationId: { in: convs.map((c) => c.id) },
+      direction: "outbound",
+      isSystemMessage: false,
+    },
+  });
+  const repliedIds = new Set(replied.map((r) => r.conversationId));
+  return convs.filter((c) => {
+    if (!c.sla || repliedIds.has(c.id)) return false;
+    return now.getTime() > c.createdAt.getTime() + c.sla.firstResponseSecs * 1000;
+  }).length;
+}
+
+export async function getAttentionCounts(
+  prisma: PrismaClient,
+  organizationId: string,
+  now: Date,
+  want: Set<AttentionKey>
+): Promise<Record<AttentionKey, number>> {
+  const [unanswered, sla_at_risk, failed_messages, templates] = await Promise.all([
+    want.has("unanswered") ? countUnanswered(prisma, organizationId, now) : 0,
+    want.has("sla_at_risk") ? countSlaAtRisk(prisma, organizationId, now) : 0,
+    want.has("failed_messages")
+      ? prisma.message.count({
+          where: {
+            organizationId,
+            direction: "outbound",
+            status: { in: ["failed", "expired", "aborted"] },
+            isSystemMessage: false,
+            sentAt: { gte: new Date(now.getTime() - FAILED_WINDOW_MS) },
+            ...LIVE_CONV_MSG,
+          },
+        })
+      : 0,
+    want.has("templates")
+      ? prisma.template.count({
+          where: { organizationId, status: { in: ["rejected", "paused", "flagged", "limit_exceeded", "disabled"] } },
+        })
+      : 0,
+  ]);
+  return { unanswered, sla_at_risk, failed_messages, templates };
+}
