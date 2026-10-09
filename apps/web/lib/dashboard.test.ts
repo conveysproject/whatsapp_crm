@@ -65,3 +65,13 @@ describe("fetchDashboard", () => {
     await expect(fetchDashboard(getToken, "7d", "UTC")).rejects.toBeInstanceOf(DashboardError);
   });
 });
+
+describe("attention href safety", () => {
+  const item = (href: string) => ({ key: "templates", severity: "warning", count: 1, label: "L", href });
+  it.each(["javascript:alert(1)", "//evil.com", "https://evil.com", "/\\evil.com", "/a\nb"])("falls back to /inbox for %s", (href) => {
+    expect(normalizeDashboard({ attention: [item(href)] }).attention[0]!.href).toBe("/inbox");
+  });
+  it("keeps a valid internal path", () => {
+    expect(normalizeDashboard({ attention: [item("/templates")] }).attention[0]!.href).toBe("/templates");
+  });
+});

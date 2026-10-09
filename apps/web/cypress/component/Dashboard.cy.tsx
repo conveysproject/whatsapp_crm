@@ -206,6 +206,33 @@ describe('Dashboard v2', () => {
     cy.get('[data-testid="funnel-failed"]').should('contain', '5 (5%)');
   });
 
+  it('first-reply delta colour is inverted (lower is better)', () => {
+    stubDashboard(body({ kpis: { ...(body().data as Record<string, any>).kpis, firstReplySecs: { value: 100, previous: 80, deltaPct: 20 } } }));
+    mount();
+    cy.get('[data-testid="kpi-first-reply"] [data-testid="kpi-delta"]').should('have.attr', 'data-direction', 'up').and('have.class', 'text-red-600');
+  });
+
+  it('first-reply decrease is green', () => {
+    stubDashboard(body({ kpis: { ...(body().data as Record<string, any>).kpis, firstReplySecs: { value: 60, previous: 80, deltaPct: -20 } } }));
+    mount();
+    cy.get('[data-testid="kpi-first-reply"] [data-testid="kpi-delta"]').should('have.attr', 'data-direction', 'down').and('have.class', 'text-green-600');
+  });
+
+  it('shows the bot-replies note as visible text', () => {
+    stubDashboard();
+    mount();
+    cy.get('[data-testid="kpi-first-reply"] [data-testid="kpi-note"]').should('be.visible').and('contain', 'Bot replies are included');
+  });
+
+  it('a failed /users/me shows a retryable error, not the no-access message', () => {
+    stubUser(null);
+    stubDashboard();
+    mount();
+    cy.get('[role="alert"]').should('contain', 'Could not load the dashboard');
+    cy.contains('You do not have access to the dashboard').should('not.exist');
+    cy.contains('button', 'Retry').should('be.visible');
+  });
+
   it('has no horizontal scroll at 360px', () => {
     cy.viewport(360, 740);
     stubDashboard(body({ campaignFunnel: { current: { ...FUNNEL, name: 'A very long campaign name with_no_breaks_' + 'x'.repeat(80) }, previous: null } }));

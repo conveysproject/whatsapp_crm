@@ -36,7 +36,7 @@ export interface DashboardBodyProps {
 }
 
 export function DashboardBody({ getToken, range, onRangeChange, slots }: DashboardBodyProps): JSX.Element {
-  const { user, isLoading: userLoading } = useCurrentUser();
+  const { user, isLoading: userLoading, isError: userError, refetch: refetchUser } = useCurrentUser();
   const tz = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", []);
   const orgAllowed = canAccess(user, "analytics_access");
 
@@ -50,6 +50,9 @@ export function DashboardBody({ getToken, range, onRangeChange, slots }: Dashboa
   let org: JSX.Element;
   if (userLoading || (orgAllowed && q.isPending)) {
     org = <DashboardSkeleton />;
+  } else if (userError && !user) {
+    // Could not determine permissions: a retryable error, not a permission denial.
+    org = <DashboardErrorState onRetry={refetchUser} />;
   } else if (!orgAllowed || (q.error instanceof DashboardError && q.error.status === 403)) {
     org = <DashboardNoAccess />;
   } else if (q.isError || !q.data) {

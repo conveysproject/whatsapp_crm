@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import type { CurrentUser } from "@/lib/can";
 
-export function useCurrentUser(): { user: CurrentUser | null; isLoading: boolean } {
-  const { data, isLoading } = useQuery<CurrentUser | null>({
+export function useCurrentUser(): { user: CurrentUser | null; isLoading: boolean; isError: boolean; refetch: () => void } {
+  const { data, isLoading, isError, refetch } = useQuery<CurrentUser | null>({
     queryKey: ["user-me"],
     queryFn: async () => {
       const res = await fetch("/api/v1/users/me");
@@ -12,5 +12,5 @@ export function useCurrentUser(): { user: CurrentUser | null; isLoading: boolean
     },
     staleTime: 60_000,
   });
-  return { user: data ?? null, isLoading };
+  return { user: data ?? null, isLoading, isError, refetch: () => { void refetch(); } };
 }

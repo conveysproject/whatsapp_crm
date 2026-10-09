@@ -60,13 +60,23 @@ function kpi(v: unknown, emptyValue: number | null): Kpi {
   };
 }
 
+/** Only same-origin absolute paths: one leading "/", not "//", no backslash or control characters. */
+export function isSafeInternalHref(v: unknown): v is string {
+  if (typeof v !== "string" || !v.startsWith("/") || v.startsWith("//")) return false;
+  for (let i = 0; i < v.length; i++) {
+    const c = v.charCodeAt(i);
+    if (c === 0x5c || c <= 0x1f || c === 0x7f) return false;
+  }
+  return true;
+}
+
 function attentionItem(v: unknown): AttentionItem | null {
   if (!isRecord(v)) return null;
   const { key, severity, count, label, href } = v;
   if (typeof key !== "string" || typeof label !== "string" || typeof href !== "string") return null;
   if (severity !== "critical" && severity !== "warning") return null;
   if (typeof count !== "number" || !Number.isFinite(count)) return null;
-  return { key, severity, count, label, href };
+  return { key, severity, count, label, href: isSafeInternalHref(href) ? href : "/inbox" };
 }
 
 function funnel(v: unknown): Funnel | null {

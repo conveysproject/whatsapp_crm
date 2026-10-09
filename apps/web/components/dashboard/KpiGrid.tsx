@@ -5,7 +5,7 @@ import { formatDelta, formatDuration } from "@/lib/format";
 
 const FIRST_REPLY_NOTE = "Time from the first customer message to the first reply. Bot replies are included.";
 
-function Delta({ pct }: { pct: number | null }): JSX.Element {
+function Delta({ pct, lowerIsBetter = false }: { pct: number | null; lowerIsBetter?: boolean }): JSX.Element {
   const d = formatDelta(pct);
   if (d.up === null) {
     return <span data-testid="kpi-delta" className="text-xs text-gray-400 dark:text-gray-500">{d.text}</span>;
@@ -14,7 +14,7 @@ function Delta({ pct }: { pct: number | null }): JSX.Element {
     <span
       data-testid="kpi-delta"
       data-direction={d.up ? "up" : "down"}
-      className={`text-xs font-medium ${d.up ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+      className={`text-xs font-medium ${d.up !== lowerIsBetter ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
     >
       {d.up ? "▲" : "▼"} {d.text}
     </span>
@@ -28,11 +28,13 @@ interface CardProps {
   value: string;
   delta?: number | null;
   hasDelta: boolean;
+  lowerIsBetter?: boolean;
   sub?: string;
+  note?: string;
   info?: ReactNode;
 }
 
-function Card({ id, label, href, value, delta, hasDelta, sub, info }: CardProps): JSX.Element {
+function Card({ id, label, href, value, delta, hasDelta, lowerIsBetter, sub, note, info }: CardProps): JSX.Element {
   return (
     <Link
       data-testid={`kpi-${id}`}
@@ -43,9 +45,10 @@ function Card({ id, label, href, value, delta, hasDelta, sub, info }: CardProps)
         <span className="min-w-0 break-words">{label}</span>
         {info}
       </p>
+      {note && <p data-testid="kpi-note" className="text-xs text-gray-500 dark:text-gray-400">{note}</p>}
       <p data-testid="kpi-value" className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">{value}</p>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-gray-500 dark:text-gray-400">
-        {hasDelta && <Delta pct={delta ?? null} />}
+        {hasDelta && <Delta pct={delta ?? null} lowerIsBetter={lowerIsBetter} />}
         {sub && <span>{sub}</span>}
       </div>
     </Link>
@@ -78,6 +81,8 @@ export function KpiGrid({ kpis }: { kpis: DashboardData["kpis"] }): JSX.Element 
         value={formatDuration(kpis.firstReplySecs.value)}
         delta={kpis.firstReplySecs.deltaPct}
         hasDelta
+        lowerIsBetter
+        note="Bot replies are included."
         info={
           <span
             data-testid="first-reply-info"
