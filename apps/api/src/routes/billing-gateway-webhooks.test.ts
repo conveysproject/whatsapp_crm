@@ -50,7 +50,7 @@ function setEnv(name: string, value: string): () => void {
 describe("razorpay webhook", () => {
   let app: FastifyInstance;
   let restore: () => void;
-  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); restore = setEnv("RAZORPAY_WEBHOOK_SECRET", "rzp_secret"); app = await build(); });
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); mockPrisma.vendorSetting.findMany.mockResolvedValue([]); restore = setEnv("RAZORPAY_WEBHOOK_SECRET", "rzp_secret"); app = await build(); });
   afterEach(async () => { await app.close(); restore(); });
 
   it("rejects a missing signature", async () => {
@@ -61,6 +61,7 @@ describe("razorpay webhook", () => {
   it("rejects a bad signature", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": "deadbeef" }, payload: rzpBody(99900) });
     expect(res.statusCode).toBe(400);
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
   });
   it("activates the plan for a correct signature and sufficient amount", async () => {
     const raw = rzpBody(99900);
@@ -88,12 +89,32 @@ describe("razorpay webhook", () => {
     expect(res.statusCode).toBe(200);
     expect(mockPrisma.manualSubscription.findFirst).toHaveBeenCalledWith({ where: { id: "sub-9", organizationId: "org-1" } });
   });
+  it("ignores a tenant-set webhook secret and never reads vendor settings", async () => {
+    mockPrisma.vendorSetting.findMany.mockResolvedValue([{ key: "razorpay_webhook_secret", value: "tenant_known" }]);
+    const raw = rzpBody(99900);
+    const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": sign("sha256", "tenant_known", raw) }, payload: raw });
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(mockPrisma.vendorSetting.findMany).not.toHaveBeenCalled();
+  });
+  it("does not read vendor settings before/after a valid verification either", async () => {
+    const raw = rzpBody(99900);
+    await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": sign("sha256", "rzp_secret", raw) }, payload: raw });
+    expect(mockPrisma.vendorSetting.findMany).not.toHaveBeenCalled();
+  });
+  it("rejects when the env secret is unset", async () => {
+    delete process.env["RAZORPAY_WEBHOOK_SECRET"];
+    const raw = rzpBody(99900);
+    const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": sign("sha256", "", raw) }, payload: raw });
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+  });
 });
 
 describe("paystack webhook", () => {
   let app: FastifyInstance;
   let restore: () => void;
-  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); restore = setEnv("PAYSTACK_SECRET_KEY", "ps_secret"); app = await build(); });
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); mockPrisma.vendorSetting.findMany.mockResolvedValue([]); restore = setEnv("PAYSTACK_SECRET_KEY", "ps_secret"); app = await build(); });
   afterEach(async () => { await app.close(); restore(); });
   const body = (amount: number, currency: string) => JSON.stringify({ event: "charge.success", data: { amount, currency, metadata: { organizationId: "org-1", planId: "growth" } } });
 
@@ -106,6 +127,21 @@ describe("paystack webhook", () => {
     const res = await app.inject({ method: "POST", url: "/v1/billing/paystack/webhook", headers: { "content-type": "application/json", "x-paystack-signature": sign("sha512", "ps_secret", raw) }, payload: raw });
     expect(res.statusCode).toBe(200);
     expect(mockPrisma.organization.update).toHaveBeenCalledWith({ where: { id: "org-1" }, data: { planTier: "growth" } });
+  });
+  it("ignores a tenant-set secret key and never reads vendor settings", async () => {
+    mockPrisma.vendorSetting.findMany.mockResolvedValue([{ key: "paystack_secret_key", value: "tenant_known" }]);
+    const raw = body(299900, "INR");
+    const res = await app.inject({ method: "POST", url: "/v1/billing/paystack/webhook", headers: { "content-type": "application/json", "x-paystack-signature": sign("sha512", "tenant_known", raw) }, payload: raw });
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(mockPrisma.vendorSetting.findMany).not.toHaveBeenCalled();
+  });
+  it("rejects when the env secret is unset", async () => {
+    delete process.env["PAYSTACK_SECRET_KEY"];
+    const raw = body(299900, "INR");
+    const res = await app.inject({ method: "POST", url: "/v1/billing/paystack/webhook", headers: { "content-type": "application/json", "x-paystack-signature": sign("sha512", "", raw) }, payload: raw });
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
   });
   it("fails closed for a non-catalogued currency", async () => {
     const raw = body(99999999, "NGN");

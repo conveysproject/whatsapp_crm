@@ -307,11 +307,10 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       if (!isBillableTier(planTier) || interval !== "monthly") {
         return reply.status(400).send({ error: { code: "INVALID_PLAN", message: "Unknown or unsupported plan" } });
       }
-      // GAP-S60: DB credentials take precedence over env vars
-      const creds = await getGatewayCredentials(fastify.prisma, organizationId, "razorpay");
+      // Platform keys only: the platform webhook can only verify orders created with them.
       const rzp = new Razorpay({
-        key_id: creds["razorpay_key_id"] ?? process.env["RAZORPAY_KEY_ID"] ?? "",
-        key_secret: creds["razorpay_key_secret"] ?? process.env["RAZORPAY_KEY_SECRET"] ?? "",
+        key_id: process.env["RAZORPAY_KEY_ID"] ?? "",
+        key_secret: process.env["RAZORPAY_KEY_SECRET"] ?? "",
       });
       const order = await rzp.orders.create({
         amount: PLAN_CATALOG[planTier].priceInr * 100, // server-side price; client amount is ignored

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
-const { stripeSessionCreate, ordersCreate } = vi.hoisted(() => ({ stripeSessionCreate: vi.fn(), ordersCreate: vi.fn() }));
+const { stripeSessionCreate, ordersCreate, razorpayCtor } = vi.hoisted(() => ({ stripeSessionCreate: vi.fn(), ordersCreate: vi.fn(), razorpayCtor: vi.fn() }));
 vi.mock("../lib/stripe.js", () => ({
   getStripe: () => ({
     checkout: { sessions: { create: stripeSessionCreate } },
@@ -18,9 +18,10 @@ vi.mock("../lib/stripe.js", () => ({
 }));
 
 vi.mock("razorpay", () => ({
-  default: vi.fn().mockImplementation(() => ({
-    orders: { create: ordersCreate },
-  })),
+  default: vi.fn().mockImplementation((opts: unknown) => {
+    razorpayCtor(opts);
+    return { orders: { create: ordersCreate } };
+  }),
 }));
 
 const mockPrisma = {
@@ -68,6 +69,7 @@ describe("POST /v1/billing/razorpay/create-order", () => {
   let app: FastifyInstance;
   beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks();
+    mockPrisma.vendorSetting.findMany.mockResolvedValue([]);
     ordersCreate.mockResolvedValue({ id: "order_test123", amount: 99900, currency: "INR" });
     app = await buildApp();
   });
@@ -81,6 +83,21 @@ describe("POST /v1/billing/razorpay/create-order", () => {
     expect(ordersCreate).toHaveBeenCalledWith(expect.objectContaining({
       amount: 99900, currency: "INR", notes: { planId: "starter", organizationId: "org-1" },
     }));
+  });
+
+  it("uses only platform env keys and never reads tenant gateway credentials", async () => {
+    const prevId = process.env["RAZORPAY_KEY_ID"], prevSecret = process.env["RAZORPAY_KEY_SECRET"];
+    process.env["RAZORPAY_KEY_ID"] = "env_key_id"; process.env["RAZORPAY_KEY_SECRET"] = "env_key_secret";
+    mockPrisma.vendorSetting.findMany.mockResolvedValue([{ key: "razorpay_key_id", value: "tenant_id" }, { key: "razorpay_key_secret", value: "tenant_secret" }]);
+    try {
+      const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/create-order", payload: { planId: "starter" } });
+      expect(res.statusCode).toBe(200);
+      expect(mockPrisma.vendorSetting.findMany).not.toHaveBeenCalled();
+      expect(razorpayCtor).toHaveBeenCalledWith({ key_id: "env_key_id", key_secret: "env_key_secret" });
+    } finally {
+      if (prevId === undefined) delete process.env["RAZORPAY_KEY_ID"]; else process.env["RAZORPAY_KEY_ID"] = prevId;
+      if (prevSecret === undefined) delete process.env["RAZORPAY_KEY_SECRET"]; else process.env["RAZORPAY_KEY_SECRET"] = prevSecret;
+    }
   });
 
   it("rejects unknown and enterprise plans", async () => {

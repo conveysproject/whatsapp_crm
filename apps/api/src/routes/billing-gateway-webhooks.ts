@@ -1,10 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { PlanTier, Prisma } from "@prisma/client";
 import { createHmac, timingSafeEqual } from "crypto";
-import { getGatewayCredentials, activateManualSubscription } from "./billing.js";
+import { activateManualSubscription } from "./billing.js";
 import { isBillableTier, isPaidAmountSufficient } from "../lib/billing/catalog.js";
 
-function safeEqualHex(a: string, b: string): boolean {
+function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a, "utf8");
   const y = Buffer.from(b, "utf8");
   return x.length === y.length && timingSafeEqual(x, y);
@@ -15,7 +15,8 @@ export const billingGatewayWebhooksRouter: FastifyPluginAsync = async (fastify) 
   fastify.addContentTypeParser("application/json", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
 
   function parse<T>(body: unknown): T | null {
-    try { return JSON.parse((body as Buffer).toString("utf8")) as T; } catch { return null; }
+    if (!Buffer.isBuffer(body)) return null;
+    try { return JSON.parse(body.toString("utf8")) as T; } catch { return null; }
   }
 
   // ── Razorpay ────────────────────────────────────────────────────────────
@@ -26,13 +27,10 @@ export const billingGatewayWebhooksRouter: FastifyPluginAsync = async (fastify) 
     if (typeof signature !== "string" || !event) return reply.status(400).send({ error: "Invalid signature" });
     const entity = event.payload?.payment?.entity;
     const orgId = entity?.notes?.organizationId;
-    let secret = process.env["RAZORPAY_WEBHOOK_SECRET"] ?? "";
-    if (orgId) {
-      const creds = await getGatewayCredentials(fastify.prisma, orgId, "razorpay");
-      secret = creds["razorpay_webhook_secret"] ?? secret;
-    }
+    // Platform secret only: tenant-supplied credentials must never drive plan changes.
+    const secret = process.env["RAZORPAY_WEBHOOK_SECRET"] ?? "";
     const expected = createHmac("sha256", secret).update(request.body as Buffer).digest("hex");
-    if (!secret || !safeEqualHex(signature, expected)) return reply.status(400).send({ error: "Invalid signature" });
+    if (!secret || !safeEqual(signature, expected)) return reply.status(400).send({ error: "Invalid signature" });
 
     if (event.event === "payment.captured" && orgId && entity) {
       const { planId, manualSubId } = entity.notes ?? {};
@@ -63,13 +61,10 @@ export const billingGatewayWebhooksRouter: FastifyPluginAsync = async (fastify) 
     const event = parse<PsEvent>(request.body);
     if (typeof hash !== "string" || !event) return reply.status(400).send({ error: "Invalid signature" });
     const orgId = event.data?.metadata?.organizationId;
-    let secretKey = process.env["PAYSTACK_SECRET_KEY"] ?? "";
-    if (orgId) {
-      const creds = await getGatewayCredentials(fastify.prisma, orgId, "paystack");
-      secretKey = creds["paystack_secret_key"] ?? secretKey;
-    }
+    // Platform secret only: tenant-supplied credentials must never drive plan changes.
+    const secretKey = process.env["PAYSTACK_SECRET_KEY"] ?? "";
     const expected = createHmac("sha512", secretKey).update(request.body as Buffer).digest("hex");
-    if (!secretKey || !safeEqualHex(hash, expected)) return reply.status(400).send({ error: "Invalid signature" });
+    if (!secretKey || !safeEqual(hash, expected)) return reply.status(400).send({ error: "Invalid signature" });
 
     if (event.event === "charge.success" && orgId && event.data) {
       const { planId, manualSubId } = event.data.metadata ?? {};
