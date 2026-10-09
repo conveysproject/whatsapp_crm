@@ -12,6 +12,22 @@ import {
 } from "../lib/analytics-queries.js";
 import { cacheGet, cacheSet, orgKey } from "../lib/cache.js";
 import { canAccess, canAccessSub } from "../lib/permissions.js";
+import { parseRange, isValidTz, windowFor } from "../lib/dashboard-range.js";
+import { getDashboardKpis, getAttentionCounts, getCampaignFunnel, type AttentionKey } from "../lib/dashboard-queries.js";
+import { checkPlanLimit } from "../lib/plan-limits.js";
+
+// Clamp the client-supplied window to 1..90 days; non-numeric falls back to the endpoint default.
+function clampDays(raw: string | undefined, fallback: number): number {
+  const n = parseInt(raw ?? String(fallback), 10);
+  if (Number.isNaN(n)) return fallback;
+  return Math.min(90, Math.max(1, n));
+}
+
+type Severity = "critical" | "warning";
+interface AttentionItem { key: string; severity: Severity; count: number; label: string; href: string }
+
+// Same limit entities and gate semantics as GET /billing/usage (checkPlanLimit).
+const PLAN_ENTITIES = ["contacts", "campaigns", "chatbots", "flows", "custom_fields", "team_members"] as const;
 
 export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
   // Section gate (Phase 2 / D15): every analytics route requires analytics_access.
@@ -22,10 +38,90 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  fastify.get("/analytics/dashboard", async (request, reply) => {
+    const { organizationId, role, permissions } = request.auth;
+    const query = request.query as Record<string, string | undefined>;
+    const range = parseRange(query["range"] ?? "7d");
+    if (!range) {
+      return reply.status(400).send({ error: { code: "INVALID_RANGE", message: "range must be today, 7d or 30d" } });
+    }
+    const tz = query["tz"] ?? "UTC";
+    if (!isValidTz(tz)) {
+      return reply.status(400).send({ error: { code: "INVALID_TZ", message: "tz must be a valid IANA timezone" } });
+    }
+
+    // Each attention item and the funnel require the permission of the area they link to.
+    const canInbox = canAccess(role, permissions, "inbox_access");
+    const canTemplates = canAccess(role, permissions, "templates_access");
+    const canCampaigns = canAccess(role, permissions, "campaigns_access");
+    const canBilling = canAccessSub(role, permissions, "settings_access", "settings_billing");
+    const allowed = [
+      canInbox && "inbox",
+      canTemplates && "templates",
+      canCampaigns && "campaigns",
+      canBilling && "billing",
+    ].filter(Boolean) as string[];
+    const permSig = allowed.sort().join(",");
+
+    const key = orgKey(organizationId, `analytics:dashboard:${range}:${tz}:${permSig}`);
+    const cached = await cacheGet(key);
+    if (cached) return reply.send({ data: cached });
+
+    const now = new Date();
+    const w = windowFor(range, tz, now);
+    const want = new Set<AttentionKey>();
+    if (canInbox) { want.add("unanswered"); want.add("sla_at_risk"); want.add("failed_messages"); }
+    if (canTemplates) want.add("templates");
+
+    const [kpis, counts, org, funnel, plan] = await Promise.all([
+      getDashboardKpis(fastify.prisma, organizationId, w),
+      getAttentionCounts(fastify.prisma, organizationId, now, want),
+      // Same source as GET /onboarding/status wabaConnected.
+      fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { wabaAccessToken: true } }),
+      canCampaigns ? getCampaignFunnel(fastify.prisma, organizationId) : Promise.resolve(null),
+      canBilling
+        ? Promise.all(PLAN_ENTITIES.map((e) => checkPlanLimit(fastify.prisma, organizationId, e)))
+        : Promise.resolve(null),
+    ]);
+
+    const attention: AttentionItem[] = [];
+    if (!org?.wabaAccessToken) {
+      attention.push({ key: "whatsapp_disconnected", severity: "critical", count: 1, label: "WhatsApp is disconnected", href: "/settings/whatsapp-account" });
+    }
+    if (want.has("unanswered") && counts.unanswered > 0) attention.push({ key: "unanswered", severity: "warning", count: counts.unanswered, label: "Unanswered chats", href: "/inbox" });
+    if (want.has("sla_at_risk") && counts.sla_at_risk > 0) attention.push({ key: "sla_at_risk", severity: "critical", count: counts.sla_at_risk, label: "SLA at risk", href: "/inbox" });
+    if (want.has("failed_messages") && counts.failed_messages > 0) attention.push({ key: "failed_messages", severity: "warning", count: counts.failed_messages, label: "Failed messages (24h)", href: "/messages" });
+    if (want.has("templates") && counts.templates > 0) attention.push({ key: "templates", severity: "warning", count: counts.templates, label: "Templates need attention", href: "/templates" });
+    if (plan) {
+      const blocked = plan.filter((g) => !g.allowed).length;
+      const near = plan.filter((g) => g.allowed && g.limit > 0 && g.current / g.limit >= 0.8).length;
+      if (blocked + near > 0) {
+        attention.push({
+          key: "plan_usage",
+          severity: blocked > 0 ? "critical" : "warning",
+          count: blocked + near,
+          label: blocked > 0 ? "Plan limit reached" : "Plan limit nearly reached",
+          href: "/settings/billing",
+        });
+      }
+    }
+
+    const data = {
+      range,
+      tz,
+      generatedAt: now.toISOString(),
+      attention,
+      kpis,
+      campaignFunnel: funnel,
+    };
+    await cacheSet(key, data, 60);
+    return reply.send({ data });
+  });
+
   fastify.get("/analytics/overview", async (request, reply) => {
     const { organizationId } = request.auth;
     const query = request.query as Record<string, string>;
-    const days = parseInt(query["days"] ?? "30", 10);
+    const days = clampDays(query["days"], 30);
     const key = orgKey(organizationId, `analytics:overview:${days}`);
     const cached = await cacheGet(key);
     if (cached) return reply.send({ data: cached });
@@ -37,7 +133,7 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/analytics/conversations", async (request, reply) => {
     const { organizationId } = request.auth;
     const query = request.query as Record<string, string>;
-    const days = parseInt(query["days"] ?? "14", 10);
+    const days = clampDays(query["days"], 14);
     const key = orgKey(organizationId, `analytics:conversations:${days}`);
     const cached = await cacheGet(key);
     if (cached) return reply.send({ data: cached });
@@ -52,7 +148,7 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "analytics_agent_performance permission required" } });
     }
     const query = request.query as Record<string, string>;
-    const days = parseInt(query["days"] ?? "30", 10);
+    const days = clampDays(query["days"], 30);
     const key = orgKey(organizationId, `analytics:team:${days}`);
     const cached = await cacheGet(key);
     if (cached) return reply.send({ data: cached });
@@ -99,7 +195,7 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Agents can only view their own analytics" } });
     }
     const query = request.query as Record<string, string>;
-    const days = parseInt(query["days"] ?? "30", 10);
+    const days = clampDays(query["days"], 30);
     const key = orgKey(organizationId, `analytics:agent:${params.id}:${days}`);
     const cached = await cacheGet(key);
     if (cached) return reply.send({ data: cached });
@@ -111,7 +207,7 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/analytics/campaigns", async (request, reply) => {
     const { organizationId } = request.auth;
     const query = request.query as Record<string, string>;
-    const days = parseInt(query["days"] ?? "30", 10);
+    const days = clampDays(query["days"], 30);
     const key = orgKey(organizationId, `analytics:campaigns:${days}`);
     const cached = await cacheGet(key);
     if (cached) return reply.send({ data: cached });
@@ -123,7 +219,7 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/analytics/conversation-status", async (request, reply) => {
     const { organizationId } = request.auth;
     const query = request.query as Record<string, string>;
-    const days = parseInt(query["days"] ?? "30", 10);
+    const days = clampDays(query["days"], 30);
     const key = orgKey(organizationId, `analytics:conv-status:${days}`);
     const cached = await cacheGet(key);
     if (cached) return reply.send({ data: cached });
@@ -139,7 +235,7 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
     if (!canAccessSub(role, permissions, "analytics_access", "analytics_export")) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "analytics_export permission required" } });
     }
-    const days = parseInt(query["days"] ?? "30", 10);
+    const days = clampDays(query["days"], 30);
     const filename = `analytics-${tab}-${days}d.csv`;
 
     let csv = "";
