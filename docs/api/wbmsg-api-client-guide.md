@@ -26,17 +26,17 @@ An organization can hold up to 10 active credentials.
 | Field | Notes |
 |---|---|
 | `src` | Your connected WhatsApp Business number, digits only (for example `918269150291`) |
-| `dst` | One or more recipients in international format, separated by `<`. At most 20 per request; duplicates are removed |
+| `dst` | One or more recipients in international format, separated by `<`. At most 20 per request; duplicates are removed. Phone numbers may contain digits, an optional leading `+`, spaces, dashes and parentheses only |
 | `type` | `whatsapp` |
 | exactly one of `text`, `media_urls`, `template`, `interactive`, `location` | see below |
-| `url` | Optional status callback URL for this request (overrides the credential's) |
-| `method` | `POST` (default) or `GET`, how the callback is delivered |
+| `url` | Optional status callback URL for this request (overrides the credential's). Maximum 2000 characters |
+| `method` | `POST` (default) or `GET`, how the callback is delivered. Must be `GET` or `POST`; blank means `POST` |
 
 - `text`: a string up to 4096 characters.
 - `media_urls`: array of `https` URLs to an image, video, audio or document.
-- `template`: `{"name": "...", "language": "en", "components": [...]}`. The template must exist in your account with status `approved`, and `language` must match exactly the code it was created with. Components:
+- `template`: `{"name": "...", "language": "en", "components": [...]}`. The template must exist in your account with status `approved`, and `language` must match exactly the code it was created with (for example `en` or `en_US`). The template `name` uses lowercase letters, digits and underscores only. Components:
   `[{"type": "header", "parameters": [{"type": "media", "media": "https://..."}]}, {"type": "body", "parameters": [{"type": "text", "text": "Alex"}]}]`
-  Button parameters use `sub_type` (`quick_reply` or `url`) and `index`.
+  For numbered variables (`{{1}}`) body parameters go in order; for named variables order does not matter. Button parameters use `sub_type` (`quick_reply` or `url`) and `index`.
 - `interactive` **(confirm)** and `location` (`{"latitude", "longitude", "name", "address"}`, all strings) are also supported.
 
 Example:
@@ -56,26 +56,31 @@ The call returns as soon as the message is queued; delivery is reported by callb
 Template with named variables:
 ```json
 {
-  "src": "918548829535",
-  "dst": "919902819754",
+  "src": "14155552671",
+  "dst": "14155552672",
   "type": "whatsapp",
   "template": {
-    "name": "msg_user_kycapproved_v2",
+    "name": "order_confirmation",
     "language": "en",
     "components": [
       { "type": "body", "parameters": [
         { "type": "text", "parameter_name": "username", "text": "Alex" },
-        { "type": "text", "parameter_name": "ra_name", "text": "WB-1001" }
+        { "type": "text", "parameter_name": "order_id", "text": "WB-1001" }
       ] }
     ]
   }
 }
 ```
 For templates with named variables (`{{username}}`) send `parameter_name` on every parameter; order does not matter. For numbered variables (`{{1}}`) omit `parameter_name`. Typical 400 errors:
-- `template parameters not matched for BODY: expected [username, ra_name]; got [username]`
+- `template parameters not matched for BODY: expected [username, order_id]; got [username]`
 - `Template "x" not found`
 - `Template "x" has no language "en"; available: en_US`
 - `Template "x" (en) is not approved (status: pending)`
+
+These checks now return `400` immediately when you send the request (they used to fail later, after queuing):
+- wrong number of body parameters for the template
+- empty parameter text
+- a `parameter_name` sent to a template that uses numbered variables
 
 WhatsApp rules still apply: free-form (`text`, `media_urls`, `interactive`, `location`) messages are only delivered inside the 24-hour window after the customer last wrote to you (otherwise the message ends as `failed`, `ErrorCode` `380`); outside it use an approved template. Marketing templates are subject to Meta's per-user limits (see section 7).
 

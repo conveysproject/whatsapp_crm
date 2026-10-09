@@ -301,6 +301,22 @@ describe("parseSendBody: strict input checks", () => {
     expect(parseSendBody({ ...base, text: "x", method: "get" }).callbackMethod).toBe("GET");
     expect(parseSendBody({ ...base, text: "x" }).callbackMethod).toBe("POST");
   });
+  it("treats blank method as POST and trims whitespace", () => {
+    expect(parseSendBody({ ...base, text: "x", method: "" }).callbackMethod).toBe("POST");
+    expect(parseSendBody({ ...base, text: "x", method: "  " }).callbackMethod).toBe("POST");
+    expect(parseSendBody({ ...base, text: "x", method: " get " }).callbackMethod).toBe("GET");
+    bad({ ...base, text: "x", method: "PUT" });
+  });
+  it("accepts a callback url of exactly 2000 characters, rejects 2001", () => {
+    const prefix = "https://c.example.com/";
+    expect(() => parseSendBody({ ...base, text: "x", url: prefix + "a".repeat(2000 - prefix.length) })).not.toThrow();
+    bad({ ...base, text: "x", url: prefix + "a".repeat(2001 - prefix.length) });
+  });
+  it("caps the echoed destination in the error message", () => {
+    let msg = "";
+    try { parseSendBody({ ...base, dst: "x".repeat(100), text: "x" }); } catch (e) { msg = (e as Error).message; }
+    expect(msg).toBe("Invalid destination number: " + "x".repeat(32));
+  });
   it("rejects a callback url over 2000 characters", () => {
     bad({ ...base, text: "x", url: "https://c.example.com/" + "a".repeat(2000) });
   });

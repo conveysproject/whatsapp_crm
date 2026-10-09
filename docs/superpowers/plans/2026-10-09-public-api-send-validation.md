@@ -26,7 +26,7 @@
 - Named template, parameters sent in a different order than the template: must be accepted (Meta allows any order).
 - Named template, same `parameter_name` sent twice, or an unknown name: 400.
 - Positional template with `parameter_name` supplied: 400 (do not silently drop).
-- Phone string with letters (`abc919902819754xyz`), `+`-prefixed and spaced numbers (`+91 99028 19754`): letters rejected, spaced accepted.
+- Phone string with letters (`abc14155552672xyz`), `+`-prefixed and spaced numbers (`+1 415 555 2672`): letters rejected, spaced accepted.
 - Template exists in another language (`en` sent, `en_US` stored) or is not approved: message names the available languages / the status.
 
 ---
@@ -59,11 +59,11 @@
 describe("named template parameters", () => {
   it("passes parameter_name through to the Meta component", () => {
     const out = toMetaTemplateComponents(cast([
-      { type: "body", parameters: [{ type: "text", parameter_name: "username", text: "Alex" }, { type: "text", parameter_name: "ra_name", text: "WB-1001" }] },
+      { type: "body", parameters: [{ type: "text", parameter_name: "username", text: "Alex" }, { type: "text", parameter_name: "order_id", text: "WB-1001" }] },
     ]), null);
     expect(out).toEqual([{ type: "body", parameters: [
       { type: "text", text: "Alex", parameter_name: "username" },
-      { type: "text", text: "WB-1001", parameter_name: "ra_name" },
+      { type: "text", text: "WB-1001", parameter_name: "order_id" },
     ] }]);
   });
 
@@ -90,9 +90,9 @@ describe("named template parameters", () => {
   });
 
   it("renderTemplateForInbox fills named placeholders by parameter_name, in any order", () => {
-    const stored = [{ type: "BODY", text: "Hi {{username}}, approved by {{ra_name}}" }];
+    const stored = [{ type: "BODY", text: "Hi {{username}}, approved by {{order_id}}" }];
     const json = renderTemplateForInbox("t", stored, cast([
-      { type: "body", parameters: [{ type: "text", parameter_name: "ra_name", text: "WB-1001" }, { type: "text", parameter_name: "username", text: "Alex" }] },
+      { type: "body", parameters: [{ type: "text", parameter_name: "order_id", text: "WB-1001" }, { type: "text", parameter_name: "username", text: "Alex" }] },
     ]));
     expect(JSON.parse(json).body).toBe("Hi Alex, approved by WB-1001");
   });
@@ -304,7 +304,7 @@ import { placeholders, resolveTemplate, validateAgainstTemplate, type TemplateRo
 
 const row = (over: Partial<TemplateRow> = {}): TemplateRow => ({
   name: "kyc", language: "en", status: "approved", parameterFormat: "NAMED",
-  components: [{ type: "BODY", text: "Hi {{username}}, approved by {{ra_name}}" }], ...over,
+  components: [{ type: "BODY", text: "Hi {{username}}, approved by {{order_id}}" }], ...over,
 });
 const t = (n: string, v = "x") => ({ type: "text", parameter_name: n, text: v });
 const body = (...parameters: object[]) => [{ type: "body", parameters }] as PlivoTemplateComponent[];
@@ -334,8 +334,8 @@ describe("resolveTemplate", () => {
 });
 
 describe("validateAgainstTemplate: named", () => {
-  it("accepts any order", () => { expect(() => validateAgainstTemplate(row(), body(t("ra_name"), t("username")))).not.toThrow(); });
-  it("rejects a missing name", () => { fails(row(), body(t("username")), /not matched for BODY: expected \[username, ra_name\]; got \[username\]/); });
+  it("accepts any order", () => { expect(() => validateAgainstTemplate(row(), body(t("order_id"), t("username")))).not.toThrow(); });
+  it("rejects a missing name", () => { fails(row(), body(t("username")), /not matched for BODY: expected \[username, order_id\]; got \[username\]/); });
   it("rejects an unknown name", () => { fails(row(), body(t("username"), t("other")), /not matched for BODY/); });
   it("rejects a duplicate name", () => { fails(row(), body(t("username"), t("username")), /not matched for BODY/); });
   it("rejects a parameter without parameter_name", () => {
@@ -344,7 +344,7 @@ describe("validateAgainstTemplate: named", () => {
   it("rejects when no components are sent at all", () => { fails(row(), [], /not matched for BODY.*got \[\]/); });
   it("rejects non-text body parameters", () => { fails(row(), body({ type: "media", media: "https://x/a.png" }), /not matched for BODY/); });
   it("treats a non-numeric placeholder as named even when parameterFormat is null", () => {
-    expect(() => validateAgainstTemplate(row({ parameterFormat: null }), body(t("username"), t("ra_name")))).not.toThrow();
+    expect(() => validateAgainstTemplate(row({ parameterFormat: null }), body(t("username"), t("order_id")))).not.toThrow();
   });
 });
 
@@ -522,21 +522,21 @@ git commit -m "feat(api): validate template parameters against the stored templa
 
   it("template: 400 'template parameters not matched' for wrong count or names, and nothing is written", async () => {
     mockPrisma.template.findMany.mockResolvedValue([{ name: "kyc", language: "en", status: "approved", parameterFormat: "NAMED",
-      components: [{ type: "BODY", text: "Hi {{username}}, by {{ra_name}}" }] }]);
+      components: [{ type: "BODY", text: "Hi {{username}}, by {{order_id}}" }] }]);
     sendAdd.mockClear(); mockPrisma.message.create.mockClear();
     const res = await post(app, { ...body, text: undefined, template: { name: "kyc", language: "en",
       components: [{ type: "body", parameters: [{ type: "text", parameter_name: "username", text: "Alex" }] }] } });
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toBe("template parameters not matched for BODY: expected [username, ra_name]; got [username]");
+    expect(res.json().error).toBe("template parameters not matched for BODY: expected [username, order_id]; got [username]");
     expect(mockPrisma.message.create).not.toHaveBeenCalled();
     expect(sendAdd).not.toHaveBeenCalled();
 
     const ok = await post(app, { ...body, text: undefined, template: { name: "kyc", language: "en",
       components: [{ type: "body", parameters: [
-        { type: "text", parameter_name: "ra_name", text: "WB-1001" }, { type: "text", parameter_name: "username", text: "Alex" }] }] } });
+        { type: "text", parameter_name: "order_id", text: "WB-1001" }, { type: "text", parameter_name: "username", text: "Alex" }] }] } });
     expect(ok.statusCode).toBe(202);
     expect(sendAdd.mock.calls[0]![1].content.components[0].parameters).toEqual([
-      { type: "text", text: "WB-1001", parameter_name: "ra_name" }, { type: "text", text: "Alex", parameter_name: "username" }]);
+      { type: "text", text: "WB-1001", parameter_name: "order_id" }, { type: "text", text: "Alex", parameter_name: "username" }]);
   });
 ```
 
@@ -600,23 +600,23 @@ git commit -m "feat(api): validate template send against stored template before 
 
 ```json
 {
-  "src": "918548829535",
-  "dst": "919902819754",
+  "src": "14155552671",
+  "dst": "14155552672",
   "type": "whatsapp",
   "template": {
-    "name": "msg_user_kycapproved_v2",
+    "name": "order_confirmation",
     "language": "en",
     "components": [
       { "type": "body", "parameters": [
         { "type": "text", "parameter_name": "username", "text": "Alex" },
-        { "type": "text", "parameter_name": "ra_name", "text": "WB-1001" }
+        { "type": "text", "parameter_name": "order_id", "text": "WB-1001" }
       ] }
     ]
   }
 }
 ```
 
-Text: "For templates with named variables (`{{username}}`) send `parameter_name` on every parameter; order does not matter. For numbered variables (`{{1}}`) omit `parameter_name`. Typical 400 errors: `template parameters not matched for BODY: expected [username, ra_name]; got [username]`, `Template "x" not found`, `Template "x" has no language "en"; available: en_US`, `Template "x" (en) is not approved (status: pending)`."
+Text: "For templates with named variables (`{{username}}`) send `parameter_name` on every parameter; order does not matter. For numbered variables (`{{1}}`) omit `parameter_name`. Typical 400 errors: `template parameters not matched for BODY: expected [username, order_id]; got [username]`, `Template "x" not found`, `Template "x" has no language "en"; available: en_US`, `Template "x" (en) is not approved (status: pending)`."
 
 - [ ] **Step 2:** Add the same named-parameter request as a new item in the Postman collection JSON, copying the shape of the existing template item.
 

@@ -96,17 +96,17 @@
 <table>
   <tr><th style="width:22%">Field</th><th>Notes</th></tr>
   <tr><td><code>src</code></td><td>Your connected WhatsApp Business number, digits only (for example <code>918269150291</code>).</td></tr>
-  <tr><td><code>dst</code></td><td>One or more recipients in international format, separated by <code>&lt;</code>. At most 20 per request. Duplicates are removed.</td></tr>
+  <tr><td><code>dst</code></td><td>One or more recipients in international format, separated by <code>&lt;</code>. At most 20 per request. Duplicates are removed. Phone numbers may contain digits, an optional leading <code>+</code>, spaces, dashes and parentheses only.</td></tr>
   <tr><td><code>type</code></td><td><code>whatsapp</code></td></tr>
   <tr><td>One of: <code>text</code>, <code>media_urls</code>, <code>template</code>, <code>interactive</code>, <code>location</code></td><td>Exactly one content field per request. Details below.</td></tr>
-  <tr><td><code>url</code></td><td>Optional status callback URL for this request. Overrides the credential's callback URL.</td></tr>
-  <tr><td><code>method</code></td><td><code>POST</code> (default) or <code>GET</code>: how the status callback is delivered.</td></tr>
+  <tr><td><code>url</code></td><td>Optional status callback URL for this request. Overrides the credential's callback URL. Maximum 2000 characters.</td></tr>
+  <tr><td><code>method</code></td><td><code>POST</code> (default) or <code>GET</code>: how the status callback is delivered. Must be <code>GET</code> or <code>POST</code>; blank means <code>POST</code>.</td></tr>
 </table>
 <h3>Content types</h3>
 <ul>
   <li><b>text</b>: a string of up to 4096 characters.</li>
   <li><b>media_urls</b>: an array of <code>https</code> URLs to an image, video, audio file or document.</li>
-  <li><b>template</b>: <code>{"name": "...", "language": "en", "components": [...]}</code>. The template must exist in your account with status <code>APPROVED</code>, and <code>language</code> must be exactly the code the template was created with. See the example below.</li>
+  <li><b>template</b>: <code>{"name": "...", "language": "en", "components": [...]}</code>. The template must exist in your account with status <code>APPROVED</code>, and <code>language</code> must be exactly the code the template was created with (for example <code>en</code> or <code>en_US</code>). The template <code>name</code> uses lowercase letters, digits and underscores only. See the example below.</li>
   <li><b>location</b>: <code>{"latitude": "...", "longitude": "...", "name": "...", "address": "..."}</code>, all four as strings.</li>
   <li><b>interactive</b>: reply-button, call-to-action and list messages.</li>
 </ul>
@@ -133,29 +133,35 @@
   "message_uuid": ["426ed7b5-7b63-46b9-a659-39ac815a52cd", "cbe73c0d-..."]
 }</code></pre>
 <p>One <code>message_uuid</code> is returned per recipient, in order. The call returns as soon as the message is queued. Delivery is reported by <a href="#callbacks">callbacks</a> or by <a href="#read">reading the message</a>.</p>
-<p><b>Template components.</b> <code>header</code> takes a media parameter when the template has an image, video or document header. <code>body</code> takes one text parameter per <code>{{1}}</code>, <code>{{2}}</code>, ... placeholder, in order. Button parameters use <code>"type": "button"</code> with <code>sub_type</code> (<code>quick_reply</code> or <code>url</code>) and <code>index</code>.</p>
+<p><b>Template components.</b> <code>header</code> takes a media parameter when the template has an image, video or document header. <code>body</code> takes one text parameter per <code>{{1}}</code>, <code>{{2}}</code>, ... placeholder. For numbered variables (<code>{{1}}</code>) parameters go in order; for named variables order does not matter. Button parameters use <code>"type": "button"</code> with <code>sub_type</code> (<code>quick_reply</code> or <code>url</code>) and <code>index</code>.</p>
 <h3>Example: template with named variables</h3>
 <pre><code>{
-  "src": "918548829535",
-  "dst": "919902819754",
+  "src": "14155552671",
+  "dst": "14155552672",
   "type": "whatsapp",
   "template": {
-    "name": "msg_user_kycapproved_v2",
+    "name": "order_confirmation",
     "language": "en",
     "components": [
       { "type": "body", "parameters": [
         { "type": "text", "parameter_name": "username", "text": "Alex" },
-        { "type": "text", "parameter_name": "ra_name", "text": "WB-1001" }
+        { "type": "text", "parameter_name": "order_id", "text": "WB-1001" }
       ] }
     ]
   }
 }</code></pre>
 <p>For templates with named variables (<code>{{username}}</code>) send <code>parameter_name</code> on every parameter; order does not matter. For numbered variables (<code>{{1}}</code>) omit <code>parameter_name</code>. Typical <code>400</code> errors:</p>
 <ul>
-  <li><code>template parameters not matched for BODY: expected [username, ra_name]; got [username]</code></li>
+  <li><code>template parameters not matched for BODY: expected [username, order_id]; got [username]</code></li>
   <li><code>Template "x" not found</code></li>
   <li><code>Template "x" has no language "en"; available: en_US</code></li>
   <li><code>Template "x" (en) is not approved (status: pending)</code></li>
+</ul>
+<p>These checks now return <code>400</code> immediately when you send the request (they used to fail later, after queuing):</p>
+<ul>
+  <li>wrong number of body parameters for the template</li>
+  <li>empty parameter text</li>
+  <li>a <code>parameter_name</code> sent to a template that uses numbered variables</li>
 </ul>
 
 <h2 id="read">4. Read messages</h2>

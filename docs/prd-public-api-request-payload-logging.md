@@ -55,14 +55,14 @@ Rollback: set the flag off; the tables are additive and can stay empty.
 Part A (backward compatible): a text parameter may carry `parameter_name` (string, `^[A-Za-z0-9_]{1,64}$`). Forwarded to Meta as `parameter_name`. Positional sends are unchanged.
 
 Pre-send validation against the stored template (owner decision 2026-10-09: validate before calling Meta): the stored `templates.components` already contain the placeholders in the BODY/HEADER text (`{{username}}` or `{{1}}`), and `parameter_format` says NAMED or POSITIONAL. Before queueing, compare the request's body/header text parameters with the template:
-- NAMED: the set of `parameter_name`s sent must equal the set of placeholders in the text. Missing, unknown or duplicate names -> 400 `template parameters not matched` with a safe detail, e.g. `expected: username, ra_name; got: username`.
+- NAMED: the set of `parameter_name`s sent must equal the set of placeholders in the text. Missing, unknown or duplicate names -> 400 `template parameters not matched` with a safe detail, e.g. `expected: username, order_id; got: username`.
 - POSITIONAL: the number of text parameters must equal the number of `{{n}}` placeholders; a `parameter_name` sent to a positional template -> 400.
 - Scope (confirmed by owner): BODY and HEADER text only. Button parameters keep today's checks.
 
 Part A2: additional pre-send validation (owner request 2026-10-09). All failures are 400 with a short safe message, before any DB write or queueing. Existing checks stay as they are (type, src/dst phone validity via `normalizeFullPhone`, max 20 dst, text max 4096, exactly one content kind, https media, location fields, parameter types: `send-mapping.ts:56-158`).
 
 New checks (owner approved items 1, 3, 6 and 8 on 2026-10-09; item 6 is conditional on verifying Meta's current rules before coding):
-1. Phone strings: `src`/`dst` currently strip every non-digit (`phone-normalize.ts:16-19`), so `abc919902819754xyz` passes. Proposed: allow only digits, optional leading `+`, spaces, `-`, parentheses; anything else -> 400 naming the offending field. (?)
+1. Phone strings: `src`/`dst` currently strip every non-digit (`phone-normalize.ts:16-19`), so `abc14155552672xyz` passes. Proposed: allow only digits, optional leading `+`, spaces, `-`, parentheses; anything else -> 400 naming the offending field. (?)
 2. Template name: must match `^[a-z0-9_]{1,512}$` (Meta naming) and language `^[a-z]{2,3}(_[A-Za-z]{2,4})?$` before the DB lookup.
 3. Template lookup errors split into: not found (and, when the same name exists in other languages, list the available languages, e.g. you sent `en`, available: `en_US`); found but not approved (return the current status). (?)
 4. Duplicate component types (two `body`) and unsupported types -> 400.

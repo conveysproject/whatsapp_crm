@@ -71,16 +71,17 @@ export function parseSendBody(body: unknown): ParsedSend {
   if (!rawDst) throw new SendValidationError("dst is required");
   const dsts: string[] = [];
   for (const part of rawDst.split("<")) {
-    if (part.trim() && !PHONE_CHARS.test(part.trim())) throw new SendValidationError(`Invalid destination number: ${part.trim()}`);
+    if (part.trim() && !PHONE_CHARS.test(part.trim())) throw new SendValidationError(`Invalid destination number: ${part.trim().slice(0, 32)}`);
     const n = normalizeFullPhone(part.trim());
-    if (!n) throw new SendValidationError(`Invalid destination number: ${part.trim() || "(empty)"}`);
+    if (!n) throw new SendValidationError(`Invalid destination number: ${part.trim().slice(0, 32) || "(empty)"}`);
     if (!dsts.includes(n)) dsts.push(n);
   }
   if (dsts.length > MAX_DST) throw new SendValidationError(`At most ${MAX_DST} destinations per request`);
 
   const callbackUrl = str(body["url"]);
   if (callbackUrl && callbackUrl.length > MAX_CALLBACK_URL) throw new SendValidationError(`url must be at most ${MAX_CALLBACK_URL} characters`);
-  const methodRaw = body["method"] == null ? "POST" : String(body["method"]).toUpperCase();
+  const m = typeof body["method"] === "string" ? body["method"].trim() : body["method"];
+  const methodRaw = m == null || m === "" ? "POST" : String(m).toUpperCase();
   if (methodRaw !== "GET" && methodRaw !== "POST") throw new SendValidationError("method must be GET or POST");
   const callbackMethod: "GET" | "POST" = methodRaw;
 

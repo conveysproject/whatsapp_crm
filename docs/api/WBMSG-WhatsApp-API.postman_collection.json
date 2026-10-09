@@ -188,7 +188,7 @@
             "description": "For templates with named variables ({{username}}) send parameter_name on every parameter; order does not matter. For numbered variables ({{1}}) omit parameter_name.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"src\": \"{{src}}\",\n  \"dst\": \"{{dst}}\",\n  \"type\": \"whatsapp\",\n  \"template\": {\n    \"name\": \"{{template_name}}\",\n    \"language\": \"{{template_language}}\",\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          {\n            \"type\": \"text\",\n            \"parameter_name\": \"username\",\n            \"text\": \"Alex\"\n          },\n          {\n            \"type\": \"text\",\n            \"parameter_name\": \"ra_name\",\n            \"text\": \"WB-1001\"\n          }\n        ]\n      }\n    ]\n  }\n}",
+              "raw": "{\n  \"src\": \"{{src}}\",\n  \"dst\": \"{{dst}}\",\n  \"type\": \"whatsapp\",\n  \"template\": {\n    \"name\": \"{{template_name}}\",\n    \"language\": \"{{template_language}}\",\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          {\n            \"type\": \"text\",\n            \"parameter_name\": \"username\",\n            \"text\": \"Alex\"\n          },\n          {\n            \"type\": \"text\",\n            \"parameter_name\": \"order_id\",\n            \"text\": \"WB-1001\"\n          }\n        ]\n      }\n    ]\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
