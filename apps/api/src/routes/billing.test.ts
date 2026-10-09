@@ -92,7 +92,7 @@ describe("POST /v1/billing/manual/submit-proof", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/billing/manual/submit-proof",
-      payload: { planId: "plan-standard", proofUrl: "https://cdn.example.com/proof.jpg", transactionRef: "TXN123" },
+      payload: { planId: "starter", proofUrl: "https://cdn.example.com/proof.jpg", transactionRef: "TXN123" },
     });
     expect(res.statusCode).toBe(201);
   });
@@ -185,5 +185,65 @@ describe("POST /v1/billing/checkout", () => {
       payload: { planTier: "starter", successUrl: "https://wbmsg.com/a", cancelUrl: "https://wbmsg.com/a" } });
     expect(res.statusCode).toBe(403);
     await other.close();
+  });
+});
+
+async function buildAs(role: string, permissions: Record<string, string> = {}): Promise<FastifyInstance> {
+  const a = Fastify({ logger: false });
+  a.decorate("prisma", mockPrisma as unknown as PrismaClient);
+  a.addHook("onRequest", async (r) => {
+    r.auth = { userId: "u-9", organizationId: "org-1", role: role as never, permissions, teamId: null, teamRole: null };
+  });
+  const { billingRouter } = await import("./billing.js");
+  await a.register(billingRouter, { prefix: "/v1" });
+  return a;
+}
+
+describe("manual subscription + read RBAC", () => {
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it("org admin cannot approve a manual subscription", async () => {
+    const a = await buildAs("admin");
+    const res = await a.inject({ method: "POST", url: "/v1/billing/manual/ms-1/approve" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.manualSubscription.findFirst).not.toHaveBeenCalled();
+    await a.close();
+  });
+
+  it("org admin cannot reject a manual subscription", async () => {
+    const a = await buildAs("admin");
+    const res = await a.inject({ method: "POST", url: "/v1/billing/manual/ms-1/reject" });
+    expect(res.statusCode).toBe(403);
+    await a.close();
+  });
+
+  it("superAdmin can approve", async () => {
+    mockPrisma.manualSubscription.findFirst.mockResolvedValue({ id: "ms-1", organizationId: "org-2", planTier: "growth" });
+    const a = await buildAs("superAdmin");
+    const res = await a.inject({ method: "POST", url: "/v1/billing/manual/ms-1/approve" });
+    expect(res.statusCode).toBe(200);
+    await a.close();
+  });
+
+  it("agent cannot submit proof, cancel request, or read subscriptions/transactions", async () => {
+    const a = await buildAs("agent");
+    for (const [method, url] of [
+      ["POST", "/v1/billing/manual/submit-proof"],
+      ["DELETE", "/v1/billing/manual/cancel-request"],
+      ["GET", "/v1/billing/subscriptions"],
+      ["GET", "/v1/billing/transactions"],
+    ] as const) {
+      const res = await a.inject({ method, url, payload: method === "POST" ? { planId: "starter", proofUrl: "https://x/y", transactionRef: "T1" } : undefined });
+      expect(res.statusCode, `${method} ${url}`).toBe(403);
+    }
+    await a.close();
+  });
+
+  it("submit-proof rejects unknown plan tiers", async () => {
+    const a = await buildAs("admin");
+    const res = await a.inject({ method: "POST", url: "/v1/billing/manual/submit-proof",
+      payload: { planId: "plan-standard", proofUrl: "https://x/y", transactionRef: "T2" } });
+    expect(res.statusCode).toBe(400);
+    await a.close();
   });
 });

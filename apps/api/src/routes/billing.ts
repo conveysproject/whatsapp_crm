@@ -4,6 +4,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS, ZERO_DECIMAL_CURRENCIES } from "../lib/stripe.js";
 import { checkPlanLimit, isFeatureEnabled } from "../lib/plan-limits.js";
 import { canAccessSub } from "../lib/permissions.js";
+import { isBillableTier } from "../lib/billing/catalog.js";
 import { isAllowedRedirect } from "../lib/billing/safe-redirect.js";
 import Razorpay from "razorpay";
 
@@ -58,7 +59,10 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── Current subscription ──────────────────────────────────────────────────
-  fastify.get("/billing/subscriptions", async (request) => {
+  fastify.get("/billing/subscriptions", async (request, reply) => {
+    if (!canAccessSub(request.auth.role, request.auth.permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
     const { organizationId } = request.auth;
     const [org, manualSub] = await Promise.all([
       fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { planTier: true, settings: true } }),
@@ -180,7 +184,10 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── Transaction history ───────────────────────────────────────────────────
-  fastify.get<{ Querystring: { page?: string } }>("/billing/transactions", async (request) => {
+  fastify.get<{ Querystring: { page?: string } }>("/billing/transactions", async (request, reply) => {
+    if (!canAccessSub(request.auth.role, request.auth.permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
     const { organizationId } = request.auth;
     const page = Math.max(1, parseInt(request.query.page ?? "1", 10));
     const pageSize = 20;
@@ -503,12 +510,19 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { planId: string | undefined; planSelector?: string; proofUrl: string; transactionRef: string; interval?: "monthly" | "yearly" } }>(
     "/billing/manual/submit-proof",
     async (request, reply) => {
+      if (!canAccessSub(request.auth.role, request.auth.permissions, "settings_access", "settings_billing")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+      }
       const { organizationId } = request.auth;
       const { proofUrl, transactionRef } = request.body;
       // GAP-S56: accept planSelector "{tier}___interval" or plain planId
       const { planTier, interval } = request.body.planSelector
         ? parsePlanSelector(request.body.planSelector)
         : { planTier: request.body.planId as PlanTier, interval: (request.body.interval ?? "monthly") as "monthly" | "yearly" };
+
+      if (!isBillableTier(planTier)) {
+        return reply.status(400).send({ error: { code: "INVALID_PLAN", message: "Unknown plan tier" } });
+      }
 
       if (transactionRef) {
         const duplicate = await fastify.prisma.manualSubscription.findFirst({
@@ -551,6 +565,9 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   );
 
   fastify.delete("/billing/manual/cancel-request", async (request, reply) => {
+    if (!canAccessSub(request.auth.role, request.auth.permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
     const { organizationId } = request.auth;
     await fastify.prisma.manualSubscription.updateMany({
       where: { organizationId, status: "active" },
@@ -561,7 +578,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
 
   // GAP-S53: admin approve — activates subscription, cancels any existing active
   fastify.post<{ Params: { id: string } }>("/billing/manual/:id/approve", async (request, reply) => {
-    if (request.auth.role !== "admin") return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Admin only" } });
+    if (request.auth.role !== "superAdmin") return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Platform admin only" } });
     const sub = await fastify.prisma.manualSubscription.findFirst({
       where: { id: request.params.id, status: "pending" },
     });
@@ -572,7 +589,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
 
   // GAP-S53: admin reject — moves to cancelled
   fastify.post<{ Params: { id: string } }>("/billing/manual/:id/reject", async (request, reply) => {
-    if (request.auth.role !== "admin") return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Admin only" } });
+    if (request.auth.role !== "superAdmin") return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Platform admin only" } });
     const updated = await fastify.prisma.manualSubscription.updateMany({
       where: { id: request.params.id, status: { in: ["pending", "initiated"] } },
       data: { status: "cancelled" },
