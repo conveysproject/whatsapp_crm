@@ -259,9 +259,16 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       const org = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { stripeId: true, settings: true } });
       let customerId = getStripeCustomerId(org);
       if (!customerId) {
-        const customer = await getStripe().customers.create({ metadata: { organizationId } });
+        const customer = await getStripe().customers.create(
+          { metadata: { organizationId } },
+          { idempotencyKey: `wbmsg-customer-${organizationId}` },
+        );
         customerId = customer.id;
-        await fastify.prisma.organization.update({ where: { id: organizationId }, data: { stripeId: customerId } });
+        const stored = await fastify.prisma.organization.updateMany({ where: { id: organizationId, stripeId: null }, data: { stripeId: customer.id } });
+        if (stored.count === 0) {
+          const winner = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { stripeId: true } });
+          customerId = winner?.stripeId ?? customer.id;
+        }
       }
       const session = await getStripe().checkout.sessions.create({
         mode: "subscription",

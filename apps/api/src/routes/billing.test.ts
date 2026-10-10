@@ -34,7 +34,7 @@ vi.mock("razorpay", () => ({
 }));
 
 const mockPrisma = {
-  organization: { findUnique: vi.fn(), update: vi.fn() },
+  organization: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   contact: { count: vi.fn().mockResolvedValue(0) },
   message: { count: vi.fn().mockResolvedValue(0) },
   campaign: { count: vi.fn().mockResolvedValue(0) },
@@ -199,6 +199,7 @@ describe("POST /v1/billing/checkout", () => {
     customersCreate.mockReset().mockResolvedValue({ id: "cus_new" });
     mockPrisma.organization.findUnique.mockReset().mockResolvedValue({ stripeId: null, settings: {} });
     mockPrisma.organization.update.mockReset().mockResolvedValue({});
+    mockPrisma.organization.updateMany.mockReset().mockResolvedValue({ count: 1 });
     app = await buildApp();
   });
   afterEach(async () => {
@@ -233,13 +234,33 @@ describe("POST /v1/billing/checkout", () => {
       payload: { planTier: "starter", successUrl: "https://wbmsg.com/a", cancelUrl: "https://wbmsg.com/a" } });
     expect(res.statusCode).toBe(200);
     expect(customersCreate).toHaveBeenCalledTimes(1);
-    expect(customersCreate).toHaveBeenCalledWith({ metadata: { organizationId: "org-1" } });
-    expect(mockPrisma.organization.update).toHaveBeenCalledWith({ where: { id: "org-1" }, data: { stripeId: "cus_new" } });
+    expect(customersCreate).toHaveBeenCalledWith({ metadata: { organizationId: "org-1" } }, { idempotencyKey: "wbmsg-customer-org-1" });
+    expect(mockPrisma.organization.updateMany).toHaveBeenCalledWith({ where: { id: "org-1", stripeId: null }, data: { stripeId: "cus_new" } });
     expect(stripeSessionCreate).toHaveBeenCalledWith(expect.objectContaining({
       customer: "cus_new",
       metadata: { organizationId: "org-1", planTier: "starter" },
       subscription_data: { metadata: { organizationId: "org-1", planTier: "starter" } },
     }));
+  });
+
+  it("uses the winning stripeId when a concurrent checkout stored one first", async () => {
+    mockPrisma.organization.findUnique
+      .mockResolvedValueOnce({ stripeId: null, settings: {} })
+      .mockResolvedValueOnce({ stripeId: "cus_winner" });
+    mockPrisma.organization.updateMany.mockResolvedValue({ count: 0 });
+    const res = await app.inject({ method: "POST", url: "/v1/billing/checkout",
+      payload: { planTier: "starter", successUrl: "https://wbmsg.com/a", cancelUrl: "https://wbmsg.com/a" } });
+    expect(res.statusCode).toBe(200);
+    expect(stripeSessionCreate).toHaveBeenCalledWith(expect.objectContaining({ customer: "cus_winner" }));
+  });
+
+  it("reuses a legacy settings.stripeCustomerId", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ stripeId: null, settings: { stripeCustomerId: "cus_legacy" } });
+    const res = await app.inject({ method: "POST", url: "/v1/billing/checkout",
+      payload: { planTier: "starter", successUrl: "https://wbmsg.com/a", cancelUrl: "https://wbmsg.com/a" } });
+    expect(res.statusCode).toBe(200);
+    expect(customersCreate).not.toHaveBeenCalled();
+    expect(stripeSessionCreate).toHaveBeenCalledWith(expect.objectContaining({ customer: "cus_legacy" }));
   });
 
   it("reuses an existing stripeId", async () => {
