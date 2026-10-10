@@ -2,6 +2,10 @@ import type { FastifyPluginAsync } from "fastify";
 import type Stripe from "stripe";
 import { getStripe } from "../lib/stripe.js";
 import type { PlanTier } from "@prisma/client";
+import { activatePlan, isUnknownOrgError } from "../lib/billing/activation.js";
+import { isBillingV2Enabled, graceDays } from "../lib/billing/flags.js";
+import { tierFromPriceId } from "../lib/billing/stripe-customer.js";
+import { notifyPaymentFailed } from "../lib/billing/payment-failed-email.js";
 
 export const billingWebhookRouter: FastifyPluginAsync = async (fastify) => {
   // Capture raw body as Buffer so Stripe can verify the HMAC signature.
@@ -35,27 +39,113 @@ export const billingWebhookRouter: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ error: "invalid_signature" });
       }
 
-      if (event.type === "checkout.session.completed") {
-        const session = event.data.object;
-        const { organizationId, planTier } = session.metadata ?? {};
-        if (organizationId && planTier) {
-          const org = await fastify.prisma.organization.findUnique({
-            where: { id: organizationId },
-            select: { settings: true },
+      const v2 = isBillingV2Enabled();
+      const obj = event.data.object as unknown as Record<string, unknown>;
+      const customerOf = (c: unknown): string | null =>
+        typeof c === "string" ? c : (c as { id?: string } | null)?.id ?? null;
+      const findOrg = async (customerId: string | null) =>
+        customerId
+          ? fastify.prisma.organization.findFirst({
+              where: { stripeId: customerId },
+              select: { id: true, planTier: true, billingStatus: true },
+            })
+          : null;
+      type SubShape = { id: string; cancel_at_period_end?: boolean; items?: { data: { price?: { id?: string } }[] } };
+
+      try {
+        if (event.type === "checkout.session.completed" && v2) {
+          const session = event.data.object;
+          const orgId = session.metadata?.["organizationId"];
+          const customerId = customerOf(session.customer);
+          if (orgId && customerId) {
+            await fastify.prisma.organization.updateMany({
+              where: { id: orgId, stripeId: null },
+              data: { stripeId: customerId },
+            });
+          }
+        } else if (event.type === "checkout.session.completed") {
+          const session = event.data.object;
+          const { organizationId, planTier } = session.metadata ?? {};
+          if (organizationId && planTier) {
+            const org = await fastify.prisma.organization.findUnique({
+              where: { id: organizationId },
+              select: { settings: true },
+            });
+            const existing = (org?.settings as Record<string, unknown>) ?? {};
+            const customerId =
+              typeof session.customer === "string"
+                ? session.customer
+                : (session.customer as { id?: string } | null)?.id ?? null;
+            await fastify.prisma.organization.update({
+              where: { id: organizationId },
+              data: {
+                planTier: planTier as PlanTier,
+                settings: { ...existing, stripeCustomerId: customerId },
+              },
+            });
+          }
+        } else if (v2 && event.type === "invoice.payment_succeeded") {
+          const customerId = customerOf(obj["customer"]);
+          const org = await findOrg(customerId);
+          if (!org || !customerId) {
+            fastify.log.warn("stripe invoice for unknown customer");
+            return reply.status(200).send({ received: true });
+          }
+          const subs = await getStripe().subscriptions.list({ customer: customerId, status: "active", limit: 1 });
+          const sub = subs.data[0] as unknown as SubShape | undefined;
+          const tier = tierFromPriceId(sub?.items?.data[0]?.price?.id) ?? org.planTier;
+          await activatePlan(fastify.prisma, {
+            organizationId: org.id,
+            planTier: tier as PlanTier,
+            source: "stripe",
+            gateway: "stripe",
+            referenceId: `stripe:invoice:${String(obj["id"])}`,
+            gatewayTransactionId: String(obj["id"]),
+            amountMinor: typeof obj["amount_paid"] === "number" ? obj["amount_paid"] : undefined,
+            currency: typeof obj["currency"] === "string" ? obj["currency"] : undefined,
+            stripeSubscriptionId: sub?.id,
+            cancelAtPeriodEnd: sub?.cancel_at_period_end,
           });
-          const existing = (org?.settings as Record<string, unknown>) ?? {};
-          const customerId =
-            typeof session.customer === "string"
-              ? session.customer
-              : (session.customer as { id?: string } | null)?.id ?? null;
-          await fastify.prisma.organization.update({
-            where: { id: organizationId },
-            data: {
-              planTier: planTier as PlanTier,
-              settings: { ...existing, stripeCustomerId: customerId },
-            },
-          });
+        } else if (v2 && event.type === "invoice.payment_failed") {
+          const org = await findOrg(customerOf(obj["customer"]));
+          if (!org) {
+            fastify.log.warn("stripe payment_failed for unknown customer");
+          } else if (org.billingStatus !== "past_due") {
+            const graceEndsAt = new Date(Date.now() + graceDays() * 86_400_000);
+            await fastify.prisma.organization.update({
+              where: { id: org.id },
+              data: { billingStatus: "past_due", billingGraceEndsAt: graceEndsAt },
+            });
+            await notifyPaymentFailed(fastify.prisma, org.id, graceEndsAt);
+          }
+        } else if (v2 && event.type === "customer.subscription.updated") {
+          const org = await findOrg(customerOf(obj["customer"]));
+          if (!org) {
+            fastify.log.warn("stripe subscription update for unknown customer");
+          } else {
+            await fastify.prisma.organization.update({
+              where: { id: org.id },
+              data: { planCancelAtPeriodEnd: (obj["cancel_at_period_end"] as boolean | undefined) ?? false },
+            });
+          }
+        } else if (v2 && event.type === "customer.subscription.deleted") {
+          const customerId = customerOf(obj["customer"]);
+          const org = await findOrg(customerId);
+          if (!org || !customerId) {
+            fastify.log.warn("stripe subscription deletion for unknown customer");
+          } else {
+            const active = await getStripe().subscriptions.list({ customer: customerId, status: "active", limit: 1 });
+            if (active.data.length === 0) {
+              await fastify.prisma.organization.update({
+                where: { id: org.id },
+                data: { planTier: "starter", billingStatus: "cancelled", billingGraceEndsAt: null, planCancelAtPeriodEnd: false },
+              });
+            }
+          }
         }
+      } catch (err) {
+        if (!v2 || !isUnknownOrgError(err)) throw err;
+        fastify.log.warn({ eventId: event.id }, "stripe event for unknown organization");
       }
 
       return reply.status(200).send({ received: true });
