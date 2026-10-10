@@ -17,6 +17,7 @@ import { CampaignFunnel } from "./CampaignFunnel";
 import { DashboardErrorState, DashboardNoAccess, DashboardSkeleton } from "./DashboardStates";
 import { KpiGrid } from "./KpiGrid";
 import { PlanUsageStrip } from "./PlanUsageStrip";
+import { SetupPrompt } from "./SetupPrompt";
 import { RangePicker } from "./RangePicker";
 
 const RANGES: readonly DashRange[] = ["today", "7d", "30d"];
@@ -82,6 +83,7 @@ export function DashboardBody({ getToken, range, onRangeChange, slots }: Dashboa
 
   return (
     <div className="space-y-6 min-w-0">
+      <SetupPrompt />
       <div className="flex flex-wrap items-center justify-end gap-3">
         <RangePicker value={range} onChange={onRangeChange} />
       </div>

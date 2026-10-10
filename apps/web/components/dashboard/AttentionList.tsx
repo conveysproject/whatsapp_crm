@@ -10,22 +10,15 @@ export function DisconnectedBanner({ items }: { items: AttentionItem[] }): JSX.E
   const onboarding = useOnboardingStatusOptional();
   const item = items.find((i) => i.key === WHATSAPP_KEY && i.severity === "critical");
   if (!item) return null;
-  // Setup unfinished: the actionable step is the checklist, not the settings page.
-  const setupPending = onboarding !== null && !onboarding.allDone;
+  // Setup unfinished: SetupPrompt owns that case; never show both banners.
+  if (onboarding !== null && !onboarding.allDone) return null;
   return (
     <Link
       data-testid="whatsapp-banner"
-      href={setupPending ? "/checklist" : item.href}
+      href={item.href}
       className="block rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950 px-4 py-3 text-sm font-medium text-red-700 dark:text-red-300 break-words"
     >
-      {setupPending ? (
-        <>
-          Finish setting up WhatsApp to unlock Inbox and Campaigns.{" "}
-          <span className="underline underline-offset-2">Complete setup</span>
-        </>
-      ) : (
-        <>{item.label}. Open settings to reconnect.</>
-      )}
+      {item.label}. Open settings to reconnect.
     </Link>
   );
 }

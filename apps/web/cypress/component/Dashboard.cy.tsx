@@ -375,12 +375,48 @@ describe('Dashboard v2', () => {
     cy.contains('No activity yet').should('not.exist');
   });
 
-  it('banner asks to finish setup when onboarding is incomplete', () => {
-    stubDashboard(body({ attention: [{ key: 'whatsapp_disconnected', severity: 'critical', count: 1, label: 'WhatsApp is disconnected', href: '/settings/whatsapp-account' }] }));
+  const DISC = { key: 'whatsapp_disconnected', severity: 'critical', count: 1, label: 'WhatsApp is disconnected', href: '/settings/whatsapp-account' };
+
+  it('shows exactly one setup prompt when setup is unfinished and nothing is disconnected', () => {
+    stubDashboard(body({ attention: [] }));
+    mount('7d', { wabaConnected: true, numberProvisioned: false });
+    cy.get('[data-testid="setup-prompt"]').should('have.length', 1)
+      .and('contain', 'Finish setting up WhatsApp to unlock Inbox and Campaigns.').and('have.attr', 'href', '/checklist');
+    cy.get('[data-testid="whatsapp-banner"]').should('not.exist');
+  });
+
+  it('unfinished setup plus disconnected item shows only the setup prompt', () => {
+    stubDashboard(body({ attention: [DISC] }));
     mount('7d', { wabaConnected: false, numberProvisioned: false });
-    cy.get('[data-testid="whatsapp-banner"]').should('have.length', 1)
-      .and('contain', 'Finish setting up WhatsApp to unlock Inbox and Campaigns.')
-      .and('contain', 'Complete setup').and('have.attr', 'href', '/checklist').and('not.contain', 'Open settings to reconnect');
+    cy.get('[data-testid="setup-prompt"]').should('have.length', 1);
+    cy.get('[data-testid="whatsapp-banner"]').should('not.exist');
+  });
+
+  it('finished setup plus disconnected item shows only the reconnect banner', () => {
+    stubDashboard(body({ attention: [DISC] }));
+    mount('7d', { wabaConnected: true, numberProvisioned: true });
+    cy.get('[data-testid="whatsapp-banner"]').should('have.length', 1);
+    cy.get('[data-testid="setup-prompt"]').should('not.exist');
+  });
+
+  it('shows the setup prompt for a user without analytics_access and makes no dashboard calls', () => {
+    stubUser(NO_ANALYTICS);
+    let calls = 0;
+    cy.intercept({ method: 'GET', pathname: '/v1/analytics/dashboard' }, (req) => { calls += 1; req.reply({ body: body() }); });
+    mount('7d', { wabaConnected: false, numberProvisioned: false });
+    cy.get('[data-testid="setup-prompt"]').should('have.length', 1);
+    cy.contains('You do not have access to the dashboard').should('be.visible');
+    cy.then(() => expect(calls).to.eq(0));
+  });
+
+  it('has no horizontal scroll at 360px with the setup prompt', () => {
+    cy.viewport(360, 740);
+    stubDashboard();
+    mount('7d', { wabaConnected: false, numberProvisioned: false });
+    cy.get('[data-testid="setup-prompt"]').should('be.visible');
+    cy.document().then((doc) => {
+      expect(doc.documentElement.scrollWidth).to.be.at.most(doc.documentElement.clientWidth);
+    });
   });
 
   it('banner keeps the reconnect text when onboarding is complete', () => {
