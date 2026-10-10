@@ -5,15 +5,19 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { canAccess } from "@/lib/can";
+import { canAccess, canAccessSub } from "@/lib/can";
 import { DashboardError, fetchDashboard, type DashRange } from "@/lib/dashboard";
 import { ConversationChart } from "@/components/analytics/ConversationChart";
 import { MyWorkSection } from "@/components/analytics/MyWorkSection";
+import { QuickActions } from "@/components/analytics/QuickActions";
+import { TeamLeaderboard } from "@/components/analytics/TeamLeaderboard";
 import { ActivityFeed } from "@/components/analytics/ActivityFeed";
 import { AttentionList, DisconnectedBanner } from "./AttentionList";
 import { CampaignFunnel } from "./CampaignFunnel";
 import { DashboardErrorState, DashboardNoAccess, DashboardSkeleton } from "./DashboardStates";
 import { KpiGrid } from "./KpiGrid";
+import { PlanUsageStrip } from "./PlanUsageStrip";
+import { SetupPrompt } from "./SetupPrompt";
 import { RangePicker } from "./RangePicker";
 
 const RANGES: readonly DashRange[] = ["today", "7d", "30d"];
@@ -30,6 +34,7 @@ export interface DashboardBodyProps {
   /** Legacy widgets that authenticate through Clerk themselves; injected so the body is testable. */
   slots?: {
     myWork?: ReactNode;
+    leaderboard?: ReactNode;
     volumeChart?: (days: number) => ReactNode;
     activity?: ReactNode;
   };
@@ -39,6 +44,8 @@ export function DashboardBody({ getToken, range, onRangeChange, slots }: Dashboa
   const { user, isLoading: userLoading, isError: userError, refetch: refetchUser } = useCurrentUser();
   const tz = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", []);
   const orgAllowed = canAccess(user, "analytics_access");
+  const showBilling = canAccessSub(user, "settings_access", "settings_billing");
+  const showLeaderboard = canAccessSub(user, "analytics_access", "analytics_agent_performance");
 
   const q = useQuery({
     queryKey: ["dashboard", range, tz],
@@ -64,19 +71,23 @@ export function DashboardBody({ getToken, range, onRangeChange, slots }: Dashboa
         <DisconnectedBanner items={d.attention} />
         <AttentionList items={d.attention} />
         <KpiGrid kpis={d.kpis} />
+        {showBilling && <PlanUsageStrip getToken={getToken} />}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <CampaignFunnel funnel={d.campaignFunnel} />
           {slots?.volumeChart?.(CHART_DAYS[range])}
         </div>
+        {showLeaderboard && slots?.leaderboard}
       </div>
     );
   }
 
   return (
     <div className="space-y-6 min-w-0">
+      <SetupPrompt />
       <div className="flex flex-wrap items-center justify-end gap-3">
         <RangePicker value={range} onChange={onRangeChange} />
       </div>
+      <QuickActions />
       {org}
       {slots?.myWork && (
         <section>
@@ -112,7 +123,8 @@ export function DashboardView(): JSX.Element {
       range={range}
       onRangeChange={onRangeChange}
       slots={{
-        myWork: <MyWorkSection />,
+        myWork: <MyWorkSection firstReplyLabel="My avg time to first reply" />,
+        leaderboard: <TeamLeaderboard limit={5} viewAllHref="/analytics?tab=team" />,
         volumeChart: (days) => <ConversationChart days={days} />,
         activity: <ActivityFeed limit={5} />,
       }}

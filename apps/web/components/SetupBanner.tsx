@@ -2,6 +2,7 @@
 
 import { JSX, useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useOnboardingStatus } from "@/app/(dashboard)/onboarding-context";
 
 const DISMISSED_KEY = "setup_banner_dismissed";
@@ -10,6 +11,7 @@ export function SetupBanner(): JSX.Element | null {
   const { allDone } = useOnboardingStatus();
   const [dismissed, setDismissed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     setMounted(true);
@@ -22,6 +24,8 @@ export function SetupBanner(): JSX.Element | null {
     }
   }, [allDone]);
 
+  // Dashboard v2 shows its own context-aware banner on /dashboard.
+  if (pathname === "/dashboard") return null;
   if (!mounted || allDone || dismissed) return null;
 
   return (

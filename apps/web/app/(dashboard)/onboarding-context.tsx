@@ -33,3 +33,8 @@ export function useOnboardingStatus(): OnboardingStatus {
   if (!ctx) throw new Error("useOnboardingStatus must be used inside OnboardingProvider");
   return ctx;
 }
+
+/** Like useOnboardingStatus but returns null outside a provider (never throws). */
+export function useOnboardingStatusOptional(): OnboardingStatus | null {
+  return useContext(OnboardingContext);
+}

@@ -1,6 +1,7 @@
 import { SendValidationError, type PlivoTemplateComponent } from "./send-mapping.js";
 
 export interface TemplateRow {
+  id: string;
   name: string;
   language: string;
   status: string;

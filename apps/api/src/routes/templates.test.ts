@@ -2,11 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import type * as MetaTemplatesModule from "../lib/meta-templates.js";
+import type * as TemplateAnalyticsModule from "../lib/template-analytics.js";
 
 const mockPrisma = {
   template: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
   vendorSetting: { findFirst: vi.fn() },
-  message: { groupBy: vi.fn(), create: vi.fn() },
+  message: { groupBy: vi.fn(), create: vi.fn(), findFirst: vi.fn() },
   contact: { findFirst: vi.fn() },
   conversation: { findFirst: vi.fn(), create: vi.fn() },
   organization: { findUnique: vi.fn(), findFirst: vi.fn() },
@@ -15,6 +16,11 @@ const deleteOnMeta = vi.fn();
 vi.mock("../lib/meta-templates.js", async (orig) => {
   const real = await orig<typeof MetaTemplatesModule>();
   return { ...real, deleteTemplateOnMeta: (...a: unknown[]) => deleteOnMeta(...a) };
+});
+const getAnalytics = vi.fn();
+vi.mock("../lib/template-analytics.js", async (orig) => {
+  const real = await orig<typeof TemplateAnalyticsModule>();
+  return { ...real, getTemplateAnalytics: (...a: unknown[]) => getAnalytics(...a) };
 });
 const mockAuth = { userId: "u-1", organizationId: "org-1", role: "admin" as const, permissions: {}, teamId: null as string | null, teamRole: null as "lead" | "member" | null };
 
@@ -69,28 +75,163 @@ describe("GET /v1/templates/:id/analytics", () => {
   beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
   afterEach(async () => { await app.close(); });
 
-  it("returns delivery stats for the template", async () => {
-    mockPrisma.template.findFirst.mockResolvedValue({
-      id: "t-1",
-      organizationId: "org-1",
-      name: "Welcome",
-      status: "approved",
-    });
-    mockPrisma.message.groupBy.mockResolvedValue([
-      { status: "delivered", _count: { status: 40 } },
-      { status: "read", _count: { status: 10 } },
-      { status: "failed", _count: { status: 5 } },
-    ]);
-    const res = await app.inject({ method: "GET", url: "/v1/templates/t-1/analytics" });
-    expect(res.statusCode).toBe(200);
-    const body = res.json<{ data: { delivered: number; read: number; failed: number } }>();
-    expect(body.data.delivered).toBe(40);
+  const tpl = {
+    id: "t-1",
+    organizationId: "org-1",
+    name: "Welcome",
+    language: "en",
+    category: "marketing",
+    status: "approved",
+    qualityScore: "GREEN",
+    createdAt: new Date("2026-08-01T10:00:00.000Z"),
+    lastEditedTime: new Date("2026-09-01T10:00:00.000Z"),
+    bodyText: "Hello {{1}}",
+  };
+  const analytics = (over: Partial<{ sent: number; delivered: number; read: number; failed: number }> = {}) => ({
+    inProgress: 2,
+    sent: 100,
+    delivered: 80,
+    read: 40,
+    failed: 5,
+    rates: { delivery: 80, read: 50, failure: 4.8 },
+    reach: { uniqueRecipients: 90, lastSentAt: "2026-10-09T08:00:00.000Z" },
+    daily: [{ day: "2026-10-09", sent: 10, delivered: 8, read: 4, failed: 1 }],
+    failures: [],
+    sources: [{ source: "campaign", count: 100 }],
+    template: {
+      name: "Welcome", language: "en", category: "marketing", status: "approved",
+      qualityScore: "GREEN", lastEditedAt: "2026-09-01T10:00:00.000Z", previewText: "Hello {{1}}",
+    },
+    range: "7d",
+    ...over,
+  });
+  type Body = {
+    data: {
+      sent: number; delivered: number; read: number; failed: number; readPercentage: number;
+      template: Record<string, unknown>; range: string; attributionNote: string | null;
+      inProgress: number; rates: unknown; daily: unknown[];
+    };
+  };
+  const get = (url = "/v1/templates/t-1/analytics") => app.inject({ method: "GET", url });
+  const setup = (over: Parameters<typeof analytics>[0] = {}, unlinked: unknown = null) => {
+    mockPrisma.template.findFirst.mockResolvedValue(tpl);
+    mockPrisma.message.findFirst.mockResolvedValue(unlinked);
+    getAnalytics.mockResolvedValue(analytics(over));
+  };
+
+  it("returns 404 for a template of another org and scopes the lookup by organizationId", async () => {
+    mockPrisma.template.findFirst.mockResolvedValue(null);
+    const res = await get("/v1/templates/other-org-id/analytics");
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("NOT_FOUND");
+    expect(mockPrisma.template.findFirst).toHaveBeenCalledWith({ where: { id: "other-org-id", organizationId: "org-1" } });
+    expect(getAnalytics).not.toHaveBeenCalled();
   });
 
-  it("returns 404 when template not found", async () => {
-    mockPrisma.template.findFirst.mockResolvedValue(null);
-    const res = await app.inject({ method: "GET", url: "/v1/templates/bad-id/analytics" });
-    expect(res.statusCode).toBe(404);
+  it("returns 400 INVALID_RANGE for an unknown range", async () => {
+    mockPrisma.template.findFirst.mockResolvedValue(tpl);
+    const res = await get("/v1/templates/t-1/analytics?range=bogus");
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: { code: "INVALID_RANGE", message: "range must be 7d, 30d, 90d or all" } });
+    expect(getAnalytics).not.toHaveBeenCalled();
+  });
+
+  it("returns the full shape for range=7d and calls the lib with org, template and range", async () => {
+    setup();
+    const res = await get("/v1/templates/t-1/analytics?range=7d");
+    expect(res.statusCode).toBe(200);
+    expect(getAnalytics).toHaveBeenCalledTimes(1);
+    const args = getAnalytics.mock.calls[0]?.[1] as { organizationId: string; template: Record<string, unknown>; range: string };
+    expect(args.organizationId).toBe("org-1");
+    expect(args.template).toMatchObject({ id: "t-1", name: "Welcome", language: "en", category: "marketing", status: "approved", qualityScore: "GREEN" });
+    expect(args.range).toBe("7d");
+    const { data } = res.json<Body>();
+    expect(data.inProgress).toBe(2);
+    expect(data.rates).toEqual({ delivery: 80, read: 50, failure: 4.8 });
+    expect(data.daily).toHaveLength(1);
+    expect(data.range).toBe("7d");
+    expect(data.template).toEqual({
+      name: "Welcome", language: "en", category: "marketing", status: "approved",
+      qualityScore: "GREEN", lastEditedAt: "2026-09-01T10:00:00.000Z", previewText: "Hello {{1}}",
+    });
+  });
+
+  it("defaults to 30d when range is absent", async () => {
+    setup();
+    const res = await get();
+    expect(res.statusCode).toBe(200);
+    expect((getAnalytics.mock.calls[0]?.[1] as { range: string }).range).toBe("30d");
+  });
+
+  it("includes legacy keys consistent with the cumulative numbers", async () => {
+    setup();
+    const { data } = (await get()).json<Body>();
+    expect(data.sent).toBe(100);
+    expect(data.delivered).toBe(80);
+    expect(data.read).toBe(40);
+    expect(data.failed).toBe(5);
+    expect(data.readPercentage).toBe(50);
+  });
+
+  it("computes readPercentage as 0 when delivered is 0", async () => {
+    setup({ sent: 3, delivered: 0, read: 0, failed: 3 });
+    const { data } = (await get()).json<Body>();
+    expect(data.readPercentage).toBe(0);
+  });
+
+  it("rounds readPercentage and caps it at 100", async () => {
+    setup({ delivered: 3, read: 1 });
+    expect((await get()).json<Body>().data.readPercentage).toBe(33);
+    setup({ delivered: 2, read: 5 });
+    expect((await get()).json<Body>().data.readPercentage).toBe(100);
+  });
+
+  it("sets attributionNote when the org has unlinked outbound template messages", async () => {
+    setup({}, { id: "m-1" });
+    const { data } = (await get()).json<Body>();
+    expect(data.attributionNote).toBe("Messages sent before this feature was introduced may not be included.");
+    expect(mockPrisma.message.findFirst).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1", direction: "outbound", contentType: "template", templateId: null,
+        sentAt: { gte: new Date("2026-08-01T10:00:00.000Z"), lt: new Date("2026-10-20T00:00:00.000Z") },
+      },
+      select: { id: true },
+    });
+  });
+
+  it("skips the unlinked scan and returns a null note for a template created after the release", async () => {
+    mockPrisma.template.findFirst.mockResolvedValue({ ...tpl, createdAt: new Date("2026-10-20T00:00:00.000Z") });
+    mockPrisma.message.findFirst.mockResolvedValue({ id: "m-1" });
+    getAnalytics.mockResolvedValue(analytics());
+    const { data } = (await get()).json<Body>();
+    expect(data.attributionNote).toBeNull();
+    expect(mockPrisma.message.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("rejects repeated, empty and wrong-case range values with 400 INVALID_RANGE", async () => {
+    mockPrisma.template.findFirst.mockResolvedValue(tpl);
+    for (const q of ["range=7d&range=30d", "range=", "range=7D"]) {
+      const res = await get(`/v1/templates/t-1/analytics?${q}`);
+      expect(res.statusCode).toBe(400);
+      expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_RANGE");
+    }
+    expect(getAnalytics).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 without leaking the thrown error when analytics fails", async () => {
+    setup();
+    getAnalytics.mockRejectedValue(new Error("secret db detail postgres://u:p@h"));
+    const res = await get();
+    expect(res.statusCode).toBe(500);
+    expect(res.body).not.toContain("secret db detail");
+    expect(res.body).not.toContain("postgres://");
+    expect(res.body).not.toMatch(/stack|at .*\.ts/);
+  });
+
+  it("leaves attributionNote null when there are no unlinked template messages", async () => {
+    setup();
+    const { data } = (await get()).json<Body>();
+    expect(data.attributionNote).toBeNull();
   });
 });
 
@@ -139,6 +280,24 @@ describe("POST /v1/templates/:id/send-to-contact", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ data: { message: { id: string } } }>();
     expect(body.data.message.id).toBe("msg-1");
+  });
+
+  it("records the template id and source=test on the created message", async () => {
+    mockPrisma.template.findFirst.mockResolvedValue({
+      id: "t-1", organizationId: "org-1", name: "Welcome", status: "approved", metaTemplateId: "meta-t-1", language: "en_US",
+    });
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c-1", organizationId: "org-1", phoneNumber: "+919999999999", firstName: "Alice" });
+    mockPrisma.organization.findUnique.mockResolvedValue({ phoneNumberId: "phone-1", wabaAccessToken: "token-1" });
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1", contactId: "c-1" });
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-1" });
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/templates/t-1/send-to-contact",
+      payload: { contactId: "c-1", variables: [] },
+    });
+    expect(res.statusCode).toBe(200);
+    const data = (mockPrisma.message.create.mock.calls[0]![0] as { data: Record<string, unknown> }).data;
+    expect(data).toMatchObject({ contentType: "template", organizationId: "org-1", templateId: "t-1", source: "test" });
   });
 
   it("returns 404 when template not found", async () => {
@@ -230,6 +389,15 @@ describe("templates section gate (D15)", () => {
     const res = await app.inject({ method: "GET", url: "/v1/templates" });
     expect(res.statusCode).toBe(403);
     expect(mockPrisma.template.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("returns 403 on the analytics route when the role lacks templates_access", async () => {
+    const app = await buildAppAs({ contacts_access: "allow" });
+    const res = await app.inject({ method: "GET", url: "/v1/templates/t-1/analytics" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.template.findFirst).not.toHaveBeenCalled();
+    expect(getAnalytics).not.toHaveBeenCalled();
     await app.close();
   });
 

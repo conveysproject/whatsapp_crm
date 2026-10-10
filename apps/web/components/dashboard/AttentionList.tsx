@@ -1,13 +1,17 @@
 import type { JSX } from "react";
 import Link from "next/link";
 import type { AttentionItem } from "@/lib/dashboard";
+import { useOnboardingStatusOptional } from "@/app/(dashboard)/onboarding-context";
 
 const WHATSAPP_KEY = "whatsapp_disconnected";
 
 /** Critical banner shown above everything when WhatsApp is disconnected. */
 export function DisconnectedBanner({ items }: { items: AttentionItem[] }): JSX.Element | null {
+  const onboarding = useOnboardingStatusOptional();
   const item = items.find((i) => i.key === WHATSAPP_KEY && i.severity === "critical");
   if (!item) return null;
+  // Setup unfinished: SetupPrompt owns that case; never show both banners.
+  if (onboarding !== null && !onboarding.allDone) return null;
   return (
     <Link
       data-testid="whatsapp-banner"

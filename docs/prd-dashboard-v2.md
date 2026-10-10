@@ -110,11 +110,11 @@ Volume chart keeps using `GET /v1/analytics/conversations?days=` (unchanged; `da
 
 ## 8. Rollout, rollback, acceptance
 
-- Feature flag `NEXT_PUBLIC_DASHBOARD_V2` (default off in prod); old page is kept in the same file path behind the flag and removed in a later cleanup. Rollback = flip the flag. No data change to revert.
-- Release checklist: unanswered-query EXPLAIN on prod-size data, flag on for the owner's org first.
+- Shipped without a feature flag (decision 2026-10-10: the flag `NEXT_PUBLIC_DASHBOARD_V2` and the old page were removed). Rollback = revert the commit and redeploy the web app. No data change to revert.
+- Release checklist: unanswered-query EXPLAIN on prod-size data before relying on the page in production (see docs/runbooks/dashboard-v2.md).
 
 Acceptance criteria
-1. With the flag on, an admin sees header, attention list, 6 KPI cards with deltas, campaign funnel, volume chart, My Work, latest activity, all from one dashboard request plus the unchanged chart/my-work/activity endpoints.
+1. An admin sees header, attention list, 6 KPI cards with deltas, campaign funnel, volume chart, My Work, latest activity, all from one dashboard request plus the unchanged chart/my-work/activity endpoints.
 2. Each definition in section 3 is unit-tested with fixtures, including 0-denominator -> null and window boundaries in a non-UTC timezone (e.g. Asia/Kolkata, and a DST zone).
 3. A user with `analytics_access` but no inbox/campaign/templates/billing permission gets no corresponding items (test).
 4. A custom-role user with `analytics_access` sees the overview (test of the web gate).
@@ -127,7 +127,7 @@ Acceptance criteria
 - **Q1 First response:** accept "Avg time to first reply (bot included)" for Phase 1 and fix it properly in Phase 2? Default: yes.
 - **Q2 Timezone:** browser timezone now; add an organization timezone setting in Phase 2? Default: yes.
 - **Q3 Deals:** omit revenue until a won/lost definition exists? Default: yes, and in Phase 2 add `won`/`lost` stage designation to pipelines. **Q3b Deep links:** include the small inbox filter task in this release? Default: yes.
-- **Q4 Flag:** use `NEXT_PUBLIC_DASHBOARD_V2` with the old page kept for one release? Default: yes.
+- **Q4 Flag:** resolved 2026-10-10: no flag; v2 replaces the old dashboard.
 - **Q5 Campaign "read":** does `played` (voice/media) count as read? Default: count `played` as read.
 - **Q6 Unanswered threshold:** 60 minutes fixed, or configurable per org? Default: fixed 60 min.
 - **Q7 Scope of dark mode:** new components only? Default: yes.
@@ -137,4 +137,4 @@ Acceptance criteria
 - Unanswered query cost on large orgs (mitigated by caching and an EXPLAIN gate).
 - Browser-timezone reporting differs between users (documented, Q2).
 - "Time to first reply" still includes bots; the label must say so.
-- Two code paths behind the flag for one release.
+- No safety switch: v2 is the only dashboard, so rollback needs a code revert and redeploy.
