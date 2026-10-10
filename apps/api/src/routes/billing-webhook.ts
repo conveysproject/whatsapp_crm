@@ -91,31 +91,53 @@ export const billingWebhookRouter: FastifyPluginAsync = async (fastify) => {
             fastify.log.warn("stripe invoice for unknown customer");
             return reply.status(200).send({ received: true });
           }
-          const subs = await getStripe().subscriptions.list({ customer: customerId, status: "active", limit: 1 });
-          const sub = subs.data[0] as unknown as SubShape | undefined;
-          const tier = tierFromPriceId(sub?.items?.data[0]?.price?.id) ?? org.planTier;
-          await activatePlan(fastify.prisma, {
+          const billingReason = obj["billing_reason"];
+          const isSubscriptionInvoice = typeof billingReason === "string" && billingReason.startsWith("subscription");
+          const amountMinor = typeof obj["amount_paid"] === "number" ? obj["amount_paid"] : undefined;
+          const currency = typeof obj["currency"] === "string" ? obj["currency"] : undefined;
+          const base = {
             organizationId: org.id,
-            planTier: tier as PlanTier,
-            source: "stripe",
-            gateway: "stripe",
+            source: "stripe" as const,
+            gateway: "stripe" as const,
             referenceId: `stripe:invoice:${String(obj["id"])}`,
             gatewayTransactionId: String(obj["id"]),
-            amountMinor: typeof obj["amount_paid"] === "number" ? obj["amount_paid"] : undefined,
-            currency: typeof obj["currency"] === "string" ? obj["currency"] : undefined,
-            stripeSubscriptionId: sub?.id,
-            cancelAtPeriodEnd: sub?.cancel_at_period_end,
-            // A late/retried invoice after cancellation keeps the money record but must not resurrect the plan.
-            ...(!sub && org.billingStatus === "cancelled" ? { ledgerOnly: true } : {}),
-          });
+            ...(amountMinor !== undefined ? { amountMinor } : {}),
+            ...(currency !== undefined ? { currency } : {}),
+          };
+          if (!isSubscriptionInvoice) {
+            // One-off / non-subscription invoice: record the money only; never touch plan or billing state.
+            await activatePlan(fastify.prisma, { ...base, planTier: org.planTier as PlanTier, ledgerOnly: true });
+          } else {
+            const subs = await getStripe().subscriptions.list({ customer: customerId, status: "active", limit: 10 });
+            const multiple = subs.data.length > 1;
+            if (multiple) {
+              fastify.log.warn({ organizationId: org.id, activeSubscriptions: subs.data.length }, "stripe customer has multiple active subscriptions; keeping tier");
+            }
+            const sub = multiple ? undefined : (subs.data[0] as unknown as SubShape | undefined);
+            const tier = tierFromPriceId(sub?.items?.data[0]?.price?.id) ?? org.planTier;
+            await activatePlan(fastify.prisma, {
+              ...base,
+              planTier: tier as PlanTier,
+              ...(sub?.id !== undefined ? { stripeSubscriptionId: sub.id } : {}),
+              ...(sub?.cancel_at_period_end !== undefined ? { cancelAtPeriodEnd: sub.cancel_at_period_end } : {}),
+              // A late/retried invoice after cancellation keeps the money record but must not resurrect the plan.
+              ...(subs.data.length === 0 && org.billingStatus === "cancelled" ? { ledgerOnly: true } : {}),
+            });
+          }
         } else if (v2 && event.type === "invoice.payment_failed") {
           const org = await findOrg(customerOf(obj["customer"]));
           if (!org) {
             fastify.log.warn("stripe payment_failed for unknown customer");
+          } else if (
+            // Stripe does not guarantee event order: a stale failure may arrive after the invoice was paid.
+            // If retrieve throws, the error propagates (500) and Stripe retries.
+            (await getStripe().invoices.retrieve(String(obj["id"]))).status === "paid"
+          ) {
+            fastify.log.info({ invoiceId: String(obj["id"]) }, "stale payment_failed for an already paid invoice; skipping");
           } else {
             const graceEndsAt = new Date(Date.now() + graceDays() * 86_400_000);
             const res = await fastify.prisma.organization.updateMany({
-              where: { id: org.id, billingStatus: { not: "past_due" } },
+              where: { id: org.id, billingStatus: { notIn: ["past_due", "cancelled"] } },
               data: { billingStatus: "past_due", billingGraceEndsAt: graceEndsAt },
             });
             if (res.count === 1) await notifyPaymentFailed(fastify.prisma, org.id, graceEndsAt);

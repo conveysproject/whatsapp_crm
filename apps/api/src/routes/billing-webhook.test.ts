@@ -3,15 +3,16 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import type * as ActivationModule from "../lib/billing/activation.js";
 
-const { constructEvent, subsList, activatePlanMock, notifyMock } = vi.hoisted(() => ({
+const { constructEvent, subsList, activatePlanMock, notifyMock, invoicesRetrieve } = vi.hoisted(() => ({
   constructEvent: vi.fn(),
+  invoicesRetrieve: vi.fn(),
   subsList: vi.fn(),
   activatePlanMock: vi.fn(),
   notifyMock: vi.fn(),
 }));
 
 vi.mock("../lib/stripe.js", () => ({
-  getStripe: () => ({ webhooks: { constructEvent }, subscriptions: { list: subsList } }),
+  getStripe: () => ({ webhooks: { constructEvent }, subscriptions: { list: subsList }, invoices: { retrieve: invoicesRetrieve } }),
   PLAN_PRICE_IDS: { starter: "price_s", growth: "price_g", scale: "price_sc", enterprise: "" },
   PLAN_LIMITS: {},
   ZERO_DECIMAL_CURRENCIES: new Set<string>(),
@@ -43,7 +44,7 @@ const post = (app: FastifyInstance, withSig = true) =>
   });
 
 const ev = (type: string, object: Record<string, unknown>) => ({ type, data: { object } });
-const invoiceEv = () => ev("invoice.payment_succeeded", { id: "in_1", customer: "cus_1", amount_paid: 299900, currency: "inr" });
+const invoiceEv = () => ev("invoice.payment_succeeded", { id: "in_1", customer: "cus_1", amount_paid: 299900, currency: "inr", billing_reason: "subscription_cycle" });
 const org = (billingStatus = "active") => ({ id: "org-1", planTier: "starter", billingStatus });
 
 let saved: { secret?: string; flag?: string };
@@ -53,12 +54,13 @@ beforeEach(async () => {
   saved = { secret: process.env["STRIPE_WEBHOOK_SECRET"], flag: process.env["BILLING_V2_ENABLED"] };
   process.env["STRIPE_WEBHOOK_SECRET"] = "whsec";
   process.env["BILLING_V2_ENABLED"] = "true";
-  for (const m of [constructEvent, subsList, activatePlanMock, notifyMock,
+  for (const m of [constructEvent, subsList, activatePlanMock, notifyMock, invoicesRetrieve,
     mockPrisma.organization.findFirst, mockPrisma.organization.findUnique,
     mockPrisma.organization.update, mockPrisma.organization.updateMany]) m.mockReset();
   activatePlanMock.mockResolvedValue({ duplicate: false });
   notifyMock.mockResolvedValue(undefined);
   subsList.mockResolvedValue({ data: [] });
+  invoicesRetrieve.mockResolvedValue({ status: "open" });
   mockPrisma.organization.findFirst.mockResolvedValue(org());
   mockPrisma.organization.findUnique.mockResolvedValue({ settings: {} });
   app = await build();
@@ -123,12 +125,86 @@ describe("POST /v1/billing/webhook", () => {
     expect((await post(app)).statusCode).toBe(200);
     const grace = new Date("2026-10-08T00:00:00Z");
     expect(mockPrisma.organization.updateMany).toHaveBeenCalledWith({
-      where: { id: "org-1", billingStatus: { not: "past_due" } },
+      where: { id: "org-1", billingStatus: { notIn: ["past_due", "cancelled"] } },
       data: { billingStatus: "past_due", billingGraceEndsAt: grace },
     });
     expect(mockPrisma.organization.update).not.toHaveBeenCalled();
     expect(notifyMock).toHaveBeenCalledTimes(1);
     expect(notifyMock).toHaveBeenCalledWith(mockPrisma, "org-1", grace);
+  });
+
+  it("invoice.payment_failed re-checks the invoice and skips when already paid (stale event)", async () => {
+    constructEvent.mockReturnValue(ev("invoice.payment_failed", { id: "in_2", customer: "cus_1" }));
+    invoicesRetrieve.mockResolvedValue({ status: "paid" });
+    expect((await post(app)).statusCode).toBe(200);
+    expect(invoicesRetrieve).toHaveBeenCalledWith("in_2");
+    expect(mockPrisma.organization.updateMany).not.toHaveBeenCalled();
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(notifyMock).not.toHaveBeenCalled();
+  });
+
+  it("invoice.payment_failed proceeds when the invoice is still open", async () => {
+    constructEvent.mockReturnValue(ev("invoice.payment_failed", { id: "in_2", customer: "cus_1" }));
+    invoicesRetrieve.mockResolvedValue({ status: "open" });
+    mockPrisma.organization.updateMany.mockResolvedValue({ count: 1 });
+    expect((await post(app)).statusCode).toBe(200);
+    expect(mockPrisma.organization.updateMany).toHaveBeenCalledTimes(1);
+    expect(notifyMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("invoice.payment_failed 500s when the invoice re-check fails (Stripe retries)", async () => {
+    constructEvent.mockReturnValue(ev("invoice.payment_failed", { id: "in_2", customer: "cus_1" }));
+    invoicesRetrieve.mockRejectedValue(new Error("stripe down"));
+    expect((await post(app)).statusCode).toBe(500);
+    expect(mockPrisma.organization.updateMany).not.toHaveBeenCalled();
+    expect(notifyMock).not.toHaveBeenCalled();
+  });
+
+  it("invoice.payment_succeeded: non-subscription billing_reason is ledger-only", async () => {
+    for (const br of ["manual", undefined]) {
+      activatePlanMock.mockClear();
+      const o: Record<string, unknown> = { id: "in_1", customer: "cus_1", amount_paid: 100, currency: "inr" };
+      if (br) o["billing_reason"] = br;
+      constructEvent.mockReturnValue(ev("invoice.payment_succeeded", o));
+      subsList.mockResolvedValue({ data: [{ id: "sub_1", items: { data: [{ price: { id: "price_g" } }] } }] });
+      expect((await post(app)).statusCode).toBe(200);
+      expect(activatePlanMock).toHaveBeenCalledWith(mockPrisma, expect.objectContaining({ ledgerOnly: true, referenceId: "stripe:invoice:in_1" }));
+    }
+  });
+
+  it("invoice.payment_succeeded: subscription_create / subscription_cycle activate normally", async () => {
+    for (const br of ["subscription_create", "subscription_cycle"]) {
+      activatePlanMock.mockClear();
+      constructEvent.mockReturnValue(ev("invoice.payment_succeeded", { id: "in_1", customer: "cus_1", billing_reason: br }));
+      subsList.mockResolvedValue({ data: [{ id: "sub_1", items: { data: [{ price: { id: "price_g" } }] } }] });
+      await post(app);
+      const input = activatePlanMock.mock.calls[0]![1] as { ledgerOnly?: boolean; planTier: string };
+      expect(input.ledgerOnly).toBeUndefined();
+      expect(input.planTier).toBe("growth");
+    }
+  });
+
+  it("invoice.payment_succeeded: lists active subs with limit 10; exactly one sets tier", async () => {
+    constructEvent.mockReturnValue(invoiceEv());
+    subsList.mockResolvedValue({ data: [{ id: "sub_1", items: { data: [{ price: { id: "price_g" } }] } }] });
+    await post(app);
+    expect(subsList).toHaveBeenCalledWith({ customer: "cus_1", status: "active", limit: 10 });
+    expect(activatePlanMock).toHaveBeenCalledWith(mockPrisma, expect.objectContaining({ planTier: "growth" }));
+  });
+
+  it("invoice.payment_succeeded: multiple active subs keep org tier and still activate", async () => {
+    constructEvent.mockReturnValue(invoiceEv());
+    subsList.mockResolvedValue({ data: [
+      { id: "sub_1", items: { data: [{ price: { id: "price_g" } }] } },
+      { id: "sub_2", items: { data: [{ price: { id: "price_sc" } }] } },
+    ] });
+    const warn = vi.spyOn(app.log, "warn");
+    expect((await post(app)).statusCode).toBe(200);
+    expect(activatePlanMock).toHaveBeenCalledTimes(1);
+    const input = activatePlanMock.mock.calls[0]![1] as { planTier: string; ledgerOnly?: boolean };
+    expect(input.planTier).toBe("starter");
+    expect(input.ledgerOnly).toBeUndefined();
+    expect(warn).toHaveBeenCalled();
   });
 
   it("invoice.payment_failed does not email when already past_due (count 0)", async () => {

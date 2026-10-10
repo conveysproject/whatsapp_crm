@@ -30,7 +30,7 @@ async function main(): Promise<void> {
     const orgs: BackfillOrg[] = [...unset, ...held.map((h) => ({ ...h, settings: null }))];
     const { updates, conflicts } = planStripeIdBackfill(orgs);
 
-    console.log(`${apply ? "APPLY" : "DRY RUN"}: would update ${updates.length} org(s); conflicts: ${conflicts.length}`);
+    console.log(`${apply ? "APPLY: will update" : "DRY RUN: would update"} ${updates.length} org(s); conflicts: ${conflicts.length}`);
     if (updates.length) console.log(`org ids: ${updates.map((u) => u.id).join(", ")}`);
     for (const c of conflicts) console.log(`conflict org ids (skipped): ${c.orgIds.join(", ")}`);
 

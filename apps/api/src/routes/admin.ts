@@ -136,7 +136,9 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
           charges: request.body.charges,
           chargesFrequency: request.body.chargesFrequency,
           gateway: request.body.gateway,
-          status: "active",
+          // Created pending: activatePlan(manualSubscriptionId) activates it inside its DB transaction,
+          // so a failed activation leaves a harmless pending row, never an orphan active sub.
+          status: "pending",
           endsAt,
         },
       });
@@ -218,7 +220,8 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       const data = await fastify.prisma.organization.update({
         where: { id: request.params.id },
         data: {
-          ...(planTier ? { planTier: planTier as "starter" | "growth" | "scale" | "enterprise" } : {}),
+          // A manual plan change also clears any dunning state so the grace job cannot downgrade the org.
+          ...(planTier ? { planTier: planTier as "starter" | "growth" | "scale" | "enterprise", billingStatus: "active" as const, billingGraceEndsAt: null } : {}),
           ...(status ? { status } : {}),
           ...(banReason !== undefined ? { banReason } : {}),
         },

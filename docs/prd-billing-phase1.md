@@ -106,3 +106,24 @@ Risks
 - Turning on limits can lock customers out -> shadow mode, flags, grandfathering.
 - Stripe event ordering/duplication -> Transaction-row idempotency + status-derived transitions.
 - Refactor touches live webhooks -> keep Phase 0 tests, add regression tests per gateway before moving code.
+
+## 9. Phase 1A deploy checklist
+
+1. Deploy. Railway `start.sh` runs `prisma migrate deploy` before the app. The new code selects and writes `billingStatus` even with the flag off, so the migration must land before the code; `start.sh` enforces this. If DDL is ever applied out of band, run `prisma migrate resolve --applied 20261010100000_billing_lifecycle`.
+2. Run `scripts/backfill-stripe-id.ts` as a dry run, review the conflicts, and eyeball any org where `stripeId` and `settings.stripeCustomerId` differ. After the owner confirms, run it with `--apply`. This is a HARD GATE before `BILLING_V2_ENABLED=true`: orgs whose Stripe customer id exists only in settings are otherwise unresolved by webhooks.
+3. Subscribe the Stripe webhook endpoint to `checkout.session.completed`, `invoice.payment_succeeded`, `invoice.payment_failed`, `customer.subscription.updated` and `customer.subscription.deleted`.
+4. Flag rollback hazard: with the flag off, successful Stripe payments from `past_due` orgs are ignored. Before turning the flag back on, reconcile or reset `past_due` orgs (set `billingStatus` to `active`), or the grace job will downgrade customers who paid in between.
+5. Enable `BILLING_V2_ENABLED=true` only after steps 1 to 3 are done.
+
+## 10. Known follow-ups
+
+- Switch-plan upgrades whose proration invoice fails end in a downgrade to starter after grace. Consider `payment_behavior: "pending_if_incomplete"` in Phase 2 (needs Stripe-side verification).
+- The grace job could re-check the live Stripe subscription status before downgrading.
+- Manual submit-proof records charges as 0, so the ledger shows 0 for approved manual subscriptions.
+- Currency for manual/admin rows defaults to INR, and zero-decimal Stripe currencies display 100x too small.
+- `gatewayTransactionId` is not namespaced across gateways.
+- Manual-subscription update is not org-scoped or status-guarded.
+- Add a lint-style test (PRD section 5) for other `planTier` writes.
+- `PATCH /organizations/me` returns the full org row including `wabaAccessToken` and `stripeId` (separate security ticket).
+- With the flag off, Stripe payments write no Transaction row (legacy path, by design).
+- A legacy customer deleted in Stripe now returns 500 at checkout.

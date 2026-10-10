@@ -274,6 +274,9 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
           const winner = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { stripeId: true } });
           customerId = winner?.stripeId ?? customer.id;
         }
+      } else if (!org?.stripeId) {
+        // Customer known only from legacy settings: copy it to stripeId so webhook events resolve to this org.
+        await fastify.prisma.organization.updateMany({ where: { id: organizationId, stripeId: null }, data: { stripeId: customerId } });
       }
       const session = await getStripe().checkout.sessions.create({
         mode: "subscription",

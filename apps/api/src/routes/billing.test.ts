@@ -260,6 +260,7 @@ describe("POST /v1/billing/checkout", () => {
       payload: { planTier: "starter", successUrl: "https://wbmsg.com/a", cancelUrl: "https://wbmsg.com/a" } });
     expect(res.statusCode).toBe(200);
     expect(customersCreate).not.toHaveBeenCalled();
+    expect(mockPrisma.organization.updateMany).toHaveBeenCalledWith({ where: { id: "org-1", stripeId: null }, data: { stripeId: "cus_legacy" } });
     expect(stripeSessionCreate).toHaveBeenCalledWith(expect.objectContaining({ customer: "cus_legacy" }));
   });
 
@@ -269,6 +270,7 @@ describe("POST /v1/billing/checkout", () => {
       payload: { planTier: "starter", successUrl: "https://wbmsg.com/a", cancelUrl: "https://wbmsg.com/a" } });
     expect(res.statusCode).toBe(200);
     expect(customersCreate).not.toHaveBeenCalled();
+    expect(mockPrisma.organization.updateMany).not.toHaveBeenCalled();
     expect(stripeSessionCreate).toHaveBeenCalledWith(expect.objectContaining({ customer: "cus_old" }));
   });
 

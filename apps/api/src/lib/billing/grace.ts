@@ -10,11 +10,18 @@ export async function expireGraceOrgs(prisma: PrismaClient, now: Date = new Date
   });
   const downgraded: string[] = [];
   for (const { id } of due) {
-    const res = await prisma.organization.updateMany({
-      where: { id, billingStatus: "past_due" },
-      data: { planTier: "starter", billingStatus: "cancelled", billingGraceEndsAt: null, planCancelAtPeriodEnd: false },
-    });
-    if (res.count > 0) downgraded.push(id);
+    try {
+      // The Stripe subscription is intentionally NOT cancelled here: Stripe's own retry/cancel policy
+      // emits customer.subscription.deleted. billingGraceEndsAt is re-checked so an org whose grace
+      // was refreshed since the select is not downgraded.
+      const res = await prisma.organization.updateMany({
+        where: { id, billingStatus: "past_due", billingGraceEndsAt: { lt: now } },
+        data: { planTier: "starter", billingStatus: "cancelled", billingGraceEndsAt: null, planCancelAtPeriodEnd: false },
+      });
+      if (res.count > 0) downgraded.push(id);
+    } catch (err) {
+      console.error("[billing] grace expiry failed", { organizationId: id, error: err instanceof Error ? err.name : "error" });
+    }
   }
   return downgraded;
 }

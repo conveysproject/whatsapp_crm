@@ -469,6 +469,9 @@ describe("POST /v1/admin/manual-subscriptions", () => {
   it("creates the subscription and activates the plan through activatePlan", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/admin/manual-subscriptions", payload });
     expect(res.statusCode).toBe(201);
+    expect(mockPrisma.manualSubscription.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ organizationId: "org-1", planTier: "growth", status: "pending" }),
+    });
     expect(activatePlanMock).toHaveBeenCalledWith(expect.anything(), {
       organizationId: "org-1", planTier: "growth", source: "admin", gateway: "bank_transfer",
       referenceId: "admin:ms-7", manualSubscriptionId: "ms-7", amountMinor: 299900,
@@ -480,5 +483,32 @@ describe("POST /v1/admin/manual-subscriptions", () => {
     expect(res.statusCode).toBe(403);
     expect(mockPrisma.manualSubscription.create).not.toHaveBeenCalled();
     expect(activatePlanMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("PATCH /v1/admin/organizations/:id", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    mockPrisma.organization.findUnique.mockReset().mockResolvedValue({ id: "org-1" });
+    mockPrisma.organization.update.mockReset().mockResolvedValue({ id: "org-1" });
+    mockAdminAuth.role = "superAdmin";
+    app = await buildApp();
+  });
+  afterEach(async () => { mockAdminAuth.role = "superAdmin"; await app.close(); });
+
+  it("a plan change also resets billingStatus and grace", async () => {
+    const res = await app.inject({ method: "PATCH", url: "/v1/admin/organizations/org-1", payload: { planTier: "scale" } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.organization.update).toHaveBeenCalledWith({
+      where: { id: "org-1" },
+      data: { planTier: "scale", billingStatus: "active", billingGraceEndsAt: null },
+    });
+  });
+
+  it("a status-only change leaves billing state alone", async () => {
+    await app.inject({ method: "PATCH", url: "/v1/admin/organizations/org-1", payload: { status: "inactive" } });
+    expect(mockPrisma.organization.update).toHaveBeenCalledWith({ where: { id: "org-1" }, data: { status: "inactive" } });
   });
 });
