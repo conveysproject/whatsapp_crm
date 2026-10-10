@@ -29,7 +29,7 @@ export function TrendChart({ daily }: { daily: DailyPoint[] }): JSX.Element {
   const total = daily.reduce((s, d) => s + d.sent, 0);
   const summary = `Daily messages: ${formatCount(total)} sent across ${daily.length} ${daily.length === 1 ? "day" : "days"} (UTC).`;
   return (
-    <section aria-labelledby="trend-heading" className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 min-w-0">
+    <section aria-labelledby="trend-heading" className="relative rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 min-w-0">
       <div className="flex items-baseline justify-between gap-2 mb-3">
         <h2 id="trend-heading" className="text-sm font-semibold text-gray-900 dark:text-gray-100">Daily trend</h2>
         <span className="text-xs text-gray-500 dark:text-gray-400">Days in UTC</span>
@@ -52,8 +52,10 @@ export function TrendChart({ daily }: { daily: DailyPoint[] }): JSX.Element {
           </ResponsiveContainer>
         </div>
       )}
-      {/* sr-only goes on a block wrapper: it clips its children (overflow hidden). On the <table> itself the browser
-          does not clip, and a long all-time series would stretch the whole page and add a second scrollbar. */}
+      {/* sr-only goes on a block wrapper: it clips its children (overflow hidden); on the <table> itself the browser does
+          not clip. The section is `relative` so this absolutely positioned wrapper is measured against the section and
+          clipped by the app's scrolling <main>; without a positioned ancestor it is measured against the whole page and
+          stretches the document, which added a second scrollbar and a blank band at the bottom. */}
       <div className="sr-only">
       <table data-testid="trend-table">
         <caption>{summary}</caption>
