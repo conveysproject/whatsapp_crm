@@ -1,7 +1,24 @@
 "use client";
 import { useState, type JSX } from "react";
 import { Badge } from "@/components/ui/Badge";
+import Link from "next/link";
+import { Plus, Minus, Megaphone, Wrench, ShieldCheck, type LucideIcon } from "lucide-react";
 import { TemplateActions } from "./TemplateActions";
+import { formatCount, formatRate, type AnalyticsRange } from "@/lib/template-analytics";
+import type { TemplateListStat } from "@/lib/template-list-stats";
+
+/** Column widths shared by the header row (TemplateActiveTab) and every row so they always line up. */
+export const COLS = {
+  category: "w-32 shrink-0 hidden md:block",
+  status: "w-32 shrink-0",
+  sent: "w-20 shrink-0 text-right hidden md:block",
+  delivered: "w-28 shrink-0 text-right hidden lg:block",
+  read: "w-28 shrink-0 text-right hidden lg:block",
+  updated: "w-24 shrink-0 hidden md:block",
+  actions: "w-52 shrink-0 flex items-center justify-end gap-2",
+} as const;
+
+const categoryIcon: Record<string, LucideIcon> = { marketing: Megaphone, utility: Wrench, authentication: ShieldCheck };
 
 export interface TemplateData {
   id: string;
@@ -68,6 +85,19 @@ function formatTtl(seconds: number): string {
   return `${seconds}s`;
 }
 
+/** One stats cell: skeleton while loading, an em dash when the template has no linked messages in the range. */
+function StatCell({ className, ready, stat, id, range, children }: {
+  className: string; ready: boolean; stat?: TemplateListStat; id: string; range: AnalyticsRange; children: React.ReactNode;
+}): JSX.Element {
+  if (!ready) return <span className={className}><span className="inline-block h-3 w-10 animate-pulse rounded bg-gray-100" /></span>;
+  if (!stat || stat.sent === 0) return <span className={`${className} text-gray-300`} title="No messages in this period">—</span>;
+  return (
+    <Link href={`/templates/${id}/analytics?range=${range}`} className={`${className} text-gray-800 hover:text-brand-600`}>
+      {children}
+    </Link>
+  );
+}
+
 function DetailField({ label, value }: { label: string; value: React.ReactNode }): JSX.Element {
   return (
     <div className="flex flex-col gap-0.5">
@@ -77,7 +107,19 @@ function DetailField({ label, value }: { label: string; value: React.ReactNode }
   );
 }
 
-export function TemplateRow({ template: t, onRefresh }: { template: TemplateData; onRefresh?: () => void }): JSX.Element {
+export function TemplateRow({
+  template: t,
+  onRefresh,
+  stat,
+  statsReady = false,
+  range = "30d",
+}: {
+  template: TemplateData;
+  onRefresh?: () => void;
+  stat?: TemplateListStat;
+  statsReady?: boolean;
+  range?: AnalyticsRange;
+}): JSX.Element {
   const [expanded, setExpanded] = useState(false);
 
   const qualityDotClass = t.qualityScore ? (qualityColor[t.qualityScore] ?? null) : null;
@@ -115,32 +157,58 @@ export function TemplateRow({ template: t, onRefresh }: { template: TemplateData
               </span>
             )}
           </div>
-          {t.status === "rejected" && t.rejectedReason && (
-            <p className="text-xs text-red-400 truncate">{t.rejectedReason.replace(/_/g, " ").toLowerCase()}</p>
-          )}
+          <p className="text-xs text-gray-400 truncate">
+            {t.language}
+            {t.status === "rejected" && t.rejectedReason && (
+              <span className="text-red-400"> · {t.rejectedReason.replace(/_/g, " ").toLowerCase()}</span>
+            )}
+          </p>
         </div>
 
-        {/* Language */}
-        <span className="w-20 shrink-0 text-sm text-gray-600">{t.language}</span>
-
         {/* Category */}
-        <span className="w-28 shrink-0 text-sm text-gray-600 capitalize">{t.category.toLowerCase()}</span>
+        <span className={`${COLS.category} text-sm text-gray-600 capitalize`}>
+          <span className="inline-flex items-center gap-1.5">
+            {(() => {
+              const Icon = categoryIcon[t.category.toLowerCase()];
+              return Icon ? <Icon className="w-3.5 h-3.5 text-gray-400" aria-hidden="true" /> : null;
+            })()}
+            {t.category.toLowerCase()}
+          </span>
+        </span>
 
         {/* Status */}
-        <div className="w-32 shrink-0 flex items-center gap-1.5">
+        <div className={`${COLS.status} flex items-center gap-1.5`}>
           <Badge variant={statusVariant[t.status] ?? "gray"}>{statusLabel[t.status] ?? t.status}</Badge>
           {qualityDotClass && (
             <span className={`inline-block w-2 h-2 rounded-full ${qualityDotClass}`} title={`Quality: ${t.qualityScore}`} />
           )}
         </div>
 
+        {/* Sent / Delivered / Read rate (linked messages in the selected range) */}
+        <StatCell className={`${COLS.sent} text-sm`} ready={statsReady} stat={stat} id={t.id} range={range}>
+          {stat ? formatCount(stat.sent) : ""}
+        </StatCell>
+        <StatCell className={`${COLS.delivered} text-sm`} ready={statsReady} stat={stat} id={t.id} range={range}>
+          {stat ? <>{formatCount(stat.delivered)} <span className="text-gray-400">({formatRate(stat.deliveryRate)})</span></> : ""}
+        </StatCell>
+        <StatCell className={`${COLS.read} text-sm`} ready={statsReady} stat={stat} id={t.id} range={range}>
+          {stat ? (
+            <span className="inline-flex items-center justify-end gap-2">
+              <span className="font-medium">{formatRate(stat.readRate)}</span>
+              <span className="hidden xl:block w-10 h-1.5 rounded-full bg-gray-100 overflow-hidden" aria-hidden="true">
+                <span className="block h-full bg-green-500" style={{ width: `${Math.min(100, Math.max(0, stat.readRate ?? 0))}%` }} />
+              </span>
+            </span>
+          ) : ""}
+        </StatCell>
+
         {/* Updated On */}
-        <span className="w-32 shrink-0 text-sm text-gray-500" suppressHydrationWarning>
+        <span className={`${COLS.updated} text-sm text-gray-500`} suppressHydrationWarning>
           {new Date(t.updatedAt).toLocaleDateString()}
         </span>
 
         {/* Action */}
-        <div className="w-20 shrink-0 flex items-center justify-end gap-1">
+        <div className={COLS.actions}>
           <TemplateActions
             templateId={t.id}
             templateName={t.name}
@@ -165,16 +233,19 @@ export function TemplateRow({ template: t, onRefresh }: { template: TemplateData
             }
             imageCardCount={imageCardCount}
           />
-          {hasDetail && (
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className="text-gray-400 hover:text-gray-600 transition-transform duration-150"
-              style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}
-              aria-label={expanded ? "Collapse" : "Expand"}
-            >
-              ›
-            </button>
-          )}
+          <span className="w-6 shrink-0 flex justify-center">
+            {hasDetail && (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="flex h-6 w-6 items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                aria-label={expanded ? "Collapse details" : "Expand details"}
+                aria-expanded={expanded}
+              >
+                {expanded ? <Minus className="h-3.5 w-3.5" aria-hidden="true" /> : <Plus className="h-3.5 w-3.5" aria-hidden="true" />}
+              </button>
+            )}
+          </span>
         </div>
       </div>
 

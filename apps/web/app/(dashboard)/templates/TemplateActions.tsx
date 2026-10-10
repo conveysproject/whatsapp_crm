@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, type JSX } from "react";
 import Link from "next/link";
+import { BarChart3, Send } from "lucide-react";
 import { MediaUrlField } from "@/components/media-url-field";
 
 interface Contact {
@@ -167,14 +168,21 @@ export function TemplateActions({
         </>
       ) : (
         <>
-          <Link href={`/templates/${templateId}/analytics`} className="text-xs text-blue-600 hover:underline">
+          <Link
+            href={`/templates/${templateId}/analytics`}
+            className="flex h-7 items-center gap-1 rounded-md border border-gray-200 px-2 text-xs text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            title="View analytics"
+          >
+            <BarChart3 className="h-3.5 w-3.5" aria-hidden="true" />
             Analytics
           </Link>
           <button
             onClick={() => setOpen(true)}
-            className="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 border rounded"
+            className="flex h-7 items-center gap-1 rounded-md border border-green-300 bg-green-50 px-2 text-xs font-medium text-green-700 hover:bg-green-100"
+            title="Send to contact"
           >
-            Send to Contact
+            <Send className="h-3.5 w-3.5" aria-hidden="true" />
+            Send
           </button>
         </>
       )}
