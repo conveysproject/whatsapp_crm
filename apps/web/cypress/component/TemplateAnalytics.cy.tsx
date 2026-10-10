@@ -274,22 +274,36 @@ describe('TemplateAnalytics page', () => {
     cy.get('[data-testid="trend-chart"] .recharts-bar-rectangle').should('exist');
   });
 
-  it('keeps the hidden data table from stretching the page (no extra scroll)', () => {
+  it('inside the app shell the document does not scroll (only main scrolls)', () => {
+    // Same markup as apps/web/app/(dashboard)/layout.tsx: a one-screen shell whose <main> is the scroll container.
+    // Absolutely positioned descendants without a positioned ancestor (e.g. the sr-only table wrapper) are measured
+    // against the whole page and stretch the document, which produced a second scrollbar and a blank band.
+    cy.viewport(1280, 700);
     stub(payload({ daily: days('2025-10-15', 366) }));
-    mount('all');
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    cy.mount(
+      <QueryClientProvider client={qc}>
+        <div className="flex h-screen overflow-hidden bg-gray-50">
+          <aside className="flex flex-col w-60 min-h-screen bg-white border-r border-gray-200">sidebar</aside>
+          <div className="flex flex-col flex-1 min-w-0 min-h-0">
+            <div className="bg-amber-500 text-white px-4 py-2 text-sm">banner</div>
+            <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-gray-200 h-14">top bar</header>
+            <main data-testid="shell-main" className="flex flex-col flex-1 px-4 py-4 overflow-auto min-h-0">
+              <Harness initial="all" />
+            </main>
+          </div>
+        </div>
+      </QueryClientProvider>,
+    );
     cy.get('[data-testid="trend-table"] tbody tr').should('have.length', 366);
     cy.get('[data-testid="card-sent"]').should('be.visible');
-    cy.document().then((doc) => {
-      const root = doc.querySelector('[data-cy-root]') as HTMLElement;
-      const contentBottom = root.getBoundingClientRect().bottom + (doc.defaultView?.scrollY ?? 0);
-      // A 366-row table that escapes its clip adds thousands of pixels of scrollable height; a clipped one adds none.
-      expect(doc.documentElement.scrollHeight - contentBottom).to.be.at.most(120);
+    cy.get('[data-testid="shell-main"]').then(($main) => {
+      // The content really is taller than the scroll area, so the check below is meaningful.
+      expect($main[0]!.scrollHeight).to.be.greaterThan($main[0]!.clientHeight + 100);
     });
-    // The wrapper that hides the table must itself clip it (overflow hidden, 1px box).
-    cy.get('[data-testid="trend-table"]').parent().then(($wrap) => {
-      const style = $wrap[0]!.ownerDocument.defaultView!.getComputedStyle($wrap[0]!);
-      expect(style.overflow).to.eq('hidden');
-      expect(style.width).to.eq('1px');
+    cy.document().then((doc) => {
+      const de = doc.documentElement;
+      expect(de.scrollHeight, 'document must not be taller than the viewport').to.be.at.most(de.clientHeight + 1);
     });
   });
 
