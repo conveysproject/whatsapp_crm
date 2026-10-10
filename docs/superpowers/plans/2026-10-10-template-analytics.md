@@ -185,7 +185,7 @@ Fill days with no messages as zero rows between `from` and today (so the chart h
 
 - [ ] **Step 1: Real-Postgres smoke** (Docker, throwaway DB on host port 15432, Redis on 16379 only if needed): seed an org with a template and messages in all statuses, via each writer path where practical, run `getTemplateAnalytics` and the route, assert the PRD acceptance numbers, cross-org isolation (a second org with the same template name sees nothing), range filters, and that a second backfill run is a no-op. Print PASS/FAIL per check; refuse non-local DBs (copy the guards from `apps/api/scripts/smoke-payload-logging.ts`).
 - [ ] **Step 2: Docs.** `docs/runbooks/template-analytics-backfill.md` (finalize) and a short section in the PRD "As built".
-- [ ] **Step 3: Release checklist (owner-only steps marked):** push `main`; migration runs on deploy; run the backfill dry run against production and read the counts (owner); `--apply` after confirmation (owner); open `/templates/<id>/analytics` for `call_milestone_monitor` and confirm 1 read + 2 failed.
+- [ ] **Step 3: Release checklist (owner-only steps marked):** push `main`; migration runs on deploy; run the backfill dry run against production and read the counts (owner); `--apply` after confirmation (owner); open `/templates/<id>/analytics` for `order_shipped_update` and confirm 1 read + 2 failed.
 - [ ] **Step 4: Full verification** `cd apps/api && pnpm vitest run` (only the 2 known flaky segments tests may fail), `pnpm tsc --noEmit`, web checks as in Task 6.
 - [ ] **Step 5: Commit** `docs: template analytics runbook and as-built notes`.
 

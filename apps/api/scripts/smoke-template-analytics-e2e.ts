@@ -73,6 +73,10 @@ interface Analytics {
 }
 
 async function main() {
+  // The note is bounded by the release instant: put it just after "now" so the seeded unlinked rows (all sent in the past)
+  // are legacy rows, regardless of when this smoke runs. Must be set before the router module is imported.
+  const RELEASE = new Date(Date.now() + 3600_000);
+  process.env["TEMPLATE_LINK_RELEASED_AT"] = RELEASE.toISOString();
   const { default: Fastify } = await import("fastify");
   const { templatesRouter } = await import("../src/routes/templates.js");
   const { recordOutbound } = await import("../src/lib/record-outbound.js");
@@ -187,6 +191,9 @@ async function main() {
   const tFresh = await mkTpl(A, "fresh_after_release", "en", new Date()); // created now: every unlinked row predates it
   const rFresh = await get(appA, tFresh.id, "30d");
   check("C1: a template created after all unlinked rows (created now) has attributionNote null, sent 0", rFresh.status === 200 && rFresh.data.attributionNote === null && rFresh.data.sent === 0, [rFresh.status, rFresh.data?.attributionNote]);
+  const tPost = await mkTpl(A, "created_after_release_smoke", "en", new Date(RELEASE.getTime() + 60_000)); // newer than TEMPLATE_LINK_RELEASED_AT: scan skipped
+  const rPost = await get(appA, tPost.id, "30d");
+  check("C1b: a template created after TEMPLATE_LINK_RELEASED_AT has attributionNote null (scan skipped)", rPost.status === 200 && rPost.data.attributionNote === null, [rPost.status, rPost.data?.attributionNote]);
   check("attributionNote is present before the backfill (unlinked rows sent after the template's creation exist)", typeof a30.attributionNote === "string" && a30.attributionNote.length > 0, a30.attributionNote);
   const r7 = (await get(appA, tA.id, "7d")).data;
   check("7d: sent 12, delivered 7, read 4, failed 4, rates 58.3 / 57.1 / 25, 8 UTC days", r7.sent === 12 && r7.delivered === 7 && r7.read === 4 && r7.failed === 4 && r7.rates.delivery === 58.3 && r7.rates.read === 57.1 && r7.rates.failure === 25 && r7.daily.length === 8, [r7.sent, r7.delivered, r7.read, r7.failed, r7.rates, r7.daily.length]);

@@ -37,7 +37,7 @@ export function TemplateAnalyticsView({ id, range, onRangeChange }: { id: string
   let body: JSX.Element;
   if (data) {
     body = isEmptyAnalytics(data) ? (
-      <AnalyticsEmpty />
+      <AnalyticsEmpty attributionNote={data.attributionNote} />
     ) : (
       <div className="space-y-4" aria-busy={switching} data-testid="analytics-content">
         <SummaryCards data={data} />
@@ -71,7 +71,7 @@ export function TemplateAnalyticsView({ id, range, onRangeChange }: { id: string
         spanLabel={data ? dateSpanLabel(data.daily, switching ? data.range : range) : ""}
         onRefresh={() => void q.refetch()}
         refreshing={q.isFetching}
-        onExport={data ? () => downloadCsv(data, range) : null}
+        onExport={data ? () => downloadCsv(data, data.range) : null}
       />
       {refreshFailed && (
         <div role="alert" data-testid="analytics-refresh-error" className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">

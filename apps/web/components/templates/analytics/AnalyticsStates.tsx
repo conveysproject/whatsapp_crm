@@ -12,11 +12,16 @@ export function AnalyticsSkeleton(): JSX.Element {
   );
 }
 
-export function AnalyticsEmpty(): JSX.Element {
+export function AnalyticsEmpty({ attributionNote }: { attributionNote?: string | null }): JSX.Element {
   return (
     <div data-testid="analytics-empty" className="rounded-xl border border-dashed border-gray-300 dark:border-gray-600 p-8 text-center space-y-1">
-      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">No messages sent with this template yet</p>
+      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+        {attributionNote ? "No linked messages in this period" : "No messages sent with this template yet"}
+      </p>
       <p className="text-sm text-gray-500 dark:text-gray-400">Results appear here once messages are sent.</p>
+      {attributionNote && (
+        <p data-testid="attribution-note" className="pt-2 text-xs text-gray-500 dark:text-gray-400">{attributionNote}</p>
+      )}
     </div>
   );
 }

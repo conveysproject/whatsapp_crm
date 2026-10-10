@@ -193,10 +193,19 @@ describe("GET /v1/templates/:id/analytics", () => {
     expect(mockPrisma.message.findFirst).toHaveBeenCalledWith({
       where: {
         organizationId: "org-1", direction: "outbound", contentType: "template", templateId: null,
-        sentAt: { gte: new Date("2026-08-01T10:00:00.000Z") },
+        sentAt: { gte: new Date("2026-08-01T10:00:00.000Z"), lt: new Date("2026-10-20T00:00:00.000Z") },
       },
       select: { id: true },
     });
+  });
+
+  it("skips the unlinked scan and returns a null note for a template created after the release", async () => {
+    mockPrisma.template.findFirst.mockResolvedValue({ ...tpl, createdAt: new Date("2026-10-20T00:00:00.000Z") });
+    mockPrisma.message.findFirst.mockResolvedValue({ id: "m-1" });
+    getAnalytics.mockResolvedValue(analytics());
+    const { data } = (await get()).json<Body>();
+    expect(data.attributionNote).toBeNull();
+    expect(mockPrisma.message.findFirst).not.toHaveBeenCalled();
   });
 
   it("rejects repeated, empty and wrong-case range values with 400 INVALID_RANGE", async () => {

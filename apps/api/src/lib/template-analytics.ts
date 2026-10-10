@@ -80,7 +80,8 @@ export async function getTemplateAnalytics(
         FROM messages WHERE ${where} GROUP BY 1 ORDER BY 1`,
     ),
     prisma.$queryRaw<Array<{ code: string | null; title: string | null; n: number; last_seen: Date | null }>>(
-      Prisma.sql`SELECT delivery_error->>'code' AS code, max(delivery_error->>'title') AS title, count(*)::int AS n, max(sent_at) AS last_seen
+      Prisma.sql`SELECT CASE WHEN delivery_error->>'code' ~ '^[0-9]+$' THEN delivery_error->>'code' ELSE 'unknown' END AS code,
+        max(delivery_error->>'title') AS title, count(*)::int AS n, max(sent_at) AS last_seen
         FROM messages WHERE ${where} AND status IN ('failed','expired','aborted') GROUP BY 1 ORDER BY n DESC, code LIMIT 10`,
     ),
     prisma.$queryRaw<Array<{ source: string | null; n: number }>>(
@@ -125,7 +126,7 @@ export async function getTemplateAnalytics(
     const code = numeric ? (r.code as string).trim() : "unknown";
     const last = r.last_seen ? new Date(r.last_seen) : null;
     const prev = merged.get(code);
-    if (!prev) merged.set(code, { code, title: r.title ?? null, n: Number(r.n), last });
+    if (!prev) merged.set(code, { code, title: code === "unknown" ? null : r.title ?? null, n: Number(r.n), last });
     else {
       prev.n += Number(r.n);
       if (last && (!prev.last || last > prev.last)) prev.last = last;

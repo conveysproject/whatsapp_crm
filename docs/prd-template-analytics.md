@@ -4,7 +4,7 @@ Status: DRAFT for owner sign-off (2026-10-10). Page: `/templates/:id/analytics` 
 
 ## 1. Problem and evidence
 
-1. **The numbers are wrong.** The endpoint counts `messages` where `body = template.name` (`templates.ts:180`). The dashboard send (`routes/messages.ts:362`), the template test-send (`templates.ts:551`) and the public API (`routes/public-api/messages.ts:22`) store a JSON string in `body` (`{"templateName":..., ...}`); campaigns store their own rendered text (`workers/campaign.worker.ts:198-217`). Only flow messages store the plain name (`lib/flow-runner.ts:238`). Production check on 2026-10-10 for template `call_milestone_monitor` (Signalz): the page counts 0 messages, the real figure is 1 read + 2 failed. There is no column linking a message to its template.
+1. **The numbers are wrong.** The endpoint counts `messages` where `body = template.name` (`templates.ts:180`). The dashboard send (`routes/messages.ts:362`), the template test-send (`templates.ts:551`) and the public API (`routes/public-api/messages.ts:22`) store a JSON string in `body` (`{"templateName":..., ...}`); campaigns store their own rendered text (`workers/campaign.worker.ts:198-217`). Only flow messages store the plain name (`lib/flow-runner.ts:238`). Production check on 2026-10-10 for template `order_shipped_update`: the page counts 0 messages, the real figure is 1 read + 2 failed. There is no column linking a message to its template.
 2. **The funnel is not a funnel.** Counts are the current status only, so a read message is no longer counted as sent or delivered; bars are each status's share of that sum (`page.tsx:20-57`). The API computes `readPercentage` and the page ignores it. Statuses `sending`, `expired`, `aborted` (`MessageStatus` enum) are not shown at all.
 3. **Errors look like data.** A 404/500 body has no `data`, so the page shows zeros with no message or retry. No empty state, no tests.
 4. **Nothing to act on.** No template header (status, quality), no date range or trend, no failure reasons even though `messages.delivery_error` now stores Meta's code/title.
@@ -79,7 +79,7 @@ Org scoping and the `templates_access` gate are unchanged; another org's id -> 4
 
 ## 8. Acceptance criteria
 
-- For `call_milestone_monitor` the page shows 1 read, 2 failed (after backfill) and sent/delivered/read follow section 3.
+- For `order_shipped_update` the page shows 1 read, 2 failed (after backfill) and sent/delivered/read follow section 3.
 - A new send through each path (dashboard, test, API, campaign, flow) appears in analytics for its template immediately with the right source.
 - Another org's template id returns 404; a role without `templates_access` gets 403 and the page says so.
 - Range switch changes the numbers; denominators of 0 show "—"; API errors show an error with Retry (never zeros).
@@ -107,10 +107,12 @@ Shipped on branch `feat/template-analytics` (tasks 1-7):
 Deviations and findings from the build:
 
 - Backfill UPDATE uses `unnest` over parallel arrays: one parameterized statement per batch of 500 instead of one statement per row. Each row still re-checks `organization_id` and `template_id IS NULL`.
-- The dry run executes inside one `SET TRANSACTION READ ONLY` transaction on a single connection, so it cannot write even through a bug.
-- Attribution note predicate: the route shows "Messages sent before this feature was introduced may not be included." when the organization has ANY outbound template message with `template_id IS NULL` (cheap `findFirst`, org-scoped, no message text read). It is organization-wide, not per template, and it stays visible after the backfill while unattributable rows remain (old campaign rows, ambiguous or deleted template names).
+- The dry run pages through the table in short `READ ONLY` transactions (500 rows per page, 60 s timeout each), so it cannot write even through a bug and holds no long transaction.
+- The backfill UPDATE also guards `direction = 'outbound'` and `content_type = 'template'`, and checks with `EXISTS` that the template belongs to the same organization as the message.
+- Attribution note predicate: the route shows "Messages sent before this feature was introduced may not be included." when the organization has an outbound template message with `template_id IS NULL` and `sent_at` between the template's `created_at` and `TEMPLATE_LINK_RELEASED_AT` (`apps/api/src/lib/template-link-release.ts`, default 2026-10-20, env override; it must be later than the real deploy date). Templates created on or after that instant skip the query and never show the note. It is a cheap org-scoped `findFirst`, no message text is read, and the note stays while unattributable rows remain (old campaign rows, ambiguous or unmatched names).
 - "7d" covers 8 UTC days (today plus the 7 previous days, from the start of the UTC day), so the daily series has 8 rows; 30d has 31, 90d has 91.
 - The web page is wrapped in `PermissionGate` (templates access), in addition to the API gate.
 - The page was split into `TemplateAnalyticsView` (presentational) and a thin data-loading wrapper so the view can be tested with fixtures.
 - Cypress specs were written after the components (not test-first).
 - Failure codes without a plain-language mapping (for example 131042) show a generic "WhatsApp could not deliver the message."; rows with no code show as `unknown`.
+- Known limit: synchronous Meta send failures never create a `messages` row on the campaign, flow and test-send paths. Campaign failures are visible in campaign stats, not in template analytics.

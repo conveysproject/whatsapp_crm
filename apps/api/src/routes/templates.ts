@@ -7,6 +7,7 @@ import { buildTemplateComponents, contactBodyVars, extractTemplateFields } from 
 import type { TemplateId, ContactId } from "@WBMSG/shared";
 import { canAccess, canAccessSub } from "../lib/permissions.js";
 import { parseRange, getTemplateAnalytics } from "../lib/template-analytics.js";
+import { TEMPLATE_LINK_RELEASED_AT } from "../lib/template-link-release.js";
 import { fromMetaTemplateStatus } from "../lib/template-status.js";
 
 interface TemplateBody {
@@ -189,10 +190,16 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
     try {
       [analytics, unlinked] = await Promise.all([
         getTemplateAnalytics(fastify.prisma, { organizationId, template, range }),
-        fastify.prisma.message.findFirst({
-          where: { organizationId, direction: "outbound", contentType: "template", templateId: null, sentAt: { gte: template.createdAt } },
-          select: { id: true },
-        }),
+        // Templates created on/after the release only ever have linked sends: skip the scan entirely.
+        template.createdAt >= TEMPLATE_LINK_RELEASED_AT
+          ? Promise.resolve(null)
+          : fastify.prisma.message.findFirst({
+              where: {
+                organizationId, direction: "outbound", contentType: "template", templateId: null,
+                sentAt: { gte: template.createdAt, lt: TEMPLATE_LINK_RELEASED_AT },
+              },
+              select: { id: true },
+            }),
       ]);
     } catch (err) {
       // Log server-side only; never return the driver/stack text to the client.

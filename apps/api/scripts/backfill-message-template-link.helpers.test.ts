@@ -84,7 +84,14 @@ describe("parseArgs", () => {
     expect(() => parseArgs(["--org"])).toThrow(/--org requires a value/);
     expect(() => parseArgs(["--org", "--apply"])).toThrow(/--org requires a value/);
   });
-  it("ignores unknown flags", () => {
-    expect(parseArgs(["--wat", "--org", "o1"])).toEqual({ org: "o1", apply: false });
+  it("throws on unknown flags, the --org=value form and typos (never silently widens scope)", () => {
+    expect(() => parseArgs(["--wat", "--org", "o1"])).toThrow("unknown argument: --wat");
+    expect(() => parseArgs(["--org=abc", "--apply"])).toThrow("unknown argument: --org=abc");
+    expect(() => parseArgs(["--aply"])).toThrow("unknown argument: --aply");
+    expect(() => parseArgs(["--org", "o1", "stray"])).toThrow("unknown argument: stray");
+  });
+  it("accepts the valid forms in any order", () => {
+    expect(parseArgs(["--apply", "--org", "o1"])).toEqual({ org: "o1", apply: true });
+    expect(parseArgs(["--apply"])).toEqual({ apply: true });
   });
 });

@@ -173,6 +173,40 @@ describe('TemplateAnalytics page', () => {
     cy.get('[data-testid="card-sent"]').should('not.exist');
   });
 
+  const emptyOver = { sent: 0, delivered: 0, read: 0, failed: 0, inProgress: 0, rates: { delivery: null, read: null, failure: null }, daily: [], failures: [], sources: [] };
+
+  it('empty state with an attribution note changes the headline and shows the note', () => {
+    stub(payload({ ...emptyOver, attributionNote: 'Messages sent before this feature was introduced may not be included.' }));
+    mount();
+    cy.get('[data-testid="analytics-empty"]').should('contain', 'No linked messages in this period');
+    cy.get('[data-testid="analytics-empty"]').should('not.contain', 'No messages sent with this template yet');
+    cy.get('[data-testid="attribution-note"]').should('contain', 'may not be included');
+  });
+
+  it('empty state without a note keeps the original headline and no note', () => {
+    stub(payload({ ...emptyOver, attributionNote: null }));
+    mount();
+    cy.get('[data-testid="analytics-empty"]').should('contain', 'No messages sent with this template yet');
+    cy.get('[data-testid="attribution-note"]').should('not.exist');
+  });
+
+  it('Export CSV during a pending range switch names the file after the data on screen', () => {
+    cy.intercept({ method: 'GET', pathname: PATH, query: { range: '30d' } }, { body: payload({ range: '30d' }) });
+    cy.intercept({ method: 'GET', pathname: PATH, query: { range: '7d' } }, (req) => { req.reply({ delay: 2500, body: payload({ range: '7d' }) }); });
+    mount();
+    const captured = { name: '' };
+    cy.window().then((win) => {
+      cy.stub(win.URL, 'createObjectURL').returns('blob:test');
+      cy.stub(win.URL, 'revokeObjectURL');
+      cy.stub(win.HTMLAnchorElement.prototype, 'click').callsFake(function (this: HTMLAnchorElement) { captured.name = this.download; });
+    });
+    cy.get('[data-testid="card-sent"]').should('be.visible');
+    cy.get('[data-testid="range-7d"]').click();
+    cy.get('[data-testid="analytics-content"]').should('have.attr', 'aria-busy', 'true');
+    cy.contains('button', 'Export CSV').click();
+    cy.then(() => { expect(captured.name).to.eq('template-welcome-offer-analytics-30d.csv'); });
+  });
+
   it('shows an error with Retry, never zeros, and recovers', () => {
     let calls = 0;
     cy.intercept({ method: 'GET', pathname: PATH }, (req) => {
@@ -241,7 +275,7 @@ describe('TemplateAnalytics page', () => {
   });
 
   it('Export CSV downloads a BOM-prefixed file with daily rows, a blank line and the failure table', () => {
-    stub(payload({ failures: [{ code: '131026', title: null, message: '=cmd|"x"', count: 5, share: 100, lastSeenAt: null }] }));
+    stub(payload({ range: '7d', failures: [{ code: '131026', title: null, message: '=cmd|"x"', count: 5, share: 100, lastSeenAt: null }] }));
     mount('7d');
     const captured: { blob: Blob | null; name: string } = { blob: null, name: '' };
     cy.window().then((win) => {

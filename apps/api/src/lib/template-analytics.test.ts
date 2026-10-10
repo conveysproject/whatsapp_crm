@@ -212,6 +212,20 @@ describe("failures", () => {
     expect(new Set(result.failures.map((f) => f.code)).size).toBe(result.failures.length);
   });
 
+  it("normalises null and non-numeric codes to 'unknown' in SQL, before the LIMIT, so shares use all failed", async () => {
+    const { queryRaw, result } = await run({
+      statuses: [{ status: "failed", n: 30 }],
+      failures: [
+        { code: "unknown", title: "stray title", n: 20, last_seen: null },
+        { code: "131049", title: "A", n: 10, last_seen: null },
+      ],
+    });
+    const failureSql = queryRaw.mock.calls.map(([q]) => q as Sqlish).find((q) => q.sql.includes("delivery_error"));
+    expect(failureSql?.sql).toMatch(/CASE WHEN delivery_error->>'code' ~ '\^\[0-9\]\+\$' THEN delivery_error->>'code' ELSE 'unknown' END AS code/);
+    expect(failureSql?.sql.indexOf("CASE WHEN")).toBeLessThan(failureSql?.sql.indexOf("LIMIT 10") ?? 0);
+    expect(result.failures[0]).toMatchObject({ code: "unknown", title: null, count: 20, share: expect.closeTo(66.7, 0) });
+  });
+
   it("orders the failures query deterministically", async () => {
     const { queryRaw } = await run({});
     const failureSql = queryRaw.mock.calls.map(([q]) => q as Sqlish).find((q) => q.sql.includes("delivery_error"));

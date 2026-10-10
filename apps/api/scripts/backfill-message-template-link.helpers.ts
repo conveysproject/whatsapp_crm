@@ -86,11 +86,16 @@ export function planBackfill(rows: BackfillRow[], templatesByOrgAndName: Map<str
 
 export function parseArgs(argv: string[]): BackfillArgs {
   let org: string | undefined;
-  const i = argv.indexOf("--org");
-  if (i >= 0) {
-    const v = argv[i + 1]?.trim();
-    if (!v || v.startsWith("--")) throw new Error("--org requires a value");
-    org = v;
+  let apply = false;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]!;
+    if (a === "--apply") apply = true;
+    else if (a === "--org") {
+      const v = argv[i + 1]?.trim();
+      if (!v || v.startsWith("--")) throw new Error("--org requires a value");
+      org = v;
+      i++;
+    } else throw new Error(`unknown argument: ${a}`);
   }
-  return { ...(org ? { org } : {}), apply: argv.includes("--apply") };
+  return { ...(org ? { org } : {}), apply };
 }

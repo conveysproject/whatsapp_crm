@@ -153,7 +153,7 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
             data: {
               conversationId: conversation.id, organizationId, direction: "outbound",
               contentType: fields.contentType, body: fields.body, mediaUrl: fields.mediaUrl, status: "sending",
-              ...(templateIdForMessage ? { templateId: templateIdForMessage, source: "api" } : { source: "api" }),
+              source: "api", ...(templateIdForMessage ? { templateId: templateIdForMessage } : {}),
             },
           });
           messageId = message.id;
