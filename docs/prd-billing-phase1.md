@@ -127,3 +127,14 @@ Risks
 - `PATCH /organizations/me` returns the full org row including `wabaAccessToken` and `stripeId` (separate security ticket).
 - With the flag off, Stripe payments write no Transaction row (legacy path, by design).
 - A legacy customer deleted in Stripe now returns 500 at checkout.
+
+## 11. Phase 1B entitlements rollout runbook
+
+Plan tiers now decide limits and feature switches (`apps/api/src/lib/billing/plans.ts`, applied by `checkPlanLimit` and `isFeatureEnabled` in `apps/api/src/lib/plan-limits.ts`). The tier values in `plans.ts` are placeholders; edit that one table to change them. A per-org `VendorSetting` row (`plan_limit_*` / `plan_feature_*`) always overrides the tier, in every mode.
+
+1. Deploy with `BILLING_V2_ENABLED` unset: nothing changes and no extra database queries run.
+2. Set `BILLING_V2_ENABLED=true`: shadow mode. No request is blocked and no feature changes. The API logs `[entitlements] shadow_block` (org id, entity, current count, limit) when an org is at or over its tier limit, and `[entitlements] shadow_enable` when the tier would turn on a feature that is off today. Review these logs for about 30 days.
+3. Before enforcing, read the logs, confirm or edit the tier table in `plans.ts`, and run the read-only production query (orgs per tier, existing `plan_limit_*` / `plan_feature_*` rows) once the owner approves it.
+4. Set `BILLING_ENTITLEMENTS_ENFORCE=true` and `BILLING_ENTITLEMENTS_ENFORCE_AFTER=<ISO date>` to enforce only for organizations created on or after that date. Older organizations stay in shadow mode (grandfathered). An invalid or missing-in-error date fails safe to shadow.
+5. Note: the AI chat bot and API access features are off today for organizations without a settings row. Enforcing turns them ON for growth, scale and enterprise organizations created after the cutover.
+6. Rollback: unset `BILLING_ENTITLEMENTS_ENFORCE` (back to shadow) or `BILLING_V2_ENABLED` (back to today's behaviour). No data changes are involved.
