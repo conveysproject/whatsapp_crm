@@ -63,9 +63,11 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
   const { getToken } = useAuth();
   const router = useRouter();
   const [switching, setSwitching] = useState<string | null>(null);
+  const [switchNote, setSwitchNote] = useState<string | null>(null);
 
   async function switchPlan(tier: string) {
     setSwitching(tier);
+    setSwitchNote(null);
     const token = await getToken();
     const res = await fetch(`${API_URL}/v1/billing/switch-plan`, {
       method: "POST",
@@ -73,7 +75,11 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
       body: JSON.stringify({ planTier: tier }),
     });
     setSwitching(null);
-    if (res.ok) router.refresh();
+    if (res.ok) {
+      const body = (await res.json().catch(() => null)) as { data?: { pending?: boolean } } | null;
+      if (body?.data?.pending === true) setSwitchNote("Plan change requested. It applies once the payment is confirmed.");
+      router.refresh();
+    }
   }
 
   async function subscribe(tier: string) {
@@ -193,6 +199,7 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
               );
             })}
           </div>
+          {switchNote && <p className="mt-3 text-xs text-gray-600">{switchNote}</p>}
         </div>
       )}
 

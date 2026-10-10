@@ -3,14 +3,14 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import type * as ActivationModule from "../lib/billing/activation.js";
 
-const { stripeSessionCreate, ordersCreate, razorpayCtor, webhookEndpointsCreate, customersCreate, subscriptionsList } = vi.hoisted(() => ({ stripeSessionCreate: vi.fn(), ordersCreate: vi.fn(), razorpayCtor: vi.fn(), webhookEndpointsCreate: vi.fn(), customersCreate: vi.fn(), subscriptionsList: vi.fn() }));
+const { stripeSessionCreate, ordersCreate, razorpayCtor, webhookEndpointsCreate, customersCreate, subscriptionsList, subscriptionsUpdate } = vi.hoisted(() => ({ stripeSessionCreate: vi.fn(), ordersCreate: vi.fn(), razorpayCtor: vi.fn(), webhookEndpointsCreate: vi.fn(), customersCreate: vi.fn(), subscriptionsList: vi.fn(), subscriptionsUpdate: vi.fn() }));
 vi.mock("../lib/stripe.js", () => ({
   getStripe: () => ({
     checkout: { sessions: { create: stripeSessionCreate } },
     billingPortal: { sessions: { create: vi.fn() } },
     webhookEndpoints: { create: webhookEndpointsCreate },
     customers: { create: customersCreate },
-    subscriptions: { list: subscriptionsList, update: vi.fn(), cancel: vi.fn() },
+    subscriptions: { list: subscriptionsList, update: subscriptionsUpdate, cancel: vi.fn() },
   }),
   PLAN_PRICE_IDS: { starter: "price_starter", growth: "price_growth" },
   PLAN_LIMITS: {
@@ -435,6 +435,42 @@ describe("POST /v1/billing/switch-plan prototype keys", () => {
       expect(res.json().error.code, planTier).toBe("INVALID_PLAN");
     }
     await a.close();
+  });
+});
+
+describe("POST /v1/billing/switch-plan payment gating", () => {
+  let prevFlag: string | undefined;
+  let a: FastifyInstance;
+  beforeEach(async () => {
+    vi.resetModules(); vi.clearAllMocks();
+    prevFlag = process.env["BILLING_V2_ENABLED"];
+    mockPrisma.organization.findUnique.mockReset().mockResolvedValue({ stripeId: "cus_1", settings: {} });
+    subscriptionsList.mockReset().mockResolvedValue({ data: [{ id: "sub_1", items: { data: [{ id: "si_1" }] } }] });
+    subscriptionsUpdate.mockReset().mockResolvedValue({});
+    a = await buildAs("admin");
+  });
+  afterEach(async () => {
+    if (prevFlag === undefined) delete process.env["BILLING_V2_ENABLED"]; else process.env["BILLING_V2_ENABLED"] = prevFlag;
+    await a.close();
+  });
+
+  it("flag on: updates Stripe, does not write planTier, returns pending", async () => {
+    process.env["BILLING_V2_ENABLED"] = "true";
+    const res = await a.inject({ method: "POST", url: "/v1/billing/switch-plan", payload: { planTier: "growth" } });
+    expect(res.statusCode).toBe(200);
+    expect(subscriptionsUpdate).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(res.json()).toEqual({ data: { success: true, planTier: "growth", pending: true } });
+  });
+
+  it("flag off: writes planTier and returns no pending key", async () => {
+    delete process.env["BILLING_V2_ENABLED"];
+    const res = await a.inject({ method: "POST", url: "/v1/billing/switch-plan", payload: { planTier: "growth" } });
+    expect(res.statusCode).toBe(200);
+    expect(subscriptionsUpdate).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.organization.update).toHaveBeenCalledWith({ where: { id: "org-1" }, data: { planTier: "growth" } });
+    expect(res.json()).toEqual({ data: { success: true, planTier: "growth" } });
+    expect(res.json().data).not.toHaveProperty("pending");
   });
 });
 

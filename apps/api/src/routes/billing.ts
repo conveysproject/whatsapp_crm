@@ -7,6 +7,7 @@ import { canAccessSub } from "../lib/permissions.js";
 import { PLAN_CATALOG, isBillableTier, type BillableTier } from "../lib/billing/catalog.js";
 import { activatePlan } from "../lib/billing/activation.js";
 import { getStripeCustomerId } from "../lib/billing/stripe-customer.js";
+import { isBillingV2Enabled } from "../lib/billing/flags.js";
 import { isAllowedRedirect } from "../lib/billing/safe-redirect.js";
 import Razorpay from "razorpay";
 
@@ -170,6 +171,10 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       proration_behavior: "always_invoice",
       metadata: { planTier },
     });
+    if (isBillingV2Enabled()) {
+      // The plan changes when the paid invoice arrives (invoice.payment_succeeded).
+      return { data: { success: true, planTier, pending: true } };
+    }
     await fastify.prisma.organization.update({
       where: { id: organizationId },
       data: { planTier },
