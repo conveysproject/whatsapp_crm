@@ -2,11 +2,10 @@
  * Backfill Organization.stripeId from settings.stripeCustomerId for orgs where stripeId is null.
  *
  * SAFETY: run the dry run first (default, writes nothing). Run with --apply ONLY after the owner confirms.
- * Reads DATABASE_URL from the environment only; nothing derived from it is printed.
+ * Reads DATABASE_PUBLIC_URL (else DATABASE_URL) from the environment only; nothing derived from it is printed.
  * Output: counts and organization ids only (no settings, customer ids or emails).
  *
- *   railway run pnpm tsx scripts/backfill-stripe-id.ts            # dry run
- *   railway run pnpm tsx scripts/backfill-stripe-id.ts --apply    # writes
+ *   (from apps/api) railway run --service Postgres pnpm tsx scripts/backfill-stripe-id.ts [--apply]
  */
 import { pathToFileURL } from "node:url";
 import { PrismaClient } from "@prisma/client";
@@ -15,7 +14,7 @@ import { parseBackfillArgs, planStripeIdBackfill, type BackfillOrg } from "../sr
 
 async function main(): Promise<void> {
   const { apply } = parseBackfillArgs(process.argv.slice(2)); // throws before connecting if args are invalid
-  const url = process.env["DATABASE_URL"];
+  const url = process.env["DATABASE_PUBLIC_URL"] ?? process.env["DATABASE_URL"];
   if (!url) throw new Error("DATABASE_URL is not set");
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
   try {
