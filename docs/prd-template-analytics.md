@@ -92,3 +92,25 @@ Org scoping and the `templates_access` gate are unchanged; another org's id -> 4
 - `sent_at` is UTC; daily buckets are UTC days (labelled). Org timezone is a possible later improvement.
 - Campaign history may stay largely unattributed if `rich_content` has no template name; the backfill report will say how many.
 - Large orgs: the new index plus date-range predicate keep the query bounded; add `EXPLAIN` check in the plan.
+
+## 10. As built
+
+Shipped on branch `feat/template-analytics` (tasks 1-7):
+
+- Migration `20261010000000_message_template_link`: nullable `messages.template_id` and `messages.source`, plus index `messages_org_template_sent_idx`.
+- Writers set `template_id` and `source` at send time: dashboard send, test send, public API, campaign worker, flow runner (via `recordOutbound`, which takes `templateId` and `source`).
+- Backfill `apps/api/scripts/backfill-message-template-link.ts` (runbook: `docs/runbooks/template-analytics-backfill.md`).
+- Query module `apps/api/src/lib/template-analytics.ts` and route `GET /templates/:id/analytics?range=7d|30d|90d|all` (default 30d) in `apps/api/src/routes/templates.ts`, behind the `templates_access` section gate, org-scoped, identical 404 for unknown and other-org ids.
+- Web page `/templates/<id>/analytics`.
+- End-to-end check against a real Postgres: `apps/api/scripts/smoke-template-analytics-e2e.ts` (manual, not part of `vitest run`).
+
+Deviations and findings from the build:
+
+- Backfill UPDATE uses `unnest` over parallel arrays: one parameterized statement per batch of 500 instead of one statement per row. Each row still re-checks `organization_id` and `template_id IS NULL`.
+- The dry run executes inside one `SET TRANSACTION READ ONLY` transaction on a single connection, so it cannot write even through a bug.
+- Attribution note predicate: the route shows "Messages sent before this feature was introduced may not be included." when the organization has ANY outbound template message with `template_id IS NULL` (cheap `findFirst`, org-scoped, no message text read). It is organization-wide, not per template, and it stays visible after the backfill while unattributable rows remain (old campaign rows, ambiguous or deleted template names).
+- "7d" covers 8 UTC days (today plus the 7 previous days, from the start of the UTC day), so the daily series has 8 rows; 30d has 31, 90d has 91.
+- The web page is wrapped in `PermissionGate` (templates access), in addition to the API gate.
+- The page was split into `TemplateAnalyticsView` (presentational) and a thin data-loading wrapper so the view can be tested with fixtures.
+- Cypress specs were written after the components (not test-first).
+- Failure codes without a plain-language mapping (for example 131042) show a generic "WhatsApp could not deliver the message."; rows with no code show as `unknown`.
