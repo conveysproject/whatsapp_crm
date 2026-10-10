@@ -14,6 +14,8 @@ export interface ActivatePlanInput {
   stripeSubscriptionId?: string;
   manualSubscriptionId?: string;
   cancelAtPeriodEnd?: boolean;
+  /** Record the Transaction only: no manual-subscription writes and no organization update. */
+  ledgerOnly?: boolean;
 }
 
 export interface ActivationResult { duplicate: boolean }
@@ -51,6 +53,7 @@ export async function activatePlan(prisma: PrismaClient, input: ActivatePlanInpu
           metadata: { source: input.source, planTier: input.planTier },
         },
       });
+      if (input.ledgerOnly) return;
       if (input.manualSubscriptionId) {
         await tx.manualSubscription.updateMany({
           where: { organizationId: input.organizationId, status: "active", id: { not: input.manualSubscriptionId } },

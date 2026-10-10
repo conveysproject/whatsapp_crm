@@ -115,24 +115,56 @@ describe("POST /v1/billing/webhook", () => {
     expect((await post(app)).statusCode).toBe(200);
   });
 
-  it("invoice.payment_failed starts grace and emails once", async () => {
+  it("invoice.payment_failed starts grace atomically and emails once", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-01T00:00:00Z"));
     constructEvent.mockReturnValue(ev("invoice.payment_failed", { id: "in_2", customer: "cus_1" }));
+    mockPrisma.organization.updateMany.mockResolvedValue({ count: 1 });
     expect((await post(app)).statusCode).toBe(200);
-    const call = mockPrisma.organization.update.mock.calls[0]![0] as { data: { billingStatus: string; billingGraceEndsAt: Date } };
-    expect(call.data.billingStatus).toBe("past_due");
-    expect(call.data.billingGraceEndsAt.getTime()).toBe(new Date("2026-10-08T00:00:00Z").getTime());
+    const grace = new Date("2026-10-08T00:00:00Z");
+    expect(mockPrisma.organization.updateMany).toHaveBeenCalledWith({
+      where: { id: "org-1", billingStatus: { not: "past_due" } },
+      data: { billingStatus: "past_due", billingGraceEndsAt: grace },
+    });
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
     expect(notifyMock).toHaveBeenCalledTimes(1);
-    expect(notifyMock).toHaveBeenCalledWith(mockPrisma, "org-1", call.data.billingGraceEndsAt);
+    expect(notifyMock).toHaveBeenCalledWith(mockPrisma, "org-1", grace);
   });
 
-  it("invoice.payment_failed never extends an existing grace", async () => {
+  it("invoice.payment_failed does not email when already past_due (count 0)", async () => {
     constructEvent.mockReturnValue(ev("invoice.payment_failed", { id: "in_2", customer: "cus_1" }));
-    mockPrisma.organization.findFirst.mockResolvedValue(org("past_due"));
+    mockPrisma.organization.updateMany.mockResolvedValue({ count: 0 });
     expect((await post(app)).statusCode).toBe(200);
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
     expect(notifyMock).not.toHaveBeenCalled();
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+  });
+
+  it("cancelled org + no active sub: late invoice is ledger-only", async () => {
+    constructEvent.mockReturnValue(invoiceEv());
+    mockPrisma.organization.findFirst.mockResolvedValue(org("cancelled"));
+    expect((await post(app)).statusCode).toBe(200);
+    expect(activatePlanMock).toHaveBeenCalledWith(mockPrisma, expect.objectContaining({
+      ledgerOnly: true, referenceId: "stripe:invoice:in_1", amountMinor: 299900, currency: "inr" }));
+  });
+
+  it("cancelled org + active sub (re-subscribed): normal activation", async () => {
+    constructEvent.mockReturnValue(invoiceEv());
+    mockPrisma.organization.findFirst.mockResolvedValue(org("cancelled"));
+    subsList.mockResolvedValue({ data: [{ id: "sub_9", items: { data: [{ price: { id: "price_g" } }] } }] });
+    await post(app);
+    const input = activatePlanMock.mock.calls[0]![1] as { ledgerOnly?: boolean; planTier: string };
+    expect(input.ledgerOnly).toBeUndefined();
+    expect(input.planTier).toBe("growth");
+  });
+
+  it("active/past_due org + no active sub: normal activation", async () => {
+    constructEvent.mockReturnValue(invoiceEv());
+    for (const st of ["active", "past_due"]) {
+      activatePlanMock.mockClear();
+      mockPrisma.organization.findFirst.mockResolvedValue(org(st));
+      await post(app);
+      expect((activatePlanMock.mock.calls[0]![1] as { ledgerOnly?: boolean }).ledgerOnly).toBeUndefined();
+    }
   });
 
   it("customer.subscription.updated stores cancel_at_period_end", async () => {

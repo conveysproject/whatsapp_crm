@@ -57,6 +57,28 @@ describe("activatePlan", () => {
   });
 });
 
+describe("activatePlan ledgerOnly", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    tx.transaction.create.mockReset(); tx.organization.update.mockReset();
+    tx.manualSubscription.updateMany.mockReset(); tx.manualSubscription.update.mockReset();
+  });
+
+  it("inserts the transaction and writes nothing else", async () => {
+    const res = await activatePlan(prisma, { ...base, ledgerOnly: true, manualSubscriptionId: "ms-1" });
+    expect(res).toEqual({ duplicate: false });
+    expect(tx.transaction.create).toHaveBeenCalledTimes(1);
+    expect(tx.organization.update).not.toHaveBeenCalled();
+    expect(tx.manualSubscription.updateMany).not.toHaveBeenCalled();
+    expect(tx.manualSubscription.update).not.toHaveBeenCalled();
+  });
+
+  it("still reports duplicate on P2002", async () => {
+    tx.transaction.create.mockRejectedValue(p2002);
+    expect(await activatePlan(prisma, { ...base, ledgerOnly: true })).toEqual({ duplicate: true });
+  });
+});
+
 describe("isUnknownOrgError", () => {
   it("matches P2003 and P2025 only", () => {
     expect(isUnknownOrgError({ code: "P2003" })).toBe(true);

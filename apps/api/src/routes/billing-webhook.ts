@@ -105,18 +105,20 @@ export const billingWebhookRouter: FastifyPluginAsync = async (fastify) => {
             currency: typeof obj["currency"] === "string" ? obj["currency"] : undefined,
             stripeSubscriptionId: sub?.id,
             cancelAtPeriodEnd: sub?.cancel_at_period_end,
+            // A late/retried invoice after cancellation keeps the money record but must not resurrect the plan.
+            ...(!sub && org.billingStatus === "cancelled" ? { ledgerOnly: true } : {}),
           });
         } else if (v2 && event.type === "invoice.payment_failed") {
           const org = await findOrg(customerOf(obj["customer"]));
           if (!org) {
             fastify.log.warn("stripe payment_failed for unknown customer");
-          } else if (org.billingStatus !== "past_due") {
+          } else {
             const graceEndsAt = new Date(Date.now() + graceDays() * 86_400_000);
-            await fastify.prisma.organization.update({
-              where: { id: org.id },
+            const res = await fastify.prisma.organization.updateMany({
+              where: { id: org.id, billingStatus: { not: "past_due" } },
               data: { billingStatus: "past_due", billingGraceEndsAt: graceEndsAt },
             });
-            await notifyPaymentFailed(fastify.prisma, org.id, graceEndsAt);
+            if (res.count === 1) await notifyPaymentFailed(fastify.prisma, org.id, graceEndsAt);
           }
         } else if (v2 && event.type === "customer.subscription.updated") {
           const org = await findOrg(customerOf(obj["customer"]));
