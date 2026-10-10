@@ -4,7 +4,7 @@ import { sendMail } from "../mail.js";
 export async function notifyPaymentFailed(prisma: PrismaClient, organizationId: string, graceEndsAt: Date): Promise<void> {
   try {
     const admins = await prisma.user.findMany({
-      where: { organizationId, role: "admin", isActive: true },
+      where: { organizationId, role: "admin", isActive: true, deletedAt: null },
       select: { email: true },
     });
     const to = admins.map((a) => a.email).filter(Boolean);

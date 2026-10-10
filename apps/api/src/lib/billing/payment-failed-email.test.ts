@@ -17,7 +17,7 @@ describe("notifyPaymentFailed", () => {
   it("emails the active admins of the org only", async () => {
     findMany.mockResolvedValue([{ email: "a@x.com" }, { email: "b@x.com" }]);
     await notifyPaymentFailed(prisma, "org-1", new Date("2026-10-17T00:00:00Z"));
-    expect(findMany).toHaveBeenCalledWith({ where: { organizationId: "org-1", role: "admin", isActive: true }, select: { email: true } });
+    expect(findMany).toHaveBeenCalledWith({ where: { organizationId: "org-1", role: "admin", isActive: true, deletedAt: null }, select: { email: true } });
     expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: ["a@x.com", "b@x.com"], subject: expect.stringContaining("WBMSG") }));
     expect(String(sendMail.mock.calls[0]![0].html)).toContain("17");
   });
