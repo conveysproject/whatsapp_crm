@@ -32,13 +32,13 @@ Non-goals (later phases): usage metering and pricing (Phase 2), `/admin/billing`
 ## 3. Design
 
 ### 3.1 Plan definitions (code, not DB, in Phase 1)
-`apps/api/src/lib/billing/plans.ts` exports `PLAN_DEFINITIONS: Record<BillableTier | "enterprise", { limits: {contacts,campaigns,chatbots,flows,custom_fields,team_members: number | null}, features: {ai_chat_bot, api_access: boolean} }>` (`null` = unlimited), plus `getEntitlements(prisma, organizationId)`.
+`apps/api/src/lib/billing/plans.ts` exports `TIER_DEFINITIONS: Record<BillableTier | "enterprise", { limits: {contacts,campaigns,chatbots,flows,custom_fields,team_members: number | null}, features: {ai_chat_bot, api_access: boolean} }>` (`null` = unlimited), plus the lookup helpers `tierLimit` and `tierFeature`.
 Precedence: **per-org platform override (`VendorSetting plan_limit_*`/`plan_feature_*` if a row exists) > tier definition > (if flag off) today's behavior**. `checkPlanLimit` and `isFeatureEnabled` call it; their signatures and `GET /billing/usage` response shape do not change (dashboard consumes it).
 Phase 3 can move the definitions into DB tables behind the same function.
 
 ### 3.2 Rollout safety for entitlements
 - Flag `BILLING_V2_ENABLED` (env, default off): off = exactly today's behavior.
-- Even with the flag on, tier limits apply in **shadow mode first**: when an org would be blocked, log `entitlement_shadow_block` (org, entity, current, limit) and allow. A second flag `BILLING_ENTITLEMENTS_ENFORCE=1` turns on real blocking. This answers E9 and avoids locking out existing customers.
+- Even with the flag on, tier limits apply in **shadow mode first**: when an org would be blocked, log `[entitlements] shadow_block` (org, entity, current, limit; and `[entitlements] shadow_enable` for features) and allow. A second flag `BILLING_ENTITLEMENTS_ENFORCE=true` (exactly `"true"`, not `1`) turns on real blocking, and enforcement also requires a valid `BILLING_ENTITLEMENTS_ENFORCE_AFTER` cutover date (missing or invalid means shadow). This answers E9 and avoids locking out existing customers.
 - Orgs that already have `plan_limit_*` rows keep them (override wins). Optional grandfather list = orgs with a row are never changed by this phase.
 
 ### 3.3 One activation pipeline
@@ -133,8 +133,19 @@ Risks
 Plan tiers now decide limits and feature switches (`apps/api/src/lib/billing/plans.ts`, applied by `checkPlanLimit` and `isFeatureEnabled` in `apps/api/src/lib/plan-limits.ts`). The tier values in `plans.ts` are placeholders; edit that one table to change them. A per-org `VendorSetting` row (`plan_limit_*` / `plan_feature_*`) always overrides the tier, in every mode.
 
 1. Deploy with `BILLING_V2_ENABLED` unset: nothing changes and no extra database queries run.
-2. Set `BILLING_V2_ENABLED=true`: shadow mode. No request is blocked and no feature changes. The API logs `[entitlements] shadow_block` (org id, entity, current count, limit) when an org is at or over its tier limit, and `[entitlements] shadow_enable` when the tier would turn on a feature that is off today. Review these logs for about 30 days.
+2. Set `BILLING_V2_ENABLED=true`: shadow mode. Note that this flag also switches on the Phase 1A Stripe lifecycle and the grace job, so shadow logging cannot be enabled separately from them. Shadow logs are deduplicated per organization and entity or feature, once per hour per process. No request is blocked and no feature changes. The API logs `[entitlements] shadow_block` (org id, entity, current count, limit) when an org is at or over its tier limit, and `[entitlements] shadow_enable` when the tier would turn on a feature that is off today. Review these logs for about 30 days.
 3. Before enforcing, read the logs, confirm or edit the tier table in `plans.ts`, and run the read-only production query (orgs per tier, existing `plan_limit_*` / `plan_feature_*` rows) once the owner approves it.
-4. Set `BILLING_ENTITLEMENTS_ENFORCE=true` and `BILLING_ENTITLEMENTS_ENFORCE_AFTER=<ISO date>` to enforce only for organizations created on or after that date. Older organizations stay in shadow mode (grandfathered). An invalid or missing-in-error date fails safe to shadow.
-5. Note: the AI chat bot and API access features are off today for organizations without a settings row. Enforcing turns them ON for growth, scale and enterprise organizations created after the cutover.
+4. Set `BILLING_ENTITLEMENTS_ENFORCE=true` and `BILLING_ENTITLEMENTS_ENFORCE_AFTER=<ISO date>` to enforce only for organizations created on or after that date. Older organizations stay in shadow mode (grandfathered). Enforcement REQUIRES `BILLING_ENTITLEMENTS_ENFORCE_AFTER`: if it is missing, empty or invalid, every organization stays in shadow mode.
+5. Default flip: the AI chat bot and API access features are off today for organizations without a settings row. With enforcement on, growth, scale and enterprise organizations created after the cutover get `api_access` (stored outbound webhooks start receiving inbound message payloads, including the customer phone number and message body) and `ai_chat_bot` (scripted flow bots run for conversations with status "bot" and can send WhatsApp messages automatically; there is no LLM cost). A `VendorSetting` override applies per key, not per organization: an organization with only `plan_limit_contacts` still gets tier limits for the other entities. A malformed override value means unlimited.
 6. Rollback: unset `BILLING_ENTITLEMENTS_ENFORCE` (back to shadow) or `BILLING_V2_ENABLED` (back to today's behaviour). No data changes are involved.
+
+## 12. Before enabling BILLING_ENTITLEMENTS_ENFORCE
+
+Not implemented in Phase 1B; complete or decide these first.
+
+- Close limit bypasses: `POST /flows/:id/duplicate` (`flows.ts`), the contact import worker `createMany` (`workers/contact-import.worker.ts`), the public API message upsert that creates contacts (`routes/public-api/messages.ts`), and invitations (`routes/invitations.ts`), which count only active users and never re-check on accept.
+- Fix the bot-runner escalation, which uses the platform's WhatsApp credentials instead of the organization's (`lib/bot-runner.ts`).
+- On a downgrade that switches `ai_chat_bot` off, conversations stuck in status "bot" get no replies: reset them to open or let auto-replies run.
+- Owner decision: organizations grandfathered by `createdAt` never receive tier features, even after upgrading. Decide whether upgraded grandfathered organizations should get features.
+- Performance: with the flag on, each limit or feature check adds one organization lookup (inbound worker 2 per message, `GET /billing/usage` 8, analytics 6). Add a single loader that reads the organization and all plan rows once, let the worker pass the organization it already loaded, and optionally add a 30 to 60 second cache of `{planTier, createdAt}` that `activatePlan`, the grace job, the Stripe webhook and the admin PATCH invalidate.
+- Add enforce-mode tests for `team_members` and `contacts`, and for a tier limit of 0 or null on a specific entity.
