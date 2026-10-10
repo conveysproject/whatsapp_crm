@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { checkPlanLimit, isFeatureEnabled } from "./plan-limits.js";
+import { resetShadowLogForTests } from "./billing/shadow-log.js";
 
 const m = {
   vendorSetting: { findFirst: vi.fn() },
@@ -29,6 +30,7 @@ function campaigns(n: number) {
 }
 
 beforeEach(() => {
+  resetShadowLogForTests();
   for (const k of ENV_KEYS) {
     saved[k] = process.env[k];
     delete process.env[k];
@@ -101,6 +103,32 @@ describe("shadow", () => {
     expect(await isFeatureEnabled(prisma, "org-1", "api_access")).toBe(false);
     expect(warn).toHaveBeenCalledWith("[entitlements] shadow_enable", { organizationId: "org-1", feature: "api_access" });
   });
+  it("enforce on without a cutover date stays shadow", async () => {
+    process.env["BILLING_ENTITLEMENTS_ENFORCE"] = "true";
+    org("starter");
+    campaigns(6);
+    expect(await checkPlanLimit(prisma, "org-1", "campaigns")).toEqual({ allowed: true, limit: -1, current: 6 });
+  });
+  it("repeated shadow_block for the same org+entity logs once; other org or entity logs again", async () => {
+    org("starter");
+    campaigns(6);
+    await checkPlanLimit(prisma, "org-1", "campaigns");
+    await checkPlanLimit(prisma, "org-1", "campaigns");
+    expect(warn).toHaveBeenCalledTimes(1);
+    await checkPlanLimit(prisma, "org-2", "campaigns");
+    expect(warn).toHaveBeenCalledTimes(2);
+    m.contact.count.mockResolvedValue(1000);
+    await checkPlanLimit(prisma, "org-1", "contacts");
+    expect(warn).toHaveBeenCalledTimes(3);
+  });
+  it("repeated shadow_enable for the same org+feature logs once", async () => {
+    org("growth");
+    await isFeatureEnabled(prisma, "org-1", "api_access");
+    await isFeatureEnabled(prisma, "org-1", "api_access");
+    expect(warn).toHaveBeenCalledTimes(1);
+    await isFeatureEnabled(prisma, "org-2", "api_access");
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
   it("feature: starter false, no log", async () => {
     org("starter");
     expect(await isFeatureEnabled(prisma, "org-1", "api_access")).toBe(false);
@@ -112,6 +140,7 @@ describe("enforce", () => {
   beforeEach(() => {
     process.env["BILLING_V2_ENABLED"] = "true";
     process.env["BILLING_ENTITLEMENTS_ENFORCE"] = "true";
+    process.env["BILLING_ENTITLEMENTS_ENFORCE_AFTER"] = "2000-01-01T00:00:00Z";
   });
   it("starter at limit blocked, under allowed", async () => {
     org("starter");
@@ -176,6 +205,7 @@ describe("fail safe", () => {
   beforeEach(() => {
     process.env["BILLING_V2_ENABLED"] = "true";
     process.env["BILLING_ENTITLEMENTS_ENFORCE"] = "true";
+    process.env["BILLING_ENTITLEMENTS_ENFORCE_AFTER"] = "2000-01-01T00:00:00Z";
     campaigns(50);
   });
   it("missing org behaves as today", async () => {

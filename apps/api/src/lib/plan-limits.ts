@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { isBillingV2Enabled } from "./billing/flags.js";
+import { shouldLogShadow } from "./billing/shadow-log.js";
 import { resolveEntitlementMode } from "./billing/entitlement-mode.js";
 import { tierFeature, tierLimit, type FeatureKey, type LimitEntity } from "./billing/plans.js";
 
@@ -66,7 +67,7 @@ export async function isFeatureEnabled(
   if (mode === "off") return today;
   const tierOn = tierFeature(org.planTier, feature) ?? false;
   if (mode === "shadow") {
-    if (tierOn) console.warn("[entitlements] shadow_enable", { organizationId, feature });
+    if (tierOn && shouldLogShadow(`shadow_enable:${organizationId}:${feature}`)) console.warn("[entitlements] shadow_enable", { organizationId, feature });
     return today;
   }
   return tierOn;
@@ -99,7 +100,7 @@ export async function checkPlanLimit(
 
   const tier = tierLimit(org.planTier, entity); // number | null | undefined
   if (mode === "shadow") {
-    if (typeof tier === "number" && current >= tier) {
+    if (typeof tier === "number" && current >= tier && shouldLogShadow(`shadow_block:${organizationId}:${entity}`)) {
       console.warn("[entitlements] shadow_block", { organizationId, entity, current, limit: tier });
     }
     return today();
