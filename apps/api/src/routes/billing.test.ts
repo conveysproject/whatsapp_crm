@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import type * as ActivationModule from "../lib/billing/activation.js";
 
 const { stripeSessionCreate, ordersCreate, razorpayCtor, webhookEndpointsCreate } = vi.hoisted(() => ({ stripeSessionCreate: vi.fn(), ordersCreate: vi.fn(), razorpayCtor: vi.fn(), webhookEndpointsCreate: vi.fn() }));
 vi.mock("../lib/stripe.js", () => ({
@@ -16,6 +17,12 @@ vi.mock("../lib/stripe.js", () => ({
     growth: { contacts: 5000, messages: 20000 },
   },
   ZERO_DECIMAL_CURRENCIES: new Set<string>(),
+}));
+
+const { activatePlanMock } = vi.hoisted(() => ({ activatePlanMock: vi.fn() }));
+vi.mock("../lib/billing/activation.js", async (orig) => ({
+  ...(await orig<typeof ActivationModule>()),
+  activatePlan: activatePlanMock,
 }));
 
 vi.mock("razorpay", () => ({
@@ -242,13 +249,14 @@ async function buildAs(role: string, permissions: Record<string, string> = {}): 
 }
 
 describe("manual subscription + read RBAC", () => {
-  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); activatePlanMock.mockReset().mockResolvedValue({ duplicate: false }); });
 
   it("org admin cannot approve a manual subscription", async () => {
     const a = await buildAs("admin");
     const res = await a.inject({ method: "POST", url: "/v1/billing/manual/ms-1/approve" });
     expect(res.statusCode).toBe(403);
     expect(mockPrisma.manualSubscription.findFirst).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
     await a.close();
   });
 
@@ -260,10 +268,14 @@ describe("manual subscription + read RBAC", () => {
   });
 
   it("superAdmin can approve", async () => {
-    mockPrisma.manualSubscription.findFirst.mockResolvedValueOnce({ id: "ms-1", organizationId: "org-2", planTier: "growth" });
+    mockPrisma.manualSubscription.findFirst.mockResolvedValueOnce({ id: "ms-1", organizationId: "org-2", planTier: "growth", gateway: "bank_transfer", charges: "2999.00" });
     const a = await buildAs("superAdmin");
     const res = await a.inject({ method: "POST", url: "/v1/billing/manual/ms-1/approve" });
     expect(res.statusCode).toBe(200);
+    expect(activatePlanMock).toHaveBeenCalledWith(expect.anything(), {
+      organizationId: "org-2", planTier: "growth", source: "manual_approval", gateway: "bank_transfer",
+      referenceId: "manual:ms-1", manualSubscriptionId: "ms-1", amountMinor: 299900,
+    });
     await a.close();
   });
 

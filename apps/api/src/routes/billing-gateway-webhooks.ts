@@ -1,11 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
-import type { PlanTier, Prisma } from "@prisma/client";
+import type { PlanTier } from "@prisma/client";
 import { createHmac, timingSafeEqual } from "crypto";
 import { isBillableTier, isPaidAmountSufficient } from "../lib/billing/catalog.js";
-
-function isRecordNotFound(err: unknown): boolean {
-  return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "P2025";
-}
+import { activatePlan, isUnknownOrgError } from "../lib/billing/activation.js";
 
 function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a, "utf8");
@@ -23,7 +20,7 @@ export const billingGatewayWebhooksRouter: FastifyPluginAsync = async (fastify) 
   }
 
   // ── Razorpay ────────────────────────────────────────────────────────────
-  type RzpEvent = { event?: string; payload?: { payment?: { entity?: { amount?: number; currency?: string; notes?: { organizationId?: string; planId?: string; manualSubId?: string } } } } };
+  type RzpEvent = { event?: string; payload?: { payment?: { entity?: { id?: string; amount?: number; currency?: string; notes?: { organizationId?: string; planId?: string; manualSubId?: string } } } } };
   fastify.post("/billing/razorpay/webhook", { config: { public: true } }, async (request, reply) => {
     const signature = request.headers["x-razorpay-signature"];
     const event = parse<RzpEvent>(request.body);
@@ -39,19 +36,19 @@ export const billingGatewayWebhooksRouter: FastifyPluginAsync = async (fastify) 
       // Manual subscriptions are activated only by superAdmin approval, never by a webhook.
       const { planId } = entity.notes ?? {};
       if (isBillableTier(planId) && isPaidAmountSufficient(planId, entity.currency ?? "", entity.amount ?? NaN)) {
-        try {
-          const org = await fastify.prisma.organization.findUnique({ where: { id: orgId }, select: { settings: true } });
-          const existing = (org?.settings as Record<string, unknown>) ?? {};
-          await fastify.prisma.organization.update({
-            where: { id: orgId },
-            data: {
-              planTier: planId as PlanTier,
-              settings: ({ ...existing, razorpayPlanId: planId, activatedAt: new Date().toISOString() } as Record<string, unknown>) as Prisma.InputJsonValue,
-            },
-          });
-        } catch (err) {
-          if (!isRecordNotFound(err)) throw err;
-          fastify.log.warn({ orgId, planId }, "razorpay payment for an organization that no longer exists");
+        if (!entity.id) {
+          fastify.log.warn({ orgId, planId }, "razorpay payment not activated: missing payment id");
+        } else {
+          try {
+            await activatePlan(fastify.prisma, {
+              organizationId: orgId, planTier: planId as PlanTier, source: "razorpay", gateway: "razorpay",
+              referenceId: `razorpay:${entity.id}`, gatewayTransactionId: entity.id,
+              amountMinor: entity.amount, currency: entity.currency,
+            });
+          } catch (err) {
+            if (!isUnknownOrgError(err)) throw err;
+            fastify.log.warn({ orgId, planId }, "razorpay payment for an organization that no longer exists");
+          }
         }
       } else if (planId) {
         fastify.log.warn({ orgId, planId, currency: entity.currency, amount: entity.amount }, "razorpay payment not activated: unknown plan or insufficient amount (manual review)");
@@ -61,7 +58,7 @@ export const billingGatewayWebhooksRouter: FastifyPluginAsync = async (fastify) 
   });
 
   // ── Paystack ────────────────────────────────────────────────────────────
-  type PsEvent = { event?: string; data?: { amount?: number; currency?: string; metadata?: { organizationId?: string; planId?: string } } };
+  type PsEvent = { event?: string; data?: { reference?: string; amount?: number; currency?: string; metadata?: { organizationId?: string; planId?: string } } };
   fastify.post("/billing/paystack/webhook", { config: { public: true } }, async (request, reply) => {
     const hash = request.headers["x-paystack-signature"];
     const event = parse<PsEvent>(request.body);
@@ -75,11 +72,20 @@ export const billingGatewayWebhooksRouter: FastifyPluginAsync = async (fastify) 
     if (event.event === "charge.success" && orgId && event.data) {
       const { planId } = event.data.metadata ?? {};
       if (isBillableTier(planId) && isPaidAmountSufficient(planId, event.data.currency ?? "", event.data.amount ?? NaN)) {
-        try {
-          await fastify.prisma.organization.update({ where: { id: orgId }, data: { planTier: planId as PlanTier } });
-        } catch (err) {
-          if (!isRecordNotFound(err)) throw err;
-          fastify.log.warn({ orgId, planId }, "paystack payment for an organization that no longer exists");
+        const reference = event.data.reference;
+        if (!reference) {
+          fastify.log.warn({ orgId, planId }, "paystack payment not activated: missing reference");
+        } else {
+          try {
+            await activatePlan(fastify.prisma, {
+              organizationId: orgId, planTier: planId as PlanTier, source: "paystack", gateway: "paystack",
+              referenceId: `paystack:${reference}`, gatewayTransactionId: reference,
+              amountMinor: event.data.amount, currency: event.data.currency,
+            });
+          } catch (err) {
+            if (!isUnknownOrgError(err)) throw err;
+            fastify.log.warn({ orgId, planId }, "paystack payment for an organization that no longer exists");
+          }
         }
       } else if (planId) {
         fastify.log.warn({ orgId, planId, currency: event.data.currency, amount: event.data.amount }, "paystack payment not activated: unknown plan or insufficient amount (manual review)");
@@ -120,11 +126,19 @@ export const billingGatewayWebhooksRouter: FastifyPluginAsync = async (fastify) 
     if (!orgId || orgId !== orgHint) return reply.send({ received: true });
     const minor = Math.round(Number(payment.amount?.value ?? "NaN") * 100);
     if (isBillableTier(planId) && isPaidAmountSufficient(planId, payment.amount?.currency ?? "", minor)) {
-      try {
-        await fastify.prisma.organization.update({ where: { id: orgId }, data: { planTier: planId as PlanTier } });
-      } catch (err) {
-        if (!isRecordNotFound(err)) throw err;
-        fastify.log.warn({ orgId, planId }, "yoomoney payment for an organization that no longer exists");
+      if (!payment.id) {
+        fastify.log.warn({ orgId, planId }, "yoomoney payment not activated: missing payment id");
+      } else {
+        try {
+          await activatePlan(fastify.prisma, {
+            organizationId: orgId, planTier: planId as PlanTier, source: "yoomoney", gateway: "yoomoney",
+            referenceId: `yoomoney:${payment.id}`, gatewayTransactionId: payment.id,
+            amountMinor: minor, currency: payment.amount?.currency,
+          });
+        } catch (err) {
+          if (!isUnknownOrgError(err)) throw err;
+          fastify.log.warn({ orgId, planId }, "yoomoney payment for an organization that no longer exists");
+        }
       }
     } else if (planId) {
       fastify.log.warn({ orgId, planId, currency: payment.amount?.currency }, "yoomoney payment not activated: unknown plan, currency or insufficient amount (manual review)");

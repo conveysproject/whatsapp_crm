@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { randomBytes } from "crypto";
 import { redis } from "../lib/redis.js";
+import { activatePlan } from "../lib/billing/activation.js";
 import { writeAdminAudit } from "../lib/audit.js";
 import { getClerkUser } from "../lib/clerk-admin.js";
 import { sendMail, isEmailConfigured } from "../lib/mail.js";
@@ -138,6 +139,11 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
           status: "active",
           endsAt,
         },
+      });
+      await activatePlan(fastify.prisma, {
+        organizationId: request.body.organizationId, planTier: request.body.planTier, source: "admin",
+        gateway: request.body.gateway, referenceId: `admin:${data.id}`, manualSubscriptionId: data.id,
+        amountMinor: Math.round(request.body.charges * 100),
       });
       writeAdminAudit({
         prisma: fastify.prisma,

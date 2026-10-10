@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import { createHmac } from "crypto";
 import type { PrismaClient } from "@prisma/client";
+import type * as ActivationModule from "../lib/billing/activation.js";
 
 vi.mock("../lib/stripe.js", () => ({
   getStripe: () => ({
@@ -15,6 +16,12 @@ vi.mock("../lib/stripe.js", () => ({
     growth: { contacts: 5000, messages: 20000 },
   },
   ZERO_DECIMAL_CURRENCIES: new Set<string>(),
+}));
+
+const { activatePlanMock } = vi.hoisted(() => ({ activatePlanMock: vi.fn() }));
+vi.mock("../lib/billing/activation.js", async (orig) => ({
+  ...(await orig<typeof ActivationModule>()),
+  activatePlan: activatePlanMock,
 }));
 
 vi.mock("razorpay", () => ({
@@ -37,12 +44,13 @@ async function build(): Promise<FastifyInstance> {
 }
 const rzpBody = (amount: number, currency = "INR", planId = "starter") => JSON.stringify({
   event: "payment.captured",
-  payload: { payment: { entity: { amount, currency, notes: { organizationId: "org-1", planId } } } },
+  payload: { payment: { entity: { id: "pay_1", amount, currency, notes: { organizationId: "org-1", planId } } } },
 });
 const sign = (algo: "sha256" | "sha512", secret: string, raw: string) => createHmac(algo, secret).update(raw).digest("hex");
 
 function expectNothingActivated(): void {
-  expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+  expect(activatePlanMock).not.toHaveBeenCalled();
+  expect(activatePlanMock).not.toHaveBeenCalled();
   expect(mockPrisma.manualSubscription.update).not.toHaveBeenCalled();
   expect(mockPrisma.manualSubscription.updateMany).not.toHaveBeenCalled();
   expect(mockPrisma.$transaction).not.toHaveBeenCalled();
@@ -59,24 +67,26 @@ function setEnv(name: string, value: string): () => void {
 describe("razorpay webhook", () => {
   let app: FastifyInstance;
   let restore: () => void;
-  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); mockPrisma.vendorSetting.findMany.mockResolvedValue([]); restore = setEnv("RAZORPAY_WEBHOOK_SECRET", "rzp_secret"); app = await build(); });
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); activatePlanMock.mockReset().mockResolvedValue({ duplicate: false }); mockPrisma.vendorSetting.findMany.mockResolvedValue([]); restore = setEnv("RAZORPAY_WEBHOOK_SECRET", "rzp_secret"); app = await build(); });
   afterEach(async () => { await app.close(); restore(); });
 
   it("rejects a missing signature", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json" }, payload: rzpBody(99900) });
     expect(res.statusCode).toBe(400);
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
   });
   it("rejects a bad signature", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": "deadbeef" }, payload: rzpBody(99900) });
     expect(res.statusCode).toBe(400);
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
   });
   it("activates the plan for a correct signature and sufficient amount", async () => {
     const raw = rzpBody(99900);
     const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": sign("sha256", "rzp_secret", raw) }, payload: raw });
     expect(res.statusCode).toBe(200);
-    expect(mockPrisma.organization.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "org-1" }, data: expect.objectContaining({ planTier: "starter" }) }));
+    expect(activatePlanMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      organizationId: "org-1", planTier: "starter", source: "razorpay", gateway: "razorpay",
+      referenceId: "razorpay:pay_1", gatewayTransactionId: "pay_1", amountMinor: 99900, currency: "INR" }));
   });
   it("verifies on raw bytes even when whitespace differs from JSON.stringify", async () => {
     const raw = rzpBody(99900).replace(/,/g, ", ");
@@ -87,7 +97,7 @@ describe("razorpay webhook", () => {
     const raw = rzpBody(100, "INR", "scale");
     const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": sign("sha256", "rzp_secret", raw) }, payload: raw });
     expect(res.statusCode).toBe(200);
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
   });
   it("never activates a manual subscription from a signed payload carrying manualSubId", async () => {
     const raw = JSON.stringify({
@@ -99,16 +109,28 @@ describe("razorpay webhook", () => {
     expect(res.statusCode).toBe(200);
     expectNothingActivated();
   });
-  it("returns 200 and does not retry when the org no longer exists (P2025)", async () => {
-    mockPrisma.organization.update.mockRejectedValueOnce({ code: "P2025" });
+  it("returns 200 and warns when the org does not exist (P2003)", async () => {
+    activatePlanMock.mockRejectedValueOnce({ code: "P2003" });
     const warn = vi.spyOn(app.log, "warn");
     const raw = rzpBody(99900);
     const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": sign("sha256", "rzp_secret", raw) }, payload: raw });
     expect(res.statusCode).toBe(200);
     expect(warn).toHaveBeenCalled();
   });
-  it("returns 500 for any other update error so the gateway retries", async () => {
-    mockPrisma.organization.update.mockRejectedValueOnce(new Error("db down"));
+  it("returns 200 for a duplicate delivery", async () => {
+    activatePlanMock.mockResolvedValue({ duplicate: true });
+    const raw = rzpBody(99900);
+    const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": sign("sha256", "rzp_secret", raw) }, payload: raw });
+    expect(res.statusCode).toBe(200);
+  });
+  it("does not activate when the payment id is missing (200)", async () => {
+    const raw = JSON.stringify({ event: "payment.captured", payload: { payment: { entity: { amount: 99900, currency: "INR", notes: { organizationId: "org-1", planId: "starter" } } } } });
+    const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": sign("sha256", "rzp_secret", raw) }, payload: raw });
+    expect(res.statusCode).toBe(200);
+    expect(activatePlanMock).not.toHaveBeenCalled();
+  });
+  it("returns 500 for any other activation error so the gateway retries", async () => {
+    activatePlanMock.mockRejectedValueOnce(new Error("db down"));
     const raw = rzpBody(99900);
     const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": sign("sha256", "rzp_secret", raw) }, payload: raw });
     expect(res.statusCode).toBe(500);
@@ -118,7 +140,7 @@ describe("razorpay webhook", () => {
     const raw = rzpBody(99900);
     const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": sign("sha256", "tenant_known", raw) }, payload: raw });
     expect(res.statusCode).toBe(400);
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
     expect(mockPrisma.vendorSetting.findMany).not.toHaveBeenCalled();
   });
   it("does not read vendor settings before/after a valid verification either", async () => {
@@ -131,16 +153,16 @@ describe("razorpay webhook", () => {
     const raw = rzpBody(99900);
     const res = await app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": sign("sha256", "", raw) }, payload: raw });
     expect(res.statusCode).toBe(400);
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
   });
 });
 
 describe("paystack webhook", () => {
   let app: FastifyInstance;
   let restore: () => void;
-  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); mockPrisma.vendorSetting.findMany.mockResolvedValue([]); restore = setEnv("PAYSTACK_SECRET_KEY", "ps_secret"); app = await build(); });
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); activatePlanMock.mockReset().mockResolvedValue({ duplicate: false }); mockPrisma.vendorSetting.findMany.mockResolvedValue([]); restore = setEnv("PAYSTACK_SECRET_KEY", "ps_secret"); app = await build(); });
   afterEach(async () => { await app.close(); restore(); });
-  const body = (amount: number, currency: string) => JSON.stringify({ event: "charge.success", data: { amount, currency, metadata: { organizationId: "org-1", planId: "growth" } } });
+  const body = (amount: number, currency: string) => JSON.stringify({ event: "charge.success", data: { reference: "ref_1", amount, currency, metadata: { organizationId: "org-1", planId: "growth" } } });
 
   it("rejects a bad signature", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/billing/paystack/webhook", headers: { "content-type": "application/json", "x-paystack-signature": "nope" }, payload: body(299900, "INR") });
@@ -150,14 +172,16 @@ describe("paystack webhook", () => {
     const raw = body(299900, "INR");
     const res = await app.inject({ method: "POST", url: "/v1/billing/paystack/webhook", headers: { "content-type": "application/json", "x-paystack-signature": sign("sha512", "ps_secret", raw) }, payload: raw });
     expect(res.statusCode).toBe(200);
-    expect(mockPrisma.organization.update).toHaveBeenCalledWith({ where: { id: "org-1" }, data: { planTier: "growth" } });
+    expect(activatePlanMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      organizationId: "org-1", planTier: "growth", source: "paystack", gateway: "paystack",
+      referenceId: "paystack:ref_1", gatewayTransactionId: "ref_1", amountMinor: 299900, currency: "INR" }));
   });
   it("ignores a tenant-set secret key and never reads vendor settings", async () => {
     mockPrisma.vendorSetting.findMany.mockResolvedValue([{ key: "paystack_secret_key", value: "tenant_known" }]);
     const raw = body(299900, "INR");
     const res = await app.inject({ method: "POST", url: "/v1/billing/paystack/webhook", headers: { "content-type": "application/json", "x-paystack-signature": sign("sha512", "tenant_known", raw) }, payload: raw });
     expect(res.statusCode).toBe(400);
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
     expect(mockPrisma.vendorSetting.findMany).not.toHaveBeenCalled();
   });
   it("rejects when the env secret is unset", async () => {
@@ -165,7 +189,7 @@ describe("paystack webhook", () => {
     const raw = body(299900, "INR");
     const res = await app.inject({ method: "POST", url: "/v1/billing/paystack/webhook", headers: { "content-type": "application/json", "x-paystack-signature": sign("sha512", "", raw) }, payload: raw });
     expect(res.statusCode).toBe(400);
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
   });
   it("never activates a manual subscription from signed metadata.manualSubId", async () => {
     const raw = JSON.stringify({ event: "charge.success", data: { amount: 1, currency: "INR", metadata: { organizationId: "org-1", manualSubId: "sub-9" } } });
@@ -174,21 +198,33 @@ describe("paystack webhook", () => {
     expect(res.statusCode).toBe(200);
     expectNothingActivated();
   });
-  it("returns 200 when the org no longer exists (P2025) and 500 for other errors", async () => {
+  it("does not activate when the reference is missing (200)", async () => {
+    const raw = JSON.stringify({ event: "charge.success", data: { amount: 299900, currency: "INR", metadata: { organizationId: "org-1", planId: "growth" } } });
+    const res = await app.inject({ method: "POST", url: "/v1/billing/paystack/webhook", headers: { "content-type": "application/json", "x-paystack-signature": sign("sha512", "ps_secret", raw) }, payload: raw });
+    expect(res.statusCode).toBe(200);
+    expect(activatePlanMock).not.toHaveBeenCalled();
+  });
+  it("returns 200 for a duplicate delivery", async () => {
+    activatePlanMock.mockResolvedValue({ duplicate: true });
+    const raw = body(299900, "INR");
+    const res = await app.inject({ method: "POST", url: "/v1/billing/paystack/webhook", headers: { "content-type": "application/json", "x-paystack-signature": sign("sha512", "ps_secret", raw) }, payload: raw });
+    expect(res.statusCode).toBe(200);
+  });
+  it("returns 200 when the org does not exist (P2003) and 500 for other errors", async () => {
     const raw = body(299900, "INR");
     const headers = { "content-type": "application/json", "x-paystack-signature": sign("sha512", "ps_secret", raw) };
-    mockPrisma.organization.update.mockRejectedValueOnce({ code: "P2025" });
+    activatePlanMock.mockRejectedValueOnce({ code: "P2003" });
     const warn = vi.spyOn(app.log, "warn");
     expect((await app.inject({ method: "POST", url: "/v1/billing/paystack/webhook", headers, payload: raw })).statusCode).toBe(200);
     expect(warn).toHaveBeenCalled();
-    mockPrisma.organization.update.mockRejectedValueOnce(new Error("db down"));
+    activatePlanMock.mockRejectedValueOnce(new Error("db down"));
     expect((await app.inject({ method: "POST", url: "/v1/billing/paystack/webhook", headers, payload: raw })).statusCode).toBe(500);
   });
   it("fails closed for a non-catalogued currency", async () => {
     const raw = body(99999999, "NGN");
     const res = await app.inject({ method: "POST", url: "/v1/billing/paystack/webhook", headers: { "content-type": "application/json", "x-paystack-signature": sign("sha512", "ps_secret", raw) }, payload: raw });
     expect(res.statusCode).toBe(200);
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
   });
 });
 
@@ -198,6 +234,7 @@ describe("yoomoney webhook", () => {
   beforeEach(async () => {
     vi.resetModules();
     vi.clearAllMocks();
+    activatePlanMock.mockReset().mockResolvedValue({ duplicate: false });
     mockPrisma.vendorSetting.findMany.mockResolvedValue([]);
     restores = [setEnv("YOOMONEY_SHOP_ID", "shop"), setEnv("YOOMONEY_SECRET_KEY", "sk")];
     app = await build();
@@ -211,19 +248,21 @@ describe("yoomoney webhook", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({}) }));
     const res = await send();
     expect(res.statusCode).toBe(200);
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
   });
   it("activates when gateway confirms a paid, sufficient INR payment", async () => {
     vi.stubGlobal("fetch", gw("INR", "999.00"));
     const res = await send();
     expect(res.statusCode).toBe(200);
-    expect(mockPrisma.organization.update).toHaveBeenCalledWith(expect.objectContaining({ data: { planTier: "starter" } }));
+    expect(activatePlanMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      organizationId: "org-1", planTier: "starter", source: "yoomoney", gateway: "yoomoney",
+      referenceId: "yoomoney:pay-1", gatewayTransactionId: "pay-1", amountMinor: 99900, currency: "INR" }));
   });
   it("does not auto-activate RUB payments (no catalog price)", async () => {
     vi.stubGlobal("fetch", gw("RUB", "99999.00"));
     const res = await send();
     expect(res.statusCode).toBe(200);
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
   });
   it("ignores tenant-set gateway credentials and uses only env credentials", async () => {
     mockPrisma.vendorSetting.findMany.mockResolvedValue([
@@ -244,7 +283,7 @@ describe("yoomoney webhook", () => {
     const res = await send();
     expect(res.statusCode).toBe(200);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
   });
   it("never activates a manual subscription from gateway-confirmed metadata.manualSubId", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "pay-1", status: "succeeded", paid: true, amount: { value: "0.01", currency: "INR" }, metadata: { organizationId: "org-1", manualSubId: "sub-9" } }) }));
@@ -259,7 +298,7 @@ describe("yoomoney webhook", () => {
     const res = await send();
     expect(res.statusCode).toBe(200);
     expect(warn).toHaveBeenCalled();
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
   });
   it("passes an abort signal to the gateway call", async () => {
     const f = gw("INR", "999.00");
@@ -267,11 +306,21 @@ describe("yoomoney webhook", () => {
     await send();
     expect((f.mock.calls[0]![1] as { signal?: unknown }).signal).toBeInstanceOf(AbortSignal);
   });
-  it("returns 200 when the org no longer exists (P2025) and 500 for other errors", async () => {
-    vi.stubGlobal("fetch", gw("INR", "999.00"));
-    mockPrisma.organization.update.mockRejectedValueOnce({ code: "P2025" });
+  it("does not activate when the confirmed payment has no id (200)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: "succeeded", paid: true, amount: { value: "999.00", currency: "INR" }, metadata: { organizationId: "org-1", planId: "starter" } }) }));
     expect((await send()).statusCode).toBe(200);
-    mockPrisma.organization.update.mockRejectedValueOnce(new Error("db down"));
+    expect(activatePlanMock).not.toHaveBeenCalled();
+  });
+  it("returns 200 for a duplicate delivery", async () => {
+    vi.stubGlobal("fetch", gw("INR", "999.00"));
+    activatePlanMock.mockResolvedValue({ duplicate: true });
+    expect((await send()).statusCode).toBe(200);
+  });
+  it("returns 200 when the org does not exist (P2003) and 500 for other errors", async () => {
+    vi.stubGlobal("fetch", gw("INR", "999.00"));
+    activatePlanMock.mockRejectedValueOnce({ code: "P2003" });
+    expect((await send()).statusCode).toBe(200);
+    activatePlanMock.mockRejectedValueOnce(new Error("db down"));
     expect((await send()).statusCode).toBe(500);
   });
 });

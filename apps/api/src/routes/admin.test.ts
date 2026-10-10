@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import type * as ActivationModule from "../lib/billing/activation.js";
 
 const mockRedis = vi.hoisted(() => ({
   incr: vi.fn(),
@@ -11,6 +12,11 @@ const mockRedis = vi.hoisted(() => ({
   pttl: vi.fn(),
 }));
 vi.mock("../lib/redis.js", () => ({ redis: mockRedis }));
+const { activatePlanMock } = vi.hoisted(() => ({ activatePlanMock: vi.fn() }));
+vi.mock("../lib/billing/activation.js", async (orig) => ({
+  ...(await orig<typeof ActivationModule>()),
+  activatePlan: activatePlanMock,
+}));
 const mockMail = vi.hoisted(() => ({ sendMail: vi.fn().mockResolvedValue(undefined), isEmailConfigured: vi.fn().mockReturnValue(true) }));
 vi.mock("../lib/mail.js", () => mockMail);
 
@@ -444,5 +450,35 @@ describe("POST /v1/admin/impersonation/elevate", () => {
     happy();
     mockMail.sendMail.mockRejectedValueOnce(new Error("smtp down"));
     expect((await post({ token: "tok", reason })).statusCode).toBe(200);
+  });
+});
+
+describe("POST /v1/admin/manual-subscriptions", () => {
+  let app: FastifyInstance;
+  const payload = { organizationId: "org-1", planTier: "growth", charges: 2999, chargesFrequency: "monthly", gateway: "bank_transfer" };
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    activatePlanMock.mockReset().mockResolvedValue({ duplicate: false });
+    mockPrisma.manualSubscription.create.mockReset().mockResolvedValue({ id: "ms-7", ...payload, status: "active" });
+    mockAdminAuth.role = "superAdmin";
+    app = await buildApp();
+  });
+  afterEach(async () => { mockAdminAuth.role = "superAdmin"; await app.close(); });
+
+  it("creates the subscription and activates the plan through activatePlan", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/admin/manual-subscriptions", payload });
+    expect(res.statusCode).toBe(201);
+    expect(activatePlanMock).toHaveBeenCalledWith(expect.anything(), {
+      organizationId: "org-1", planTier: "growth", source: "admin", gateway: "bank_transfer",
+      referenceId: "admin:ms-7", manualSubscriptionId: "ms-7", amountMinor: 299900,
+    });
+  });
+  it("403 for non-superAdmin and activates nothing", async () => {
+    (mockAdminAuth as { role: string }).role = "admin";
+    const res = await app.inject({ method: "POST", url: "/v1/admin/manual-subscriptions", payload });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.manualSubscription.create).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
   });
 });

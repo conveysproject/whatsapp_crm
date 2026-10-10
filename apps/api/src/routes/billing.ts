@@ -5,6 +5,7 @@ import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS, ZERO_DECIMAL_CURRENCIES } from 
 import { checkPlanLimit, isFeatureEnabled } from "../lib/plan-limits.js";
 import { canAccessSub } from "../lib/permissions.js";
 import { PLAN_CATALOG, isBillableTier, type BillableTier } from "../lib/billing/catalog.js";
+import { activatePlan } from "../lib/billing/activation.js";
 import { isAllowedRedirect } from "../lib/billing/safe-redirect.js";
 import Razorpay from "razorpay";
 
@@ -34,15 +35,6 @@ function calcEndsAt(interval: "monthly" | "yearly", proratedDays: number): Date 
   const endsAt = new Date(now.getTime() + (baseDays + proratedDays) * 86_400_000);
   const cap = new Date("9999-12-31T23:59:59Z");
   return endsAt > cap ? cap : endsAt;
-}
-
-// GAP-S53: activate a manual subscription and cancel all previously active ones
-export async function activateManualSubscription(prisma: PrismaClient, organizationId: string, manualSubId: string, planTier: PlanTier): Promise<void> {
-  await prisma.$transaction([
-    prisma.manualSubscription.updateMany({ where: { organizationId, status: "active" }, data: { status: "cancelled" } }),
-    prisma.manualSubscription.update({ where: { id: manualSubId }, data: { status: "active" } }),
-    prisma.organization.update({ where: { id: organizationId }, data: { planTier } }),
-  ]);
 }
 
 export const billingRouter: FastifyPluginAsync = async (fastify) => {
@@ -526,7 +518,11 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       where: { id: request.params.id, status: "pending" },
     });
     if (!sub) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Pending subscription not found" } });
-    await activateManualSubscription(fastify.prisma, sub.organizationId, sub.id, sub.planTier as PlanTier);
+    await activatePlan(fastify.prisma, {
+      organizationId: sub.organizationId, planTier: sub.planTier, source: "manual_approval", gateway: sub.gateway,
+      referenceId: `manual:${sub.id}`, manualSubscriptionId: sub.id,
+      amountMinor: Math.round(Number(sub.charges) * 100),
+    });
     return reply.send({ data: { activated: true } });
   });
 
