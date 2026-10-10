@@ -48,8 +48,8 @@ function Card({ id, label, href, value, delta, hasDelta, lowerIsBetter, sub, not
       {note && <p data-testid="kpi-note" className="text-xs text-gray-500 dark:text-gray-400">{note}</p>}
       <p data-testid="kpi-value" className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">{value}</p>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-gray-500 dark:text-gray-400">
-        {hasDelta && <Delta pct={delta ?? null} lowerIsBetter={lowerIsBetter} />}
-        {sub && <span>{sub}</span>}
+        {hasDelta && !(sub && (delta ?? null) === null) && <Delta pct={delta ?? null} lowerIsBetter={lowerIsBetter} />}
+        {sub && <span data-testid="kpi-sub" className="min-w-0 break-words">{sub}</span>}
       </div>
     </Link>
   );
