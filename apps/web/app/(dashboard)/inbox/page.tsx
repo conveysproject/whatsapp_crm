@@ -1,6 +1,7 @@
 "use client";
 
-import { JSX, useState, useCallback } from "react";
+import { JSX, Suspense, useState, useCallback, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -15,10 +16,19 @@ import { useConversations } from "@/hooks/useConversations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { CreateOfferModal } from "@/components/deals/CreateOfferModal";
 import { clientFetch } from "@/lib/client-fetch";
+import { parseInboxParams, resolveDeepLinkSelection } from "@/lib/inbox-params";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 export default function InboxPage(): JSX.Element {
+  return (
+    <Suspense fallback={null}>
+      <InboxPageInner />
+    </Suspense>
+  );
+}
+
+function InboxPageInner(): JSX.Element {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [prefillText, setPrefillText] = useState("");
   const [showOffer, setShowOffer] = useState(false);
@@ -29,6 +39,18 @@ export default function InboxPage(): JSX.Element {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const { user: currentUser } = useCurrentUser();
+
+  // Deep links: ?conversation=<id> selects it, but only if it is in the list the API already returned
+  // for this user (visibility is enforced server-side). Applied once per param value.
+  const searchParams = useSearchParams();
+  const { conversationId: urlConversationId, filter: urlFilter } = parseInboxParams(searchParams);
+  const appliedConversationRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = resolveDeepLinkSelection(urlConversationId, appliedConversationRef.current, conversations?.map((c) => c.id));
+    if (!id) return;
+    appliedConversationRef.current = id;
+    setSelectedConversationId(id);
+  }, [urlConversationId, conversations]);
 
   // Fetch all org members for assignee dropdown
   const { data: usersData } = useQuery<{ data: Agent[] }>({
@@ -142,6 +164,7 @@ export default function InboxPage(): JSX.Element {
         <ConversationList
           selectedId={selectedConversationId}
           onSelect={setSelectedConversationId}
+          urlFilter={urlFilter}
         />
       </div>
 

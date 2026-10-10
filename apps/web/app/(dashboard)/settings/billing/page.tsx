@@ -2,15 +2,11 @@ import type { JSX } from "react";
 import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { normalizeUsage, canViewBilling } from "@/lib/billing-page";
+import type { CurrentUser } from "@/lib/can";
 import { BillingClient } from "./BillingClient";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
-
-interface UsageData {
-  plan: string;
-  usage: { contacts: number; messages: number };
-  limits: { contacts: number | null; messages: number | null };
-}
 
 interface SubscriptionData {
   planTier: string;
@@ -43,28 +39,22 @@ async function fetchJson<T>(url: string, token: string): Promise<T | null> {
   } catch { return null; }
 }
 
-async function getUserRole(token: string): Promise<string> {
+async function getCurrentUser(token: string): Promise<CurrentUser | null> {
   try {
-    const res = await fetch(`${API_URL}/v1/users/me`, {
-      headers: await serverApiHeaders(token), cache: "no-store",
-    });
-    if (!res.ok) return "agent";
-    const json = await res.json() as { data?: { role?: string } };
-    return json.data?.role ?? "agent";
-  } catch { return "agent"; }
+    const res = await fetch(`${API_URL}/v1/users/me`, { headers: await serverApiHeaders(token), cache: "no-store" });
+    return res.ok ? ((await res.json()) as { data: CurrentUser }).data : null;
+  } catch { return null; }
 }
 
 export default async function BillingPage(): Promise<JSX.Element> {
   const { getToken } = await auth.protect();
   const token = (await getToken()) ?? "";
 
-  const userRole = await getUserRole(token);
-  if (userRole !== "admin" && userRole !== "superAdmin") {
-    redirect("/settings");
-  }
+  const user = await getCurrentUser(token);
+  if (!canViewBilling(user)) redirect("/settings");
 
-  const [usage, subscription, plans, transactions] = await Promise.all([
-    fetchJson<UsageData>(`${API_URL}/v1/billing/usage`, token),
+  const [rawUsage, subscription, plans, transactions] = await Promise.all([
+    fetchJson<unknown>(`${API_URL}/v1/billing/usage`, token),
     fetchJson<SubscriptionData>(`${API_URL}/v1/billing/subscriptions`, token),
     fetch(`${API_URL}/v1/billing/plans`, { headers: await serverApiHeaders(token), cache: "no-store" })
       .then((r) => r.ok ? r.json() as Promise<{ data: Plan[] }> : { data: [] })
@@ -75,7 +65,7 @@ export default async function BillingPage(): Promise<JSX.Element> {
 
   return (
     <BillingClient
-      usage={usage}
+      usage={normalizeUsage(rawUsage)}
       subscription={subscription}
       plans={plans}
       transactions={transactions ?? []}

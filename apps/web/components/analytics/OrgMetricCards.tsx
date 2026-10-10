@@ -1,16 +1,7 @@
 import { JSX } from "react";
 import { MetricCard } from "./MetricCard";
+import { formatDuration } from "@/lib/format";
 
-function formatDuration(secs: number): string {
-  if (secs === 0) return "—";
-  if (secs < 60) return `${secs}s`;
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  if (m < 60) return s > 0 ? `${m}m ${s}s` : `${m}m`;
-  const h = Math.floor(m / 60);
-  const rem = m % 60;
-  return rem > 0 ? `${h}h ${rem}m` : `${h}h`;
-}
 
 interface OrgMetricCardsProps {
   openConversations: number;

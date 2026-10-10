@@ -2,6 +2,7 @@
 
 import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { relativeTime } from "@/lib/format";
 
 interface ActivityEvent {
   type: "contact_created" | "campaign_sent" | "conversation_closed" | "member_joined";
@@ -16,19 +17,10 @@ const ICONS: Record<ActivityEvent["type"], string> = {
   member_joined: "🎉",
 };
 
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
 
 const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
-export function ActivityFeed(): JSX.Element | null {
+export function ActivityFeed({ limit }: { limit?: number } = {}): JSX.Element | null {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const { getToken } = useAuth();
@@ -57,7 +49,7 @@ export function ActivityFeed(): JSX.Element | null {
         <h3 className="text-sm font-semibold text-gray-900">Recent Activity</h3>
       </div>
       <ul className="divide-y divide-gray-100">
-        {events.map((event, i) => (
+        {(limit ? events.slice(0, limit) : events).map((event, i) => (
           <li key={i} className="flex items-center gap-3 px-5 py-3">
             <span className="text-base shrink-0">{ICONS[event.type]}</span>
             <p className="text-sm text-gray-700 flex-1 min-w-0 truncate">{event.label}</p>
