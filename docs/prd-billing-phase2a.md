@@ -89,3 +89,22 @@ TDD per task. API (Vitest): aggregation SQL via a Prisma `$queryRaw` mock plus a
 5. No backfill of old messages; counting starts when the job first runs [yes].
 6. Numbers visible to super admins only during the shadow month [yes].
 7. Read-only production query (row count of `messages`, monthly outbound volume per tier, excluding internal orgs) to size things now instead of waiting a month [still needs your explicit yes].
+
+Update 2026-10-10: question 7 was approved and run read-only. Result: the `messages` table is about 1 MB (about 367 rows), so question 3 is settled: the plain `CREATE INDEX` in the normal migration is fine. Production has 14 customer organizations, all on Starter, and about one billable message from them this month.
+
+## 11. Deploy checklist
+
+1. Deploy. `start.sh` runs `prisma migrate deploy`, which applies `20261010200000_message_usage_daily` (new table) and `20261010200100_messages_org_sent_idx` (index on `messages`). With a table this small the index builds instantly. Only if `messages` has grown large would the index need to be created out of band first with `CREATE INDEX CONCURRENTLY IF NOT EXISTS "messages_org_sent_at_idx" ON "messages"("organization_id","sent_at")`, followed by `prisma migrate resolve --applied 20261010200100_messages_org_sent_idx`.
+2. Nothing runs until `BILLING_METERING_ENABLED=true` is set on the API service. Setting it starts the hourly job (minute 5), which recomputes today and yesterday (UTC).
+3. Optional backfill of earlier days of the month, from the Railway-linked checkout folder: `cd apps/api && railway run --service Postgres pnpm tsx scripts/recompute-message-usage.ts --from YYYY-MM-DD --to YYYY-MM-DD` is a dry run that writes nothing; add `--apply` only after the owner confirms. The script uses the public database address that `--service Postgres` injects (plain `railway run` uses the unreachable internal address). It counts every organization, including internal ones. Only messages that still exist can be counted, and `message-cleanup` deletes old messages.
+4. Read the report as a super admin: `GET /v1/admin/billing/usage?month=YYYY-MM` (add `&includeInternal=true` to include the two internal organizations).
+5. Rollback: unset `BILLING_METERING_ENABLED`. The table and index are additive and can stay.
+
+## 12. Known follow-ups
+
+- Repeated query parameters on the admin endpoint arrive as arrays; behaviour is safe (validation fails) but add an explicit string guard and a test.
+- Export the `requireSuperAdmin` helper from `admin.ts` instead of repeating the 403 in `admin-billing.ts`.
+- Chunk the organization lookup in the admin endpoint if the number of organizations grows into the thousands.
+- If both days fail in one sweep the job still completes; add an alert on `days=0` in the log line.
+- Add tests: leap-February `parseMonth`, the exact timestamps bound into the counting SQL, `--to` followed by another flag in the recompute script.
+- The Phase 1A backfill script now also uses `DATABASE_PUBLIC_URL ?? DATABASE_URL`.
