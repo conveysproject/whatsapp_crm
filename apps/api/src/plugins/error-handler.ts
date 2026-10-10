@@ -13,11 +13,13 @@ const GENERIC_BODY = { error: { code: "INTERNAL_ERROR", message: "Internal serve
  */
 const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.setErrorHandler((error: FastifyError | unknown, request, reply) => {
-    const raw = (error as { statusCode?: unknown } | null | undefined)?.statusCode;
-    const statusCode = typeof raw === "number" && Number.isInteger(raw) ? raw : undefined;
+    // Same precedence as Fastify's default handler: `status` wins over `statusCode`.
+    const e = error as { status?: unknown; statusCode?: unknown } | null | undefined;
+    const pick = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v >= 400 ? v : undefined);
+    const statusCode = pick(e?.status) ?? pick(e?.statusCode);
 
     if (statusCode !== undefined && statusCode >= 400 && statusCode < 500) {
-      void reply.send(error);
+      void reply.code(statusCode).send(error);
       return;
     }
 

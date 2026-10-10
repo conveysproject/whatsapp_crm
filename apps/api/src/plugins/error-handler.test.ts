@@ -5,6 +5,7 @@ const sentry = vi.hoisted(() => ({ init: vi.fn(), captureException: vi.fn() }));
 vi.mock("@sentry/node", () => sentry);
 
 import errorHandlerPlugin from "./error-handler.js";
+import { publicApiErrorHandler } from "../routes/public-api/index.js";
 
 const SECRET = "SELECT secret FROM users -- 919876543210";
 const GENERIC = { error: { code: "INTERNAL_ERROR", message: "Internal server error" } };
@@ -17,6 +18,12 @@ const routes: FastifyPluginAsync = async (f) => {
     reply.header("retry-after", "7");
     throw Object.assign(new Error("Rate limit exceeded"), { statusCode: 429 });
   });
+  f.get("/status400", async () => { throw Object.assign(new Error("x"), { status: 400 }); });
+  f.get("/status422", async () => { throw Object.assign(new Error("x"), { status: 422 }); });
+  f.get("/status502", async () => { throw Object.assign(new Error(SECRET), { status: 502 }); });
+  f.get("/status200", async () => { throw Object.assign(new Error(SECRET), { status: 200 }); });
+  f.get("/statusFloat", async () => { throw Object.assign(new Error(SECRET), { status: 400.5 }); });
+  f.get("/plain404", async () => { throw { statusCode: 404, message: "plain" }; });
   f.get("/string", async () => { throw SECRET; });
   f.post("/validate", {
     schema: { body: { type: "object", required: ["name"], properties: { name: { type: "string" } } } },
@@ -24,7 +31,8 @@ const routes: FastifyPluginAsync = async (f) => {
 };
 
 const childOverride: FastifyPluginAsync = async (f) => {
-  f.setErrorHandler((_e, _r, reply) => { void reply.status(500).send({ error_code: "INTERNAL_ERROR", api_id: "abc" }); });
+  f.addHook("onRequest", (req, _reply, done) => { (req as { apiId?: string }).apiId = "abc"; done(); });
+  f.setErrorHandler(publicApiErrorHandler);
   f.get("/boom", async () => { throw new Error(SECRET); });
 };
 
@@ -135,6 +143,33 @@ describe("global error handler", () => {
   it("(f) a child plugin's own error handler overrides the global one", async () => {
     const res = await app.inject({ method: "GET", url: "/child/boom" });
     expect(res.statusCode).toBe(500);
-    expect(res.json()).toEqual({ error_code: "INTERNAL_ERROR", api_id: "abc" });
+    expect(res.json()).toMatchObject({ error_code: "INTERNAL_ERROR", api_id: "abc" });
+    expect(res.body).not.toContain("SELECT");
+    const sibling = await app.inject({ method: "GET", url: "/boom" });
+    expect(sibling.json()).toEqual(GENERIC);
+  });
+
+  it.each(["/status400", "/status422", "/plain404"])("error.status / plain object %s is identical to the default handler", async (url) => {
+    const a = await app.inject({ method: "GET", url });
+    const c = await control.inject({ method: "GET", url });
+    expect(a.statusCode).toBe(c.statusCode);
+    expect(a.statusCode).not.toBe(200);
+    expect(a.headers["content-type"]).toBe(c.headers["content-type"]);
+    expect(a.json()).toEqual(c.json());
+  });
+
+  it("status 502 via error.status gets the generic body and keeps 502", async () => {
+    const res = await app.inject({ method: "GET", url: "/status502" });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toEqual(GENERIC);
+  });
+
+  it("status 200 is ignored (generic 500); non-integer status is ignored too", async () => {
+    const r1 = await app.inject({ method: "GET", url: "/status200" });
+    expect(r1.statusCode).toBe(500);
+    expect(r1.json()).toEqual(GENERIC);
+    const r2 = await app.inject({ method: "GET", url: "/statusFloat" });
+    expect(r2.statusCode).toBe(500);
+    expect(r2.json()).toEqual(GENERIC);
   });
 });
