@@ -27,7 +27,7 @@ interface MyWorkData {
 
 const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
-export function MyWorkSection(): JSX.Element {
+export function MyWorkSection({ firstReplyLabel = "Avg First Response" }: { firstReplyLabel?: string }): JSX.Element {
   const [data, setData] = useState<MyWorkData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -128,7 +128,7 @@ export function MyWorkSection(): JSX.Element {
             <p className="mt-1 text-2xl font-bold text-green-600">{data.resolvedToday}</p>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-            <p className="text-xs text-gray-500">Avg First Response</p>
+            <p className="text-xs text-gray-500">{firstReplyLabel}</p>
             <p className="mt-1 text-2xl font-bold text-gray-900">{formatDuration(data.avgFirstResponseSecs)}</p>
           </div>
           <div className={`bg-white border rounded-xl p-4 shadow-sm ${data.slaBreaches > 0 ? "border-red-200 bg-red-50" : "border-gray-200"}`}>
