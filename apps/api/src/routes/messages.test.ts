@@ -14,6 +14,7 @@ const mockPrisma = {
     update: vi.fn(),
   },
   adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
+  template: { findFirst: vi.fn(), update: vi.fn() },
 };
 
 const mockAuth = {
@@ -39,6 +40,7 @@ vi.mock("../lib/whatsapp.js", () => ({
   sendTextMessage: vi.fn().mockResolvedValue({ messageId: "wamid-123" }),
   sendMediaMessage: vi.fn().mockResolvedValue({ messageId: "wamid-media-456" }),
   sendInteractiveMessage: vi.fn().mockResolvedValue({ messageId: "wamid-int-789" }),
+  sendTemplateMessage: vi.fn().mockResolvedValue({ messageId: "wamid-tpl-321" }),
 }));
 
 vi.mock("../lib/trigger-dispatcher.js", () => ({
@@ -324,5 +326,49 @@ describe("POST /v1/conversations/:id/messages - impersonated reply is tagged in 
     });
     const createArg = mockPrisma.message.create.mock.calls[0][0] as { data: Record<string, unknown> };
     expect(JSON.stringify(createArg.data)).not.toContain("sa-1");
+  });
+});
+
+describe("POST /v1/conversations/:id/messages - template analytics columns", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  const send = (payload: object) => app.inject({
+    method: "POST",
+    url: "/v1/conversations/conv-1/messages",
+    headers: { "content-type": "application/json" },
+    payload,
+  });
+
+  it("records templateId and source=dashboard on a template send", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ ...baseConversation, contact: null });
+    mockPrisma.template.findFirst.mockResolvedValue({
+      id: "tpl-9", name: "welcome", language: "en_US", status: "approved", metaTemplateId: "meta-9",
+      components: [{ type: "BODY", text: "Hello there" }],
+    });
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-t-1", status: "sending" });
+    mockPrisma.message.update.mockResolvedValue({ id: "msg-t-1", status: "sent", sentAt: new Date() });
+    mockPrisma.conversation.update.mockResolvedValue({});
+
+    const res = await send({ contentType: "template", templateId: "tpl-9" });
+
+    expect(res.statusCode).toBe(201);
+    const data = (mockPrisma.message.create.mock.calls[0]![0] as { data: Record<string, unknown> }).data;
+    expect(data).toMatchObject({ contentType: "template", organizationId: "org-1", templateId: "tpl-9", source: "dashboard" });
+  });
+
+  it("leaves templateId and source off a text send", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(baseConversation);
+    mockPrisma.message.create.mockResolvedValue({ id: "msg-1", status: "sending" });
+    mockPrisma.message.update.mockResolvedValue({ id: "msg-1", status: "sent" });
+    mockPrisma.conversation.update.mockResolvedValue({});
+
+    const res = await send({ text: "Hello" });
+
+    expect(res.statusCode).toBe(201);
+    const data = (mockPrisma.message.create.mock.calls[0]![0] as { data: Record<string, unknown> }).data;
+    expect(data).not.toHaveProperty("templateId");
+    expect(data).not.toHaveProperty("source");
   });
 });

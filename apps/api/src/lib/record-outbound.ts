@@ -9,6 +9,8 @@ interface RecordOutboundArgs {
   richContent?: object | null;
   mediaUrl?: string | null;
   whatsappMessageId?: string | null;
+  templateId?: string | null;
+  source?: string | null;
 }
 
 export async function recordOutbound(prisma: PrismaClient, args: RecordOutboundArgs): Promise<void> {
@@ -23,6 +25,8 @@ export async function recordOutbound(prisma: PrismaClient, args: RecordOutboundA
       richContent: args.richContent ?? undefined,
       mediaUrl: args.mediaUrl ?? null,
       whatsappMessageId: args.whatsappMessageId ?? null,
+      templateId: args.templateId ?? null,
+      source: args.source ?? null,
       status: "sent",
       sentAt,
     },

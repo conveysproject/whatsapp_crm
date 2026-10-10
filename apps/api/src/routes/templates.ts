@@ -6,6 +6,8 @@ import { sendTemplateMessage, getMetaTemplateAnalytics, uploadMediaHandle } from
 import { buildTemplateComponents, contactBodyVars, extractTemplateFields } from "../lib/template-components.js";
 import type { TemplateId, ContactId } from "@WBMSG/shared";
 import { canAccess, canAccessSub } from "../lib/permissions.js";
+import { parseRange, getTemplateAnalytics } from "../lib/template-analytics.js";
+import { TEMPLATE_LINK_RELEASED_AT } from "../lib/template-link-release.js";
 import { fromMetaTemplateStatus } from "../lib/template-status.js";
 
 interface TemplateBody {
@@ -166,7 +168,7 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  fastify.get<{ Params: { id: TemplateId } }>("/templates/:id/analytics", async (request, reply) => {
+  fastify.get<{ Params: { id: TemplateId }; Querystring: { range?: string } }>("/templates/:id/analytics", async (request, reply) => {
     const { organizationId } = request.auth;
     const template = await fastify.prisma.template.findFirst({
       where: { id: request.params.id, organizationId },
@@ -175,28 +177,44 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Template not found" } });
     }
 
-    const rows = await fastify.prisma.message.groupBy({
-      by: ["status"],
-      where: { organizationId, direction: "outbound", contentType: "template", body: template.name },
-      _count: { status: true },
-    });
-
-    const stats: Record<string, number> = { sent: 0, delivered: 0, read: 0, failed: 0 };
-    for (const row of rows) {
-      stats[row.status] = row._count.status;
+    const range = parseRange(request.query.range);
+    if (!range) {
+      return reply.status(400).send({ error: { code: "INVALID_RANGE", message: "range must be 7d, 30d, 90d or all" } });
     }
 
-    const delivered = stats["delivered"] ?? 0;
-    const read = stats["read"] ?? 0;
+    // Older template sends were not linked to a template id. A cheap existence check (stops at the first row,
+    // org-scoped, only rows sent after this template was created, so newer templates never show the note) tells the
+    // UI the figures may be incomplete. No message text is read or returned.
+    let analytics: Awaited<ReturnType<typeof getTemplateAnalytics>>;
+    let unlinked: { id: string } | null;
+    try {
+      [analytics, unlinked] = await Promise.all([
+        getTemplateAnalytics(fastify.prisma, { organizationId, template, range }),
+        // Templates created on/after the release only ever have linked sends: skip the scan entirely.
+        template.createdAt >= TEMPLATE_LINK_RELEASED_AT
+          ? Promise.resolve(null)
+          : fastify.prisma.message.findFirst({
+              where: {
+                organizationId, direction: "outbound", contentType: "template", templateId: null,
+                sentAt: { gte: template.createdAt, lt: TEMPLATE_LINK_RELEASED_AT },
+              },
+              select: { id: true },
+            }),
+      ]);
+    } catch (err) {
+      // Log server-side only; never return the driver/stack text to the client.
+      request.log.error({ err }, "template analytics failed");
+      return reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "Could not load template analytics" } });
+    }
+
+    const { delivered, read } = analytics;
     // GAP-S21: readPercentage = (read / delivered) × 100, capped at 100, rounded
     const readPercentage = delivered > 0 ? Math.min(100, Math.round((read / delivered) * 100)) : 0;
     return reply.send({
       data: {
-        sent: stats["sent"] ?? 0,
-        delivered,
-        read,
-        failed: stats["failed"] ?? 0,
+        ...analytics,
         readPercentage,
+        attributionNote: unlinked ? "Messages sent before this feature was introduced may not be included." : null,
       },
     });
   });
@@ -551,6 +569,8 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
           contentType: "template",
           body: renderedBody,
           whatsappMessageId: messageId,
+          templateId: template.id,
+          source: "test",
           status: "sent",
         },
       });

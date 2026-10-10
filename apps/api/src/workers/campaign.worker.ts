@@ -301,6 +301,7 @@ export const campaignWorker = new Worker<CampaignJob>(
           body,
           richContent,
           whatsappMessageId: messageId,
+          ...(isTemplateCampaign ? { templateId: campaign.templateId, source: "campaign" } : {}),
         });
 
         if (contact) {

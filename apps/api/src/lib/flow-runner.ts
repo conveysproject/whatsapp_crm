@@ -235,7 +235,18 @@ export async function runFlow(
           if (payload.contactPhone && templateName) {
             const { messageId } = await sendTemplateMessage(phoneNumberId, payload.contactPhone, templateName, languageCode, components, accessToken);
             if (payload.conversationId) {
-              await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "template", body: templateName, whatsappMessageId: messageId });
+              let templateId: string | undefined;
+              try {
+                const matches = await prisma.template.findMany({
+                  where: { organizationId: payload.organizationId, name: templateName, language: languageCode },
+                  select: { id: true },
+                  take: 2,
+                });
+                if (matches.length === 1) templateId = matches[0]!.id;
+              } catch {
+                // analytics attribution is best-effort; never break the flow step
+              }
+              await recordOutbound(prisma, { conversationId: payload.conversationId, organizationId: payload.organizationId, contentType: "template", body: templateName, whatsappMessageId: messageId, ...(templateId ? { templateId } : {}), source: "flow" });
             }
           }
           break;

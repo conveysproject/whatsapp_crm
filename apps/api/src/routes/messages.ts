@@ -359,7 +359,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
         });
 
         const draft = await fastify.prisma.message.create({
-          data: { conversationId: conversation.id, organizationId, direction: "outbound", contentType: "template", body: renderedBody, status: "sending" },
+          data: { conversationId: conversation.id, organizationId, direction: "outbound", contentType: "template", body: renderedBody, status: "sending", templateId: template.id, source: "dashboard" },
         });
 
         let messageId: string;

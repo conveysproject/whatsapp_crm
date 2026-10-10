@@ -3,7 +3,7 @@ import { SendValidationError, type PlivoTemplateComponent } from "./send-mapping
 import { placeholders, resolveTemplate, validateAgainstTemplate, type TemplateRow } from "./template-validation.js";
 
 const row = (over: Partial<TemplateRow> = {}): TemplateRow => ({
-  name: "kyc", language: "en", status: "approved", parameterFormat: "NAMED",
+  id: "tpl-1", name: "kyc", language: "en", status: "approved", parameterFormat: "NAMED",
   components: [{ type: "BODY", text: "Hi {{username}}, approved by {{ra_name}}" }], ...over,
 });
 const t = (n: string, v = "x") => ({ type: "text", parameter_name: n, text: v });
