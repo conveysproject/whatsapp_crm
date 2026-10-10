@@ -4,7 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS, ZERO_DECIMAL_CURRENCIES } from "../lib/stripe.js";
 import { checkPlanLimit, isFeatureEnabled } from "../lib/plan-limits.js";
 import { canAccessSub } from "../lib/permissions.js";
-import { PLAN_CATALOG, isBillableTier } from "../lib/billing/catalog.js";
+import { PLAN_CATALOG, isBillableTier, type BillableTier } from "../lib/billing/catalog.js";
 import { isAllowedRedirect } from "../lib/billing/safe-redirect.js";
 import Razorpay from "razorpay";
 
@@ -50,9 +50,13 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/billing/plans", async () => {
     return {
       data: [
-        { tier: "starter", name: "Starter", priceInr: 999, priceUsd: 12, limits: PLAN_LIMITS["starter"] },
-        { tier: "growth", name: "Growth", priceInr: 2999, priceUsd: 36, limits: PLAN_LIMITS["growth"] },
-        { tier: "scale", name: "Scale", priceInr: 7999, priceUsd: 96, limits: PLAN_LIMITS["scale"] },
+        ...(Object.keys(PLAN_CATALOG) as BillableTier[]).map((tier) => ({
+          tier,
+          name: PLAN_CATALOG[tier].name,
+          priceInr: PLAN_CATALOG[tier].priceInr as number | null,
+          priceUsd: PLAN_CATALOG[tier].priceUsd as number | null,
+          limits: PLAN_LIMITS[tier] as unknown,
+        })),
         { tier: "enterprise", name: "Enterprise", priceInr: null, priceUsd: null, limits: { contacts: null, messages: null } },
       ],
     };
@@ -156,6 +160,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     }
     // GAP-S56: support planSelectorId "___" format
     const { planTier } = parsePlanSelector(request.body.planTier as string);
+    if (!isBillableTier(planTier)) return reply.status(400).send({ error: { code: "INVALID_PLAN", message: "Unknown plan tier" } });
     const priceId = PLAN_PRICE_IDS[planTier];
     if (!priceId) return reply.status(400).send({ error: { code: "INVALID_PLAN", message: "Unknown plan tier" } });
 
@@ -258,6 +263,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       }
       // GAP-S56: support "{planTier}___monthly" / "{planTier}___yearly" selectors
       const { planTier } = parsePlanSelector(request.body.planTier as string);
+      if (!isBillableTier(planTier)) return reply.status(400).send({ error: "invalid_plan" });
       const priceId = PLAN_PRICE_IDS[planTier];
       if (!priceId) return reply.status(400).send({ error: "invalid_plan" });
 
@@ -323,11 +329,12 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Paystack ──────────────────────────────────────────────────────────────
   fastify.post<{ Body: { reference: string } }>("/billing/paystack/verify", async (request, reply) => {
-    const { organizationId } = request.auth;
-    // GAP-S60: DB credentials
-    const creds = await getGatewayCredentials(fastify.prisma, organizationId, "paystack");
-    const secretKey = creds["paystack_secret_key"] ?? process.env["PAYSTACK_SECRET_KEY"] ?? "";
-    const res = await fetch(`https://api.paystack.co/transaction/verify/${request.body.reference}`, {
+    if (!canAccessSub(request.auth.role, request.auth.permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
+    // Platform key only: tenant-supplied credentials must not drive platform billing.
+    const secretKey = process.env["PAYSTACK_SECRET_KEY"] ?? "";
+    const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(String(request.body.reference ?? ""))}`, {
       headers: { Authorization: `Bearer ${secretKey}` },
     });
     const json = await res.json() as { status: boolean; data: { status: string } };
@@ -337,16 +344,20 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── PhonePe ───────────────────────────────────────────────────────────────
   fastify.post<{ Body: { transactionId: string } }>("/billing/phonepe/capture", async (request, reply) => {
+    if (!canAccessSub(request.auth.role, request.auth.permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
     const merchantId = process.env["PHONEPE_MERCHANT_ID"] ?? "";
+    const txnSegment = encodeURIComponent(String(request.body.transactionId ?? ""));
     const apiKey = process.env["PHONEPE_API_KEY"] ?? "";
     const { createHash } = await import("crypto");
     const checksum =
       createHash("sha256")
-        .update(`/pg/v1/status/${merchantId}/${request.body.transactionId}${apiKey}`)
+        .update(`/pg/v1/status/${merchantId}/${txnSegment}${apiKey}`)
         .digest("hex") + "###1";
     // GAP-S62: PhonePe requires "O-Bearer" prefix (not standard "Bearer")
     const res = await fetch(
-      `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${request.body.transactionId}`,
+      `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${txnSegment}`,
       {
         headers: {
           "Content-Type": "application/json",
@@ -532,8 +543,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Stripe webhook endpoint auto-creation (GAP-S72) ─────────────────────
   fastify.post("/billing/stripe/setup-webhook", async (request, reply) => {
-    const { role } = request.auth;
-    if (role !== "admin") return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Admin only" } });
+    if (request.auth.role !== "superAdmin") return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Platform admin only" } });
     const apiUrl = process.env["API_PUBLIC_URL"] ?? process.env["RAILWAY_PUBLIC_DOMAIN"] ?? "";
     if (!apiUrl) return reply.status(400).send({ error: { code: "NO_API_URL", message: "API_PUBLIC_URL env var not set" } });
     const endpoint = await getStripe().webhookEndpoints.create({
@@ -549,12 +559,8 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
         "payment_intent.succeeded",
       ],
     });
-    await fastify.prisma.vendorSetting.upsert({
-      where: { organizationId_key: { organizationId: request.auth.organizationId, key: "stripe_webhook_secret" } },
-      create: { organizationId: request.auth.organizationId, key: "stripe_webhook_secret", value: endpoint.secret ?? "", dataType: "string" },
-      update: { value: endpoint.secret ?? "" },
-    });
-    return reply.send({ data: { webhookId: endpoint.id, url: endpoint.url } });
+    // The endpoint secret is shown only once: the platform admin must set it as the STRIPE_WEBHOOK_SECRET env var.
+    return reply.send({ data: { webhookId: endpoint.id, url: endpoint.url, secret: endpoint.secret ?? "" } });
   });
 
   // ── UPI QR code generation ────────────────────────────────────────────────

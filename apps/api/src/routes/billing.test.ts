@@ -2,11 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
-const { stripeSessionCreate, ordersCreate, razorpayCtor } = vi.hoisted(() => ({ stripeSessionCreate: vi.fn(), ordersCreate: vi.fn(), razorpayCtor: vi.fn() }));
+const { stripeSessionCreate, ordersCreate, razorpayCtor, webhookEndpointsCreate } = vi.hoisted(() => ({ stripeSessionCreate: vi.fn(), ordersCreate: vi.fn(), razorpayCtor: vi.fn(), webhookEndpointsCreate: vi.fn() }));
 vi.mock("../lib/stripe.js", () => ({
   getStripe: () => ({
     checkout: { sessions: { create: stripeSessionCreate } },
     billingPortal: { sessions: { create: vi.fn() } },
+    webhookEndpoints: { create: webhookEndpointsCreate },
     subscriptions: { list: vi.fn().mockResolvedValue({ data: [] }) },
   }),
   PLAN_PRICE_IDS: { starter: "price_starter", growth: "price_growth" },
@@ -181,13 +182,27 @@ describe("settings_billing sub gate", () => {
 
 describe("POST /v1/billing/checkout", () => {
   let app: FastifyInstance;
+  let prevWebUrl: string | undefined;
   beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks();
+    prevWebUrl = process.env["WEB_PUBLIC_URL"];
     process.env["WEB_PUBLIC_URL"] = "https://wbmsg.com";
     stripeSessionCreate.mockResolvedValue({ url: "https://checkout.stripe.test/s" });
     app = await buildApp();
   });
-  afterEach(async () => { await app.close(); });
+  afterEach(async () => {
+    await app.close();
+    if (prevWebUrl === undefined) delete process.env["WEB_PUBLIC_URL"]; else process.env["WEB_PUBLIC_URL"] = prevWebUrl;
+  });
+
+  it("returns 400 for prototype-key plan tiers", async () => {
+    for (const planTier of ["__proto__", "constructor"]) {
+      const res = await app.inject({ method: "POST", url: "/v1/billing/checkout",
+        payload: { planTier, successUrl: "https://wbmsg.com/a", cancelUrl: "https://wbmsg.com/a" } });
+      expect(res.statusCode, planTier).toBe(400);
+    }
+    expect(stripeSessionCreate).not.toHaveBeenCalled();
+  });
 
   it("creates a session for allowed redirect urls", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/billing/checkout",
@@ -316,5 +331,114 @@ describe("billing branding and webhook url", () => {
     const { readFileSync } = await import("fs");
     const src = readFileSync(new URL("./billing.ts", import.meta.url), "utf8");
     expect(src).not.toMatch(/TrustCRM/);
+  });
+});
+
+describe("POST /v1/billing/switch-plan prototype keys", () => {
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+  it("returns 400 for __proto__ and constructor", async () => {
+    const a = await buildAs("admin");
+    for (const planTier of ["__proto__", "constructor"]) {
+      const res = await a.inject({ method: "POST", url: "/v1/billing/switch-plan", payload: { planTier } });
+      expect(res.statusCode, planTier).toBe(400);
+      expect(res.json().error.code, planTier).toBe("INVALID_PLAN");
+    }
+    await a.close();
+  });
+});
+
+describe("GET /v1/billing/plans", () => {
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+  it("derives prices and names from PLAN_CATALOG", async () => {
+    const { PLAN_CATALOG } = await import("../lib/billing/catalog.js");
+    const a = await buildAs("admin");
+    const res = await a.inject({ method: "GET", url: "/v1/billing/plans" });
+    const data = res.json<{ data: Array<{ tier: string; name: string; priceInr: number | null; priceUsd: number | null }> }>().data;
+    expect(data.map((p) => p.tier)).toEqual(["starter", "growth", "scale", "enterprise"]);
+    for (const tier of ["starter", "growth", "scale"] as const) {
+      const p = data.find((x) => x.tier === tier)!;
+      expect([p.name, p.priceInr, p.priceUsd]).toEqual([PLAN_CATALOG[tier].name, PLAN_CATALOG[tier].priceInr, PLAN_CATALOG[tier].priceUsd]);
+    }
+    expect(data[3]).toMatchObject({ tier: "enterprise", name: "Enterprise", priceInr: null, priceUsd: null });
+    await a.close();
+  });
+});
+
+describe("POST /v1/billing/stripe/setup-webhook", () => {
+  let prevUrl: string | undefined;
+  beforeEach(() => {
+    vi.resetModules(); vi.clearAllMocks();
+    prevUrl = process.env["API_PUBLIC_URL"];
+    process.env["API_PUBLIC_URL"] = "https://api.example.com/";
+    webhookEndpointsCreate.mockResolvedValue({ id: "we_1", url: "https://api.example.com/v1/billing/webhook", secret: "whsec_abc" });
+  });
+  afterEach(() => { if (prevUrl === undefined) delete process.env["API_PUBLIC_URL"]; else process.env["API_PUBLIC_URL"] = prevUrl; });
+
+  it("is forbidden for an org admin and calls nothing", async () => {
+    const a = await buildAs("admin");
+    const res = await a.inject({ method: "POST", url: "/v1/billing/stripe/setup-webhook" });
+    expect(res.statusCode).toBe(403);
+    expect(webhookEndpointsCreate).not.toHaveBeenCalled();
+    await a.close();
+  });
+
+  it("superAdmin registers the endpoint, gets the secret once, and nothing is stored per tenant", async () => {
+    const a = await buildAs("superAdmin");
+    const res = await a.inject({ method: "POST", url: "/v1/billing/stripe/setup-webhook" });
+    expect(res.statusCode).toBe(200);
+    expect(webhookEndpointsCreate.mock.calls[0]![0].url).toMatch(/\/v1\/billing\/webhook$/);
+    expect(res.json().data).toEqual({ webhookId: "we_1", url: "https://api.example.com/v1/billing/webhook", secret: "whsec_abc" });
+    expect((mockPrisma.vendorSetting as Record<string, unknown>)["upsert"]).toBeUndefined();
+    await a.close();
+  });
+});
+
+describe("paystack/verify and phonepe/capture", () => {
+  const envNames = ["PAYSTACK_SECRET_KEY", "PHONEPE_MERCHANT_ID", "PHONEPE_API_KEY"];
+  let prev: Record<string, string | undefined>;
+  beforeEach(() => {
+    vi.resetModules(); vi.clearAllMocks();
+    prev = Object.fromEntries(envNames.map((n) => [n, process.env[n]]));
+    process.env["PAYSTACK_SECRET_KEY"] = "env_ps"; process.env["PHONEPE_MERCHANT_ID"] = "M1"; process.env["PHONEPE_API_KEY"] = "K1";
+    mockPrisma.vendorSetting.findMany.mockResolvedValue([{ key: "paystack_secret_key", value: "tenant_ps" }]);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    for (const n of envNames) { if (prev[n] === undefined) delete process.env[n]; else process.env[n] = prev[n]; }
+    mockPrisma.vendorSetting.findMany.mockResolvedValue([]);
+  });
+
+  it("agent gets 403 on both", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const a = await buildAs("agent");
+    expect((await a.inject({ method: "POST", url: "/v1/billing/paystack/verify", payload: { reference: "r" } })).statusCode).toBe(403);
+    expect((await a.inject({ method: "POST", url: "/v1/billing/phonepe/capture", payload: { transactionId: "t" } })).statusCode).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+    await a.close();
+  });
+
+  it("paystack/verify encodes the reference and uses only the platform env key", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ json: async () => ({ status: true, data: { status: "success" } }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const a = await buildAs("admin");
+    const res = await a.inject({ method: "POST", url: "/v1/billing/paystack/verify", payload: { reference: "a/b?x=1#y" } });
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock.mock.calls[0]![0]).toBe(`https://api.paystack.co/transaction/verify/${encodeURIComponent("a/b?x=1#y")}`);
+    expect(fetchMock.mock.calls[0]![1].headers.Authorization).toBe("Bearer env_ps");
+    expect(mockPrisma.vendorSetting.findMany).not.toHaveBeenCalled();
+    await a.close();
+  });
+
+  it("phonepe/capture sends an encoded id and checksums exactly that path segment", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ json: async () => ({ success: true, code: "OK" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const a = await buildAs("admin");
+    await a.inject({ method: "POST", url: "/v1/billing/phonepe/capture", payload: { transactionId: "t/1?x" } });
+    const enc = encodeURIComponent("t/1?x");
+    expect(fetchMock.mock.calls[0]![0]).toBe(`https://api.phonepe.com/apis/hermes/pg/v1/status/M1/${enc}`);
+    const { createHash } = await import("crypto");
+    expect(fetchMock.mock.calls[0]![1].headers["X-VERIFY"]).toBe(createHash("sha256").update(`/pg/v1/status/M1/${enc}K1`).digest("hex") + "###1");
+    await a.close();
   });
 });
