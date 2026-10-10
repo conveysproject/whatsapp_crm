@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import { sentryPlugin } from "./plugins/sentry.js";
+import errorHandlerPlugin from "./plugins/error-handler.js";
 import prismaPlugin from "./plugins/prisma.js";
 import swaggerPlugin from "./plugins/swagger.js";
 import authPlugin from "./plugins/auth.js";
@@ -50,6 +51,7 @@ const server = Fastify({
 
 async function start() {
   await server.register(sentryPlugin);
+  await server.register(errorHandlerPlugin); // global generic 5xx body; must precede routes
   await server.register(helmet);
   const corsOrigins = (process.env["CORS_ORIGIN"] ?? "http://localhost:3000")
     .split(",")
