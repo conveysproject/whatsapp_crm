@@ -52,7 +52,10 @@ export function TrendChart({ daily }: { daily: DailyPoint[] }): JSX.Element {
           </ResponsiveContainer>
         </div>
       )}
-      <table className="sr-only" data-testid="trend-table">
+      {/* sr-only goes on a block wrapper: it clips its children (overflow hidden). On the <table> itself the browser
+          does not clip, and a long all-time series would stretch the whole page and add a second scrollbar. */}
+      <div className="sr-only">
+      <table data-testid="trend-table">
         <caption>{summary}</caption>
         <thead>
           <tr>
@@ -75,6 +78,7 @@ export function TrendChart({ daily }: { daily: DailyPoint[] }): JSX.Element {
           ))}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

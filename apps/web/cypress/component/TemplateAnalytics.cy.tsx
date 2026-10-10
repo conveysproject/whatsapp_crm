@@ -274,6 +274,25 @@ describe('TemplateAnalytics page', () => {
     cy.get('[data-testid="trend-chart"] .recharts-bar-rectangle').should('exist');
   });
 
+  it('keeps the hidden data table from stretching the page (no extra scroll)', () => {
+    stub(payload({ daily: days('2025-10-15', 366) }));
+    mount('all');
+    cy.get('[data-testid="trend-table"] tbody tr').should('have.length', 366);
+    cy.get('[data-testid="card-sent"]').should('be.visible');
+    cy.document().then((doc) => {
+      const root = doc.querySelector('[data-cy-root]') as HTMLElement;
+      const contentBottom = root.getBoundingClientRect().bottom + (doc.defaultView?.scrollY ?? 0);
+      // A 366-row table that escapes its clip adds thousands of pixels of scrollable height; a clipped one adds none.
+      expect(doc.documentElement.scrollHeight - contentBottom).to.be.at.most(120);
+    });
+    // The wrapper that hides the table must itself clip it (overflow hidden, 1px box).
+    cy.get('[data-testid="trend-table"]').parent().then(($wrap) => {
+      const style = $wrap[0]!.ownerDocument.defaultView!.getComputedStyle($wrap[0]!);
+      expect(style.overflow).to.eq('hidden');
+      expect(style.width).to.eq('1px');
+    });
+  });
+
   it('Export CSV downloads a BOM-prefixed file with daily rows, a blank line and the failure table', () => {
     stub(payload({ range: '7d', failures: [{ code: '131026', title: null, message: '=cmd|"x"', count: 5, share: 100, lastSeenAt: null }] }));
     mount('7d');
