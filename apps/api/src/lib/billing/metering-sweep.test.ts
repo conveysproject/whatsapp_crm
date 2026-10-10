@@ -21,4 +21,17 @@ describe("runMeteringSweep", () => {
     const res = await runMeteringSweep(prisma, new Date("2026-10-10T12:00:00Z"));
     expect(res).toEqual({ days: ["2026-10-10"], upserted: 1, removed: 2 });
   });
+  it("lookbackDays 5 processes six days, oldest first", async () => {
+    const res = await runMeteringSweep(prisma, new Date("2026-10-10T00:40:00Z"), 5);
+    expect(res.days).toEqual(["2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09", "2026-10-10"]);
+    expect(computeDailyUsage).toHaveBeenCalledTimes(6);
+  });
+  it("skips a failing day and continues with the rest", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      computeDailyUsage.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("boom"));
+      const res = await runMeteringSweep(prisma, new Date("2026-10-10T12:00:00Z"), 3);
+      expect(res.days).toEqual(["2026-10-07", "2026-10-09", "2026-10-10"]);
+    } finally { warn.mockRestore(); }
+  });
 });

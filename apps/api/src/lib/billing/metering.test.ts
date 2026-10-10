@@ -14,6 +14,7 @@ describe("day math", () => {
     expect(r?.toExclusive.toISOString()).toBe("2026-03-01T00:00:00.000Z");
     expect(r?.days).toBe(28);
     expect(parseMonth("2026-12")?.toExclusive.toISOString()).toBe("2027-01-01T00:00:00.000Z");
+    expect(parseMonth("2028-02")?.days).toBe(29);
     for (const bad of ["2026-13", "2026-00", "2026-1", "26-01", "2026/01", "", "abcd-ef"]) expect(parseMonth(bad)).toBeNull();
   });
 });
@@ -49,6 +50,17 @@ describe("computeDailyUsage", () => {
       { organizationId: "a", billable: 5, bySource: { unknown: 3, campaign: 2 } },
       { organizationId: "b", billable: 1, bySource: { api: 1 } },
     ]);
+  });
+  it("binds exactly the UTC day start and next day start and keeps the billable filters", async () => {
+    queryRaw.mockResolvedValue([]);
+    await computeDailyUsage(prisma, new Date("2026-10-10T05:00:00Z"));
+    const sql = queryRaw.mock.calls[0]![0] as { values: unknown[]; sql: string };
+    expect(sql.values.map((v) => (v as Date).toISOString())).toEqual(["2026-10-10T00:00:00.000Z", "2026-10-11T00:00:00.000Z"]);
+    const text = sql.sql.replace(/\s+/g, " ");
+    expect(text).toContain("sent_at >= ? AND sent_at < ?");
+    expect(text).toContain("direction = 'outbound'");
+    expect(text).toContain("status IN ('sent','delivered','read')");
+    expect(text).toContain("is_system_message = false");
   });
   it("returns an empty list when there are no messages", async () => {
     queryRaw.mockResolvedValue([]);

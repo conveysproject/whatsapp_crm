@@ -13,6 +13,24 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { parseMeteringArgs } from "../src/lib/billing/metering-args.js";
 import { computeDailyUsage, storeDailyUsage, utcDayKey } from "../src/lib/billing/metering.js";
+import { formatApplyLine, formatDryRunLine, type StoredTotal } from "../src/lib/billing/metering-report.js";
+
+/** Stored totals per UTC day for the range. Returns null when the table does not exist yet (migration not deployed). */
+async function readStored(prisma: PrismaClient, from: Date, to: Date): Promise<Map<string, number> | null> {
+  try {
+    const groups = await prisma.messageUsageDaily.groupBy({
+      by: ["day"],
+      where: { day: { gte: from, lte: to } },
+      _sum: { billableCount: true },
+      _count: { _all: true },
+    });
+    return new Map(groups.map((g) => [utcDayKey(g.day), g._sum.billableCount ?? 0]));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if ((e as { code?: string } | null)?.code === "P2021" || /relation .* does not exist|does not exist in the current database/i.test(msg)) return null;
+    throw e;
+  }
+}
 
 async function main(): Promise<void> {
   const { from, to, apply } = parseMeteringArgs(process.argv.slice(2)); // throws before connecting if args are invalid
@@ -21,15 +39,17 @@ async function main(): Promise<void> {
   if (!url) throw new Error("DATABASE_URL is not set");
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
   try {
+    const stored = await readStored(prisma, from, to);
+    const storedFor = (key: string): StoredTotal => (stored === null ? "n/a" : (stored.get(key) ?? null));
     let days = 0;
     for (let d = new Date(from); d <= to; d = new Date(d.getTime() + 86_400_000)) {
       const rows = await computeDailyUsage(prisma, d);
       if (apply) {
         const { upserted, removed } = await storeDailyUsage(prisma, d, rows);
-        console.log(`APPLY: ${utcDayKey(d)} upserted=${upserted} removed=${removed}`);
+        console.log(formatApplyLine(utcDayKey(d), upserted, removed, storedFor(utcDayKey(d))));
       } else {
         const billable = rows.reduce((s, r) => s + r.billable, 0);
-        console.log(`DRY RUN: ${utcDayKey(d)} orgs=${rows.length} billable=${billable}`);
+        console.log(formatDryRunLine(utcDayKey(d), rows.length, billable, storedFor(utcDayKey(d))));
       }
       days++;
     }
