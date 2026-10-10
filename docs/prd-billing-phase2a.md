@@ -48,7 +48,7 @@ New table `message_usage_daily`: `organization_id TEXT`, `day DATE`, `billable_c
 New index on `messages(organization_id, sent_at)` to make the daily aggregation cheap. **Lock risk:** a plain `CREATE INDEX` blocks writes to `messages` while it builds; build time depends on table size (unknown). See open question 3. Prisma migrations cannot run `CREATE INDEX CONCURRENTLY` inside their transaction, so if the table is large the index must be created out of band by the owner during a quiet window, followed by `prisma migrate resolve --applied <name>`.
 
 ### 5.2 Rollup job
-`lib/billing/metering.ts` exports `computeDailyUsage(prisma, day, orgIds?)` (pure SQL aggregate: `SELECT organization_id, COUNT(*) FILTER (...) , source breakdown FROM messages WHERE sent_at >= day AND sent_at < day+1 AND direction='outbound' AND status IN (...) AND is_system_message = false GROUP BY organization_id, source`) and `upsertDailyUsage(...)` (UPSERT by `(organization_id, day)`). A BullMQ job (same pattern as `register-phone.worker.ts`) runs hourly and recomputes **today and yesterday (UTC)**; a manual `scripts/recompute-message-usage.ts` (dry-run by default, `--apply`) can recompute any date range. Everything is behind a new flag `BILLING_METERING_ENABLED` (exactly `"true"`), independent of `BILLING_V2_ENABLED`. The send path is untouched.
+`lib/billing/metering.ts` exports `computeDailyUsage(prisma, day)` (pure SQL aggregate: `SELECT organization_id, COUNT(*) FILTER (...) , source breakdown FROM messages WHERE sent_at >= day AND sent_at < day+1 AND direction='outbound' AND status IN (...) AND is_system_message = false GROUP BY organization_id, source`) and `storeDailyUsage(prisma, day, rows, now?)` (UPSERT by `(organization_id, day)`, removes rows of that day without billable messages). A BullMQ job (same pattern as `register-phone.worker.ts`) runs hourly (minute 5) and recomputes **today and yesterday (UTC)**, and a nightly job (00:35 UTC) re-sweeps the **last 5 UTC days** (kept below the 7-day retention minimum) so late status changes are picked up; a manual `scripts/recompute-message-usage.ts` (dry-run by default, `--apply`) can recompute any date range; the dry run shows, per day, what is stored versus recomputed (`stored=` and `delta=`; `n/a` if the table does not exist yet), and the apply output shows what was stored before (`was=`). Everything is behind a new flag `BILLING_METERING_ENABLED` (exactly `"true"`), independent of `BILLING_V2_ENABLED`. The send path is untouched.
 
 ### 5.3 Admin view
 `GET /v1/admin/billing/usage?month=YYYY-MM` (superAdmin only, same gate as other `/admin/*` routes): per organization `{ organizationId, name, planTier, billable, bySource, days: [...] }` sorted by volume, plus totals and percentile summary (p50/p90/p99 of monthly volume) to help choose tiers. Excludes the two internal organizations ("Conveys Information Technology", "Pooyan's Organization") unless `includeInternal=true`. Response contains counts only: no message bodies, phone numbers or customer data. A matching read-only page under `/admin` is a follow-up; the API is enough for now.
@@ -58,7 +58,7 @@ No `source` backfill, no change to the send routes, no customer-visible numbers 
 
 ## 6. Security
 - Admin route: `role === "superAdmin"` only; no tenant can read another tenant's counts; customers get no new endpoint.
-- Job and script touch only `messages` (read) and `message_usage_daily` (write); the script dry-runs by default, reads `DATABASE_URL` from the environment only, prints counts and org ids, never credentials.
+- Job and script touch only `messages` (read) and `message_usage_daily` (write); the script dry-runs by default, reads `DATABASE_URL` from the environment only, prints day keys and counts only (no organization ids), never credentials.
 - No PII stored: counts and source labels only.
 - Internal organizations excluded from the admin summary by default.
 
@@ -95,8 +95,8 @@ Update 2026-10-10: question 7 was approved and run read-only. Result: the `messa
 ## 11. Deploy checklist
 
 1. Deploy. `start.sh` runs `prisma migrate deploy`, which applies `20261010200000_message_usage_daily` (new table) and `20261010200100_messages_org_sent_idx` (index on `messages`). With a table this small the index builds instantly. Only if `messages` has grown large would the index need to be created out of band first with `CREATE INDEX CONCURRENTLY IF NOT EXISTS "messages_org_sent_at_idx" ON "messages"("organization_id","sent_at")`, followed by `prisma migrate resolve --applied 20261010200100_messages_org_sent_idx`.
-2. Nothing runs until `BILLING_METERING_ENABLED=true` is set on the API service. Setting it starts the hourly job (minute 5), which recomputes today and yesterday (UTC).
-3. Optional backfill of earlier days of the month, from the Railway-linked checkout folder: `cd apps/api && railway run --service Postgres pnpm tsx scripts/recompute-message-usage.ts --from YYYY-MM-DD --to YYYY-MM-DD` is a dry run that writes nothing; add `--apply` only after the owner confirms. The script uses the public database address that `--service Postgres` injects (plain `railway run` uses the unreachable internal address). It counts every organization, including internal ones. Only messages that still exist can be counted, and `message-cleanup` deletes old messages.
+2. Nothing runs until `BILLING_METERING_ENABLED=true` is set on the API service. Setting it starts the hourly job (minute 5), which recomputes today and yesterday (UTC); a nightly job at 00:35 UTC re-sweeps the last 5 UTC days.
+3. Optional backfill of earlier days of the month, from the Railway-linked checkout folder: `cd apps/api && railway run --service Postgres pnpm tsx scripts/recompute-message-usage.ts --from YYYY-MM-DD --to YYYY-MM-DD` is a dry run that writes nothing and shows stored versus recomputed totals per day; add `--apply` only after the owner confirms. The script uses the public database address that `--service Postgres` injects (plain `railway run` uses the unreachable internal address). It counts every organization, including internal ones. Only messages that still exist can be counted, and `message-cleanup` deletes old messages.
 4. Read the report as a super admin: `GET /v1/admin/billing/usage?month=YYYY-MM` (add `&includeInternal=true` to include the two internal organizations).
 5. Rollback: unset `BILLING_METERING_ENABLED`. The table and index are additive and can stay.
 
@@ -105,6 +105,18 @@ Update 2026-10-10: question 7 was approved and run read-only. Result: the `messa
 - Repeated query parameters on the admin endpoint arrive as arrays; behaviour is safe (validation fails) but add an explicit string guard and a test.
 - Export the `requireSuperAdmin` helper from `admin.ts` instead of repeating the 403 in `admin-billing.ts`.
 - Chunk the organization lookup in the admin endpoint if the number of organizations grows into the thousands.
-- If both days fail in one sweep the job still completes; add an alert on `days=0` in the log line.
-- Add tests: leap-February `parseMonth`, the exact timestamps bound into the counting SQL, `--to` followed by another flag in the recompute script.
+- If both days fail in one sweep the job still completes; the worker logs an error (`sweep produced no days`) in that case.
+- Add a test for `--to` followed by another flag in the recompute script.
 - The Phase 1A backfill script now also uses `DATABASE_PUBLIC_URL ?? DATABASE_URL`.
+
+### Before these numbers can drive charges (required for Phase 2B)
+
+- Counts are rebuilt from rows that still exist, so customers can lower billed volume by deleting messages (`DELETE /conversations/:id/history` in `routes/conversations.ts`, and `message-cleanup` deleting by `createdAt` with no server-side minimum for `delete_whatsapp_message_days` in `routes/vendor-settings.ts`). Make billing deletion-proof: an append-only billable-event ledger written when a message first reaches a billable status, or soft delete. Also enforce a server-side retention minimum of at least 7 days.
+- Days older than the re-sweep window (5 days) can drift (late Meta failures overcount). Close days (immutable) after N days, or record corrections explicitly.
+- The UTC bucketing relies on the database session time zone being UTC; cast explicitly if that ever changes.
+- The interactive transaction in `storeDailyUsage` has the default 5 s timeout; set a longer timeout or use `createMany`/`ON CONFLICT` when organizations number in the thousands.
+- Internal organizations are excluded by name; consider excluding by id.
+
+### Separate security ticket (pre-existing, not part of this work)
+
+- In `apps/api/src/plugins/auth.ts` the demo-session block checks the raw request URL with `startsWith("/v1/admin")`. The router percent-decodes paths, so an encoded path such as `/v1/%61dmin/...` may reach admin routes in a demo-mode deployment (`IS_DEMO_MODE`; startup refuses it in production). Fix by checking the matched route URL, or by rejecting the demo user in admin handlers.
