@@ -25,7 +25,7 @@ export function SetupBanner(): JSX.Element | null {
   }, [allDone]);
 
   // Dashboard v2 shows its own context-aware banner on /dashboard.
-  if (process.env["NEXT_PUBLIC_DASHBOARD_V2"] === "true" && pathname === "/dashboard") return null;
+  if (pathname === "/dashboard") return null;
   if (!mounted || allDone || dismissed) return null;
 
   return (
