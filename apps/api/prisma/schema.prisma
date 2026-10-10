@@ -68,6 +68,9 @@ model Organization {
   banReason          String?   @map("ban_reason")
   stripeId           String?   @map("stripe_id")
   trialEndsAt        DateTime? @map("trial_ends_at")
+  billingStatus          String    @default("active") @map("billing_status") // active | past_due | cancelled
+  billingGraceEndsAt     DateTime? @map("billing_grace_ends_at")
+  planCancelAtPeriodEnd  Boolean   @default(false) @map("plan_cancel_at_period_end")
   vendorSettings     VendorSetting[]
   cannedResponses    CannedResponse[]
   contactGroups      ContactGroup[]
@@ -85,6 +88,8 @@ model Organization {
   orgAutomationSettings OrgAutomationSettings?
 
   @@map("organizations")
+  @@index([stripeId])
+  @@index([billingStatus, billingGraceEndsAt])
 }
 
 model VendorSetting {
@@ -416,6 +421,8 @@ enum PaymentGateway {
   bank_transfer
   cash
   other
+  paystack
+  yoomoney
 }
 
 enum ManualSubscriptionStatus {
