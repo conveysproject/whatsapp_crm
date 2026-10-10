@@ -4,6 +4,8 @@ import { DashboardBody } from '../../components/dashboard/DashboardView';
 import '../support/css-marker';
 import '../../app/globals.css';
 import type { DashRange } from '../../lib/dashboard';
+import { OnboardingProvider } from '../../app/(dashboard)/onboarding-context';
+import { TeamLeaderboardPanel } from '../../components/analytics/TeamLeaderboard';
 
 const EVIL = '<img src=x onerror=alert(1)>';
 
@@ -45,33 +47,62 @@ function stubDashboard(reply: Record<string, unknown> = body()): void {
   cy.intercept({ method: 'GET', pathname: '/v1/analytics/dashboard' }, { body: reply }).as('dash');
 }
 
-function Harness({ initial = '7d' as DashRange }: { initial?: DashRange }): React.JSX.Element {
+const BILLING_USER = { id: 'u4', fullName: 'Bo Billing', email: 'd@x.com', role: 'custom', permissions: { analytics_access: 'allow', settings_access: 'allow', 'settings_access@settings_billing': 'allow' } };
+const LEADER_USER = { id: 'u5', fullName: 'Lee Lead', email: 'e@x.com', role: 'custom', permissions: { analytics_access: 'allow', 'analytics_access@analytics_agent_performance': 'allow' } };
+
+const USAGE = {
+  data: {
+    plan: 'pro',
+    unavailableFeatures: [],
+    gates: {
+      contacts: { current: 10, limit: 100, allowed: true },
+      campaigns: { current: 85, limit: 100, allowed: true },
+      chatbots: { current: 3, limit: 3, allowed: false },
+      flows: { current: 1, limit: null, allowed: true },
+      custom_fields: { current: 0, limit: 10, allowed: true },
+      team_members: { current: 2, limit: 5, allowed: true },
+    },
+  },
+};
+function stubUsage(reply: unknown = USAGE, statusCode = 200): void {
+  cy.intercept({ method: 'GET', pathname: '/v1/billing/usage' }, { statusCode, body: reply }).as('usage');
+}
+const AGENTS = Array.from({ length: 8 }, (_, i) => ({
+  userId: 'a' + i, displayName: 'Agent ' + i, openConversations: i, resolvedToday: 10 - i, avgFirstResponseSecs: 60, slaBreaches: 0,
+}));
+
+type Onb = { wabaConnected: boolean; numberProvisioned: boolean };
+
+function Harness({ initial = '7d' as DashRange, withOnboarding }: { initial?: DashRange; withOnboarding?: Onb }): React.JSX.Element {
   const [range, setRange] = useState<DashRange>(initial);
-  return (
+  const tok = async (): Promise<string | null> => 'tok';
+  const inner = (
     <DashboardBody
-      getToken={async () => 'tok'}
+      getToken={tok}
       range={range}
       onRangeChange={setRange}
       slots={{
         myWork: <div data-testid="slot-mywork">my work</div>,
+        leaderboard: <TeamLeaderboardPanel getToken={tok} limit={5} viewAllHref="/analytics?tab=team" />,
         volumeChart: (days) => <div data-testid="slot-chart">chart {days}</div>,
         activity: <div data-testid="slot-activity">activity</div>,
       }}
     />
   );
+  return withOnboarding ? <OnboardingProvider status={{ provisioned: true, ...withOnboarding }}>{inner}</OnboardingProvider> : inner;
 }
 
-function mount(initial: DashRange = '7d'): void {
+function mount(initial: DashRange = '7d', withOnboarding?: Onb): void {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   cy.mount(
     <QueryClientProvider client={qc}>
-      <Harness initial={initial} />
+      <Harness initial={initial} withOnboarding={withOnboarding} />
     </QueryClientProvider>,
   );
 }
 
 describe('Dashboard v2', () => {
-  beforeEach(() => stubUser());
+  beforeEach(() => { stubUser(); stubUsage(); });
 
   it('renders attention items with severity and links, critical first', () => {
     stubDashboard();
@@ -262,5 +293,108 @@ describe('Dashboard v2', () => {
     cy.get('[data-testid="kpi-open"]').then(($c) => {
       expect(getComputedStyle($c[0] as HTMLElement).backgroundColor).to.not.eq('rgb(255, 255, 255)');
     });
+  });
+
+  it('renders four quick actions under the range picker', () => {
+    stubDashboard();
+    mount();
+    cy.contains('a', 'New Campaign').should('have.attr', 'href', '/campaigns/new');
+    cy.contains('a', 'Import Contacts').should('have.attr', 'href', '/contacts/import');
+    cy.contains('a', 'Open Inbox').should('have.attr', 'href', '/inbox');
+    cy.contains('a', 'New Template').should('have.attr', 'href', '/templates/new');
+  });
+
+  it('plan strip shows plan, six gates, bar colours and the upgrade link when a gate is blocked', () => {
+    stubUser(BILLING_USER);
+    stubDashboard();
+    mount();
+    cy.get('[data-testid="plan-badge"]').should('have.text', 'pro');
+    cy.get('[data-testid^="plan-gate-"]').should('have.length', 6);
+    cy.get('[data-testid="plan-gate-contacts"]').should('contain', '10 / 100');
+    cy.get('[data-testid="plan-gate-flows"]').should('contain', '1 / Unlimited');
+    cy.get('[data-testid="plan-gate-contacts"] [data-testid="plan-bar"]').should('have.class', 'bg-blue-500');
+    cy.get('[data-testid="plan-gate-campaigns"] [data-testid="plan-bar"]').should('have.class', 'bg-amber-400');
+    cy.get('[data-testid="plan-gate-chatbots"] [data-testid="plan-bar"]').should('have.class', 'bg-red-500');
+    cy.get('[data-testid="plan-upgrade"]').should('have.attr', 'href', '/settings/billing');
+  });
+
+  it('plan strip has no upgrade link when nothing is blocked', () => {
+    stubUser(BILLING_USER);
+    stubUsage({ data: { plan: 'pro', gates: {} } });
+    stubDashboard();
+    mount();
+    cy.get('[data-testid="plan-usage"]').should('be.visible');
+    cy.get('[data-testid="plan-upgrade"]').should('not.exist');
+  });
+
+  it('plan strip is hidden and not fetched without settings_billing', () => {
+    stubUser(CUSTOM);
+    let calls = 0;
+    cy.intercept({ method: 'GET', pathname: '/v1/billing/usage' }, (req) => { calls += 1; req.reply({ body: USAGE }); });
+    stubDashboard();
+    mount();
+    cy.get('[data-testid="kpi-open"]').should('be.visible');
+    cy.get('[data-testid="plan-usage"]').should('not.exist');
+    cy.get('[data-testid="plan-usage-unavailable"]').should('not.exist');
+    cy.then(() => expect(calls).to.eq(0));
+  });
+
+  it('plan strip failure shows a small note and the page still renders', () => {
+    stubUser(BILLING_USER);
+    stubUsage({ error: 'x' }, 500);
+    stubDashboard();
+    mount();
+    cy.get('[data-testid="plan-usage-unavailable"]').should('contain', 'Plan usage unavailable');
+    cy.get('[data-testid="kpi-open"]').should('be.visible');
+  });
+
+  it('leaderboard needs the sub-permission, is capped at 5 and links to View all', () => {
+    stubUser(LEADER_USER);
+    cy.intercept({ method: 'GET', pathname: '/v1/analytics/team' }, { body: { data: AGENTS } });
+    stubDashboard();
+    mount();
+    cy.contains('Team Leaderboard').should('be.visible');
+    cy.get('tbody tr').should('have.length', 5);
+    cy.get('[data-testid="leaderboard-view-all"]').should('have.attr', 'href', '/analytics?tab=team');
+  });
+
+  it('leaderboard is hidden without analytics_agent_performance', () => {
+    stubUser(CUSTOM);
+    stubDashboard();
+    mount();
+    cy.get('[data-testid="kpi-open"]').should('be.visible');
+    cy.contains('Team Leaderboard').should('not.exist');
+  });
+
+  it('leaderboard shows an error, not "No activity yet", on a failed load', () => {
+    stubUser(LEADER_USER);
+    cy.intercept({ method: 'GET', pathname: '/v1/analytics/team' }, { statusCode: 500, body: {} });
+    stubDashboard();
+    mount();
+    cy.get('[data-testid="leaderboard-error"]').should('contain', 'Could not load team data');
+    cy.contains('No activity yet').should('not.exist');
+  });
+
+  it('banner asks to finish setup when onboarding is incomplete', () => {
+    stubDashboard(body({ attention: [{ key: 'whatsapp_disconnected', severity: 'critical', count: 1, label: 'WhatsApp is disconnected', href: '/settings/whatsapp-account' }] }));
+    mount('7d', { wabaConnected: false, numberProvisioned: false });
+    cy.get('[data-testid="whatsapp-banner"]').should('have.length', 1)
+      .and('contain', 'Finish setting up WhatsApp to unlock Inbox and Campaigns.')
+      .and('contain', 'Complete setup').and('have.attr', 'href', '/checklist').and('not.contain', 'Open settings to reconnect');
+  });
+
+  it('banner keeps the reconnect text when onboarding is complete', () => {
+    stubDashboard(body({ attention: [{ key: 'whatsapp_disconnected', severity: 'critical', count: 1, label: 'WhatsApp is disconnected', href: '/settings/whatsapp-account' }] }));
+    mount('7d', { wabaConnected: true, numberProvisioned: true });
+    cy.get('[data-testid="whatsapp-banner"]').should('contain', 'WhatsApp is disconnected. Open settings to reconnect.')
+      .and('have.attr', 'href', '/settings/whatsapp-account');
+  });
+
+  it('messages card shows the in/out split without a stray dash when there is no delta', () => {
+    stubDashboard(body({ kpis: { ...(body().data as Record<string, any>).kpis, messages: { value: 0, previous: 0, deltaPct: null, inbound: 0, outbound: 0 } } }));
+    mount();
+    cy.get('[data-testid="kpi-messages"]').should('contain', '0 in / 0 out');
+    cy.get('[data-testid="kpi-messages"] [data-testid="kpi-delta"]').should('not.exist');
+    cy.get('[data-testid="kpi-messages"]').should('not.contain', '—');
   });
 });
