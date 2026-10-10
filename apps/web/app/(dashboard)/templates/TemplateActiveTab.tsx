@@ -3,7 +3,33 @@
 import { useState, useMemo, useEffect, useCallback, type JSX } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { TemplateRow, type TemplateData } from "./TemplateRow";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
+import { TemplateRow, COLS, type TemplateData } from "./TemplateRow";
+import { ANALYTICS_RANGES, type AnalyticsRange } from "@/lib/template-analytics";
+import { fetchTemplateListStats, sortTemplates, type SortDir, type SortKey, type StatsMap } from "@/lib/template-list-stats";
+
+const NO_STATS: StatsMap = {};
+
+function SortHeader({ label, k, sortKey, dir, onSort, className }: {
+  label: string; k: SortKey; sortKey: SortKey | null; dir: SortDir; onSort: (k: SortKey) => void; className: string;
+}): JSX.Element {
+  const active = sortKey === k;
+  const Icon = !active ? ChevronsUpDown : dir === "asc" ? ArrowUp : ArrowDown;
+  const justify = className.includes("text-right") ? "justify-end" : "";
+  return (
+    <span className={className} aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}>
+      <button
+        type="button"
+        onClick={() => onSort(k)}
+        className={`inline-flex w-full items-center gap-1 text-xs font-medium uppercase tracking-wide hover:text-gray-800 ${justify} ${active ? "text-gray-800" : "text-gray-500"}`}
+      >
+        {label}
+        <Icon className={`h-3 w-3 ${active ? "text-gray-700" : "text-gray-300"}`} aria-hidden="true" />
+      </button>
+    </span>
+  );
+}
 
 const STATUSES = ["all", "draft", "approved", "pending", "rejected", "paused", "disabled", "in_appeal", "flagged", "limit_exceeded", "pending_deletion", "archived"] as const;
 const CATEGORIES = ["all", "marketing", "utility", "authentication"] as const;
@@ -68,6 +94,21 @@ export function TemplateActiveTab({ templates }: { templates: TemplateData[] }):
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [showModal, setShowModal] = useState(false);
+  const [range, setRange] = useState<AnalyticsRange>("30d");
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const statsQuery = useQuery<StatsMap, Error>({
+    queryKey: ["template-list-stats", range],
+    queryFn: () => fetchTemplateListStats(range),
+    retry: false,
+    placeholderData: keepPreviousData,
+  });
+  const stats = statsQuery.data ?? NO_STATS;
+  const statsReady = !statsQuery.isLoading;
+  const onSort = (k: SortKey): void => {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(k); setSortDir(k === "name" ? "asc" : "desc"); }
+  };
   const handleRefresh = useCallback(() => { router.refresh(); }, [router]);
 
   const filtered = useMemo(() => {
@@ -78,6 +119,7 @@ export function TemplateActiveTab({ templates }: { templates: TemplateData[] }):
       return true;
     });
   }, [templates, search, statusFilter, categoryFilter]);
+  const rows = useMemo(() => sortTemplates(filtered, stats, sortKey, sortDir), [filtered, stats, sortKey, sortDir]);
 
   return (
     <>
@@ -150,6 +192,27 @@ export function TemplateActiveTab({ templates }: { templates: TemplateData[] }):
           </div>
         </div>
 
+        {/* Stats period */}
+        <div className="flex items-center justify-end gap-2 text-xs text-gray-500">
+          <span>Sent / delivered / read for</span>
+          <div role="group" aria-label="Statistics period" className="inline-flex overflow-hidden rounded-lg border border-gray-300 bg-white">
+            {ANALYTICS_RANGES.map((r) => (
+              <button
+                key={r.value}
+                type="button"
+                onClick={() => setRange(r.value)}
+                aria-pressed={range === r.value}
+                className={`px-2.5 py-1 text-xs font-medium ${range === r.value ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {statsQuery.isError && (
+          <p role="status" className="text-xs text-amber-700">Could not load sending statistics. The list is still up to date.</p>
+        )}
+
         {/* Amber review-time banner */}
         <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
           <svg className="w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -171,19 +234,21 @@ export function TemplateActiveTab({ templates }: { templates: TemplateData[] }):
         {/* Table */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-card divide-y divide-gray-100">
           <div className="flex items-center px-4 py-2 bg-gray-50 rounded-t-xl">
-            <span className="flex-1 min-w-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Name</span>
-            <span className="w-20 shrink-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Language</span>
-            <span className="w-28 shrink-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Category</span>
-            <span className="w-32 shrink-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</span>
-            <span className="w-32 shrink-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Updated On</span>
-            <span className="w-20 shrink-0 text-xs font-medium text-gray-500 uppercase tracking-wide text-right">Action</span>
+            <SortHeader label="Name" k="name" sortKey={sortKey} dir={sortDir} onSort={onSort} className="flex-1 min-w-0 pr-3" />
+            <span className={`${COLS.category} text-xs font-medium text-gray-500 uppercase tracking-wide`}>Category</span>
+            <span className={`${COLS.status} text-xs font-medium text-gray-500 uppercase tracking-wide`}>Status</span>
+            <SortHeader label="Sent" k="sent" sortKey={sortKey} dir={sortDir} onSort={onSort} className={COLS.sent} />
+            <span className={`${COLS.delivered} text-xs font-medium text-gray-500 uppercase tracking-wide`}>Delivered</span>
+            <SortHeader label="Read rate" k="readRate" sortKey={sortKey} dir={sortDir} onSort={onSort} className={COLS.read} />
+            <SortHeader label="Updated" k="updatedAt" sortKey={sortKey} dir={sortDir} onSort={onSort} className={COLS.updated} />
+            <span className={`${COLS.actions} text-xs font-medium text-gray-500 uppercase tracking-wide`}>Actions<span className="w-6" /></span>
           </div>
           {filtered.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-gray-400">
               {templates.length === 0 ? "No templates yet." : "No templates match your filters."}
             </p>
           ) : (
-            filtered.map((t) => <TemplateRow key={t.id} template={t} onRefresh={handleRefresh} />)
+            rows.map((t) => <TemplateRow key={t.id} template={t} onRefresh={handleRefresh} stat={stats[t.id]} statsReady={statsReady} range={range} />)
           )}
         </div>
       </div>

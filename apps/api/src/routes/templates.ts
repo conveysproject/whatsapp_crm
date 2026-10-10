@@ -6,7 +6,7 @@ import { sendTemplateMessage, getMetaTemplateAnalytics, uploadMediaHandle } from
 import { buildTemplateComponents, contactBodyVars, extractTemplateFields } from "../lib/template-components.js";
 import type { TemplateId, ContactId } from "@WBMSG/shared";
 import { canAccess, canAccessSub } from "../lib/permissions.js";
-import { parseRange, getTemplateAnalytics } from "../lib/template-analytics.js";
+import { parseRange, getTemplateAnalytics, getTemplateListStats } from "../lib/template-analytics.js";
 import { TEMPLATE_LINK_RELEASED_AT } from "../lib/template-link-release.js";
 import { fromMetaTemplateStatus } from "../lib/template-status.js";
 
@@ -41,6 +41,21 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: "desc" },
     });
     return reply.send({ data: templates });
+  });
+
+  fastify.get<{ Querystring: { range?: string } }>("/templates/stats", async (request, reply) => {
+    const { organizationId } = request.auth;
+    const range = parseRange(request.query.range);
+    if (!range) {
+      return reply.status(400).send({ error: { code: "INVALID_RANGE", message: "range must be one of 7d, 30d, 90d, all" } });
+    }
+    try {
+      const data = await getTemplateListStats(fastify.prisma, { organizationId, range });
+      return reply.send({ data, range });
+    } catch (err) {
+      request.log.error({ err }, "template list stats failed");
+      return reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "Could not load template statistics" } });
+    }
   });
 
   fastify.get<{ Params: { id: TemplateId } }>("/templates/:id", async (request, reply) => {

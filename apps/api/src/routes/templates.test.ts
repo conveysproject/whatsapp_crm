@@ -536,3 +536,51 @@ describe("POST /v1/templates/sync: Meta statuses", () => {
     expect(mockPrisma.template.create.mock.calls[0]![0].data.status).toBe("pending");
   });
 });
+
+describe("GET /v1/templates/stats", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    vi.resetModules(); vi.clearAllMocks();
+    mockAuth.role = "admin"; mockAuth.permissions = {};
+    app = await buildApp();
+  });
+  afterEach(async () => { await app.close(); });
+
+  it("rejects an invalid range with 400", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/templates/stats?range=1y" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_RANGE");
+  });
+
+  it("scopes the query to the caller's organization and defaults to 30d", async () => {
+    const queryRaw = vi.fn().mockResolvedValue([{ template_id: "t-1", sent: 10, delivered: 8, read: 4 }]);
+    (mockPrisma as unknown as Record<string, unknown>).$queryRaw = queryRaw;
+    const res = await app.inject({ method: "GET", url: "/v1/templates/stats" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ range: string; data: Array<{ templateId: string; deliveryRate: number; readRate: number }> }>();
+    expect(body.range).toBe("30d");
+    expect(body.data[0]).toMatchObject({ templateId: "t-1", deliveryRate: 80, readRate: 50 });
+    const sql = queryRaw.mock.calls[0][0] as { values: unknown[]; strings: string[] };
+    expect(sql.values).toContain("org-1");
+    expect(sql.strings.join("?")).toContain("organization_id =");
+  });
+
+  it("returns null rates on zero denominators", async () => {
+    (mockPrisma as unknown as Record<string, unknown>).$queryRaw = vi.fn().mockResolvedValue([{ template_id: "t-2", sent: 0, delivered: 0, read: 0 }]);
+    const res = await app.inject({ method: "GET", url: "/v1/templates/stats?range=all" });
+    expect(res.json<{ data: Array<{ deliveryRate: null; readRate: null }> }>().data[0]).toMatchObject({ deliveryRate: null, readRate: null });
+  });
+
+  it("403s without templates_access", async () => {
+    mockAuth.role = "agent" as never; mockAuth.permissions = {};
+    const res = await app.inject({ method: "GET", url: "/v1/templates/stats" });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("answers 500 with a generic body when the query fails", async () => {
+    (mockPrisma as unknown as Record<string, unknown>).$queryRaw = vi.fn().mockRejectedValue(new Error("boom contact@x.com"));
+    const res = await app.inject({ method: "GET", url: "/v1/templates/stats" });
+    expect(res.statusCode).toBe(500);
+    expect(res.body).not.toContain("boom");
+  });
+});

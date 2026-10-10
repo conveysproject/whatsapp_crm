@@ -181,3 +181,44 @@ export async function getTemplateAnalytics(
     range,
   };
 }
+
+export interface TemplateListStat {
+  templateId: string;
+  sent: number;
+  delivered: number;
+  read: number;
+  deliveryRate: number | null;
+  readRate: number | null;
+}
+
+/** One funnel row per template that has linked outbound template messages in the range (PRD section 3 definitions). */
+export async function getTemplateListStats(
+  prisma: PrismaClient,
+  args: { organizationId: string; range: AnalyticsRange; now?: Date },
+): Promise<TemplateListStat[]> {
+  const { organizationId, range } = args;
+  const now = args.now ?? new Date();
+  const from = range === "all" ? null : startOfUtcDay(new Date(now.getTime() - RANGE_DAYS[range] * DAY_MS));
+  const rows = await prisma.$queryRaw<Array<{ template_id: string; sent: number; delivered: number; read: number }>>(
+    Prisma.sql`SELECT template_id,
+      count(*) FILTER (WHERE status IN ('sent','delivered','read'))::int AS sent,
+      count(*) FILTER (WHERE status IN ('delivered','read'))::int AS delivered,
+      count(*) FILTER (WHERE status = 'read')::int AS read
+      FROM messages
+      WHERE organization_id = ${organizationId} AND template_id IS NOT NULL AND direction = 'outbound' AND content_type = 'template'${
+        from ? Prisma.sql` AND sent_at >= ${from}` : Prisma.empty
+      }
+      GROUP BY template_id`,
+  );
+  return rows.map((r) => {
+    const sent = Number(r.sent), delivered = Number(r.delivered), read = Number(r.read);
+    return {
+      templateId: r.template_id,
+      sent,
+      delivered,
+      read,
+      deliveryRate: pct(delivered, sent),
+      readRate: pct(read, delivered),
+    };
+  });
+}
