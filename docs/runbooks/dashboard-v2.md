@@ -9,7 +9,6 @@ A new `/dashboard` view (attention list, KPI cards with change vs the previous p
 - Web flag: `NEXT_PUBLIC_DASHBOARD_V2=true` (build-time, Vercel env). Unset or any other value renders the old dashboard unchanged.
 - Rollback = remove the variable and redeploy the web app. The API endpoint is additive and harmless when unused.
 - Not covered by the flag: the inbox now shows Unread / Assigned-to-me quick-filter chips and honours `?conversation=` / `?filter=` for everyone. Reverting those needs a code revert of the `feat(web): inbox deep links` commits.
-- Not covered by the flag: the inbox now shows Unread / Assigned-to-me quick-filter chips and honours `?conversation=` / `?filter=` for everyone. Reverting those needs a code revert of the `feat(web): inbox deep links` commits.
 
 ## Behaviour to know
 - Requires `analytics_access`. Attention items and the campaign funnel are filtered per permission: inbox_access (unanswered, SLA at risk, failed messages), templates_access (templates), campaigns_access (funnel), settings_access@settings_billing (plan usage). Admin and superAdmin see everything.
