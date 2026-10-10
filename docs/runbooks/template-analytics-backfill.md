@@ -12,8 +12,8 @@ Script: `apps/api/scripts/backfill-message-template-link.ts`. **Owner-only:** ru
 
 Always run the dry run first and read the counts. `--apply` is the only mode that writes.
 
-- The dry run executes in one READ ONLY transaction: it cannot write.
-- `--apply` works in batches of 500 rows, one UPDATE per batch. It is NOT atomic across batches (an interruption leaves earlier batches applied), but it is idempotent: every row re-checks its organization and `template_id IS NULL`, so just run it again to finish. A second run reports `updated_rows=0`.
+- The dry run reads 500 rows per page, each page in its own short READ ONLY transaction (60 s timeout): it cannot write and holds no long transaction.
+- `--apply` works in batches of 500 rows, one UPDATE per batch. It is NOT atomic across batches (an interruption leaves earlier batches applied), but it is idempotent: every row re-checks its organization, `direction = 'outbound'`, `content_type = 'template'`, that the template belongs to the same organization, and `template_id IS NULL`, so just run it again to finish. A second run reports `updated_rows=0`.
 - Never overwrites: rows that already have a `template_id` are untouched, and `source` is only filled while NULL.
 - Start with one organization (`--org`), check its analytics page, then run for all.
 
@@ -22,7 +22,7 @@ Always run the dry run first and read the counts. `--apply` is the only mode tha
 Only outbound `template` messages with `template_id IS NULL`, and only when the organization has exactly one template with that name.
 
 - API-sent (has an `api_message_meta` row): `source = api`
-- Flow messages (body is a plain template name): `source = flow`. Heuristic caveat: any outbound template row whose body is only a lowercase name (letters, digits, underscore) and has no rich content is assumed to come from a flow. A different old writer that stored a plain name would be mislabeled `flow`; the template link itself would still be correct.
+- Flow messages (body is a plain template name): `source = flow`. Heuristic caveat: any outbound template row whose body is only a lowercase name (letters, digits, underscore) and has no rich content is assumed to come from a flow. The owner reviews the dry-run counts (especially the flow share) before `--apply`. A different old writer that stored a plain name would be mislabeled `flow`; the template link itself would still be correct.
 - Dashboard and test sends (JSON body): linked, `source` stays NULL (the two cannot be told apart; they show as "unknown" in the sources list)
 
 ## What is skipped, and why

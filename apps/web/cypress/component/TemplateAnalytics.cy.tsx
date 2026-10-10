@@ -135,6 +135,37 @@ describe('TemplateAnalytics page', () => {
     cy.get('[data-testid="date-span"]').should('have.text', 'All time');
   });
 
+  it('keeps the previous data visible (dimmed, aria-busy) while a new range loads', () => {
+    cy.intercept({ method: 'GET', pathname: PATH, query: { range: '30d' } }, { body: payload() });
+    cy.intercept({ method: 'GET', pathname: PATH, query: { range: '7d' } }, (req) => { req.reply({ delay: 1500, body: payload({ range: '7d' }) }); }).as('seven');
+    mount();
+    cy.contains('h1', 'Welcome Offer').should('be.visible');
+    cy.get('[data-testid="range-7d"]').click();
+    cy.contains('h1', 'Welcome Offer').should('be.visible');
+    cy.get('[data-testid="card-sent"]').should('be.visible');
+    cy.get('[data-testid="analytics-loading"]').should('not.exist');
+    cy.get('[data-testid="analytics-content"]').should('have.attr', 'aria-busy', 'true');
+    cy.wait('@seven');
+    cy.get('[data-testid="analytics-content"]').should('have.attr', 'aria-busy', 'false');
+  });
+
+  it('keeps the data and shows a non-blocking alert when a background refresh fails, then recovers', () => {
+    let calls = 0;
+    cy.intercept({ method: 'GET', pathname: PATH }, (req) => {
+      calls += 1;
+      if (calls === 2) req.reply({ statusCode: 500, body: { error: { code: 'INTERNAL', message: 'Boom' } } });
+      else req.reply({ body: payload() });
+    });
+    mount();
+    cy.get('[data-testid="card-sent"]').should('contain', '100');
+    cy.contains('button', 'Refresh').click();
+    cy.get('[data-testid="analytics-refresh-error"]').should('contain', 'Could not refresh. Showing the last loaded data.');
+    cy.get('[data-testid="card-sent"]').should('contain', '100');
+    cy.get('[data-testid="analytics-error"]').should('not.exist');
+    cy.get('[data-testid="analytics-refresh-error"]').contains('button', 'Retry').click();
+    cy.get('[data-testid="analytics-refresh-error"]').should('not.exist');
+  });
+
   it('shows the empty state when nothing was sent', () => {
     stub(payload({ sent: 0, delivered: 0, read: 0, failed: 0, inProgress: 0, rates: { delivery: null, read: null, failure: null }, daily: [], failures: [], sources: [] }));
     mount();

@@ -1,6 +1,7 @@
 /**
  * Backfill messages.template_id / messages.source for OUTBOUND TEMPLATE messages sent before those columns existed.
- * DRY RUN by default: prints per-organization counts and changes nothing (the whole run is one READ ONLY transaction).
+ * DRY RUN by default: prints per-organization counts and changes nothing (every page of 500 rows is its own short
+ * READ ONLY transaction, so a bug cannot write and no long transaction is held on production).
  * Writes only with --apply.
  *
  * Usage (DATABASE_PUBLIC_URL is injected by railway; never hard-code or print a connection string):
@@ -11,7 +12,12 @@
  * source: api_message_meta row -> 'api'; flow plain-name body -> 'flow'; dashboard/test JSON rows stay NULL (not
  * distinguishable). Campaign rows keep only rendered text + header/footer/buttons (no template name in body or
  * rich_content, see campaign.worker.ts), so they cannot be attributed and are only counted. Re-runs are idempotent:
- * every UPDATE re-checks organization_id and template_id IS NULL, and never overwrites a non-NULL template_id/source.
+ * every UPDATE re-checks organization_id, direction/content_type, that the template belongs to the same organization and
+ * template_id IS NULL, and never overwrites a non-NULL template_id/source.
+ *
+ * Apply is NOT atomic across batches: each batch (one UPDATE) is atomic, an interruption leaves earlier batches applied,
+ * and a re-run simply finishes the rest (idempotent). The 'flow' source is a HEURISTIC (a plain lowercase name body with
+ * no rich_content) and may label some legacy non-flow rows as flow. The owner reviews the dry-run counts before --apply.
  */
 import { pathToFileURL } from "node:url";
 import { PrismaClient } from "@prisma/client";
@@ -46,7 +52,9 @@ export interface BackfillSummary { orgs: Map<string, OrgCounts>; total: OrgCount
 
 const zero = (): OrgCounts => ({ update: 0, ambiguous: 0, unmatched: 0, unattributedCampaign: 0, skipped: 0 });
 
-async function pass(db: BackfillDb, a: BackfillArgs, out: (l: string) => void): Promise<BackfillSummary> {
+type WithDb = <T>(fn: (db: BackfillDb) => Promise<T>) => Promise<T>;
+
+async function pass(withDb: WithDb, a: BackfillArgs, out: (l: string) => void): Promise<BackfillSummary> {
   const orgs = new Map<string, OrgCounts>();
   const total = zero();
   let updatedRows = 0;
@@ -55,60 +63,65 @@ async function pass(db: BackfillDb, a: BackfillArgs, out: (l: string) => void): 
   const orgFilter = a.org ?? null;
   let cursor = "";
 
-  for (;;) {
-    const raw = await db.$queryRaw<RawRow[]>`
-      SELECT m.id, m.organization_id, m.body, m.rich_content, (am.message_id IS NOT NULL) AS has_api_meta
-        FROM messages m
-        LEFT JOIN api_message_meta am ON am.message_id = m.id AND am.organization_id = m.organization_id
-       WHERE m.direction = 'outbound' AND m.content_type = 'template' AND m.template_id IS NULL
-         AND m.id > ${cursor}
-         AND (${orgFilter}::text IS NULL OR m.organization_id = ${orgFilter})
-       ORDER BY m.id
-       LIMIT ${BATCH_SIZE}`;
-    if (raw.length === 0) break;
-    cursor = raw[raw.length - 1]!.id;
+  let done = false;
+  while (!done) {
+    done = await withDb(async (db) => {
+      const raw = await db.$queryRaw<RawRow[]>`
+        SELECT m.id, m.organization_id, m.body, m.rich_content, (am.message_id IS NOT NULL) AS has_api_meta
+          FROM messages m
+          LEFT JOIN api_message_meta am ON am.message_id = m.id AND am.organization_id = m.organization_id
+         WHERE m.direction = 'outbound' AND m.content_type = 'template' AND m.template_id IS NULL
+           AND m.id > ${cursor}
+           AND (${orgFilter}::text IS NULL OR m.organization_id = ${orgFilter})
+         ORDER BY m.id
+         LIMIT ${BATCH_SIZE}`;
+      if (raw.length === 0) return true;
+      cursor = raw[raw.length - 1]!.id;
 
-    const newOrgs = [...new Set(raw.map((r) => r.organization_id))].filter((o) => !seenOrgs.has(o));
-    if (newOrgs.length > 0) {
-      const tpls = await db.$queryRaw<Array<{ id: string; organization_id: string; name: string }>>`
-        SELECT id, organization_id, name FROM templates WHERE organization_id = ANY(${newOrgs})`;
-      for (const t of tpls) {
-        const k = templateKey(t.organization_id, t.name);
-        tplCache.set(k, [...(tplCache.get(k) ?? []), t.id]);
+      const newOrgs = [...new Set(raw.map((r) => r.organization_id))].filter((o) => !seenOrgs.has(o));
+      if (newOrgs.length > 0) {
+        const tpls = await db.$queryRaw<Array<{ id: string; organization_id: string; name: string }>>`
+          SELECT id, organization_id, name FROM templates WHERE organization_id = ANY(${newOrgs})`;
+        for (const t of tpls) {
+          const k = templateKey(t.organization_id, t.name);
+          tplCache.set(k, [...(tplCache.get(k) ?? []), t.id]);
+        }
+        for (const o of newOrgs) seenOrgs.add(o);
       }
-      for (const o of newOrgs) seenOrgs.add(o);
-    }
 
-    const rows: BackfillRow[] = raw.map((r) => ({
-      id: r.id, organizationId: r.organization_id, body: r.body, richContent: r.rich_content, hasApiMeta: r.has_api_meta, templateId: null,
-    }));
-    // Plan per organization so the counts can be attributed.
-    const byOrg = new Map<string, BackfillRow[]>();
-    for (const r of rows) byOrg.set(r.organizationId, [...(byOrg.get(r.organizationId) ?? []), r]);
-    const updates: BackfillUpdate[] = [];
-    for (const [org, orgRows] of byOrg) {
-      const p = planBackfill(orgRows, tplCache);
-      const c = orgs.get(org) ?? zero();
-      for (const target of [c, total]) {
-        target.update += p.updates.length; target.ambiguous += p.ambiguous; target.unmatched += p.unmatched;
-        target.unattributedCampaign += p.unattributedCampaign; target.skipped += p.skippedAlreadyLinked;
+      const rows: BackfillRow[] = raw.map((r) => ({
+        id: r.id, organizationId: r.organization_id, body: r.body, richContent: r.rich_content, hasApiMeta: r.has_api_meta, templateId: null,
+      }));
+      // Plan per organization so the counts can be attributed.
+      const byOrg = new Map<string, BackfillRow[]>();
+      for (const r of rows) byOrg.set(r.organizationId, [...(byOrg.get(r.organizationId) ?? []), r]);
+      const updates: BackfillUpdate[] = [];
+      for (const [org, orgRows] of byOrg) {
+        const p = planBackfill(orgRows, tplCache);
+        const c = orgs.get(org) ?? zero();
+        for (const target of [c, total]) {
+          target.update += p.updates.length; target.ambiguous += p.ambiguous; target.unmatched += p.unmatched;
+          target.unattributedCampaign += p.unattributedCampaign; target.skipped += p.skippedAlreadyLinked;
+        }
+        orgs.set(org, c);
+        updates.push(...p.updates);
       }
-      orgs.set(org, c);
-      updates.push(...p.updates);
-    }
 
-    if (a.apply && updates.length > 0) {
-      // ONE parameterized statement per batch. organization_id and template_id IS NULL are re-checked per row, and
-      // source is only filled when still NULL, so a concurrent or repeated run can never overwrite anything.
-      updatedRows += await db.$executeRaw`
-        UPDATE messages m
-           SET template_id = v.template_id, source = COALESCE(m.source, v.source)
-          FROM unnest(${updates.map((u) => u.id)}::text[], ${updates.map((u) => u.organizationId)}::text[],
-                      ${updates.map((u) => u.templateId)}::text[], ${updates.map((u) => u.source)}::text[])
-               AS v(id, organization_id, template_id, source)
-         WHERE m.id = v.id AND m.organization_id = v.organization_id AND m.template_id IS NULL`;
-    }
-    if (raw.length < BATCH_SIZE) break;
+      if (a.apply && updates.length > 0) {
+        // ONE parameterized statement per batch. organization_id and template_id IS NULL are re-checked per row, and
+        // source is only filled when still NULL, so a concurrent or repeated run can never overwrite anything.
+        updatedRows += await db.$executeRaw`
+          UPDATE messages m
+             SET template_id = v.template_id, source = COALESCE(m.source, v.source)
+            FROM unnest(${updates.map((u) => u.id)}::text[], ${updates.map((u) => u.organizationId)}::text[],
+                        ${updates.map((u) => u.templateId)}::text[], ${updates.map((u) => u.source)}::text[])
+                 AS v(id, organization_id, template_id, source)
+           WHERE m.id = v.id AND m.organization_id = v.organization_id AND m.template_id IS NULL
+               AND m.direction = 'outbound' AND m.content_type = 'template'
+               AND EXISTS (SELECT 1 FROM templates t WHERE t.id = v.template_id AND t.organization_id = m.organization_id)`;
+      }
+      return raw.length < BATCH_SIZE;
+    });
   }
 
   out(`mode: ${a.apply ? "APPLY" : "DRY RUN (nothing is written)"}${a.org ? `, organization ${a.org}` : ", all organizations"}`);
@@ -121,12 +134,16 @@ async function pass(db: BackfillDb, a: BackfillArgs, out: (l: string) => void): 
 }
 
 export async function runBackfill(prisma: BackfillPrisma, a: BackfillArgs, out: (line: string) => void): Promise<BackfillSummary> {
-  if (a.apply) return pass(prisma, a, out);
-  // Dry run: one READ ONLY transaction on a single connection, so even a bug cannot write.
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
-    return pass(tx, a, out);
-  }, { timeout: 30 * 60_000, maxWait: 30_000 });
+  // Apply: one statement per batch, atomic per batch (not across batches; safe to re-run).
+  if (a.apply) return pass((fn) => fn(prisma), a, out);
+  // Dry run: every page is its own short READ ONLY transaction, so even a bug cannot write.
+  return pass(
+    (fn) => prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
+      return fn(tx);
+    }, { timeout: 60_000, maxWait: 30_000 }),
+    a, out,
+  );
 }
 
 async function main(): Promise<void> {

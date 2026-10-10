@@ -84,7 +84,9 @@ async function main() {
   const mkOrg = async (name: string) => (await prisma.organization.create({ data: { name, status: "active" } })).id;
   const A = await mkOrg("Smoke Org A");
   const B = await mkOrg("Smoke Org B");
-  const mkTpl = (org: string, name: string, language = "en") => prisma.template.create({ data: { organizationId: org, name, category: "marketing", language, status: "approved", bodyText: "Hi {{1}}" } });
+  // Templates are backdated 60 days: the attribution note only counts unlinked rows sent AFTER the template was created
+  // (legacy rows 2 days ago qualify; a template created now must NOT show the note).
+  const mkTpl = (org: string, name: string, language = "en", createdAt: Date = daysAgo(60)) => prisma.template.create({ data: { organizationId: org, name, category: "marketing", language, status: "approved", bodyText: "Hi {{1}}", createdAt } });
   const tA = await mkTpl(A, "promo");
   const tB = await mkTpl(B, "promo");
   await mkTpl(A, "multi", "en");
@@ -182,7 +184,10 @@ async function main() {
   check("30d failure reasons: 131049 x2 (50%, plain language), 131042 x1, no-code row as 'unknown' x1; no org B code 999999",
     a30.failures.length === 3 && f131049?.count === 2 && f131049.share === 50 && /engagement/.test(f131049.message) && f131042?.count === 1 && f131042.message.length > 0 && fUnknown?.count === 1 && !a30.failures.some((f) => f.code === "999999"), a30.failures);
   check("30d failure messages are plain language", a30.failures.every((f) => f.message.length > 10 && !/^\d+$/.test(f.message)), a30.failures.map((f) => f.message));
-  check("attributionNote is present before the backfill (unlinked rows exist)", typeof a30.attributionNote === "string" && a30.attributionNote.length > 0, a30.attributionNote);
+  const tFresh = await mkTpl(A, "fresh_after_release", "en", new Date()); // created now: every unlinked row predates it
+  const rFresh = await get(appA, tFresh.id, "30d");
+  check("C1: a template created after all unlinked rows (created now) has attributionNote null, sent 0", rFresh.status === 200 && rFresh.data.attributionNote === null && rFresh.data.sent === 0, [rFresh.status, rFresh.data?.attributionNote]);
+  check("attributionNote is present before the backfill (unlinked rows sent after the template's creation exist)", typeof a30.attributionNote === "string" && a30.attributionNote.length > 0, a30.attributionNote);
   const r7 = (await get(appA, tA.id, "7d")).data;
   check("7d: sent 12, delivered 7, read 4, failed 4, rates 58.3 / 57.1 / 25, 8 UTC days", r7.sent === 12 && r7.delivered === 7 && r7.read === 4 && r7.failed === 4 && r7.rates.delivery === 58.3 && r7.rates.read === 57.1 && r7.rates.failure === 25 && r7.daily.length === 8, [r7.sent, r7.delivered, r7.read, r7.failed, r7.rates, r7.daily.length]);
   const r90 = (await get(appA, tA.id, "90d")).data;

@@ -40,6 +40,7 @@ describe("runBackfill", () => {
     const lines: string[] = [];
     const s = await runBackfill(m.prisma, { apply: false }, (l) => lines.push(l));
     expect(m.unsafe).toEqual(["SET TRANSACTION READ ONLY"]);
+    expect(m.prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(m.db.$executeRaw).not.toHaveBeenCalled();
     expect(lines.join("\n")).toContain("org A: to_update=1 ambiguous=1 unmatched=1");
     expect(lines.join("\n")).toContain("org B: to_update=0 ambiguous=0 unmatched=1");
@@ -58,6 +59,8 @@ describe("runBackfill", () => {
     expect(u.sql).toContain("m.organization_id = v.organization_id");
     expect(u.sql).toContain("m.template_id IS NULL");
     expect(u.sql).toContain("COALESCE(m.source, v.source)");
+    expect(u.sql).toContain("m.direction = 'outbound' AND m.content_type = 'template'");
+    expect(u.sql).toContain("EXISTS (SELECT 1 FROM templates t WHERE t.id = v.template_id AND t.organization_id = m.organization_id)");
     expect(u.values).toEqual([["m1", "m5", "m6"], ["A", "A", "A"], ["t1", "t1", "t1"], [null, "api", "flow"]]);
     expect(s.updatedRows).toBe(3);
     expect(lines.join("\n")).toContain("updated_rows=3");
@@ -81,6 +84,17 @@ describe("runBackfill", () => {
     const selects = m.db.$queryRaw.mock.calls.filter((c) => sqlOf(c[0]).includes("FROM messages"));
     expect(selects).toHaveLength(2);
     expect(selects[1]!.slice(1)).toContain(`m${String(BATCH_SIZE - 1).padStart(4, "0")}`); // cursor = last id of page 1
+  });
+
+  it("dry run pages in short read-only transactions (one per page, plus the empty page) and never updates", async () => {
+    const page1 = Array.from({ length: BATCH_SIZE }, (_v, i) => msg(`m${String(i).padStart(4, "0")}`, "A", json("one")));
+    const m = mk([page1, [msg("m9999", "A", json("one"))]], tpls);
+    await runBackfill(m.prisma, { apply: false }, () => undefined);
+    expect(m.prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(m.unsafe).toEqual(["SET TRANSACTION READ ONLY", "SET TRANSACTION READ ONLY"]);
+    const opts = (m.prisma.$transaction as unknown as { mock: { calls: Array<[unknown, { timeout: number }]> } }).mock.calls;
+    for (const c of opts) expect(c[1].timeout).toBeLessThanOrEqual(60_000);
+    expect(m.db.$executeRaw).not.toHaveBeenCalled();
   });
 
   it("filters by organization when --org is given", async () => {

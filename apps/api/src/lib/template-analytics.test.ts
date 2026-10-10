@@ -139,6 +139,13 @@ describe("daily series", () => {
     expect(result.daily.map((d) => d.day)).toEqual(["2026-10-07", "2026-10-08", "2026-10-09", "2026-10-10"]);
   });
 
+  it("for all, a null or invalid first day falls back to today only", async () => {
+    for (const day of [null, "garbage"]) {
+      const { result } = await run({ daily: [{ day: day as unknown as string, sent: 0, delivered: 0, read: 0, failed: 0 }] }, "all");
+      expect(result.daily.map((d) => d.day)).toEqual(["2026-10-10"]);
+    }
+  });
+
   it("for all with no messages returns a single zero row for today", async () => {
     const { result } = await run({ daily: [] }, "all");
     expect(result.daily).toEqual([{ day: "2026-10-10", sent: 0, delivered: 0, read: 0, failed: 0 }]);
@@ -187,6 +194,28 @@ describe("failures", () => {
     expect(result.failures[0]?.message).toBe("WhatsApp could not deliver the message (code 999999).");
     expect(result.failures[1]?.code).toBe("unknown");
     expect(result.failures[1]?.message).toBe("WhatsApp could not deliver the message.");
+  });
+
+  it("merges NULL and non-numeric codes into ONE unknown entry (summed, latest lastSeen, generic message)", async () => {
+    const { result } = await run({
+      statuses: [{ status: "failed", n: 6 }],
+      failures: [
+        { code: "131049", title: "A", n: 3, last_seen: null },
+        { code: null, title: "x", n: 1, last_seen: new Date("2026-10-01T00:00:00.000Z") },
+        { code: "abc", title: "y", n: 2, last_seen: new Date("2026-10-05T00:00:00.000Z") },
+      ],
+    });
+    const unknown = result.failures.filter((f) => f.code === "unknown");
+    expect(unknown).toEqual([
+      { code: "unknown", title: null, message: "WhatsApp could not deliver the message.", count: 3, share: 50, lastSeenAt: "2026-10-05T00:00:00.000Z" },
+    ]);
+    expect(new Set(result.failures.map((f) => f.code)).size).toBe(result.failures.length);
+  });
+
+  it("orders the failures query deterministically", async () => {
+    const { queryRaw } = await run({});
+    const failureSql = queryRaw.mock.calls.map(([q]) => q as Sqlish).find((q) => q.sql.includes("delivery_error"));
+    expect(failureSql?.sql).toMatch(/ORDER BY n DESC, code/);
   });
 
   it("limits the query to the top 10 and shares add up to about 100", async () => {

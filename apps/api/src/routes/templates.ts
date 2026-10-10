@@ -181,14 +181,24 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: { code: "INVALID_RANGE", message: "range must be 7d, 30d, 90d or all" } });
     }
 
-    const analytics = await getTemplateAnalytics(fastify.prisma, { organizationId, template, range });
-
-    // Older template sends were not linked to a template id. A cheap existence check (stops at the first
-    // row, org-scoped) tells the UI the figures may be incomplete. No message text is read or returned.
-    const unlinked = await fastify.prisma.message.findFirst({
-      where: { organizationId, direction: "outbound", contentType: "template", templateId: null },
-      select: { id: true },
-    });
+    // Older template sends were not linked to a template id. A cheap existence check (stops at the first row,
+    // org-scoped, only rows sent after this template was created, so newer templates never show the note) tells the
+    // UI the figures may be incomplete. No message text is read or returned.
+    let analytics: Awaited<ReturnType<typeof getTemplateAnalytics>>;
+    let unlinked: { id: string } | null;
+    try {
+      [analytics, unlinked] = await Promise.all([
+        getTemplateAnalytics(fastify.prisma, { organizationId, template, range }),
+        fastify.prisma.message.findFirst({
+          where: { organizationId, direction: "outbound", contentType: "template", templateId: null, sentAt: { gte: template.createdAt } },
+          select: { id: true },
+        }),
+      ]);
+    } catch (err) {
+      // Log server-side only; never return the driver/stack text to the client.
+      request.log.error({ err }, "template analytics failed");
+      return reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "Could not load template analytics" } });
+    }
 
     const { delivered, read } = analytics;
     // GAP-S21: readPercentage = (read / delivered) × 100, capped at 100, rounded

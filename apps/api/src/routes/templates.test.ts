@@ -83,6 +83,7 @@ describe("GET /v1/templates/:id/analytics", () => {
     category: "marketing",
     status: "approved",
     qualityScore: "GREEN",
+    createdAt: new Date("2026-08-01T10:00:00.000Z"),
     lastEditedTime: new Date("2026-09-01T10:00:00.000Z"),
     bodyText: "Hello {{1}}",
   };
@@ -190,9 +191,32 @@ describe("GET /v1/templates/:id/analytics", () => {
     const { data } = (await get()).json<Body>();
     expect(data.attributionNote).toBe("Messages sent before this feature was introduced may not be included.");
     expect(mockPrisma.message.findFirst).toHaveBeenCalledWith({
-      where: { organizationId: "org-1", direction: "outbound", contentType: "template", templateId: null },
+      where: {
+        organizationId: "org-1", direction: "outbound", contentType: "template", templateId: null,
+        sentAt: { gte: new Date("2026-08-01T10:00:00.000Z") },
+      },
       select: { id: true },
     });
+  });
+
+  it("rejects repeated, empty and wrong-case range values with 400 INVALID_RANGE", async () => {
+    mockPrisma.template.findFirst.mockResolvedValue(tpl);
+    for (const q of ["range=7d&range=30d", "range=", "range=7D"]) {
+      const res = await get(`/v1/templates/t-1/analytics?${q}`);
+      expect(res.statusCode).toBe(400);
+      expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_RANGE");
+    }
+    expect(getAnalytics).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 without leaking the thrown error when analytics fails", async () => {
+    setup();
+    getAnalytics.mockRejectedValue(new Error("secret db detail postgres://u:p@h"));
+    const res = await get();
+    expect(res.statusCode).toBe(500);
+    expect(res.body).not.toContain("secret db detail");
+    expect(res.body).not.toContain("postgres://");
+    expect(res.body).not.toMatch(/stack|at .*\.ts/);
   });
 
   it("leaves attributionNote null when there are no unlinked template messages", async () => {

@@ -81,7 +81,7 @@ export async function getTemplateAnalytics(
     ),
     prisma.$queryRaw<Array<{ code: string | null; title: string | null; n: number; last_seen: Date | null }>>(
       Prisma.sql`SELECT delivery_error->>'code' AS code, max(delivery_error->>'title') AS title, count(*)::int AS n, max(sent_at) AS last_seen
-        FROM messages WHERE ${where} AND status IN ('failed','expired','aborted') GROUP BY 1 ORDER BY n DESC LIMIT 10`,
+        FROM messages WHERE ${where} AND status IN ('failed','expired','aborted') GROUP BY 1 ORDER BY n DESC, code LIMIT 10`,
     ),
     prisma.$queryRaw<Array<{ source: string | null; n: number }>>(
       Prisma.sql`SELECT coalesce(source, 'unknown') AS source, count(*)::int AS n FROM messages WHERE ${where} GROUP BY 1 ORDER BY n DESC`,
@@ -106,7 +106,8 @@ export async function getTemplateAnalytics(
   if (from) start = from;
   else {
     const first = dailyRows[0]?.day;
-    start = first ? new Date(`${first}T00:00:00.000Z`) : today;
+    const parsed = first ? new Date(`${first}T00:00:00.000Z`) : null;
+    start = parsed && !Number.isNaN(parsed.getTime()) ? parsed : today; // null/invalid first day -> today only
   }
   const earliest = new Date(today.getTime() - (MAX_DAILY_ROWS - 1) * DAY_MS);
   if (start < earliest) start = earliest;
@@ -117,19 +118,31 @@ export async function getTemplateAnalytics(
     daily.push({ day, sent: Number(r?.sent ?? 0), delivered: Number(r?.delivered ?? 0), read: Number(r?.read ?? 0), failed: Number(r?.failed ?? 0) });
   }
 
-  const failures = failureRows.slice(0, MAX_FAILURE_ROWS).map((r) => {
+  // Non-numeric and NULL codes are one "unknown" entry (the UI uses `code` as a React key, so no duplicates).
+  const merged = new Map<string, { code: string; title: string | null; n: number; last: Date | null }>();
+  for (const r of failureRows) {
     const numeric = r.code != null && /^\d+$/.test(r.code.trim());
     const code = numeric ? (r.code as string).trim() : "unknown";
-    const message = numeric ? errorMessageForCode(plivoErrorFromMeta(Number(code))) ?? UNKNOWN_FAILURE_MESSAGE : UNKNOWN_FAILURE_MESSAGE;
-    return {
-      code,
-      title: r.title ?? null,
-      message,
-      count: Number(r.n),
-      share: failed === 0 ? 0 : (pct(Number(r.n), failed) ?? 0),
-      lastSeenAt: r.last_seen ? new Date(r.last_seen).toISOString() : null,
-    };
-  });
+    const last = r.last_seen ? new Date(r.last_seen) : null;
+    const prev = merged.get(code);
+    if (!prev) merged.set(code, { code, title: r.title ?? null, n: Number(r.n), last });
+    else {
+      prev.n += Number(r.n);
+      if (last && (!prev.last || last > prev.last)) prev.last = last;
+      if (code === "unknown") prev.title = null;
+    }
+  }
+  const failures = [...merged.values()]
+    .sort((x, y) => y.n - x.n || x.code.localeCompare(y.code))
+    .slice(0, MAX_FAILURE_ROWS)
+    .map((r) => ({
+      code: r.code,
+      title: r.title,
+      message: r.code === "unknown" ? UNKNOWN_FAILURE_MESSAGE : errorMessageForCode(plivoErrorFromMeta(Number(r.code))) ?? UNKNOWN_FAILURE_MESSAGE,
+      count: r.n,
+      share: failed === 0 ? 0 : (pct(r.n, failed) ?? 0),
+      lastSeenAt: r.last ? r.last.toISOString() : null,
+    }));
 
   const sourceCounts = new Map<string, number>();
   for (const r of sourceRows) {
