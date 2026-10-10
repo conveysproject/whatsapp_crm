@@ -301,6 +301,7 @@ model Message {
   @@index([organizationId, direction, status]) // analytics
   @@index([organizationId, isSystemMessage])   // filter system messages from inbox
   @@index([organizationId, templateId, sentAt], map: "messages_org_template_sent_idx") // template analytics
+  @@index([organizationId, sentAt], map: "messages_org_sent_at_idx") // billing metering
   @@map("messages")
 }
 
@@ -1627,6 +1628,20 @@ model ApiUsageDaily {
   @@id([organizationId, apiKeyId, day, endpoint])
   @@index([organizationId, day])
   @@map("api_usage_daily")
+}
+
+// Daily billable outbound message counts per organization (billing metering, shadow mode).
+// No foreign key: usage history must survive organization deletion.
+model MessageUsageDaily {
+  organizationId String   @map("organization_id")
+  day            DateTime @db.Date
+  billableCount  Int      @map("billable_count")
+  bySource       Json     @default("{}") @map("by_source")
+  computedAt     DateTime @default(now()) @map("computed_at")
+
+  @@id([organizationId, day])
+  @@index([day])
+  @@map("message_usage_daily")
 }
 
 model ApiRequestPayload {
