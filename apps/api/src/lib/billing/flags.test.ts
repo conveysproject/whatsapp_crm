@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isBillingV2Enabled, graceDays, isBillingMeteringEnabled } from "./flags.js";
+import { isBillingV2Enabled, graceDays } from "./flags.js";
 
 describe("billing flags", () => {
   it("is enabled only for the exact string true", () => {
@@ -14,15 +14,5 @@ describe("billing flags", () => {
     expect(graceDays({ BILLING_GRACE_DAYS: "abc" } as NodeJS.ProcessEnv)).toBe(7);
     expect(graceDays({ BILLING_GRACE_DAYS: "-2" } as NodeJS.ProcessEnv)).toBe(7);
     expect(graceDays({ BILLING_GRACE_DAYS: "0" } as NodeJS.ProcessEnv)).toBe(7);
-  });
-});
-
-describe("isBillingMeteringEnabled", () => {
-  it("is enabled only for the exact string true and independent of BILLING_V2_ENABLED", () => {
-    expect(isBillingMeteringEnabled({ BILLING_METERING_ENABLED: "true" } as NodeJS.ProcessEnv)).toBe(true);
-    for (const v of [undefined, "", "1", "TRUE", "false"]) {
-      expect(isBillingMeteringEnabled({ BILLING_METERING_ENABLED: v } as NodeJS.ProcessEnv)).toBe(false);
-    }
-    expect(isBillingMeteringEnabled({ BILLING_V2_ENABLED: "true" } as NodeJS.ProcessEnv)).toBe(false);
   });
 });

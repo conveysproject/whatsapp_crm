@@ -27,7 +27,7 @@ import { startClosureDeadlineWorker, scheduleClosureDeadlineCron } from "./worke
 import { startRegisterPhoneWorker, scheduleRegisterPhoneSweepCron } from "./workers/register-phone.worker.js";
 import { startBillingGraceWorker, scheduleBillingGraceCron } from "./workers/billing-grace.worker.js";
 import { startBillingMeteringWorker, scheduleBillingMeteringCron } from "./workers/billing-metering.worker.js";
-import { isBillingV2Enabled, isBillingMeteringEnabled } from "./lib/billing/flags.js";
+import { isBillingV2Enabled } from "./lib/billing/flags.js";
 import { startPublicApiSendWorker } from "./workers/public-api-send.worker.js";
 import { startPublicApiCallbackWorker } from "./workers/public-api-callbacks.worker.js";
 import { startApiUsageFlusher, flushApiUsage, drainUsageOnShutdown } from "./lib/public-api/usage.js";
@@ -89,11 +89,9 @@ async function start() {
     startBillingGraceWorker();
     scheduleBillingGraceCron().catch((err) => server.log.warn({ err }, "Billing grace cron schedule failed"));
   }
-  // Billing metering (shadow mode): only when BILLING_METERING_ENABLED=true (see docs/prd-billing-phase2a.md).
-  if (isBillingMeteringEnabled()) {
-    startBillingMeteringWorker();
-    scheduleBillingMeteringCron().catch((err) => server.log.warn({ err }, "Billing metering cron schedule failed"));
-  }
+  // Billing metering (shadow mode, counts only, never charges): always on (see docs/prd-billing-phase2a.md).
+  startBillingMeteringWorker();
+  scheduleBillingMeteringCron().catch((err) => server.log.warn({ err }, "Billing metering cron schedule failed"));
   if (process.env["PUBLIC_API_ENABLED"] === "true") {
     const publicApiWorkers = [startPublicApiSendWorker(), startPublicApiCallbackWorker()];
     // Usage metering: buffered in memory, flushed in batches (single-flight); the raw-log retention purge runs hourly.
