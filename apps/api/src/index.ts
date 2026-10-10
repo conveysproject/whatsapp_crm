@@ -24,6 +24,8 @@ import { startMessageCleanupWorker, scheduleMessageCleanupCron, scheduleApiUsage
 import { startTrustScoreWorker, scheduleTrustScoreCron } from "./workers/trust-score.js";
 import { startClosureDeadlineWorker, scheduleClosureDeadlineCron } from "./workers/closure-deadline.worker.js";
 import { startRegisterPhoneWorker, scheduleRegisterPhoneSweepCron } from "./workers/register-phone.worker.js";
+import { startBillingGraceWorker, scheduleBillingGraceCron } from "./workers/billing-grace.worker.js";
+import { isBillingV2Enabled } from "./lib/billing/flags.js";
 import { startPublicApiSendWorker } from "./workers/public-api-send.worker.js";
 import { startPublicApiCallbackWorker } from "./workers/public-api-callbacks.worker.js";
 import { startApiUsageFlusher, flushApiUsage, drainUsageOnShutdown } from "./lib/public-api/usage.js";
@@ -78,6 +80,11 @@ async function start() {
   if (process.env["AUTO_REGISTER_PHONE_ENABLED"] === "true") {
     startRegisterPhoneWorker();
     scheduleRegisterPhoneSweepCron().catch((err) => server.log.warn({ err }, "Register-phone sweep schedule failed"));
+  }
+  // Billing grace expiry: only when BILLING_V2_ENABLED=true (see docs/prd-billing-phase1.md).
+  if (isBillingV2Enabled()) {
+    startBillingGraceWorker();
+    scheduleBillingGraceCron().catch((err) => server.log.warn({ err }, "Billing grace cron schedule failed"));
   }
   if (process.env["PUBLIC_API_ENABLED"] === "true") {
     const publicApiWorkers = [startPublicApiSendWorker(), startPublicApiCallbackWorker()];
