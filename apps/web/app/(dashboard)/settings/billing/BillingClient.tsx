@@ -183,7 +183,7 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
                       </button>
                     )}
                     {p.tier === "enterprise" && (
-                      <a href="mailto:sales@trustcrm.in" className="text-xs text-green-600 hover:underline">
+                      <a href="mailto:info@conveys.in" className="text-xs text-green-600 hover:underline">
                         Contact us
                       </a>
                     )}
