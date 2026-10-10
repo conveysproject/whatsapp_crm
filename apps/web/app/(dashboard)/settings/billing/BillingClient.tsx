@@ -3,12 +3,7 @@
 import { JSX, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-
-interface UsageData {
-  plan: string;
-  usage: { contacts: number; messages: number };
-  limits: { contacts: number | null; messages: number | null };
-}
+import type { BillingUsage } from "@/lib/billing-page";
 
 interface SubscriptionData {
   planTier: string;
@@ -34,7 +29,7 @@ interface Plan {
 }
 
 interface Props {
-  usage: UsageData | null;
+  usage: BillingUsage | null;
   subscription: SubscriptionData | null;
   plans: Plan[];
   transactions: Transaction[];
@@ -81,6 +76,27 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
     if (res.ok) router.refresh();
   }
 
+  async function subscribe(tier: string) {
+    setSwitching(tier);
+    try {
+      const token = await getToken();
+      const here = `${window.location.origin}/settings/billing`;
+      const res = await fetch(`${API_URL}/v1/billing/checkout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ planTier: tier, successUrl: `${here}?status=success`, cancelUrl: here }),
+      });
+      if (res.ok) {
+        const json = await res.json() as { data?: { url?: string } };
+        if (json.data?.url) {
+          window.location.href = json.data.url;
+          return;
+        }
+      }
+    } catch { /* fall through to re-enable the button */ }
+    setSwitching(null);
+  }
+
   async function openPortal() {
     const token = await getToken();
     const res = await fetch(`${API_URL}/v1/billing/portal`, {
@@ -119,8 +135,7 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
               {subscription.manual.expiresAt ? ` · Expires: ${new Date(subscription.manual.expiresAt).toLocaleDateString(undefined, { dateStyle: "medium" })}` : ""}
             </p>
           )}
-          <UsageBar used={usage.usage.contacts} limit={usage.limits.contacts} label="Contacts" />
-          <UsageBar used={usage.usage.messages} limit={usage.limits.messages} label="Messages this month" />
+          {usage.rows.map((r) => <UsageBar key={r.key} used={r.used} limit={r.limit} label={r.label} />)}
         </div>
       )}
 
@@ -140,8 +155,7 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
                   <div>
                     <div className="font-medium text-gray-800">{p.name}</div>
                     <div className="text-xs text-gray-500 mt-0.5">
-                      {p.limits.contacts ? `${p.limits.contacts.toLocaleString()} contacts` : "Unlimited contacts"} ·{" "}
-                      {p.limits.messages ? `${p.limits.messages.toLocaleString()} msg/mo` : "Unlimited messages"}
+                      {p.limits.contacts ? `${p.limits.contacts.toLocaleString()} contacts` : "Unlimited contacts"}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -160,12 +174,16 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
                       </button>
                     )}
                     {!isCurrent && !canSwitch && p.tier !== "enterprise" && (
-                      <a href={`/settings/billing/checkout?plan=${p.tier}`} className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700">
-                        Subscribe
-                      </a>
+                      <button
+                        onClick={() => { void subscribe(p.tier); }}
+                        disabled={switching === p.tier}
+                        className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                      >
+                        {switching === p.tier ? "Redirecting…" : "Subscribe"}
+                      </button>
                     )}
                     {p.tier === "enterprise" && (
-                      <a href="mailto:sales@trustcrm.in" className="text-xs text-green-600 hover:underline">
+                      <a href="mailto:info@conveys.in" className="text-xs text-green-600 hover:underline">
                         Contact us
                       </a>
                     )}

@@ -1,13 +1,15 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { PlanTier } from "@WBMSG/shared";
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { getStripe, PLAN_PRICE_IDS, PLAN_LIMITS, ZERO_DECIMAL_CURRENCIES } from "../lib/stripe.js";
 import { checkPlanLimit, isFeatureEnabled } from "../lib/plan-limits.js";
 import { canAccessSub } from "../lib/permissions.js";
+import { PLAN_CATALOG, isBillableTier, type BillableTier } from "../lib/billing/catalog.js";
+import { isAllowedRedirect } from "../lib/billing/safe-redirect.js";
 import Razorpay from "razorpay";
 
 // GAP-S60: load gateway credentials from VendorSettings, fallback to env vars
-async function getGatewayCredentials(prisma: PrismaClient, organizationId: string, gateway: string): Promise<Record<string, string>> {
+export async function getGatewayCredentials(prisma: PrismaClient, organizationId: string, gateway: string): Promise<Record<string, string>> {
   const keys = [
     `${gateway}_key_id`, `${gateway}_key_secret`, `${gateway}_webhook_secret`,
     `${gateway}_publishable_key`, `${gateway}_secret_key`, `use_test_${gateway}`,
@@ -35,7 +37,7 @@ function calcEndsAt(interval: "monthly" | "yearly", proratedDays: number): Date 
 }
 
 // GAP-S53: activate a manual subscription and cancel all previously active ones
-async function activateManualSubscription(prisma: PrismaClient, organizationId: string, manualSubId: string, planTier: PlanTier): Promise<void> {
+export async function activateManualSubscription(prisma: PrismaClient, organizationId: string, manualSubId: string, planTier: PlanTier): Promise<void> {
   await prisma.$transaction([
     prisma.manualSubscription.updateMany({ where: { organizationId, status: "active" }, data: { status: "cancelled" } }),
     prisma.manualSubscription.update({ where: { id: manualSubId }, data: { status: "active" } }),
@@ -48,16 +50,23 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/billing/plans", async () => {
     return {
       data: [
-        { tier: "starter", name: "Starter", priceInr: 999, priceUsd: 12, limits: PLAN_LIMITS["starter"] },
-        { tier: "growth", name: "Growth", priceInr: 2999, priceUsd: 36, limits: PLAN_LIMITS["growth"] },
-        { tier: "scale", name: "Scale", priceInr: 7999, priceUsd: 96, limits: PLAN_LIMITS["scale"] },
+        ...(Object.keys(PLAN_CATALOG) as BillableTier[]).map((tier) => ({
+          tier,
+          name: PLAN_CATALOG[tier].name,
+          priceInr: PLAN_CATALOG[tier].priceInr as number | null,
+          priceUsd: PLAN_CATALOG[tier].priceUsd as number | null,
+          limits: PLAN_LIMITS[tier] as unknown,
+        })),
         { tier: "enterprise", name: "Enterprise", priceInr: null, priceUsd: null, limits: { contacts: null, messages: null } },
       ],
     };
   });
 
   // ── Current subscription ──────────────────────────────────────────────────
-  fastify.get("/billing/subscriptions", async (request) => {
+  fastify.get("/billing/subscriptions", async (request, reply) => {
+    if (!canAccessSub(request.auth.role, request.auth.permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
     const { organizationId } = request.auth;
     const [org, manualSub] = await Promise.all([
       fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { planTier: true, settings: true } }),
@@ -151,6 +160,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     }
     // GAP-S56: support planSelectorId "___" format
     const { planTier } = parsePlanSelector(request.body.planTier as string);
+    if (!isBillableTier(planTier)) return reply.status(400).send({ error: { code: "INVALID_PLAN", message: "Unknown plan tier" } });
     const priceId = PLAN_PRICE_IDS[planTier];
     if (!priceId) return reply.status(400).send({ error: { code: "INVALID_PLAN", message: "Unknown plan tier" } });
 
@@ -179,7 +189,10 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── Transaction history ───────────────────────────────────────────────────
-  fastify.get<{ Querystring: { page?: string } }>("/billing/transactions", async (request) => {
+  fastify.get<{ Querystring: { page?: string } }>("/billing/transactions", async (request, reply) => {
+    if (!canAccessSub(request.auth.role, request.auth.permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
     const { organizationId } = request.auth;
     const page = Math.max(1, parseInt(request.query.page ?? "1", 10));
     const pageSize = 20;
@@ -240,10 +253,17 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { planTier: PlanTier | string; successUrl: string; cancelUrl: string } }>(
     "/billing/checkout",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "settings_access", "settings_billing")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+      }
       const { successUrl, cancelUrl } = request.body;
+      if (!isAllowedRedirect(successUrl) || !isAllowedRedirect(cancelUrl)) {
+        return reply.status(400).send({ error: { code: "INVALID_REDIRECT", message: "Redirect URL is not allowed" } });
+      }
       // GAP-S56: support "{planTier}___monthly" / "{planTier}___yearly" selectors
       const { planTier } = parsePlanSelector(request.body.planTier as string);
+      if (!isBillableTier(planTier)) return reply.status(400).send({ error: "invalid_plan" });
       const priceId = PLAN_PRICE_IDS[planTier];
       if (!priceId) return reply.status(400).send({ error: "invalid_plan" });
 
@@ -281,68 +301,40 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   // ── Razorpay ─────────────────────────────────────────────────────────────
-  fastify.post<{ Body: { planId: string; amount: number } }>(
+  fastify.post<{ Body: { planId: string; amount?: number } }>(
     "/billing/razorpay/create-order",
     { config: { public: false } },
     async (request, reply) => {
-      // GAP-S60: DB credentials take precedence over env vars
-      const creds = await getGatewayCredentials(fastify.prisma, request.auth.organizationId, "razorpay");
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "settings_access", "settings_billing")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+      }
+      const { planTier, interval } = parsePlanSelector(String(request.body.planId ?? ""));
+      if (!isBillableTier(planTier) || interval !== "monthly") {
+        return reply.status(400).send({ error: { code: "INVALID_PLAN", message: "Unknown or unsupported plan" } });
+      }
+      // Platform keys only: the platform webhook can only verify orders created with them.
       const rzp = new Razorpay({
-        key_id: creds["razorpay_key_id"] ?? process.env["RAZORPAY_KEY_ID"] ?? "",
-        key_secret: creds["razorpay_key_secret"] ?? process.env["RAZORPAY_KEY_SECRET"] ?? "",
+        key_id: process.env["RAZORPAY_KEY_ID"] ?? "",
+        key_secret: process.env["RAZORPAY_KEY_SECRET"] ?? "",
       });
       const order = await rzp.orders.create({
-        amount: request.body.amount,
+        amount: PLAN_CATALOG[planTier].priceInr * 100, // server-side price; client amount is ignored
         currency: "INR",
-        notes: { planId: request.body.planId, organizationId: request.auth.organizationId },
+        notes: { planId: planTier, organizationId },
       });
       return reply.send({ data: { orderId: order.id, amount: order.amount, currency: order.currency } });
     }
   );
 
-  fastify.post("/billing/razorpay/webhook", { config: { public: true } }, async (request, reply) => {
-    const signature = request.headers["x-razorpay-signature"] as string;
-    const body = JSON.stringify(request.body);
-    const { createHmac } = await import("crypto");
-    // GAP-S60: try DB secret first, fallback to env
-    const event = request.body as { event: string; payload: { payment: { entity: { notes: { organizationId?: string; planId?: string; manualSubId?: string } } } } };
-    const orgId = event.payload?.payment?.entity?.notes?.organizationId;
-    let webhookSecret = process.env["RAZORPAY_WEBHOOK_SECRET"] ?? "";
-    if (orgId) {
-      const creds = await getGatewayCredentials(fastify.prisma, orgId, "razorpay");
-      webhookSecret = creds["razorpay_webhook_secret"] ?? webhookSecret;
-    }
-    const expected = createHmac("sha256", webhookSecret).update(body).digest("hex");
-    if (signature && signature !== expected) return reply.status(400).send({ error: "Invalid signature" });
-    // GAP-S61: only process payment.captured
-    if (event.event === "payment.captured" && orgId) {
-      const { planId, manualSubId } = event.payload.payment.entity.notes;
-      if (manualSubId) {
-        // Activate manual subscription (GAP-S53)
-        const sub = await fastify.prisma.manualSubscription.findFirst({ where: { id: manualSubId, organizationId: orgId } });
-        if (sub) await activateManualSubscription(fastify.prisma, orgId, sub.id, sub.planTier as PlanTier);
-      } else if (planId) {
-        const org = await fastify.prisma.organization.findUnique({ where: { id: orgId }, select: { settings: true } });
-        const existing = (org?.settings as Record<string, unknown>) ?? {};
-        await fastify.prisma.organization.update({
-          where: { id: orgId },
-          data: {
-            planTier: planId as PlanTier,
-            settings: ({ ...existing, razorpayPlanId: planId, activatedAt: new Date().toISOString() } as Record<string, unknown>) as Prisma.InputJsonValue,
-          },
-        });
-      }
-    }
-    return reply.send({ received: true });
-  });
-
   // ── Paystack ──────────────────────────────────────────────────────────────
   fastify.post<{ Body: { reference: string } }>("/billing/paystack/verify", async (request, reply) => {
-    const { organizationId } = request.auth;
-    // GAP-S60: DB credentials
-    const creds = await getGatewayCredentials(fastify.prisma, organizationId, "paystack");
-    const secretKey = creds["paystack_secret_key"] ?? process.env["PAYSTACK_SECRET_KEY"] ?? "";
-    const res = await fetch(`https://api.paystack.co/transaction/verify/${request.body.reference}`, {
+    if (!canAccessSub(request.auth.role, request.auth.permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
+    // Platform key only: tenant-supplied credentials must not drive platform billing.
+    const secretKey = process.env["PAYSTACK_SECRET_KEY"] ?? "";
+    const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(String(request.body.reference ?? ""))}`, {
       headers: { Authorization: `Bearer ${secretKey}` },
     });
     const json = await res.json() as { status: boolean; data: { status: string } };
@@ -350,43 +342,22 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: { verified: true } });
   });
 
-  fastify.post("/billing/paystack/webhook", { config: { public: true } }, async (request, reply) => {
-    const hash = request.headers["x-paystack-signature"] as string;
-    const { createHmac } = await import("crypto");
-    // GAP-S61: Paystack uses charge.success event with HMAC-SHA512 via X-Paystack-Signature
-    const event = request.body as { event: string; data: { metadata?: { organizationId?: string; planId?: string; manualSubId?: string }; customer?: { metadata?: Record<string, string> } } };
-    const orgId = event.data?.metadata?.organizationId;
-    let secretKey = process.env["PAYSTACK_SECRET_KEY"] ?? "";
-    if (orgId) {
-      const creds = await getGatewayCredentials(fastify.prisma, orgId, "paystack");
-      secretKey = creds["paystack_secret_key"] ?? secretKey;
-    }
-    const expected = createHmac("sha512", secretKey).update(JSON.stringify(request.body)).digest("hex");
-    if (hash !== expected) return reply.status(400).send({ error: "Invalid signature" });
-    if (event.event === "charge.success" && orgId) {
-      const { planId, manualSubId } = event.data.metadata ?? {};
-      if (manualSubId) {
-        const sub = await fastify.prisma.manualSubscription.findFirst({ where: { id: manualSubId, organizationId: orgId } });
-        if (sub) await activateManualSubscription(fastify.prisma, orgId, sub.id, sub.planTier as PlanTier);
-      } else if (planId) {
-        await fastify.prisma.organization.update({ where: { id: orgId }, data: { planTier: planId as PlanTier } });
-      }
-    }
-    return reply.send({ received: true });
-  });
-
   // ── PhonePe ───────────────────────────────────────────────────────────────
   fastify.post<{ Body: { transactionId: string } }>("/billing/phonepe/capture", async (request, reply) => {
+    if (!canAccessSub(request.auth.role, request.auth.permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
     const merchantId = process.env["PHONEPE_MERCHANT_ID"] ?? "";
+    const txnSegment = encodeURIComponent(String(request.body.transactionId ?? ""));
     const apiKey = process.env["PHONEPE_API_KEY"] ?? "";
     const { createHash } = await import("crypto");
     const checksum =
       createHash("sha256")
-        .update(`/pg/v1/status/${merchantId}/${request.body.transactionId}${apiKey}`)
+        .update(`/pg/v1/status/${merchantId}/${txnSegment}${apiKey}`)
         .digest("hex") + "###1";
     // GAP-S62: PhonePe requires "O-Bearer" prefix (not standard "Bearer")
     const res = await fetch(
-      `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${request.body.transactionId}`,
+      `https://api.phonepe.com/apis/hermes/pg/v1/status/${merchantId}/${txnSegment}`,
       {
         headers: {
           "Content-Type": "application/json",
@@ -404,16 +375,21 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { amount: number; planId: string; currency?: string; description?: string } }>(
     "/billing/yoomoney/checkout",
     async (request, reply) => {
-      const { organizationId } = request.auth;
-      // GAP-S60: DB credentials first
-      const creds = await getGatewayCredentials(fastify.prisma, organizationId, "yoomoney");
-      const shopId = creds["yoomoney_shop_id"] ?? process.env["YOOMONEY_SHOP_ID"] ?? "";
-      const secretKey = creds["yoomoney_secret_key"] ?? process.env["YOOMONEY_SECRET_KEY"] ?? "";
-      const isTest = creds["use_test_yoomoney"] === "true" || !shopId;
+      const { organizationId, role, permissions } = request.auth;
+      if (!canAccessSub(role, permissions, "settings_access", "settings_billing")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+      }
+      if (!isBillableTier(request.body.planId)) {
+        return reply.status(400).send({ error: { code: "INVALID_PLAN", message: "Unknown plan tier" } });
+      }
+      // Platform credentials only: tenant-supplied gateway settings must not drive platform billing.
+      const shopId = process.env["YOOMONEY_SHOP_ID"] ?? "";
+      const secretKey = process.env["YOOMONEY_SECRET_KEY"] ?? "";
+      const isTest = !shopId || !secretKey;
 
       // Quickpay fallback for test mode (no shop credentials needed)
       if (isTest) {
-        const receiver = creds["yoomoney_wallet"] ?? process.env["YOOMONEY_WALLET"] ?? "";
+        const receiver = process.env["YOOMONEY_WALLET"] ?? "";
         const label = `${organizationId}:${request.body.planId}`;
         const quickpayCurrency = request.body.currency ?? "RUB";
         const quickpayIsZero = ZERO_DECIMAL_CURRENCIES.has(quickpayCurrency.toUpperCase());
@@ -431,7 +407,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       const amountValue = isZeroDecimal
         ? Math.round(request.body.amount).toString()
         : (request.body.amount / 100).toFixed(2);
-      const description = request.body.description ?? `TrustCRM Subscription — ${request.body.planId}`;
+      const description = request.body.description ?? `WBMSG Subscription — ${request.body.planId}`;
       const label = `${organizationId}:${request.body.planId}`;
       const returnUrl = `${(process.env["WEB_PUBLIC_URL"] ?? process.env["API_PUBLIC_URL"] ?? "").replace(/\/$/, "")}/settings/billing?status=success`;
 
@@ -473,35 +449,23 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // GAP-S61: YooMoney payment.succeeded webhook
-  fastify.post("/billing/yoomoney/webhook", { config: { public: true } }, async (request, reply) => {
-    const event = request.body as { event?: string; object?: { metadata?: { organizationId?: string; planId?: string; manualSubId?: string } } };
-    if (event.event === "payment.succeeded") {
-      const orgId = event.object?.metadata?.organizationId;
-      const planId = event.object?.metadata?.planId;
-      const manualSubId = event.object?.metadata?.manualSubId;
-      if (orgId) {
-        if (manualSubId) {
-          const sub = await fastify.prisma.manualSubscription.findFirst({ where: { id: manualSubId, organizationId: orgId } });
-          if (sub) await activateManualSubscription(fastify.prisma, orgId, sub.id, sub.planTier as PlanTier);
-        } else if (planId) {
-          await fastify.prisma.organization.update({ where: { id: orgId }, data: { planTier: planId as PlanTier } });
-        }
-      }
-    }
-    return reply.send({ received: true });
-  });
-
   // ── Manual payment proof ─────────────────────────────────────────────────
   fastify.post<{ Body: { planId: string | undefined; planSelector?: string; proofUrl: string; transactionRef: string; interval?: "monthly" | "yearly" } }>(
     "/billing/manual/submit-proof",
     async (request, reply) => {
+      if (!canAccessSub(request.auth.role, request.auth.permissions, "settings_access", "settings_billing")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+      }
       const { organizationId } = request.auth;
       const { proofUrl, transactionRef } = request.body;
       // GAP-S56: accept planSelector "{tier}___interval" or plain planId
       const { planTier, interval } = request.body.planSelector
         ? parsePlanSelector(request.body.planSelector)
         : { planTier: request.body.planId as PlanTier, interval: (request.body.interval ?? "monthly") as "monthly" | "yearly" };
+
+      if (!isBillableTier(planTier)) {
+        return reply.status(400).send({ error: { code: "INVALID_PLAN", message: "Unknown plan tier" } });
+      }
 
       if (transactionRef) {
         const duplicate = await fastify.prisma.manualSubscription.findFirst({
@@ -544,6 +508,9 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
   );
 
   fastify.delete("/billing/manual/cancel-request", async (request, reply) => {
+    if (!canAccessSub(request.auth.role, request.auth.permissions, "settings_access", "settings_billing")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_billing permission required" } });
+    }
     const { organizationId } = request.auth;
     await fastify.prisma.manualSubscription.updateMany({
       where: { organizationId, status: "active" },
@@ -554,7 +521,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
 
   // GAP-S53: admin approve — activates subscription, cancels any existing active
   fastify.post<{ Params: { id: string } }>("/billing/manual/:id/approve", async (request, reply) => {
-    if (request.auth.role !== "admin") return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Admin only" } });
+    if (request.auth.role !== "superAdmin") return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Platform admin only" } });
     const sub = await fastify.prisma.manualSubscription.findFirst({
       where: { id: request.params.id, status: "pending" },
     });
@@ -565,7 +532,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
 
   // GAP-S53: admin reject — moves to cancelled
   fastify.post<{ Params: { id: string } }>("/billing/manual/:id/reject", async (request, reply) => {
-    if (request.auth.role !== "admin") return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Admin only" } });
+    if (request.auth.role !== "superAdmin") return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Platform admin only" } });
     const updated = await fastify.prisma.manualSubscription.updateMany({
       where: { id: request.params.id, status: { in: ["pending", "initiated"] } },
       data: { status: "cancelled" },
@@ -576,12 +543,11 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Stripe webhook endpoint auto-creation (GAP-S72) ─────────────────────
   fastify.post("/billing/stripe/setup-webhook", async (request, reply) => {
-    const { role } = request.auth;
-    if (role !== "admin") return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Admin only" } });
+    if (request.auth.role !== "superAdmin") return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Platform admin only" } });
     const apiUrl = process.env["API_PUBLIC_URL"] ?? process.env["RAILWAY_PUBLIC_DOMAIN"] ?? "";
     if (!apiUrl) return reply.status(400).send({ error: { code: "NO_API_URL", message: "API_PUBLIC_URL env var not set" } });
     const endpoint = await getStripe().webhookEndpoints.create({
-      url: `${apiUrl.replace(/\/$/, "")}/v1/billing/stripe/webhook`,
+      url: `${apiUrl.replace(/\/$/, "")}/v1/billing/webhook`,
       enabled_events: [
         "checkout.session.completed",
         "customer.subscription.created",
@@ -593,12 +559,8 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
         "payment_intent.succeeded",
       ],
     });
-    await fastify.prisma.vendorSetting.upsert({
-      where: { organizationId_key: { organizationId: request.auth.organizationId, key: "stripe_webhook_secret" } },
-      create: { organizationId: request.auth.organizationId, key: "stripe_webhook_secret", value: endpoint.secret ?? "", dataType: "string" },
-      update: { value: endpoint.secret ?? "" },
-    });
-    return reply.send({ data: { webhookId: endpoint.id, url: endpoint.url } });
+    // The endpoint secret is shown only once: the platform admin must set it as the STRIPE_WEBHOOK_SECRET env var.
+    return reply.send({ data: { webhookId: endpoint.id, url: endpoint.url, secret: endpoint.secret ?? "" } });
   });
 
   // ── UPI QR code generation ────────────────────────────────────────────────
@@ -606,8 +568,8 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     const QRCode = await import("qrcode");
     const upiId = process.env.UPI_ID ?? "";
     const amount = ((parseInt(request.query.amount ?? "0", 10)) / 100).toFixed(2);
-    const label = `TrustCRM ${request.query.planId ?? "Subscription"}`;
-    const upiUrl = `upi://pay?pa=${upiId}&pn=TrustCRM&am=${amount}&cu=INR&tn=${encodeURIComponent(label)}`;
+    const label = `WBMSG ${request.query.planId ?? "Subscription"}`;
+    const upiUrl = `upi://pay?pa=${upiId}&pn=WBMSG&am=${amount}&cu=INR&tn=${encodeURIComponent(label)}`;
     const buffer = await QRCode.toBuffer(upiUrl, { type: "png", width: 300, margin: 2 });
     reply.header("Content-Type", "image/png");
     reply.header("Content-Disposition", "inline; filename=upi-qr.png");
