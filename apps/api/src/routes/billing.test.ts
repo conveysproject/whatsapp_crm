@@ -3,13 +3,14 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import type * as ActivationModule from "../lib/billing/activation.js";
 
-const { stripeSessionCreate, ordersCreate, razorpayCtor, webhookEndpointsCreate } = vi.hoisted(() => ({ stripeSessionCreate: vi.fn(), ordersCreate: vi.fn(), razorpayCtor: vi.fn(), webhookEndpointsCreate: vi.fn() }));
+const { stripeSessionCreate, ordersCreate, razorpayCtor, webhookEndpointsCreate, customersCreate, subscriptionsList } = vi.hoisted(() => ({ stripeSessionCreate: vi.fn(), ordersCreate: vi.fn(), razorpayCtor: vi.fn(), webhookEndpointsCreate: vi.fn(), customersCreate: vi.fn(), subscriptionsList: vi.fn() }));
 vi.mock("../lib/stripe.js", () => ({
   getStripe: () => ({
     checkout: { sessions: { create: stripeSessionCreate } },
     billingPortal: { sessions: { create: vi.fn() } },
     webhookEndpoints: { create: webhookEndpointsCreate },
-    subscriptions: { list: vi.fn().mockResolvedValue({ data: [] }) },
+    customers: { create: customersCreate },
+    subscriptions: { list: subscriptionsList, update: vi.fn(), cancel: vi.fn() },
   }),
   PLAN_PRICE_IDS: { starter: "price_starter", growth: "price_growth" },
   PLAN_LIMITS: {
@@ -194,7 +195,10 @@ describe("POST /v1/billing/checkout", () => {
     vi.resetModules(); vi.clearAllMocks();
     prevWebUrl = process.env["WEB_PUBLIC_URL"];
     process.env["WEB_PUBLIC_URL"] = "https://wbmsg.com";
-    stripeSessionCreate.mockResolvedValue({ url: "https://checkout.stripe.test/s" });
+    stripeSessionCreate.mockReset().mockResolvedValue({ url: "https://checkout.stripe.test/s" });
+    customersCreate.mockReset().mockResolvedValue({ id: "cus_new" });
+    mockPrisma.organization.findUnique.mockReset().mockResolvedValue({ stripeId: null, settings: {} });
+    mockPrisma.organization.update.mockReset().mockResolvedValue({});
     app = await buildApp();
   });
   afterEach(async () => {
@@ -224,6 +228,37 @@ describe("POST /v1/billing/checkout", () => {
     expect(stripeSessionCreate).not.toHaveBeenCalled();
   });
 
+  it("creates the Stripe customer up front and stores it on the org", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/billing/checkout",
+      payload: { planTier: "starter", successUrl: "https://wbmsg.com/a", cancelUrl: "https://wbmsg.com/a" } });
+    expect(res.statusCode).toBe(200);
+    expect(customersCreate).toHaveBeenCalledTimes(1);
+    expect(customersCreate).toHaveBeenCalledWith({ metadata: { organizationId: "org-1" } });
+    expect(mockPrisma.organization.update).toHaveBeenCalledWith({ where: { id: "org-1" }, data: { stripeId: "cus_new" } });
+    expect(stripeSessionCreate).toHaveBeenCalledWith(expect.objectContaining({
+      customer: "cus_new",
+      metadata: { organizationId: "org-1", planTier: "starter" },
+      subscription_data: { metadata: { organizationId: "org-1", planTier: "starter" } },
+    }));
+  });
+
+  it("reuses an existing stripeId", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ stripeId: "cus_old", settings: {} });
+    const res = await app.inject({ method: "POST", url: "/v1/billing/checkout",
+      payload: { planTier: "starter", successUrl: "https://wbmsg.com/a", cancelUrl: "https://wbmsg.com/a" } });
+    expect(res.statusCode).toBe(200);
+    expect(customersCreate).not.toHaveBeenCalled();
+    expect(stripeSessionCreate).toHaveBeenCalledWith(expect.objectContaining({ customer: "cus_old" }));
+  });
+
+  it("does not create a session when customer creation fails", async () => {
+    customersCreate.mockRejectedValue(new Error("stripe down"));
+    const res = await app.inject({ method: "POST", url: "/v1/billing/checkout",
+      payload: { planTier: "starter", successUrl: "https://wbmsg.com/a", cancelUrl: "https://wbmsg.com/a" } });
+    expect(res.statusCode).toBe(500);
+    expect(stripeSessionCreate).not.toHaveBeenCalled();
+  });
+
   it("returns 403 without settings_billing", async () => {
     const other = Fastify({ logger: false });
     other.decorate("prisma", mockPrisma as unknown as PrismaClient);
@@ -247,6 +282,29 @@ async function buildAs(role: string, permissions: Record<string, string> = {}): 
   await a.register(billingRouter, { prefix: "/v1" });
   return a;
 }
+
+describe("stripe customer lookup via Organization.stripeId", () => {
+  beforeEach(() => {
+    vi.resetModules(); vi.clearAllMocks();
+    subscriptionsList.mockReset().mockResolvedValue({ data: [] });
+    mockPrisma.organization.findUnique.mockReset().mockResolvedValue({ planTier: "starter", stripeId: "cus_col", settings: {} });
+    mockPrisma.manualSubscription.findFirst.mockResolvedValue(null);
+  });
+  it("/billing/subscriptions uses stripeId when settings has none", async () => {
+    const a = await buildAs("admin");
+    const res = await a.inject({ method: "GET", url: "/v1/billing/subscriptions" });
+    expect(res.statusCode).toBe(200);
+    expect(subscriptionsList).toHaveBeenCalledWith(expect.objectContaining({ customer: "cus_col" }));
+    await a.close();
+  });
+  it("/billing/cancel uses stripeId when settings has none", async () => {
+    const a = await buildAs("admin");
+    const res = await a.inject({ method: "POST", url: "/v1/billing/cancel" });
+    expect(res.json().error.code).toBe("NO_ACTIVE_SUBSCRIPTION");
+    expect(subscriptionsList).toHaveBeenCalledWith(expect.objectContaining({ customer: "cus_col" }));
+    await a.close();
+  });
+});
 
 describe("manual subscription + read RBAC", () => {
   beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); activatePlanMock.mockReset().mockResolvedValue({ duplicate: false }); });

@@ -6,6 +6,7 @@ import { checkPlanLimit, isFeatureEnabled } from "../lib/plan-limits.js";
 import { canAccessSub } from "../lib/permissions.js";
 import { PLAN_CATALOG, isBillableTier, type BillableTier } from "../lib/billing/catalog.js";
 import { activatePlan } from "../lib/billing/activation.js";
+import { getStripeCustomerId } from "../lib/billing/stripe-customer.js";
 import { isAllowedRedirect } from "../lib/billing/safe-redirect.js";
 import Razorpay from "razorpay";
 
@@ -61,14 +62,13 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     }
     const { organizationId } = request.auth;
     const [org, manualSub] = await Promise.all([
-      fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { planTier: true, settings: true } }),
+      fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { planTier: true, stripeId: true, settings: true } }),
       fastify.prisma.manualSubscription.findFirst({
         where: { organizationId, status: "active" },
         orderBy: { createdAt: "desc" },
       }),
     ]);
-    const settings = org?.settings as Record<string, string> | null;
-    const stripeCustomerId = settings?.["stripeCustomerId"];
+    const stripeCustomerId = getStripeCustomerId(org);
 
     let stripeSubscription: { id: string; status: string; currentPeriodEnd: string } | null = null;
     if (stripeCustomerId) {
@@ -110,10 +110,9 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     }
     const org = await fastify.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { settings: true },
+      select: { stripeId: true, settings: true },
     });
-    const settings = org?.settings as Record<string, string> | null;
-    const stripeCustomerId = settings?.["stripeCustomerId"];
+    const stripeCustomerId = getStripeCustomerId(org);
     if (!stripeCustomerId) return reply.status(400).send({ error: { code: "NO_BILLING_ACCOUNT", message: "No Stripe customer found" } });
     const subs = await getStripe().subscriptions.list({ customer: stripeCustomerId, status: "active", limit: 1 });
     const sub = subs.data[0];
@@ -131,10 +130,9 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     }
     const org = await fastify.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { settings: true },
+      select: { stripeId: true, settings: true },
     });
-    const settings = org?.settings as Record<string, string> | null;
-    const stripeCustomerId = settings?.["stripeCustomerId"];
+    const stripeCustomerId = getStripeCustomerId(org);
     if (!stripeCustomerId) return reply.status(400).send({ error: { code: "NO_BILLING_ACCOUNT", message: "No Stripe customer found" } });
     const subs = await getStripe().subscriptions.list({ customer: stripeCustomerId, status: "active", limit: 1 });
     const sub = subs.data[0];
@@ -158,10 +156,9 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
 
     const org = await fastify.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { settings: true },
+      select: { stripeId: true, settings: true },
     });
-    const settings = org?.settings as Record<string, string> | null;
-    const stripeCustomerId = settings?.["stripeCustomerId"];
+    const stripeCustomerId = getStripeCustomerId(org);
     if (!stripeCustomerId) return reply.status(400).send({ error: { code: "NO_BILLING_ACCOUNT", message: "No Stripe customer found" } });
 
     const subs = await getStripe().subscriptions.list({ customer: stripeCustomerId, status: "active", limit: 1 });
@@ -259,12 +256,21 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       const priceId = PLAN_PRICE_IDS[planTier];
       if (!priceId) return reply.status(400).send({ error: "invalid_plan" });
 
+      const org = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { stripeId: true, settings: true } });
+      let customerId = getStripeCustomerId(org);
+      if (!customerId) {
+        const customer = await getStripe().customers.create({ metadata: { organizationId } });
+        customerId = customer.id;
+        await fastify.prisma.organization.update({ where: { id: organizationId }, data: { stripeId: customerId } });
+      }
       const session = await getStripe().checkout.sessions.create({
         mode: "subscription",
+        customer: customerId,
         line_items: [{ price: priceId, quantity: 1 }],
         success_url: successUrl,
         cancel_url: cancelUrl,
         metadata: { organizationId, planTier },
+        subscription_data: { metadata: { organizationId, planTier } },
       });
 
       return { data: { url: session.url } };
@@ -278,10 +284,9 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     }
     const org = await fastify.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { settings: true },
+      select: { stripeId: true, settings: true },
     });
-    const settings = org?.settings as Record<string, string> | null;
-    const customerId = settings?.["stripeCustomerId"];
+    const customerId = getStripeCustomerId(org);
     if (!customerId) return reply.status(404).send({ error: "no_billing_account" });
 
     const session = await getStripe().billingPortal.sessions.create({
