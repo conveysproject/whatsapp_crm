@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import { bandRange, formatCount, formatInr, type BandView, type MessageUsage } from "@/lib/message-usage";
+import { bandRange, formatCount, formatInr, formatUsd, type BandView, type MessageUsage } from "@/lib/message-usage";
 
 function fillPercent(count: number, band: BandView): number {
   if (band.to === null) return count >= band.from ? 100 : 0;
@@ -60,7 +60,7 @@ export function BandProgress({ usage }: { usage: MessageUsage }): JSX.Element | 
         })}
       </div>
       <p className="mt-4 rounded-lg bg-green-50 dark:bg-green-950 px-4 py-3 text-sm text-green-800 dark:text-green-300">
-        You will never pay more than {formatInr(plan.cap.inr)} a month for up to {formatCount(plan.cap.upTo)} messages.
+        You will never pay more than {formatInr(plan.cap.inr)} / {formatUsd(plan.cap.usd)} a month, however many messages you send.
       </p>
     </section>
   );

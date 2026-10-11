@@ -25,7 +25,8 @@ describe("kindsReached", () => {
     expect(kindsReached(500, published)).not.toContain("band_1");
     expect(kindsReached(501, published)).toContain("band_1");
     expect(kindsReached(10_001, published)).toEqual(expect.arrayContaining(["band_1", "band_2"]));
-    expect(kindsReached(250_001, published)).toContain("above");
+    expect(kindsReached(250_001, published)).toEqual(expect.arrayContaining(["band_3"]));
+    expect(kindsReached(250_001, published).some((k) => k === "above")).toBe(false);
   });
   it("handles a zero free allowance without dividing or alerting on nothing", () => {
     expect(kindsReached(0, { ...DEFAULT_BILLING_CONFIG, freeAllowance: 0 })).toEqual([]);

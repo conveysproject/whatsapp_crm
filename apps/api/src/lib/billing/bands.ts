@@ -73,13 +73,13 @@ export function parseBillingConfig(raw: unknown): { ok: true; config: BillingCon
 export interface BandView {
   name: string;
   from: number;
-  /** null for "above the cap" (custom quote). */
+  /** null for the top band: it has no upper limit, the price is capped. */
   to: number | null;
   inr: number | null;
   usd: number | null;
 }
 
-export type Position = "free" | "band" | "above";
+export type Position = "free" | "band";
 
 export interface PlanView {
   published: true;
@@ -87,7 +87,7 @@ export interface PlanView {
   bands: BandView[];
   position: Position;
   current: BandView;
-  /** Messages left before the next band starts, or null when already in the top (or above) band. */
+  /** Messages left before the next band starts, or null when already in the top band. */
   remainingToNextBand: number | null;
   next: BandView | null;
   cap: { upTo: number; inr: number; usd: number };
@@ -98,23 +98,23 @@ export interface HiddenPlanView {
   freeAllowance: number;
 }
 
-/** Band table: Free, Band 1..n, then "Above" (custom quote). */
+/** Band table: Free, Band 1..n. The top band has no upper limit: above its starting count the price stays at the cap. */
 export function bandViews(config: BillingConfig): BandView[] {
   const views: BandView[] = [{ name: "Free", from: 0, to: config.freeAllowance, inr: 0, usd: 0 }];
   let from = config.freeAllowance + 1;
   config.bands.forEach((b, i) => {
     const last = i === config.bands.length - 1;
-    views.push({ name: last && config.bands.length > 1 ? `Band ${i + 1} (cap)` : `Band ${i + 1}`, from, to: b.upTo, inr: b.inr, usd: b.usd });
+    views.push({ name: last && config.bands.length > 1 ? `Band ${i + 1} (cap)` : `Band ${i + 1}`, from, to: last ? null : b.upTo, inr: b.inr, usd: b.usd });
     from = b.upTo + 1;
   });
-  views.push({ name: "Above", from, to: null, inr: null, usd: null });
   return views;
 }
 
 function viewIndexFor(count: number, config: BillingConfig): number {
   if (count <= config.freeAllowance) return 0;
   const i = config.bands.findIndex((b) => count <= b.upTo);
-  return i === -1 ? config.bands.length + 1 : i + 1;
+  // Above the last band's limit the price stays at the cap (the last band).
+  return i === -1 ? config.bands.length : i + 1;
 }
 
 /** The customer-facing plan for a message count. Unpublished config reveals nothing but the free allowance. */
@@ -123,13 +123,13 @@ export function planFor(count: number, config: BillingConfig): PlanView | Hidden
   const views = bandViews(config);
   const idx = viewIndexFor(Math.max(0, Math.floor(count)), config);
   const current = views[idx]!;
-  const next = idx < views.length - 1 && views[idx + 1]!.to !== null ? views[idx + 1]! : null;
+  const next = idx < views.length - 1 ? views[idx + 1]! : null;
   const last = config.bands[config.bands.length - 1]!;
   return {
     published: true,
     freeAllowance: config.freeAllowance,
     bands: views,
-    position: idx === 0 ? "free" : idx === views.length - 1 ? "above" : "band",
+    position: idx === 0 ? "free" : "band",
     current,
     remainingToNextBand: next && current.to !== null ? current.to + 1 - Math.floor(count) : null,
     next,

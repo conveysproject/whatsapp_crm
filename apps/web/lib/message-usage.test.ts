@@ -67,7 +67,7 @@ describe("plan helpers", () => {
     expect(formatInr(null)).toBe("Custom quote");
     expect(bandRange({ name: "Free", from: 0, to: 500, inr: 0, usd: 0 })).toBe("up to 500");
     expect(bandRange({ name: "Band 1", from: 501, to: 10000, inr: 999, usd: 12 })).toBe("501 to 10,000");
-    expect(bandRange({ name: "Above", from: 250001, to: null, inr: null, usd: null })).toBe("over 250,000");
+    expect(bandRange({ name: "Band 3 (cap)", from: 50001, to: null, inr: 1200, usd: 12 })).toBe("50,001 and above");
   });
 });
 

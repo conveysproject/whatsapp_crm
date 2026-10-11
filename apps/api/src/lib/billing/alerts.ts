@@ -8,7 +8,7 @@ const FREE_STEPS = [50, 80, 95, 100] as const;
 
 /**
  * Alert kinds a message count has reached this month: free_50/80/95/100 (share of the free allowance) and, only when
- * prices are published, band_N / above for each higher band entered. Pure.
+ * prices are published, band_N for each higher band entered. Pure.
  */
 export function kindsReached(count: number, config: BillingConfig): string[] {
   const kinds: string[] = [];
@@ -18,7 +18,7 @@ export function kindsReached(count: number, config: BillingConfig): string[] {
   if (config.published) {
     const views = bandViews(config);
     for (let i = 1; i < views.length; i++) {
-      if (count >= views[i]!.from) kinds.push(i === views.length - 1 ? "above" : `band_${i}`);
+      if (count >= views[i]!.from) kinds.push(`band_${i}`);
     }
   }
   return kinds;

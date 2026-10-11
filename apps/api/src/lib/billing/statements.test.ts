@@ -9,8 +9,9 @@ describe("priceStatement", () => {
     expect(priceStatement("o", "2026-10-14", 3240, DEFAULT_BILLING_CONFIG)).toMatchObject({ bandName: "Band 1", amountInr: 999, amountUsd: 12 });
     expect(priceStatement("o", "2026-10-14", 250_000, DEFAULT_BILLING_CONFIG)).toMatchObject({ amountInr: 7999 });
   });
-  it("leaves the amount empty for a custom-quote volume", () => {
-    expect(priceStatement("o", "2026-10-14", 250_001, DEFAULT_BILLING_CONFIG)).toMatchObject({ bandName: "Above", amountInr: null, amountUsd: null });
+  it("charges the cap price however far above the last band the volume goes", () => {
+    expect(priceStatement("o", "2026-10-14", 250_001, DEFAULT_BILLING_CONFIG)).toMatchObject({ bandName: "Band 3 (cap)", amountInr: 7999, amountUsd: 96 });
+    expect(priceStatement("o", "2026-10-14", 9_000_000, DEFAULT_BILLING_CONFIG)).toMatchObject({ amountInr: 7999, amountUsd: 96 });
   });
 });
 

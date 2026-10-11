@@ -209,7 +209,7 @@ export default function AdminBillingPage(): JSX.Element {
                 ))}
               </tbody>
             </table>
-            <p className="text-gray-500">Above the last band customers see &quot;Custom quote&quot;.</p>
+            <p className="text-gray-500">The last band has no upper limit: customers never pay more than its price, however many messages they send.</p>
             <label className="flex items-center gap-3">
               <span className="w-48 text-gray-600">Charging starts (cycles starting on/after)</span>
               <input type="date" value={cfg.chargingStartDate ?? ""} onChange={(e) => setCfg({ ...cfg, chargingStartDate: e.target.value || null })} className="border rounded px-2 py-1" />

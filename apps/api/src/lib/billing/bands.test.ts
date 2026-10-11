@@ -16,7 +16,8 @@ describe("planFor", () => {
     expect(at(10_001)).toBe("Band 2");
     expect(at(50_001)).toBe("Band 3 (cap)");
     expect(at(250_000)).toBe("Band 3 (cap)");
-    expect(at(250_001)).toBe("Above");
+    expect(at(250_001)).toBe("Band 3 (cap)");
+    expect(at(5_000_000)).toBe("Band 3 (cap)");
   });
   it("reports the distance to the next band and the cap", () => {
     const p = planFor(3240, published) as PlanView;
@@ -26,18 +27,19 @@ describe("planFor", () => {
     expect(p.next?.name).toBe("Band 2");
     expect(p.cap).toEqual({ upTo: 250_000, inr: 7999, usd: 96 });
   });
-  it("has no next band in the top band or above it", () => {
-    const top = planFor(100_000, published) as PlanView;
-    expect(top.next).toBeNull();
-    expect(top.remainingToNextBand).toBeNull();
-    const above = planFor(300_000, published) as PlanView;
-    expect(above.position).toBe("above");
-    expect(above.next).toBeNull();
-    expect(above.current.inr).toBeNull();
+  it("keeps the cap price however many messages are sent", () => {
+    for (const n of [100_000, 250_001, 3_000_000]) {
+      const p = planFor(n, published) as PlanView;
+      expect(p.current.inr, String(n)).toBe(7999);
+      expect(p.next).toBeNull();
+      expect(p.remainingToNextBand).toBeNull();
+      expect(p.position).toBe("band");
+    }
   });
-  it("builds the table with Free first and Above last", () => {
+  it("builds the table with Free first and the capped top band last", () => {
     const v = bandViews(published);
-    expect(v.map((b) => b.name)).toEqual(["Free", "Band 1", "Band 2", "Band 3 (cap)", "Above"]);
+    expect(v.map((b) => b.name)).toEqual(["Free", "Band 1", "Band 2", "Band 3 (cap)"]);
+    expect(v[v.length - 1]).toMatchObject({ from: 50_001, to: null, inr: 7999 });
     expect(v[1]).toMatchObject({ from: 501, to: 10_000 });
   });
 });

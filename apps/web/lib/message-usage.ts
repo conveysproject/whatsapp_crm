@@ -125,7 +125,6 @@ export function alertText(kind: string, plan: Plan | null): string | null {
     return free[1] === "100" ? `You have used all ${allowance} free messages this month.` : `You have used ${free[1]}% of your ${allowance} free messages this month.`;
   }
   if (!plan || !plan.published) return null;
-  if (kind === "above") return "Your volume is above the top band. We will contact you with a custom quote.";
   const b = /^band_(\d+)$/.exec(kind);
   const band = b ? plan.bands[Number(b[1])] : undefined;
   return band ? `Your bill moved to ${band.name}.` : null;
@@ -213,7 +212,7 @@ export function formatUsd(n: number | null): string {
   return n === null ? "Custom quote" : `$${formatCount(n)}`;
 }
 export function bandRange(b: BandView): string {
-  if (b.to === null) return `over ${formatCount(b.from - 1)}`;
+  if (b.to === null) return `${formatCount(b.from)} and above`;
   if (b.from === 0) return `up to ${formatCount(b.to)}`;
   return `${formatCount(b.from)} to ${formatCount(b.to)}`;
 }
