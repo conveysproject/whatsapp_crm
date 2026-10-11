@@ -6,7 +6,7 @@ import { BillSummary } from "@/components/billing/BillSummary";
 import { BandProgress } from "@/components/billing/BandProgress";
 import { UsageDetails } from "@/components/billing/UsageDetails";
 import { BandTable } from "@/components/billing/BandTable";
-import { alertText, type MessageUsage } from "@/lib/message-usage";
+import { alertText, formatCount, formatInr, formatUsd, monthLabel, type MessageUsage } from "@/lib/message-usage";
 
 interface SubscriptionData {
   planTier: string;
@@ -77,9 +77,34 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
 
       <section data-testid="statements" className="bg-white rounded-xl border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-2">Statements and invoices</h2>
-        <p className="text-sm text-gray-600">
-          No statements yet. Nothing is charged today. When billing starts, each month&apos;s statement and invoice will appear here, and we will tell you well before the first charge.
-        </p>
+        {messageUsage && messageUsage.statements.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-600 border-b border-gray-200">
+                  <th className="py-2 pr-3 font-semibold">Month</th>
+                  <th className="py-2 pr-3 font-semibold">Messages</th>
+                  <th className="py-2 pr-3 font-semibold">Band</th>
+                  <th className="py-2 font-semibold">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {messageUsage.statements.map((st) => (
+                  <tr key={st.month} className="border-b border-gray-100">
+                    <td className="py-2.5 pr-3">{monthLabel(st.month)}</td>
+                    <td className="py-2.5 pr-3">{formatCount(st.messages)}</td>
+                    <td className="py-2.5 pr-3">{st.bandName}</td>
+                    <td className="py-2.5">{formatInr(st.amountInr)} / {formatUsd(st.amountUsd)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-600">
+            No statements yet. Nothing is charged today. When billing starts, each month&apos;s statement and invoice will appear here, and we will tell you well before the first charge.
+          </p>
+        )}
       </section>
 
       <section data-testid="usage-alerts" className="bg-white rounded-xl border border-gray-200 p-6">

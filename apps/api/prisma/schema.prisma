@@ -1691,6 +1691,24 @@ model BillingAlertEvent {
   @@map("billing_alert_events")
 }
 
+model BillingStatement {
+  id             String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  organizationId String    @map("organization_id")
+  month          String
+  messages       Int
+  bandName       String    @map("band_name")
+  amountInr      Int?      @map("amount_inr")
+  amountUsd      Int?      @map("amount_usd")
+  status         String    @default("draft")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @map("updated_at")
+  issuedAt       DateTime? @map("issued_at")
+
+  @@unique([organizationId, month], map: "billing_statements_org_month_key")
+  @@index([month], map: "billing_statements_month_idx")
+  @@map("billing_statements")
+}
+
 model ApiRequestPayload {
   id                String   @id
   organizationId    String   @map("organization_id")

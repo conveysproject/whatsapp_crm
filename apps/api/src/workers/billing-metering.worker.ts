@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
 import { runMeteringSweep } from "../lib/billing/metering-sweep.js";
 import { evaluateAlerts } from "../lib/billing/alerts.js";
+import { generateStatements, previousMonth } from "../lib/billing/statements.js";
 
 export { runMeteringSweep };
 
@@ -16,6 +17,12 @@ export function startBillingMeteringWorker() {
   const worker = new Worker(
     "billing-metering",
     async (job) => {
+      if (job.name === "statements") {
+        // 1st of the month, after the nightly re-sweep: prepare DRAFT statements for the month that just ended. Never charges.
+        const res = await generateStatements(prisma, previousMonth(new Date()));
+        console.log(`[billing-statements] created=${res.created} refreshed=${res.refreshed} skipped=${res.skipped}`);
+        return;
+      }
       // "nightly" re-sweeps the last 5 UTC days (keep below the 7-day retention minimum); "sweep" is yesterday + today.
       const res = job.name === "nightly" ? await runMeteringSweep(prisma, new Date(), 5) : await runMeteringSweep(prisma);
       if (res.days.length === 0) console.error("[billing-metering] sweep produced no days");
@@ -34,4 +41,5 @@ export function startBillingMeteringWorker() {
 export async function scheduleBillingMeteringCron() {
   await billingMeteringQueue.add("sweep", {}, { repeat: { pattern: "5 * * * *" }, jobId: "billing-metering-cron" }); // minute 5 of every hour
   await billingMeteringQueue.add("nightly", {}, { repeat: { pattern: "35 0 * * *" }, jobId: "billing-metering-nightly-cron" }); // 00:35 UTC, last 5 days
+  await billingMeteringQueue.add("statements", {}, { repeat: { pattern: "50 0 1 * *" }, jobId: "billing-statements-cron" }); // 00:50 UTC on the 1st
 }

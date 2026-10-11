@@ -18,6 +18,7 @@ export type Plan =
       next: BandView | null;
       cap: { upTo: number; inr: number; usd: number };
     };
+export interface Statement { month: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null }
 export interface UsageAlert { kind: string; at: string }
 export interface ExpectedBill { messages: number; band: BandView }
 export interface MessageUsage {
@@ -29,6 +30,7 @@ export interface MessageUsage {
   plan: Plan | null;
   expected: ExpectedBill | null;
   alerts: UsageAlert[];
+  statements: Statement[];
 }
 
 export const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -81,6 +83,17 @@ export function normalizePlan(raw: unknown): Plan | null {
     next: normalizeBand(raw["next"]),
     cap: { upTo: num(cap["upTo"]), inr: num(cap["inr"]), usd: num(cap["usd"]) },
   };
+}
+
+function normalizeStatements(raw: unknown): Statement[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Statement[] = [];
+  for (const r of raw) {
+    if (isRecord(r) && typeof r["month"] === "string" && /^\d{4}-\d{2}$/.test(r["month"]) && typeof r["bandName"] === "string") {
+      out.push({ month: r["month"], messages: num(r["messages"]), bandName: r["bandName"], amountInr: nullableNum(r["amountInr"]), amountUsd: nullableNum(r["amountUsd"]) });
+    }
+  }
+  return out;
 }
 
 function normalizeAlerts(raw: unknown): UsageAlert[] {
@@ -136,6 +149,7 @@ export function normalizeMessageUsage(raw: unknown): MessageUsage | null {
     plan: normalizePlan(raw["plan"]),
     expected: normalizeExpected(raw["expected"]),
     alerts: normalizeAlerts(raw["alerts"]),
+    statements: normalizeStatements(raw["statements"]),
   };
 }
 

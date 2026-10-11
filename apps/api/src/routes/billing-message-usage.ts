@@ -39,6 +39,15 @@ export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => 
     const alertRows = await Promise.resolve()
       .then(() => fastify.prisma.billingAlertEvent.findMany({ where: { organizationId, month: monthStr }, select: { kind: true, createdAt: true }, orderBy: { createdAt: "asc" } }))
       .catch(() => []);
+    // Only statements the owner has issued are visible to customers; drafts are internal.
+    const statements = await Promise.resolve()
+      .then(() => fastify.prisma.billingStatement.findMany({
+        where: { organizationId, status: "issued" },
+        select: { month: true, messages: true, bandName: true, amountInr: true, amountUsd: true, status: true },
+        orderBy: { month: "desc" },
+        take: 24,
+      }))
+      .catch(() => []);
     const alerts = alertRows.filter((a) => config.published || a.kind.startsWith("free_")).map((a) => ({ kind: a.kind, at: a.createdAt.toISOString() }));
     const monthOver = now.getTime() >= range.toExclusive.getTime();
     const projectedTotal = monthOver ? summary.billable : projectMonthTotal(summary.billable, summary.daily.length, range.days);
@@ -52,6 +61,7 @@ export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => 
         ...summary,
         plan,
         alerts,
+        statements,
         expected: projectedPlan && projectedPlan.published ? { messages: projectedTotal, band: projectedPlan.current } : null,
       },
     };

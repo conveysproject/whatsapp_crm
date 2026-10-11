@@ -18,6 +18,8 @@ type Mode = "follow" | "never" | "always";
 interface Rule { category: string; mode: Mode }
 interface RulesResponse { modes: Mode[]; rules: Rule[] }
 interface BandCfg { upTo: number; inr: number; usd: number }
+interface StatementRow { organizationId: string; name: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string }
+interface StatementsResponse { month: string; totals: { statements: number; inr: number; usd: number }; statements: StatementRow[] }
 interface BillingCfg { published: boolean; freeAllowance: number; alertsEnabled: boolean; bands: BandCfg[] }
 
 const KNOWN_CATEGORIES = ["marketing", "utility", "authentication", "service", "authentication_international", "marketing_lite", "referral_conversion", "unknown"];
@@ -38,6 +40,11 @@ function useAdminFetch() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json() as Promise<T>;
   };
+}
+
+function previousMonthKey(): string {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
 }
 
 function currentMonth(): string {
@@ -85,6 +92,18 @@ export default function AdminBillingPage(): JSX.Element {
     const n = Number(value.replace(/,/g, ""));
     setCfg({ ...cfg, bands: cfg.bands.map((b, j) => (j === i ? { ...b, [key]: Number.isFinite(n) ? Math.trunc(n) : 0 } : b)) });
   };
+
+  const [stMonth, setStMonth] = useState(previousMonthKey());
+  const statementsQ = useQuery<{ data: StatementsResponse }>({
+    queryKey: ["admin-billing-statements", stMonth],
+    queryFn: () => adminFetch(`/v1/admin/billing/statements?month=${stMonth}`),
+    enabled: /^\d{4}-\d{2}$/.test(stMonth),
+  });
+  const prepare = useMutation({
+    mutationFn: () => adminFetch("/v1/admin/billing/statements/generate", { method: "POST", body: JSON.stringify({ month: stMonth }) }),
+    onSuccess: () => { toast.success("Draft statements prepared"); void qc.invalidateQueries({ queryKey: ["admin-billing-statements"] }); },
+    onError: () => toast.error("Could not prepare statements (the month may not be finished)"),
+  });
 
   const modeOf = (category: string): Mode => rules.data?.data.rules.find((r) => r.category === category)?.mode ?? "follow";
   const categories = [...new Set([...KNOWN_CATEGORIES, ...(rules.data?.data.rules.map((r) => r.category) ?? [])])];
@@ -195,6 +214,35 @@ export default function AdminBillingPage(): JSX.Element {
             >
               Save prices
             </button>
+          </div>
+        )}
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-gray-900">Draft statements</h2>
+        <p className="text-sm text-gray-500 mt-1">Prepared automatically on the 1st for the month that just ended. These are drafts only: customers cannot see them and nobody is charged.</p>
+        <div className="flex items-center gap-3 mt-4">
+          <input type="month" value={stMonth} onChange={(e) => setStMonth(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+          <button type="button" disabled={prepare.isPending} onClick={() => prepare.mutate()} className="text-sm bg-gray-900 text-white rounded px-3 py-1">Prepare drafts for this month</button>
+        </div>
+        {statementsQ.data && (
+          <div className="overflow-x-auto bg-white border rounded mt-4">
+            <p className="p-3 text-sm text-gray-600">{statementsQ.data.data.totals.statements} statements, total ₹{statementsQ.data.data.totals.inr.toLocaleString()} / ${statementsQ.data.data.totals.usd.toLocaleString()} if every one were charged</p>
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-left text-gray-500"><tr><th className="p-2">Organization</th><th className="p-2 text-right">Messages</th><th className="p-2">Band</th><th className="p-2">₹ / $</th><th className="p-2">Status</th></tr></thead>
+              <tbody>
+                {statementsQ.data.data.statements.map((r) => (
+                  <tr key={r.organizationId} className="border-t">
+                    <td className="p-2">{r.name}</td>
+                    <td className="p-2 text-right">{r.messages.toLocaleString()}</td>
+                    <td className="p-2">{r.bandName}</td>
+                    <td className="p-2">{r.amountInr === null ? "Custom quote" : `₹${r.amountInr.toLocaleString()} / $${(r.amountUsd ?? 0).toLocaleString()}`}</td>
+                    <td className="p-2">{r.status}</td>
+                  </tr>
+                ))}
+                {statementsQ.data.data.statements.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-gray-500">No draft statements for this month.</td></tr>}
+              </tbody>
+            </table>
           </div>
         )}
       </section>

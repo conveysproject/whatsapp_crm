@@ -10,16 +10,16 @@ describe("normalizeMessageUsage", () => {
     expect(u).toEqual({
       month: "2026-10", billable: 9, bySource: { campaign: 4, api: 3, unknown: 2 },
       daily: [{ day: "2026-10-01", billable: 5 }, { day: "2026-10-02", billable: 4 }], updatedAt: "2026-10-10T11:05:00.000Z",
-      plan: null, expected: null, alerts: [],
+      plan: null, expected: null, alerts: [], statements: [],
     });
   });
   it("never throws and degrades to safe defaults", () => {
     expect(normalizeMessageUsage(null)).toBeNull();
     expect(normalizeMessageUsage("x")).toBeNull();
     expect(normalizeMessageUsage([])).toBeNull();
-    expect(normalizeMessageUsage({})).toEqual({ month: "", billable: 0, bySource: {}, daily: [], updatedAt: null, plan: null, expected: null, alerts: [] });
+    expect(normalizeMessageUsage({})).toEqual({ month: "", billable: 0, bySource: {}, daily: [], updatedAt: null, plan: null, expected: null, alerts: [], statements: [] });
     expect(normalizeMessageUsage({ billable: -5, bySource: { a: "x", b: -1, c: 2 }, daily: [1, null, { day: 5 }, { day: "d", billable: "z" }] }))
-      .toEqual({ month: "", billable: 0, bySource: { c: 2 }, daily: [{ day: "d", billable: 0 }], updatedAt: null, plan: null, expected: null, alerts: [] });
+      .toEqual({ month: "", billable: 0, bySource: { c: 2 }, daily: [{ day: "d", billable: 0 }], updatedAt: null, plan: null, expected: null, alerts: [], statements: [] });
   });
 });
 
@@ -82,5 +82,17 @@ describe("alerts", () => {
     expect(alertText("free_100", hidden)).toBe("You have used all 500 free messages this month.");
     expect(alertText("band_1", hidden)).toBeNull();
     expect(alertText("nonsense", null)).toBeNull();
+  });
+});
+
+describe("statements", () => {
+  it("keeps well-formed statements only", () => {
+    const u = normalizeMessageUsage({ statements: [
+      { month: "2026-09", messages: 3000, bandName: "Band 1", amountInr: 999, amountUsd: 12 },
+      { month: "bad", messages: 1, bandName: "x" },
+      { month: "2026-08", messages: 9, bandName: "Above", amountInr: null, amountUsd: null },
+    ] });
+    expect(u?.statements.map((s) => s.month)).toEqual(["2026-09", "2026-08"]);
+    expect(u?.statements[1]?.amountInr).toBeNull();
   });
 });
