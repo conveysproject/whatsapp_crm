@@ -1,11 +1,19 @@
 import type { JSX } from "react";
 import Link from "next/link";
-import { alertText, barHeights, formatCount, formatInr, formatUsd, periodLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
+import { barHeights, formatCount, formatInr, formatUsd, periodLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
 
 interface Props {
   usage: MessageUsage | null;
   /** compact: dashboard card with a link to billing; full: billing page with the by-type breakdown and the "what counts" note. */
   variant: "compact" | "full";
+}
+
+/** Percent of a band already used (at least 2 so a started band is visible). */
+function bandFill(count: number, from: number, to: number): number {
+  const lo = Math.max(from - 1, 0);
+  if (count >= to) return 100;
+  if (count <= lo) return 0;
+  return Math.max(2, Math.min(100, Math.round(((count - lo) / (to - lo)) * 100)));
 }
 
 function updatedText(): string {
@@ -44,7 +52,6 @@ export function MessageUsagePanel({ usage, variant }: Props): JSX.Element {
   }
   const rows = sourceRows(usage.bySource);
   const full = variant === "full";
-  const headsUp = [...usage.alerts].reverse().map((al) => alertText(al.kind, usage.plan)).find((t): t is string => t !== null) ?? null;
 
   return (
     <section
@@ -78,11 +85,18 @@ export function MessageUsagePanel({ usage, variant }: Props): JSX.Element {
         </p>
       ) : null}
 
-      {!full && headsUp && (
-        <p data-testid="message-usage-heads-up" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          <span className="font-semibold">Heads-up: </span>{headsUp}
-        </p>
+      {!full && usage.plan?.published && usage.plan.current.to !== null && (
+        <div className="mt-3" data-testid="message-usage-progress">
+          <div className="h-2.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden" role="img" aria-label={`${formatCount(usage.billable)} of ${formatCount(usage.plan.current.to)} messages in ${usage.plan.current.name}`}>
+            <div className="h-2.5 bg-green-600" style={{ width: `${bandFill(usage.billable, usage.plan.current.from, usage.plan.current.to)}%` }} />
+          </div>
+          <div className="mt-1 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+            <span>{formatCount(usage.billable)} sent</span>
+            <span>{formatCount(usage.plan.current.to)} is the top of {usage.plan.current.name}</span>
+          </div>
+        </div>
       )}
+
 
       {usage.daily.length > 0 && (
         <div className="mt-4">

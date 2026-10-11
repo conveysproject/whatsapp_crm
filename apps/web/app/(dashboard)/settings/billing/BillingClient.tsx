@@ -151,7 +151,9 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
       </section>
 
       <p className="text-sm text-gray-500">
-        Questions about billing? <a href="mailto:info@conveys.in" className="text-green-700 hover:underline">info@conveys.in</a>
+        WhatsApp conversation charges are billed to you directly by Meta.{" "}
+        <a href="https://business.facebook.com/billing_hub/payment_settings" target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline">Open Meta billing</a>
+        {" "}· Questions about billing? <a href="mailto:info@conveys.in" className="text-green-700 hover:underline">info@conveys.in</a>
       </p>
 
       {(subscription?.stripe || subscription?.manual) && (

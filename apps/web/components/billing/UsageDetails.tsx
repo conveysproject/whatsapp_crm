@@ -1,9 +1,10 @@
 import type { JSX } from "react";
-import { barHeights, formatCount, periodLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
+import { barHeights, chartDayLabel, chartDays, formatCount, periodLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
 
 /** "Messages per day" chart and the "What was counted" list, side by side (stacked on phones). */
 export function UsageDetails({ usage }: { usage: MessageUsage }): JSX.Element {
-  const heights = barHeights(usage.daily);
+  const days = chartDays(usage);
+  const heights = barHeights(days);
   const rows = sourceRows(usage.bySource);
   return (
     <div className="flex flex-wrap gap-4 items-stretch">
@@ -15,19 +16,20 @@ export function UsageDetails({ usage }: { usage: MessageUsage }): JSX.Element {
           aria-label={`Messages per day, ${formatCount(usage.billable)} in total`}
           className="flex items-end gap-1 h-36 border-b border-gray-200 dark:border-gray-700"
         >
-          {usage.daily.map((d, i) => (
+          {days.map((d, i) => (
             <div
               key={d.day}
-              title={`${d.day}: ${formatCount(d.billable)}`}
-              className="flex-1 min-w-0 rounded-t bg-green-600"
-              style={{ height: `${heights[i] ?? 0}%`, minHeight: heights[i] ? undefined : 2, opacity: heights[i] ? 1 : 0.25 }}
+              title={`${d.day}: ${d.future ? "not yet" : formatCount(d.billable)}`}
+              className={`flex-1 min-w-0 rounded-t ${d.future ? "bg-gray-200 dark:bg-gray-700" : "bg-green-600"}`}
+              style={{ height: d.future ? "4%" : `${heights[i] ?? 0}%`, minHeight: 2, opacity: !d.future && !heights[i] ? 0.25 : 1 }}
             />
           ))}
         </div>
-        {usage.daily.length > 0 && (
+        {days.length > 0 && (
           <div className="mt-1.5 flex justify-between text-xs text-gray-600 dark:text-gray-400">
-            <span>{usage.daily[0]?.day.slice(5)}</span>
-            <span>{usage.daily[usage.daily.length - 1]?.day.slice(5)}</span>
+            <span>{chartDayLabel(days[0]!.day)}</span>
+            <span>{chartDayLabel(days[Math.floor((days.length - 1) / 2)]!.day)}</span>
+            <span>{chartDayLabel(days[days.length - 1]!.day)}</span>
           </div>
         )}
       </section>
@@ -46,6 +48,10 @@ export function UsageDetails({ usage }: { usage: MessageUsage }): JSX.Element {
             ))}
           </ul>
         )}
+        <div className="flex items-center justify-between gap-3 py-2 text-sm text-gray-500 dark:text-gray-400" data-testid="message-usage-failed">
+          <span>Failed (not charged)</span>
+          <span className="tabular-nums">{formatCount(usage.failed)}</span>
+        </div>
         <p className="mt-3 text-xs text-gray-600 dark:text-gray-400">
           Counted: the messages Meta charges for. A message Meta does not charge for, for example a chat reply inside its free 24-hour customer-service window, is not counted. Messages you receive and messages that fail are never counted. Counts before 12 October 2026 are estimates that include every message sent.
         </p>

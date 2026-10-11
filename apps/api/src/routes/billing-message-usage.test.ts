@@ -7,7 +7,8 @@ const findSetting = vi.fn();
 const findAlerts = vi.fn();
 const findStatements = vi.fn();
 const findOrg = vi.fn();
-const mockPrisma = { messageUsageDaily: { findMany }, billingSetting: { findUnique: findSetting }, billingAlertEvent: { findMany: findAlerts }, billingStatement: { findMany: findStatements }, organization: { findUnique: findOrg } };
+const countFailed = vi.fn();
+const mockPrisma = { messageUsageDaily: { findMany }, billingSetting: { findUnique: findSetting }, billingAlertEvent: { findMany: findAlerts }, billingStatement: { findMany: findStatements }, organization: { findUnique: findOrg }, message: { count: countFailed } };
 
 async function buildAs(role: string, permissions: Record<string, string> = {}, organizationId = "org-1"): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -26,6 +27,7 @@ describe("GET /v1/billing/message-usage", () => {
     findMany.mockReset().mockResolvedValue([]);
     findSetting.mockReset().mockResolvedValue(null);
     findAlerts.mockReset().mockResolvedValue([]);
+    countFailed.mockReset().mockResolvedValue(0);
     findStatements.mockReset().mockResolvedValue([]);
     // Registered 14 March: billing cycles run from the 14th to the 13th.
     findOrg.mockReset().mockResolvedValue({ createdAt: new Date("2026-03-14T09:00:00Z") });
@@ -170,6 +172,16 @@ describe("GET /v1/billing/message-usage", () => {
     expect(body.alerts.map((a) => a.kind)).toEqual(["free_80"]);
     findOrg.mockResolvedValue({ createdAt: new Date("2026-03-14T09:00:00Z"), settings: { billingAlerts: { step50: true, step80: true, step95: true, step100: true, newBand: true, email: true, inApp: false } } });
     expect((await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).json<{ data: { alerts: unknown[] } }>().data.alerts).toEqual([]);
+    await app.close();
+  });
+  it("reports failed sends of this cycle for the callers organization, and survives a count error", async () => {
+    countFailed.mockResolvedValue(37);
+    const app = await buildAs("admin", {}, "org-7");
+    const body = (await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).json<{ data: { failed: number } }>().data;
+    expect(body.failed).toBe(37);
+    expect(countFailed.mock.calls[0]![0].where).toMatchObject({ organizationId: "org-7", direction: "outbound", status: "failed", isSystemMessage: false });
+    countFailed.mockRejectedValue(new Error("db"));
+    expect((await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).json<{ data: { failed: number } }>().data.failed).toBe(0);
     await app.close();
   });
 });

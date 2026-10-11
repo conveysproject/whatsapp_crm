@@ -57,6 +57,10 @@ export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => 
       .catch(() => []);
     // The payment link is shown only while a statement is actually due.
     const statementsOut = statements.map((st) => ({ ...st, paymentUrl: st.status === "issued" ? st.paymentUrl : null }));
+    // Messages that failed to send in this cycle: shown for transparency, never counted or billed. Best effort.
+    const failed = await Promise.resolve()
+      .then(() => fastify.prisma.message.count({ where: { organizationId, direction: "outbound", status: "failed", isSystemMessage: false, sentAt: { gte: cycle.start, lt: cycle.endExclusive } } }))
+      .catch(() => 0);
     const prefs = readAlertPrefs(org.settings);
     const alerts = alertRows.filter((a) => prefs.inApp && kindWanted(prefs, a.kind) && (config.published || a.kind.startsWith("free_"))).map((a) => ({ kind: a.kind, at: a.createdAt.toISOString() }));
     const cycleOver = now.getTime() >= cycle.endExclusive.getTime();
@@ -73,6 +77,7 @@ export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => 
         plan,
         alerts,
         statements: statementsOut,
+        failed,
         expected: projectedPlan && projectedPlan.published ? { messages: projectedTotal, band: projectedPlan.current } : null,
       },
     };

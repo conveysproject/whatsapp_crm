@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeMessageUsage, normalizePlan, alertText, bandAt, periodLabel, resetLabel, cycleStartLabel, statementStatusLabel, dueDateLabel, formatMinor, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
+import { normalizeMessageUsage, normalizePlan, alertText, bandAt, periodLabel, resetLabel, cycleStartLabel, statementStatusLabel, dueDateLabel, formatMinor, alertDateLabel, chartDays, chartDayLabel, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
 
 describe("normalizeMessageUsage", () => {
   it("maps a full body", () => {
@@ -10,16 +10,16 @@ describe("normalizeMessageUsage", () => {
     expect(u).toEqual({
       month: "2026-10", billable: 9, bySource: { campaign: 4, api: 3, unknown: 2 },
       daily: [{ day: "2026-10-01", billable: 5 }, { day: "2026-10-02", billable: 4 }], updatedAt: "2026-10-10T11:05:00.000Z",
-      plan: null, expected: null, alerts: [], statements: [], cycle: null,
+      plan: null, expected: null, alerts: [], statements: [], cycle: null, failed: 0,
     });
   });
   it("never throws and degrades to safe defaults", () => {
     expect(normalizeMessageUsage(null)).toBeNull();
     expect(normalizeMessageUsage("x")).toBeNull();
     expect(normalizeMessageUsage([])).toBeNull();
-    expect(normalizeMessageUsage({})).toEqual({ month: "", billable: 0, bySource: {}, daily: [], updatedAt: null, plan: null, expected: null, alerts: [], statements: [], cycle: null });
+    expect(normalizeMessageUsage({})).toEqual({ month: "", billable: 0, bySource: {}, daily: [], updatedAt: null, plan: null, expected: null, alerts: [], statements: [], cycle: null, failed: 0 });
     expect(normalizeMessageUsage({ billable: -5, bySource: { a: "x", b: -1, c: 2 }, daily: [1, null, { day: 5 }, { day: "d", billable: "z" }] }))
-      .toEqual({ month: "", billable: 0, bySource: { c: 2 }, daily: [{ day: "d", billable: 0 }], updatedAt: null, plan: null, expected: null, alerts: [], statements: [], cycle: null });
+      .toEqual({ month: "", billable: 0, bySource: { c: 2 }, daily: [{ day: "d", billable: 0 }], updatedAt: null, plan: null, expected: null, alerts: [], statements: [], cycle: null, failed: 0 });
   });
 });
 
@@ -170,5 +170,32 @@ describe("statement totals", () => {
   });
   it("leaves them empty before a payment link exists", () => {
     expect(normalizeMessageUsage({ statements: [raw] })?.statements[0]).toMatchObject({ currency: null, totalMinor: null, taxMinor: null });
+  });
+});
+
+describe("chart helpers", () => {
+  const cycle = { key: "2026-10-14", from: "2026-10-14T00:00:00.000Z", toExclusive: "2026-11-14T00:00:00.000Z", days: 31 };
+  it("pads the rest of the period with empty future days", () => {
+    const days = chartDays({ cycle, daily: [{ day: "2026-10-14", billable: 5 }, { day: "2026-10-15", billable: 0 }, { day: "2026-10-16", billable: 7 }] });
+    expect(days).toHaveLength(31);
+    expect(days[0]).toEqual({ day: "2026-10-14", billable: 5, future: false });
+    expect(days[1]).toEqual({ day: "2026-10-15", billable: 0, future: false });
+    expect(days[3]).toEqual({ day: "2026-10-17", billable: 0, future: true });
+    expect(days[30]!.day).toBe("2026-11-13");
+  });
+  it("returns the days it has when there is no usable cycle", () => {
+    expect(chartDays({ cycle: null, daily: [{ day: "2026-10-14", billable: 5 }] })).toEqual([{ day: "2026-10-14", billable: 5, future: false }]);
+    expect(chartDays({ cycle: { ...cycle, days: 9999 }, daily: [] })).toEqual([]);
+  });
+  it("formats day labels and tolerates bad input", () => {
+    expect(chartDayLabel("2026-10-14")).toBe("14 Oct");
+    expect(chartDayLabel("nope")).toBe("nope");
+    expect(alertDateLabel("2026-10-06T10:00:00.000Z")).toBe("6 Oct");
+    expect(alertDateLabel("nope")).toBe("");
+  });
+  it("reads the failed count and never lets it go negative", () => {
+    expect(normalizeMessageUsage({ failed: 37 })?.failed).toBe(37);
+    expect(normalizeMessageUsage({ failed: -3 })?.failed).toBe(0);
+    expect(normalizeMessageUsage({})?.failed).toBe(0);
   });
 });

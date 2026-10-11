@@ -34,6 +34,8 @@ export interface MessageUsage {
   statements: Statement[];
   /** The customer's own billing cycle (starts on their registration day, UTC). */
   cycle: Cycle | null;
+  /** Messages that failed to send this period (shown, never counted). */
+  failed: number;
 }
 
 export const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -168,6 +170,7 @@ export function normalizeMessageUsage(raw: unknown): MessageUsage | null {
     alerts: normalizeAlerts(raw["alerts"]),
     statements: normalizeStatements(raw["statements"]),
     cycle: normalizeCycle(raw["cycle"]),
+    failed: num(raw["failed"]),
   };
 }
 
@@ -277,4 +280,37 @@ export function dueDateLabel(dueAt: string | null): string {
 export function formatMinor(currency: string | null, minor: number): string {
   const v = (minor / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return currency === "USD" ? `$${v}` : `₹${v}`;
+}
+
+/** "6 Oct" for an alert timestamp (UTC), or "" when it cannot be read. */
+export function alertDateLabel(at: string): string {
+  const d = new Date(at);
+  return Number.isNaN(d.getTime()) ? "" : dayLabel(d);
+}
+
+export interface ChartDay { day: string; billable: number; future: boolean }
+
+/**
+ * The whole billing period as chart days: days with data keep their count, the rest of the period is padded with empty
+ * "future" days so the chart always spans the cycle. Without a cycle, the days we have are returned as they are.
+ */
+export function chartDays(usage: Pick<MessageUsage, "daily" | "cycle">): ChartDay[] {
+  const have = new Map(usage.daily.map((d) => [d.day, d.billable]));
+  const c = usage.cycle;
+  if (!c || c.days <= 0 || c.days > 62) return usage.daily.map((d) => ({ ...d, future: false }));
+  const start = new Date(c.from).getTime();
+  if (Number.isNaN(start)) return usage.daily.map((d) => ({ ...d, future: false }));
+  const out: ChartDay[] = [];
+  for (let i = 0; i < c.days; i++) {
+    const day = new Date(start + i * 86_400_000).toISOString().slice(0, 10);
+    const n = have.get(day);
+    out.push({ day, billable: n ?? 0, future: n === undefined && day > (usage.daily[usage.daily.length - 1]?.day ?? "") });
+  }
+  return out;
+}
+
+/** "14 Oct" style label for a chart day key (YYYY-MM-DD). */
+export function chartDayLabel(day: string): string {
+  const d = new Date(`${day}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? day : dayLabel(d);
 }
