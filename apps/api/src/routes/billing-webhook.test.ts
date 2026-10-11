@@ -3,7 +3,8 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import type * as ActivationModule from "../lib/billing/activation.js";
 
-const { constructEvent, subsList, activatePlanMock, notifyMock, invoicesRetrieve } = vi.hoisted(() => ({
+const { constructEvent, subsList, activatePlanMock, notifyMock, invoicesRetrieve, markPaidMock } = vi.hoisted(() => ({
+  markPaidMock: vi.fn(),
   constructEvent: vi.fn(),
   invoicesRetrieve: vi.fn(),
   subsList: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock("../lib/billing/activation.js", async (orig) => ({
   activatePlan: activatePlanMock,
 }));
 vi.mock("../lib/billing/payment-failed-email.js", () => ({ notifyPaymentFailed: notifyMock }));
+vi.mock("../lib/billing/statement-payment.js", () => ({ markStatementPaid: markPaidMock }));
 
 const mockPrisma = {
   organization: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
@@ -58,6 +60,7 @@ beforeEach(async () => {
     mockPrisma.organization.findFirst, mockPrisma.organization.findUnique,
     mockPrisma.organization.update, mockPrisma.organization.updateMany]) m.mockReset();
   activatePlanMock.mockResolvedValue({ duplicate: false });
+  markPaidMock.mockReset().mockResolvedValue("paid");
   notifyMock.mockResolvedValue(undefined);
   subsList.mockResolvedValue({ data: [] });
   invoicesRetrieve.mockResolvedValue({ status: "open" });
@@ -70,6 +73,32 @@ afterEach(async () => {
   await app.close();
   if (saved.secret === undefined) delete process.env["STRIPE_WEBHOOK_SECRET"]; else process.env["STRIPE_WEBHOOK_SECRET"] = saved.secret;
   if (saved.flag === undefined) delete process.env["BILLING_V2_ENABLED"]; else process.env["BILLING_V2_ENABLED"] = saved.flag;
+});
+
+describe("POST /v1/billing/webhook: usage statement payment links", () => {
+  const session = (extra: Record<string, unknown> = {}) =>
+    ev("checkout.session.completed", { id: "cs_1", payment_status: "paid", payment_link: "plink_s", amount_total: 500, currency: "usd", metadata: { statementId: "s1" }, customer: null, ...extra });
+
+  it("marks the statement paid and does not change the organization or its plan", async () => {
+    constructEvent.mockReturnValue(session());
+    expect((await post(app)).statusCode).toBe(200);
+    expect(markPaidMock).toHaveBeenCalledWith(expect.anything(), { statementId: "s1", provider: "stripe", linkRef: "plink_s", currency: "usd", amountMinor: 500 });
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(mockPrisma.organization.updateMany).not.toHaveBeenCalled();
+    expect(activatePlanMock).not.toHaveBeenCalled();
+  });
+  it("does nothing for an unpaid session or one without a payment link", async () => {
+    constructEvent.mockReturnValue(session({ payment_status: "unpaid" }));
+    await post(app);
+    constructEvent.mockReturnValue(session({ payment_link: null }));
+    await post(app);
+    expect(markPaidMock).not.toHaveBeenCalled();
+  });
+  it("rejects a bad signature before reading the statement id", async () => {
+    constructEvent.mockImplementation(() => { throw new Error("bad sig"); });
+    expect((await post(app)).statusCode).toBe(400);
+    expect(markPaidMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /v1/billing/webhook", () => {

@@ -18,7 +18,8 @@ vi.mock("../lib/stripe.js", () => ({
   ZERO_DECIMAL_CURRENCIES: new Set<string>(),
 }));
 
-const { activatePlanMock } = vi.hoisted(() => ({ activatePlanMock: vi.fn() }));
+const { activatePlanMock, markPaidMock } = vi.hoisted(() => ({ activatePlanMock: vi.fn(), markPaidMock: vi.fn() }));
+vi.mock("../lib/billing/statement-payment.js", () => ({ markStatementPaid: markPaidMock }));
 vi.mock("../lib/billing/activation.js", async (orig) => ({
   ...(await orig<typeof ActivationModule>()),
   activatePlan: activatePlanMock,
@@ -63,6 +64,35 @@ function setEnv(name: string, value: string): () => void {
   process.env[name] = value;
   return () => { if (prev === undefined) delete process.env[name]; else process.env[name] = prev; };
 }
+
+describe("razorpay webhook: usage statement payment links", () => {
+  let app: FastifyInstance;
+  let restore: () => void;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); markPaidMock.mockReset().mockResolvedValue("paid"); activatePlanMock.mockReset(); restore = setEnv("RAZORPAY_WEBHOOK_SECRET", "rzp_secret"); app = await build(); });
+  afterEach(async () => { await app.close(); restore(); });
+  const body = (extra: Record<string, unknown> = {}) => JSON.stringify({
+    event: "payment_link.paid",
+    payload: {
+      payment: { entity: { id: "pay_1", amount: 50000, currency: "INR" } },
+      payment_link: { entity: { id: "plink_1", reference_id: "s1", amount_paid: 50000, currency: "INR", notes: { statementId: "s1", kind: "usage_statement" }, ...extra } },
+    },
+  });
+  const send = (raw: string, secret = "rzp_secret") => app.inject({ method: "POST", url: "/v1/billing/razorpay/webhook", headers: { "content-type": "application/json", "x-razorpay-signature": sign("sha256", secret, raw) }, payload: raw });
+
+  it("marks the statement paid for a correctly signed payment_link.paid and never activates a plan", async () => {
+    expect((await send(body())).statusCode).toBe(200);
+    expect(markPaidMock).toHaveBeenCalledWith(expect.anything(), { statementId: "s1", provider: "razorpay", linkRef: "plink_1", currency: "INR", amountMinor: 50000 });
+    expect(activatePlanMock).not.toHaveBeenCalled();
+  });
+  it("rejects a bad signature before touching any statement", async () => {
+    expect((await send(body(), "wrong")).statusCode).toBe(400);
+    expect(markPaidMock).not.toHaveBeenCalled();
+  });
+  it("ignores an event with no statement id or link id and still answers 200", async () => {
+    expect((await send(JSON.stringify({ event: "payment_link.paid", payload: { payment_link: { entity: { amount_paid: 1 } } } }))).statusCode).toBe(200);
+    expect(markPaidMock).not.toHaveBeenCalled();
+  });
+});
 
 describe("razorpay webhook", () => {
   let app: FastifyInstance;

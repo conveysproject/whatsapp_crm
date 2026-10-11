@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeMessageUsage, normalizePlan, alertText, bandAt, periodLabel, resetLabel, cycleStartLabel, statementStatusLabel, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
+import { normalizeMessageUsage, normalizePlan, alertText, bandAt, periodLabel, resetLabel, cycleStartLabel, statementStatusLabel, dueDateLabel, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
 
 describe("normalizeMessageUsage", () => {
   it("maps a full body", () => {
@@ -140,5 +140,22 @@ describe("statement status", () => {
     expect(statementStatusLabel("issued")).toBe("Due");
     const u = normalizeMessageUsage({ statements: [{ month: "2026-10-14", messages: 1, bandName: "Band 1", amountInr: 5, amountUsd: 1 }] });
     expect(u?.statements[0]?.status).toBe("issued");
+  });
+});
+
+describe("statement payment fields", () => {
+  const raw = { month: "2026-10-14", messages: 1, bandName: "Band 1", amountInr: 500, amountUsd: 5, status: "issued", dueAt: "2026-11-08T00:00:00.000Z" };
+  it("keeps only https payment links", () => {
+    expect(normalizeMessageUsage({ statements: [{ ...raw, paymentUrl: "https://rzp.io/l/abc" }] })?.statements[0]?.paymentUrl).toBe("https://rzp.io/l/abc");
+    for (const bad of ["javascript:alert(1)", "http://x.test", "//x.test", 5, null]) {
+      expect(normalizeMessageUsage({ statements: [{ ...raw, paymentUrl: bad }] })?.statements[0]?.paymentUrl, String(bad)).toBeNull();
+    }
+  });
+  it("labels due and overdue and formats the due date", () => {
+    expect(statementStatusLabel("issued", raw.dueAt, new Date("2026-11-07T00:00:00Z"))).toBe("Due");
+    expect(statementStatusLabel("issued", raw.dueAt, new Date("2026-11-09T00:00:00Z"))).toBe("Overdue");
+    expect(statementStatusLabel("paid", raw.dueAt, new Date("2026-12-01T00:00:00Z"))).toBe("Paid");
+    expect(dueDateLabel(raw.dueAt)).toBe("8 Nov 2026");
+    expect(dueDateLabel(null)).toBe("");
   });
 });

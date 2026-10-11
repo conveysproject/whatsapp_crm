@@ -6,6 +6,7 @@ import { activatePlan, isUnknownOrgError } from "../lib/billing/activation.js";
 import { isBillingV2Enabled, graceDays } from "../lib/billing/flags.js";
 import { tierFromPriceId } from "../lib/billing/stripe-customer.js";
 import { notifyPaymentFailed } from "../lib/billing/payment-failed-email.js";
+import { markStatementPaid } from "../lib/billing/statement-payment.js";
 
 export const billingWebhookRouter: FastifyPluginAsync = async (fastify) => {
   // Capture raw body as Buffer so Stripe can verify the HMAC signature.
@@ -53,7 +54,19 @@ export const billingWebhookRouter: FastifyPluginAsync = async (fastify) => {
       type SubShape = { id: string; cancel_at_period_end?: boolean; items?: { data: { price?: { id?: string } }[] } };
 
       try {
-        if (event.type === "checkout.session.completed" && v2) {
+        if (event.type === "checkout.session.completed" && event.data.object.metadata?.["statementId"]) {
+          // A usage statement paid through a payment link (verified signature above). Never touches plans.
+          const session = event.data.object;
+          const statementId = session.metadata?.["statementId"] as string;
+          const linkId = typeof session.payment_link === "string" ? session.payment_link : (session.payment_link as { id?: string } | null)?.id;
+          if (session.payment_status === "paid" && linkId) {
+            const result = await markStatementPaid(fastify.prisma, {
+              statementId, provider: "stripe", linkRef: linkId,
+              currency: session.currency ?? "", amountMinor: session.amount_total ?? NaN,
+            });
+            if (result === "rejected") fastify.log.warn({ statementId }, "stripe statement payment rejected (manual review)");
+          }
+        } else if (event.type === "checkout.session.completed" && v2) {
           const session = event.data.object;
           const orgId = session.metadata?.["organizationId"];
           const customerId = customerOf(session.customer);

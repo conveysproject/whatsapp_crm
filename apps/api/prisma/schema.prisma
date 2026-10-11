@@ -1703,7 +1703,16 @@ model BillingStatement {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @default(now()) @map("updated_at")
   issuedAt       DateTime? @map("issued_at")
+  currency        String?
+  amountMinor     Int?      @map("amount_minor")
+  dueAt           DateTime? @map("due_at")
+  paymentUrl      String?   @map("payment_url")
+  paymentProvider String?   @map("payment_provider")
+  paymentRef      String?   @map("payment_ref")
+  paidAt          DateTime? @map("paid_at")
+  remindersSent   Int       @default(0) @map("reminders_sent")
 
+  @@index([status], map: "billing_statements_status_idx")
   @@unique([organizationId, month], map: "billing_statements_org_month_key")
   @@index([month], map: "billing_statements_month_idx")
   @@map("billing_statements")

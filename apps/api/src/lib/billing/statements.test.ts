@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type * as PaymentLinksModule from "./payment-links.js";
 import type { PrismaClient } from "@prisma/client";
 import { DEFAULT_BILLING_CONFIG } from "./bands.js";
 import { priceStatement, generateStatements, issueStatements, setStatementStatus } from "./statements.js";
@@ -122,20 +123,39 @@ describe("issueStatements", () => {
   });
 });
 
+const { cancelLink } = vi.hoisted(() => ({ cancelLink: vi.fn() }));
+vi.mock("./payment-links.js", async (orig) => ({ ...(await orig<typeof PaymentLinksModule>()), cancelStatementPaymentLink: cancelLink }));
+
 describe("setStatementStatus", () => {
   const updateMany = vi.fn();
-  const prisma = { billingStatement: { updateMany } } as unknown as PrismaClient;
-  beforeEach(() => updateMany.mockReset().mockResolvedValue({ count: 1 }));
-  it("allows paid only from issued", async () => {
+  const findFirst = vi.fn();
+  const prisma = { billingStatement: { updateMany, findFirst } } as unknown as PrismaClient;
+  beforeEach(() => {
+    updateMany.mockReset().mockResolvedValue({ count: 1 });
+    findFirst.mockReset().mockResolvedValue({ paymentProvider: "razorpay", paymentRef: "plink_1" });
+    cancelLink.mockReset().mockResolvedValue(undefined);
+  });
+  it("allows paid only from issued, records the payment time and cancels the link", async () => {
     expect(await setStatementStatus(prisma, "o", "2026-10-14", "paid")).toBe(true);
     expect(updateMany.mock.calls[0]![0].where).toEqual({ organizationId: "o", month: "2026-10-14", status: { in: ["issued"] } });
+    expect(updateMany.mock.calls[0]![0].data.paidAt).toBeInstanceOf(Date);
+    expect(cancelLink).toHaveBeenCalledWith("razorpay", "plink_1");
   });
-  it("allows void from draft or issued", async () => {
+  it("allows void from draft or issued and cancels the link", async () => {
     await setStatementStatus(prisma, "o", "2026-10-14", "void");
     expect(updateMany.mock.calls[0]![0].where.status).toEqual({ in: ["draft", "issued"] });
+    expect(cancelLink).toHaveBeenCalledTimes(1);
   });
-  it("reports a refused transition", async () => {
+  it("cancels nothing when the change is refused or there is no link", async () => {
     updateMany.mockResolvedValue({ count: 0 });
     expect(await setStatementStatus(prisma, "o", "2026-10-14", "paid")).toBe(false);
+    updateMany.mockResolvedValue({ count: 1 });
+    findFirst.mockResolvedValue({ paymentProvider: null, paymentRef: null });
+    await setStatementStatus(prisma, "o", "2026-10-14", "void");
+    expect(cancelLink).not.toHaveBeenCalled();
+  });
+  it("still succeeds when cancelling the link fails", async () => {
+    cancelLink.mockRejectedValue(new Error("gateway down"));
+    expect(await setStatementStatus(prisma, "o", "2026-10-14", "void")).toBe(true);
   });
 });

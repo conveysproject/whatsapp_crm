@@ -3,6 +3,7 @@ import { INTERNAL_ORG_NAMES } from "../lib/billing/internal-orgs.js";
 import { parseMonth } from "../lib/billing/metering.js";
 import { parseCycleKey } from "../lib/billing/cycle.js";
 import { generateStatements, issueStatements, setStatementStatus } from "../lib/billing/statements.js";
+import { ensurePaymentLinks } from "../lib/billing/statement-payment.js";
 
 const FORBIDDEN = { error: { code: "FORBIDDEN", message: "Super admin access required" } };
 
@@ -60,7 +61,9 @@ export const adminBillingStatementsRouter: FastifyPluginAsync = async (fastify) 
     if (!res.configured) {
       return reply.status(409).send({ error: { code: "CHARGING_NOT_CONFIGURED", message: "Set a charging start date in the prices settings first" } });
     }
-    return reply.send({ data: res });
+    // Payment links are created (and emailed) right away; any that fail are retried by the daily job.
+    const links = await ensurePaymentLinks(fastify.prisma);
+    return reply.send({ data: { ...res, paymentLinks: links } });
   });
 
   fastify.post<{ Body: { organizationId?: unknown; month?: unknown; status?: unknown } }>("/admin/billing/statements/status", async (request, reply) => {

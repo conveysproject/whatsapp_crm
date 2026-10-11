@@ -4,6 +4,7 @@ import { redisConnection } from "../lib/queue.js";
 import { runMeteringSweep } from "../lib/billing/metering-sweep.js";
 import { evaluateAlerts } from "../lib/billing/alerts.js";
 import { generateStatements } from "../lib/billing/statements.js";
+import { ensurePaymentLinks, sendPaymentReminders } from "../lib/billing/statement-payment.js";
 import { utcDayStart } from "../lib/billing/metering.js";
 
 export { runMeteringSweep };
@@ -26,6 +27,10 @@ export function startBillingMeteringWorker() {
           const res = await generateStatements(prisma, new Date(today.getTime() - back * 86_400_000));
           if (res.created + res.refreshed + res.skipped > 0) console.log(`[billing-statements] day-${back} created=${res.created} refreshed=${res.refreshed} skipped=${res.skipped}`);
         }
+        // Retry payment links that failed at issue time, then send overdue reminders (reminders only, nothing is blocked).
+        const links = await ensurePaymentLinks(prisma);
+        const reminders = await sendPaymentReminders(prisma);
+        if (links + reminders > 0) console.log(`[billing-pay] links=${links} reminders=${reminders}`);
         return;
       }
       // "nightly" re-sweeps the last 5 UTC days (keep below the 7-day retention minimum); "sweep" is yesterday + today.

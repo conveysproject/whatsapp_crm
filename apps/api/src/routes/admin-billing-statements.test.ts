@@ -3,7 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
 const mockPrisma = {
-  billingStatement: { findMany: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+  billingStatement: { findMany: vi.fn(), create: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
   organization: { findMany: vi.fn() },
   messageUsageDaily: { findMany: vi.fn() },
   billingSetting: { findUnique: vi.fn() },

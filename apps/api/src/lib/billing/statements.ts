@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { planFor, type BillingConfig } from "./bands.js";
 import { loadBillingConfig } from "./settings.js";
+import { cancelStatementPaymentLink } from "./payment-links.js";
 import { cycleEndingOn, type Cycle } from "./cycle.js";
 import { utcDayStart } from "./metering.js";
 
@@ -107,9 +108,18 @@ export async function issueStatements(prisma: PrismaClient, now: Date = new Date
   return { configured: true, issued, noPayment, customQuote };
 }
 
-/** Owner marks an issued statement paid, or voids a draft or issued one. Anything else is refused. */
+/**
+ * Owner marks an issued statement paid, or voids a draft or issued one. Anything else is refused. When it succeeds the
+ * statement's payment link (if any) is cancelled so it can no longer take money; a cancel failure is logged only.
+ */
 export async function setStatementStatus(prisma: PrismaClient, organizationId: string, month: string, to: "paid" | "void", now: Date = new Date()): Promise<boolean> {
   const from: StatementStatus[] = to === "paid" ? ["issued"] : ["draft", "issued"];
-  const res = await prisma.billingStatement.updateMany({ where: { organizationId, month, status: { in: from } }, data: { status: to, updatedAt: now } });
-  return res.count === 1;
+  const link = await prisma.billingStatement.findFirst({ where: { organizationId, month, status: { in: from } }, select: { paymentProvider: true, paymentRef: true } });
+  const res = await prisma.billingStatement.updateMany({ where: { organizationId, month, status: { in: from } }, data: { status: to, ...(to === "paid" ? { paidAt: now } : {}), updatedAt: now } });
+  if (res.count !== 1) return false;
+  if (link?.paymentRef) {
+    await cancelStatementPaymentLink(link.paymentProvider, link.paymentRef).catch((err: unknown) =>
+      console.warn("[billing-pay] could not cancel payment link", err instanceof Error ? err.message.slice(0, 80) : "error"));
+  }
+  return true;
 }

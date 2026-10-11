@@ -3,6 +3,7 @@ import type { PlanTier } from "@prisma/client";
 import { createHmac, timingSafeEqual } from "crypto";
 import { isBillableTier, isPaidAmountSufficient } from "../lib/billing/catalog.js";
 import { activatePlan, isUnknownOrgError } from "../lib/billing/activation.js";
+import { markStatementPaid } from "../lib/billing/statement-payment.js";
 
 function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a, "utf8");
@@ -20,7 +21,13 @@ export const billingGatewayWebhooksRouter: FastifyPluginAsync = async (fastify) 
   }
 
   // ── Razorpay ────────────────────────────────────────────────────────────
-  type RzpEvent = { event?: string; payload?: { payment?: { entity?: { id?: string; amount?: number; currency?: string; notes?: { organizationId?: string; planId?: string; manualSubId?: string } } } } };
+  type RzpEvent = {
+    event?: string;
+    payload?: {
+      payment?: { entity?: { id?: string; amount?: number; currency?: string; notes?: { organizationId?: string; planId?: string; manualSubId?: string } } };
+      payment_link?: { entity?: { id?: string; reference_id?: string; amount_paid?: number; currency?: string; notes?: { statementId?: string; kind?: string } } };
+    };
+  };
   fastify.post("/billing/razorpay/webhook", { config: { public: true } }, async (request, reply) => {
     const signature = request.headers["x-razorpay-signature"];
     const event = parse<RzpEvent>(request.body);
@@ -31,6 +38,20 @@ export const billingGatewayWebhooksRouter: FastifyPluginAsync = async (fastify) 
     const secret = process.env["RAZORPAY_WEBHOOK_SECRET"] ?? "";
     const expected = createHmac("sha256", secret).update(request.body as Buffer).digest("hex");
     if (!secret || !safeEqual(signature, expected)) return reply.status(400).send({ error: "Invalid signature" });
+
+    // Usage statement paid through a payment link (verified signature above). Never touches plans.
+    if (event.event === "payment_link.paid") {
+      const link = event.payload?.payment_link?.entity;
+      const statementId = link?.notes?.statementId ?? link?.reference_id;
+      if (statementId && link?.id) {
+        const result = await markStatementPaid(fastify.prisma, {
+          statementId, provider: "razorpay", linkRef: link.id,
+          currency: link.currency ?? entity?.currency ?? "", amountMinor: link.amount_paid ?? entity?.amount ?? NaN,
+        });
+        if (result === "rejected") fastify.log.warn({ statementId }, "razorpay statement payment rejected (manual review)");
+      }
+      return reply.send({ received: true });
+    }
 
     if (event.event === "payment.captured" && orgId && entity) {
       // Manual subscriptions are activated only by superAdmin approval, never by a webhook.

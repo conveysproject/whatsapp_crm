@@ -49,11 +49,13 @@ export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => 
     const statements = await Promise.resolve()
       .then(() => fastify.prisma.billingStatement.findMany({
         where: { organizationId, status: { in: ["issued", "no_payment", "paid"] } },
-        select: { month: true, messages: true, bandName: true, amountInr: true, amountUsd: true, status: true },
+        select: { month: true, messages: true, bandName: true, amountInr: true, amountUsd: true, status: true, dueAt: true, paymentUrl: true },
         orderBy: { month: "desc" },
         take: 24,
       }))
       .catch(() => []);
+    // The payment link is shown only while a statement is actually due.
+    const statementsOut = statements.map((st) => ({ ...st, paymentUrl: st.status === "issued" ? st.paymentUrl : null }));
     const alerts = alertRows.filter((a) => config.published || a.kind.startsWith("free_")).map((a) => ({ kind: a.kind, at: a.createdAt.toISOString() }));
     const cycleOver = now.getTime() >= cycle.endExclusive.getTime();
     const projectedTotal = cycleOver ? summary.billable : projectMonthTotal(summary.billable, summary.daily.length, cycle.days);
@@ -68,7 +70,7 @@ export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => 
         ...summary,
         plan,
         alerts,
-        statements,
+        statements: statementsOut,
         expected: projectedPlan && projectedPlan.published ? { messages: projectedTotal, band: projectedPlan.current } : null,
       },
     };

@@ -19,7 +19,7 @@ export type Plan =
       cap: { upTo: number; inr: number; usd: number };
     };
 export interface Cycle { key: string; from: string; toExclusive: string; days: number }
-export interface Statement { month: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string }
+export interface Statement { month: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string; dueAt: string | null; paymentUrl: string | null }
 export interface UsageAlert { kind: string; at: string }
 export interface ExpectedBill { messages: number; band: BandView }
 export interface MessageUsage {
@@ -101,7 +101,11 @@ function normalizeStatements(raw: unknown): Statement[] {
   const out: Statement[] = [];
   for (const r of raw) {
     if (isRecord(r) && typeof r["month"] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r["month"]) && typeof r["bandName"] === "string") {
-      out.push({ month: r["month"], messages: num(r["messages"]), bandName: r["bandName"], amountInr: nullableNum(r["amountInr"]), amountUsd: nullableNum(r["amountUsd"]), status: typeof r["status"] === "string" ? r["status"] : "issued" });
+      out.push({ month: r["month"], messages: num(r["messages"]), bandName: r["bandName"], amountInr: nullableNum(r["amountInr"]), amountUsd: nullableNum(r["amountUsd"]), status: typeof r["status"] === "string" ? r["status"] : "issued",
+        dueAt: typeof r["dueAt"] === "string" && !Number.isNaN(Date.parse(r["dueAt"])) ? r["dueAt"] : null,
+        // Only a real https link is ever rendered as a payment link.
+        paymentUrl: typeof r["paymentUrl"] === "string" && /^https:\/\//.test(r["paymentUrl"]) ? r["paymentUrl"] : null,
+      });
     }
   }
   return out;
@@ -251,9 +255,17 @@ export function cycleStartLabel(key: string): string {
   return Number.isNaN(d.getTime()) ? key : `Cycle from ${dayLabel(d)} ${d.getUTCFullYear()}`;
 }
 
-/** Customer-facing wording for a statement status. */
-export function statementStatusLabel(status: string): string {
+/** Customer-facing wording for a statement status. An issued statement past its due date reads "Overdue". */
+export function statementStatusLabel(status: string, dueAt: string | null = null, now: Date = new Date()): string {
   if (status === "paid") return "Paid";
   if (status === "no_payment") return "No payment needed";
+  if (dueAt && new Date(dueAt).getTime() < now.getTime()) return "Overdue";
   return "Due";
+}
+
+/** "8 Nov 2026" for a due date, or "" when there is none. */
+export function dueDateLabel(dueAt: string | null): string {
+  if (!dueAt) return "";
+  const d = new Date(dueAt);
+  return Number.isNaN(d.getTime()) ? "" : `${dayLabel(d)} ${d.getUTCFullYear()}`;
 }
