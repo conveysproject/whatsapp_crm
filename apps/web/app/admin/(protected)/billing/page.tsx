@@ -94,10 +94,11 @@ export default function AdminBillingPage(): JSX.Element {
   };
 
   const [stMonth, setStMonth] = useState(currentMonth());
+  const [stInternal, setStInternal] = useState(false);
   const [stDay, setStDay] = useState(new Date().toISOString().slice(0, 10));
   const statementsQ = useQuery<{ data: StatementsResponse }>({
-    queryKey: ["admin-billing-statements", stMonth],
-    queryFn: () => adminFetch(`/v1/admin/billing/statements?month=${stMonth}`),
+    queryKey: ["admin-billing-statements", stMonth, stInternal],
+    queryFn: () => adminFetch(`/v1/admin/billing/statements?month=${stMonth}${stInternal ? "&includeInternal=true" : ""}`),
     enabled: /^\d{4}-\d{2}$/.test(stMonth),
   });
   const prepare = useMutation({
@@ -251,6 +252,10 @@ export default function AdminBillingPage(): JSX.Element {
         <div className="flex items-center gap-3 mt-4">
           <label className="text-sm text-gray-600 flex items-center gap-2">Cycles started in
             <input type="month" value={stMonth} onChange={(e) => setStMonth(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+          </label>
+          <label className="text-sm text-gray-600 flex items-center gap-2">
+            <input type="checkbox" checked={stInternal} onChange={(e) => setStInternal(e.target.checked)} />
+            Include our own organizations (Conveys)
           </label>
           <label className="text-sm text-gray-600 flex items-center gap-2">Re-run for cycles that ended on
             <input type="date" value={stDay} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setStDay(e.target.value)} className="border rounded px-2 py-1 text-sm" />
