@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeMessageUsage, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
+import { normalizeMessageUsage, normalizePlan, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
 
 describe("normalizeMessageUsage", () => {
   it("maps a full body", () => {
@@ -10,15 +10,16 @@ describe("normalizeMessageUsage", () => {
     expect(u).toEqual({
       month: "2026-10", billable: 9, bySource: { campaign: 4, api: 3, unknown: 2 },
       daily: [{ day: "2026-10-01", billable: 5 }, { day: "2026-10-02", billable: 4 }], updatedAt: "2026-10-10T11:05:00.000Z",
+      plan: null, expected: null,
     });
   });
   it("never throws and degrades to safe defaults", () => {
     expect(normalizeMessageUsage(null)).toBeNull();
     expect(normalizeMessageUsage("x")).toBeNull();
     expect(normalizeMessageUsage([])).toBeNull();
-    expect(normalizeMessageUsage({})).toEqual({ month: "", billable: 0, bySource: {}, daily: [], updatedAt: null });
+    expect(normalizeMessageUsage({})).toEqual({ month: "", billable: 0, bySource: {}, daily: [], updatedAt: null, plan: null, expected: null });
     expect(normalizeMessageUsage({ billable: -5, bySource: { a: "x", b: -1, c: 2 }, daily: [1, null, { day: 5 }, { day: "d", billable: "z" }] }))
-      .toEqual({ month: "", billable: 0, bySource: { c: 2 }, daily: [{ day: "d", billable: 0 }], updatedAt: null });
+      .toEqual({ month: "", billable: 0, bySource: { c: 2 }, daily: [{ day: "d", billable: 0 }], updatedAt: null, plan: null, expected: null });
   });
 });
 
@@ -50,5 +51,22 @@ describe("barHeights", () => {
     expect(barHeights([{ day: "a", billable: 100 }, { day: "b", billable: 50 }, { day: "c", billable: 1 }, { day: "d", billable: 0 }])).toEqual([100, 50, 3, 0]);
     expect(barHeights([])).toEqual([]);
     expect(barHeights([{ day: "a", billable: 0 }])).toEqual([0]);
+  });
+});
+
+describe("plan helpers", () => {
+  it("keeps an unpublished plan to the free allowance only", () => {
+    expect(normalizePlan({ published: false, freeAllowance: 500, bands: [{ name: "Band 1", from: 501, to: 10000, inr: 999, usd: 12 }] })).toEqual({ published: false, freeAllowance: 500 });
+  });
+  it("degrades a malformed published plan to unpublished", () => {
+    expect(normalizePlan({ published: true, freeAllowance: 500 })).toEqual({ published: false, freeAllowance: 500 });
+    expect(normalizePlan("x")).toBeNull();
+  });
+  it("formats prices and ranges", () => {
+    expect(formatInr(999)).toBe("₹999");
+    expect(formatInr(null)).toBe("Custom quote");
+    expect(bandRange({ name: "Free", from: 0, to: 500, inr: 0, usd: 0 })).toBe("up to 500");
+    expect(bandRange({ name: "Band 1", from: 501, to: 10000, inr: 999, usd: 12 })).toBe("501 to 10,000");
+    expect(bandRange({ name: "Above", from: 250001, to: null, inr: null, usd: null })).toBe("over 250,000");
   });
 });

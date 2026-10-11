@@ -4,12 +4,29 @@
  */
 
 export interface DailyCount { day: string; billable: number }
+export interface BandView { name: string; from: number; to: number | null; inr: number | null; usd: number | null }
+/** Prices appear only after the owner publishes them; until then the server sends just the free allowance. */
+export type Plan =
+  | { published: false; freeAllowance: number }
+  | {
+      published: true;
+      freeAllowance: number;
+      bands: BandView[];
+      position: "free" | "band" | "above";
+      current: BandView;
+      remainingToNextBand: number | null;
+      next: BandView | null;
+      cap: { upTo: number; inr: number; usd: number };
+    };
+export interface ExpectedBill { messages: number; band: BandView }
 export interface MessageUsage {
   month: string;
   billable: number;
   bySource: Record<string, number>;
   daily: DailyCount[];
   updatedAt: string | null;
+  plan: Plan | null;
+  expected: ExpectedBill | null;
 }
 
 export const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -34,6 +51,42 @@ function num(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0;
 }
 
+function nullableNum(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null;
+}
+
+function normalizeBand(raw: unknown): BandView | null {
+  if (!isRecord(raw) || typeof raw["name"] !== "string") return null;
+  return { name: raw["name"], from: num(raw["from"]), to: nullableNum(raw["to"]), inr: nullableNum(raw["inr"]), usd: nullableNum(raw["usd"]) };
+}
+
+export function normalizePlan(raw: unknown): Plan | null {
+  if (!isRecord(raw) || typeof raw["published"] !== "boolean") return null;
+  const freeAllowance = num(raw["freeAllowance"]);
+  if (!raw["published"]) return { published: false, freeAllowance };
+  const bands = Array.isArray(raw["bands"]) ? raw["bands"].map(normalizeBand).filter((b): b is BandView => b !== null) : [];
+  const current = normalizeBand(raw["current"]);
+  const cap = isRecord(raw["cap"]) ? raw["cap"] : null;
+  if (bands.length === 0 || !current || !cap) return { published: false, freeAllowance };
+  const position = raw["position"] === "free" || raw["position"] === "above" ? raw["position"] : "band";
+  return {
+    published: true,
+    freeAllowance,
+    bands,
+    position,
+    current,
+    remainingToNextBand: nullableNum(raw["remainingToNextBand"]),
+    next: normalizeBand(raw["next"]),
+    cap: { upTo: num(cap["upTo"]), inr: num(cap["inr"]), usd: num(cap["usd"]) },
+  };
+}
+
+function normalizeExpected(raw: unknown): ExpectedBill | null {
+  if (!isRecord(raw)) return null;
+  const band = normalizeBand(raw["band"]);
+  return band ? { messages: num(raw["messages"]), band } : null;
+}
+
 export function normalizeMessageUsage(raw: unknown): MessageUsage | null {
   if (!isRecord(raw)) return null;
   const bySource: Record<string, number> = {};
@@ -54,6 +107,8 @@ export function normalizeMessageUsage(raw: unknown): MessageUsage | null {
     bySource,
     daily,
     updatedAt: typeof raw["updatedAt"] === "string" ? raw["updatedAt"] : null,
+    plan: normalizePlan(raw["plan"]),
+    expected: normalizeExpected(raw["expected"]),
   };
 }
 
@@ -95,4 +150,17 @@ export async function fetchMessageUsage(getToken: () => Promise<string | null>, 
   } catch {
     return null;
   }
+}
+
+/** "₹999" / "$12"; null (custom quote) becomes "Custom quote". */
+export function formatInr(n: number | null): string {
+  return n === null ? "Custom quote" : `₹${formatCount(n)}`;
+}
+export function formatUsd(n: number | null): string {
+  return n === null ? "Custom quote" : `$${formatCount(n)}`;
+}
+export function bandRange(b: BandView): string {
+  if (b.to === null) return `over ${formatCount(b.from - 1)}`;
+  if (b.from === 0) return `up to ${formatCount(b.to)}`;
+  return `${formatCount(b.from)} to ${formatCount(b.to)}`;
 }

@@ -2,7 +2,10 @@
 
 import type { JSX } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { MessageUsagePanel } from "@/components/billing/MessageUsagePanel";
+import { BillSummary } from "@/components/billing/BillSummary";
+import { BandProgress } from "@/components/billing/BandProgress";
+import { UsageDetails } from "@/components/billing/UsageDetails";
+import { BandTable } from "@/components/billing/BandTable";
 import type { MessageUsage } from "@/lib/message-usage";
 
 interface SubscriptionData {
@@ -44,22 +47,48 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <h1 className="text-xl font-semibold text-gray-900">Billing &amp; Usage</h1>
+    <div className="max-w-5xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">Billing &amp; usage</h1>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          One monthly bill, based on how many messages you send. WhatsApp&apos;s own message charges are billed to you by Meta, with no markup from WBMSG.
+        </p>
+      </div>
 
-      <MessageUsagePanel usage={messageUsage} variant="full" />
+      {messageUsage ? (
+        <>
+          <BillSummary usage={messageUsage} />
+          <BandProgress usage={messageUsage} />
+          <UsageDetails usage={messageUsage} />
+          <BandTable usage={messageUsage} />
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Counts update every hour{messageUsage.updatedAt ? ` (last update ${messageUsage.updatedAt.slice(0, 16).replace("T", " ")} UTC)` : ""}.
+          </p>
+        </>
+      ) : (
+        <section data-testid="message-usage-unavailable" className="rounded-xl border border-gray-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-gray-900">Messages this month</h2>
+          <p className="mt-1 text-sm text-gray-500">Message count is unavailable right now. Please try again in a few minutes.</p>
+        </section>
+      )}
 
-      <section data-testid="how-billing-works" className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="font-medium text-gray-800 mb-2">How billing works</h2>
-        <ul className="list-disc pl-5 space-y-1.5 text-sm text-gray-600">
-          <li>Your WBMSG bill will be based on how many messages you send each month, in simple volume bands, with a monthly maximum.</li>
-          <li>WhatsApp&apos;s own per-message charges are billed to you directly by Meta. WBMSG adds no markup to them.</li>
-          <li>Pricing is not final yet. Nothing is charged for messages today, and we will share the bands before any charge starts.</li>
-        </ul>
-        <p className="mt-3 text-sm text-gray-500">
-          Questions about billing? <a href="mailto:info@conveys.in" className="text-green-700 hover:underline">info@conveys.in</a>
+      <section data-testid="statements" className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">Statements and invoices</h2>
+        <p className="text-sm text-gray-600">
+          No statements yet. Nothing is charged today. When billing starts, each month&apos;s statement and invoice will appear here, and we will tell you well before the first charge.
         </p>
       </section>
+
+      <section data-testid="usage-alerts" className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">Usage alerts</h2>
+        <p className="text-sm text-gray-600">
+          Billing admins will get a heads-up at 50%, 80%, 95% and 100% of the free allowance, and each time the bill moves to a new band, by email and in the app.
+        </p>
+      </section>
+
+      <p className="text-sm text-gray-500">
+        Questions about billing? <a href="mailto:info@conveys.in" className="text-green-700 hover:underline">info@conveys.in</a>
+      </p>
 
       {(subscription?.stripe || subscription?.manual) && (
         <section className="bg-white rounded-xl border border-gray-200 p-6">

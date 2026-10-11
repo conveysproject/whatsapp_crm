@@ -1,5 +1,5 @@
 "use client";
-import { JSX, useState } from "react";
+import { JSX, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
@@ -17,6 +17,8 @@ interface UsageReport {
 type Mode = "follow" | "never" | "always";
 interface Rule { category: string; mode: Mode }
 interface RulesResponse { modes: Mode[]; rules: Rule[] }
+interface BandCfg { upTo: number; inr: number; usd: number }
+interface BillingCfg { published: boolean; freeAllowance: number; bands: BandCfg[] }
 
 const KNOWN_CATEGORIES = ["marketing", "utility", "authentication", "service", "authentication_international", "marketing_lite", "referral_conversion", "unknown"];
 const MODE_HELP: Record<Mode, string> = {
@@ -66,6 +68,23 @@ export default function AdminBillingPage(): JSX.Element {
     },
     onError: () => toast.error("Could not save the rule"),
   });
+
+  const settings = useQuery<{ data: BillingCfg }>({
+    queryKey: ["admin-billing-settings"],
+    queryFn: () => adminFetch("/v1/admin/billing/settings"),
+  });
+  const [cfg, setCfg] = useState<BillingCfg | null>(null);
+  useEffect(() => { if (settings.data) setCfg(settings.data.data); }, [settings.data]);
+  const saveSettings = useMutation({
+    mutationFn: (c: BillingCfg) => adminFetch("/v1/admin/billing/settings", { method: "PUT", body: JSON.stringify(c) }),
+    onSuccess: () => { toast.success("Prices saved"); void qc.invalidateQueries({ queryKey: ["admin-billing-settings"] }); },
+    onError: () => toast.error("Could not save: check that band limits go up and prices do not go down"),
+  });
+  const setBand = (i: number, key: keyof BandCfg, value: string) => {
+    if (!cfg) return;
+    const n = Number(value.replace(/,/g, ""));
+    setCfg({ ...cfg, bands: cfg.bands.map((b, j) => (j === i ? { ...b, [key]: Number.isFinite(n) ? Math.trunc(n) : 0 } : b)) });
+  };
 
   const modeOf = (category: string): Mode => rules.data?.data.rules.find((r) => r.category === category)?.mode ?? "follow";
   const categories = [...new Set([...KNOWN_CATEGORIES, ...(rules.data?.data.rules.map((r) => r.category) ?? [])])];
@@ -127,6 +146,51 @@ export default function AdminBillingPage(): JSX.Element {
               </table>
             </div>
           </>
+        )}
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-gray-900">Prices and bands</h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Customers see no prices, bands or bill until you tick &quot;Show prices to customers&quot;. Nothing is charged by this page; charging is a separate step.
+        </p>
+        {settings.isError && <p className="text-sm text-red-600 mt-3">Could not load prices.</p>}
+        {cfg && (
+          <div className="bg-white border rounded mt-4 p-4 space-y-4 text-sm">
+            <label className="flex items-center gap-3">
+              <span className="w-48 text-gray-600">Free messages a month</span>
+              <input type="number" min={0} value={cfg.freeAllowance} onChange={(e) => setCfg({ ...cfg, freeAllowance: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })} className="border rounded px-2 py-1 w-32" />
+            </label>
+            <table className="w-full">
+              <thead className="text-left text-gray-500"><tr><th className="py-1">Band</th><th>Up to (messages)</th><th>Monthly bill ₹</th><th>Monthly bill $</th></tr></thead>
+              <tbody>
+                {cfg.bands.map((b, i) => (
+                  <tr key={i}>
+                    <td className="py-1">Band {i + 1}{i === cfg.bands.length - 1 ? " (cap)" : ""}</td>
+                    <td><input type="number" value={b.upTo} onChange={(e) => setBand(i, "upTo", e.target.value)} className="border rounded px-2 py-1 w-32" /></td>
+                    <td><input type="number" value={b.inr} onChange={(e) => setBand(i, "inr", e.target.value)} className="border rounded px-2 py-1 w-28" /></td>
+                    <td><input type="number" value={b.usd} onChange={(e) => setBand(i, "usd", e.target.value)} className="border rounded px-2 py-1 w-24" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-gray-500">Above the last band customers see &quot;Custom quote&quot;.</p>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={cfg.published} onChange={(e) => setCfg({ ...cfg, published: e.target.checked })} />
+              <span className={cfg.published ? "font-semibold text-red-700" : ""}>Show prices to customers</span>
+            </label>
+            <button
+              type="button"
+              disabled={saveSettings.isPending}
+              onClick={() => {
+                if (cfg.published && !settings.data?.data.published && !window.confirm("Customers will immediately see these prices on their billing page. Continue?")) return;
+                saveSettings.mutate(cfg);
+              }}
+              className="bg-gray-900 text-white rounded px-4 py-1.5"
+            >
+              Save prices
+            </button>
+          </div>
         )}
       </section>
 

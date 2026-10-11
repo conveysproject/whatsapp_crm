@@ -1,6 +1,6 @@
 import type { JSX } from "react";
 import Link from "next/link";
-import { barHeights, formatCount, monthLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
+import { barHeights, formatCount, formatInr, formatUsd, monthLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
 
 interface Props {
   usage: MessageUsage | null;
@@ -66,6 +66,19 @@ export function MessageUsagePanel({ usage, variant }: Props): JSX.Element {
         <span data-testid="message-usage-total" className="text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-50">{formatCount(usage.billable)}</span>
         <span className="text-sm text-gray-500 dark:text-gray-400">{monthLabel(usage.month)}</span>
       </div>
+
+      {usage.plan?.published ? (
+        <p data-testid="message-usage-plan" className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          {usage.plan.current.name} · bill so far {formatInr(usage.plan.current.inr)} / {formatUsd(usage.plan.current.usd)}
+          {usage.plan.next && usage.plan.remainingToNextBand !== null
+            ? `. ${formatCount(usage.plan.remainingToNextBand)} more messages until ${usage.plan.next.name} (${formatInr(usage.plan.next.inr)}).`
+            : "."}
+        </p>
+      ) : usage.plan ? (
+        <p data-testid="message-usage-free" className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          {formatCount(Math.min(usage.billable, usage.plan.freeAllowance))} of {formatCount(usage.plan.freeAllowance)} free messages used. Nothing is charged today.
+        </p>
+      ) : null}
 
       {usage.daily.length > 0 && (
         <div className="mt-4">
