@@ -535,6 +535,11 @@ describe("POST /v1/templates/sync: Meta statuses", () => {
     await syncWith("SOMETHING_NEW", null);
     expect(mockPrisma.template.create.mock.calls[0]![0].data.status).toBe("pending");
   });
+
+  it("refreshes the category of an existing row from Meta (Meta can re-categorise utility to marketing)", async () => {
+    await syncWith("APPROVED", { id: "t-1", status: "approved" });
+    expect(mockPrisma.template.update.mock.calls[0]![0].data.category).toBe("utility");
+  });
 });
 
 describe("GET /v1/templates/stats", () => {

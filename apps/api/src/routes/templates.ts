@@ -360,9 +360,12 @@ export const templatesRouter: FastifyPluginAsync = async (fastify) => {
       };
 
       if (existing) {
+        // Meta can re-categorise a template after approval (utility -> marketing); an unrecognised value keeps ours.
+        const metaCategory = t.category?.toLowerCase();
+        const categoryVal = metaCategory === "utility" || metaCategory === "marketing" || metaCategory === "authentication" ? metaCategory : undefined;
         await fastify.prisma.template.update({
           where: { id: existing.id },
-          data: metaData,
+          data: { ...metaData, ...(categoryVal ? { category: categoryVal } : {}) },
         });
       } else {
         await fastify.prisma.template.create({
