@@ -5,8 +5,9 @@ import { auth } from "@clerk/nextjs/server";
 import type { CurrentUser } from "@/lib/can";
 import { canViewBilling } from "@/lib/billing-page";
 import { formatCount, normalizeMessageUsage, periodLabel, resetLabel, type MessageUsage } from "@/lib/message-usage";
-import { isWhatsAppConnected, profileRows, statusBadge, usagePercent, type BadgeTone } from "@/lib/account-details";
+import { isWhatsAppConnected, statusBadge, usagePercent, type BadgeTone } from "@/lib/account-details";
 import { CopyButton } from "./CopyButton";
+import { ProfileEditor } from "./ProfileEditor";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -18,6 +19,7 @@ interface OrgData {
   whatsappBusinessAccountId: string | null;
   phoneNumberId: string | null;
   phone: string | null;
+  subCategory: string | null;
   website: string | null;
   location: string | null;
   industry: string | null;
@@ -103,7 +105,6 @@ export default async function AccountDetailsPage(): Promise<JSX.Element> {
 
   const badge = statusBadge(org.status);
   const connected = isWhatsAppConnected(org);
-  const profile = profileRows(org);
   const allowance = usage?.plan?.freeAllowance ?? null;
   const pct = usage && allowance !== null ? usagePercent(usage.billable, allowance) : null;
 
@@ -122,13 +123,10 @@ export default async function AccountDetailsPage(): Promise<JSX.Element> {
         <Row label="Created">{formatDate(org.createdAt)}</Row>
       </Card>
 
-      <Card title="Business profile">
-        {profile.length === 0 ? (
-          <Row label="Details"><span className="text-gray-400">No business details added yet.</span></Row>
-        ) : (
-          profile.map((r) => <Row key={r.label} label={r.label}><span className="break-all">{r.value}</span></Row>)
-        )}
-      </Card>
+      <ProfileEditor
+        profile={{ name: org.name, phone: org.phone, website: org.website, location: org.location, industry: org.industry, subCategory: org.subCategory }}
+        canEdit={user?.role === "admin" || user?.role === "manager"}
+      />
 
       <Card title="WhatsApp connection">
         <Row label="Status">

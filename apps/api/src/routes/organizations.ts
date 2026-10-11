@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { PROFILE_FIELDS, PROFILE_MAX_LENGTH, normalizeProfileField, type ProfileField } from "../lib/org-profile.js";
 
 // Keys managed server-side only — never overwritable via PATCH /organizations/me
 const PROTECTED_SETTINGS_KEYS = new Set([
@@ -54,7 +55,7 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
     return { data: org };
   });
 
-  fastify.patch<{ Body: { name?: string; settings?: Record<string, unknown> } }>(
+  fastify.patch<{ Body: { name?: string; settings?: Record<string, unknown> } & Partial<Record<ProfileField, string | null>> }>(
     "/organizations/me",
     {
       schema: {
@@ -63,6 +64,7 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
           properties: {
             name: { type: "string", minLength: 1, maxLength: 255 },
             settings: { type: "object" },
+            ...Object.fromEntries(PROFILE_FIELDS.map((f) => [f, { type: ["string", "null"], maxLength: PROFILE_MAX_LENGTH[f] }])),
           },
           additionalProperties: false,
         },
@@ -71,6 +73,14 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       if (request.auth.role !== "admin" && request.auth.role !== "manager") {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins and managers can update organization settings" } });
+      }
+
+      const profileUpdate: Partial<Record<ProfileField, string | null>> = {};
+      for (const field of PROFILE_FIELDS) {
+        if (request.body[field] === undefined) continue;
+        const r = normalizeProfileField(field, request.body[field] ?? null);
+        if (!r.ok) return reply.status(400).send({ error: { code: "INVALID_PROFILE", message: r.message } });
+        profileUpdate[field] = r.value;
       }
 
       let settingsUpdate: Prisma.InputJsonValue | undefined;
@@ -102,6 +112,7 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
         data: {
           name: request.body.name,
           settings: settingsUpdate,
+          ...profileUpdate,
         },
         select: ORG_PUBLIC_SELECT,
       });

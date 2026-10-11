@@ -137,3 +137,71 @@ describe("POST /v1/organizations/branding/logo", () => {
     expect(call.select).not.toHaveProperty("stripeId");
   });
 });
+
+describe("PATCH /v1/organizations/me business profile", () => {
+  const build = async (role: string) => {
+    const app = Fastify({ logger: false });
+    const prismaPlugin = (await import("../plugins/prisma.js")).default;
+    const { organizationRoutes } = await import("./organizations.js");
+    await app.register(prismaPlugin);
+    app.addHook("preHandler", async (req) => {
+      req.auth = { userId: "user_123", organizationId: "org_123", role, permissions: {}, teamId: null, teamRole: null } as typeof req.auth;
+    });
+    await app.register(organizationRoutes, { prefix: "/v1" });
+    await app.ready();
+    return app;
+  };
+
+  const lastData = async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    return (vi.mocked(prisma.organization.update).mock.calls.at(-1)![0] as unknown as { where: { id: string }; data: Record<string, unknown> });
+  };
+
+  it("saves profile fields scoped to the caller's org, trimming and normalising", async () => {
+    const app = await build("admin");
+    const res = await app.inject({ method: "PATCH", url: "/v1/organizations/me", payload: { phone: " +91 98765 43210 ", website: "example.com", location: "Mumbai", industry: "Retail", subCategory: "Fashion" } });
+    expect(res.statusCode).toBe(200);
+    const call = await lastData();
+    expect(call.where.id).toBe("org_123");
+    expect(call.data).toMatchObject({ phone: "+91 98765 43210", website: "https://example.com", location: "Mumbai", industry: "Retail", subCategory: "Fashion" });
+    await app.close();
+  });
+
+  it("stores an empty string as null", async () => {
+    const app = await build("manager");
+    const res = await app.inject({ method: "PATCH", url: "/v1/organizations/me", payload: { location: "  ", website: "" } });
+    expect(res.statusCode).toBe(200);
+    expect((await lastData()).data).toMatchObject({ location: null, website: null });
+    await app.close();
+  });
+
+  it.each([
+    ["javascript url", { website: "javascript:alert(1)" }],
+    ["ftp url", { website: "ftp://example.com" }],
+    ["bad phone", { phone: "call me maybe" }],
+    ["too-long industry", { industry: "x".repeat(300) }],
+  ])("rejects %s with 400", async (_n, payload) => {
+    const app = await build("admin");
+    const res = await app.inject({ method: "PATCH", url: "/v1/organizations/me", payload });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("ignores connection-managed and secret fields (stripped, never written)", async () => {
+    const app = await build("admin");
+    const res = await app.inject({ method: "PATCH", url: "/v1/organizations/me", payload: { industry: "Retail", facebookPageId: "123", wabaAccessToken: "x", planTier: "pro" } });
+    expect(res.statusCode).toBe(200);
+    const data = (await lastData()).data;
+    expect(data).not.toHaveProperty("facebookPageId");
+    expect(data).not.toHaveProperty("wabaAccessToken");
+    expect(data).not.toHaveProperty("planTier");
+    await app.close();
+  });
+
+  it("forbids agents", async () => {
+    const app = await build("agent");
+    const res = await app.inject({ method: "PATCH", url: "/v1/organizations/me", payload: { industry: "Retail" } });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+});
