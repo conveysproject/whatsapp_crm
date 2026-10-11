@@ -36,9 +36,11 @@ Goals
 
 Non-goals (later phases): pricing rules, charging, invoices, customer-facing usage screens, `/admin/billing` rate editor, backfilling old messages, per-source billing.
 
-## 4. Billable message definition (assumed defaults, change if wrong)
+## 4. Billable message definition
 
-A message is billable when: `direction = 'outbound'` AND `status IN ('sent','delivered','read')` AND `isSystemMessage = false`. Not billable: inbound, `sending` (in flight), `failed`, `expired`, `aborted`. A message counts on the UTC day of its `sentAt`. Months are UTC calendar months for the shadow period (billing anniversary dates come with charging).
+**Owner decision 2026-10-11, "count like Meta":** a message is counted only if Meta charges for it; if Meta does not charge, the count does not increase. Meta reports this per message in the WhatsApp status webhook `pricing` object (`type`: `regular` = Meta charges; `free_customer_service` and `free_entry_point` = free; plus a `category`). The webhook handler stores `type` and `category` on the message (`messages.meta_pricing_type`, `messages.meta_category`; first report wins), and from the cutover day **2026-10-12 (UTC)** on a message counts only when `meta_pricing_type = 'regular'` (in addition to the status and direction rules below). A message Meta has not reported on, or reported as free, is not counted. This replaces the earlier "every outbound message counts" rule, so chat replies inside Meta's free 24-hour window are not counted. Days before the cutover keep the previous rule and are estimates, because Meta's pricing data was not captured then. Free monthly allowance: 500 messages. Months are UTC. Alerts at 50%, 80%, 95%, 100% and on each new band. Usage is visible only to admins and billing-permission holders.
+
+Previous rule, still applied to days before the cutover: a message is billable when: `direction = 'outbound'` AND `status IN ('sent','delivered','read')` AND `isSystemMessage = false`. Not billable: inbound, `sending` (in flight), `failed`, `expired`, `aborted`. A message counts on the UTC day of its `sentAt`. Months are UTC calendar months for the shadow period (billing anniversary dates come with charging).
 Counts are idempotent aggregates (recomputed, never incremented), so a status change from `sending` to `failed` or a late delivery receipt is corrected automatically on the next run.
 
 ## 5. Design

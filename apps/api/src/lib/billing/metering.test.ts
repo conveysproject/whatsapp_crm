@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
-import { utcDayStart, utcDayKey, parseMonth, percentile, bucketOf, computeDailyUsage, storeDailyUsage } from "./metering.js";
+import { utcDayStart, utcDayKey, parseMonth, percentile, bucketOf, computeDailyUsage, storeDailyUsage, META_PRICING_CUTOVER } from "./metering.js";
 
 describe("day math", () => {
   it("buckets by UTC day with exact boundaries", () => {
@@ -61,6 +61,27 @@ describe("computeDailyUsage", () => {
     expect(text).toContain("direction = 'outbound'");
     expect(text).toContain("status IN ('sent','delivered','read')");
     expect(text).toContain("is_system_message = false");
+    // before the Meta-pricing cutover the previous rule applies: no Meta filter
+    expect(text).not.toContain("meta_pricing_type");
+  });
+  it("from the cutover day on, counts only messages Meta charges for", async () => {
+    queryRaw.mockResolvedValue([]);
+    for (const d of ["2026-10-12T00:00:00.000Z", "2026-10-12T23:59:59.999Z", "2026-11-03T05:00:00Z"]) {
+      queryRaw.mockClear();
+      await computeDailyUsage(prisma, new Date(d));
+      const text = (queryRaw.mock.calls[0]![0] as { sql: string }).sql.replace(/\s+/g, " ");
+      expect(text, d).toContain("AND meta_pricing_type = 'regular'");
+      expect(text, d).toContain("status IN ('sent','delivered','read')");
+      expect(text, d).toContain("direction = 'outbound'");
+    }
+  });
+  it("the day before the cutover still uses the previous rule", async () => {
+    queryRaw.mockResolvedValue([]);
+    await computeDailyUsage(prisma, new Date("2026-10-11T23:59:59.999Z"));
+    expect((queryRaw.mock.calls[0]![0] as { sql: string }).sql).not.toContain("meta_pricing_type");
+  });
+  it("exports the cutover as 2026-10-12 UTC", () => {
+    expect(META_PRICING_CUTOVER.toISOString()).toBe("2026-10-12T00:00:00.000Z");
   });
   it("returns an empty list when there are no messages", async () => {
     queryRaw.mockResolvedValue([]);

@@ -35,14 +35,27 @@ export function bucketOf(n: number): "0-99" | "100-999" | "1k-4.9k" | "5k-24.9k"
 
 export interface DailyOrgCount { organizationId: string; billable: number; bySource: Record<string, number> }
 
-/** Billable outbound messages of one UTC day, per organization and source. Literals (not parameters) for the enum comparisons. */
+/**
+ * From this UTC day on, a message counts only when Meta charges for it (status webhook pricing.type = 'regular'),
+ * as decided by the owner on 2026-10-11 ("count like Meta"). Earlier days keep the previous rule (every sent,
+ * delivered or read outbound message) because Meta's pricing data was not captured then: those counts are estimates.
+ */
+export const META_PRICING_CUTOVER = new Date("2026-10-12T00:00:00.000Z");
+
+/**
+ * Billable outbound messages of one UTC day, per organization and source. Literals (not parameters) for the enum comparisons.
+ * Days on or after META_PRICING_CUTOVER additionally require meta_pricing_type = 'regular' (a message Meta did not
+ * report as billable, or has not reported on yet, is not counted).
+ */
 export async function computeDailyUsage(prisma: PrismaClient, day: Date): Promise<DailyOrgCount[]> {
   const start = utcDayStart(day);
   const end = new Date(start.getTime() + 86_400_000);
+  const metaFilter = start.getTime() >= META_PRICING_CUTOVER.getTime() ? Prisma.sql`AND meta_pricing_type = 'regular'` : Prisma.empty;
   const rows = await prisma.$queryRaw<Array<{ organization_id: string; source: string | null; n: number }>>(
     Prisma.sql`SELECT organization_id, source, count(*)::int AS n FROM messages
       WHERE sent_at >= ${start} AND sent_at < ${end}
         AND direction = 'outbound' AND status IN ('sent','delivered','read') AND is_system_message = false
+        ${metaFilter}
       GROUP BY organization_id, source`,
   );
   const byOrg = new Map<string, DailyOrgCount>();

@@ -93,7 +93,7 @@ export function MessageUsagePanel({ usage, variant }: Props): JSX.Element {
             </ul>
           )}
           <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-            Counted: every message you send that was sent, delivered or read, whoever sent it. Messages you receive and messages that fail are not counted.
+            Counted: the messages Meta charges for. If Meta does not charge for a message, for example a chat reply inside its free 24-hour customer-service window, it is not counted. Messages you receive and messages that fail are never counted. Counts before 12 October 2026 are estimates that include every message sent.
           </p>
         </div>
       )}

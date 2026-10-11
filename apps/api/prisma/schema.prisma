@@ -286,6 +286,8 @@ model Message {
   isForwarded       Boolean          @default(false) @map("is_forwarded")
   templateId        String?          @map("template_id") // which template this outbound template message used (no FK: history survives template deletion)
   source            String?          // api | dashboard | campaign | flow | test (NULL = unknown/legacy)
+  metaPricingType   String?          @map("meta_pricing_type") // from Meta's status webhook pricing.type: regular (billable) | free_customer_service | free_entry_point | free (NULL = no Meta data)
+  metaCategory      String?          @map("meta_category")     // from Meta's pricing.category: marketing | utility | authentication | service | ...
   replyToId         String?          @map("reply_to_id")
   replyTo           Message?         @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies           Message[]        @relation("MessageReplies")

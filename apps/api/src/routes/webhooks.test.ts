@@ -373,3 +373,75 @@ describe("POST /v1/webhooks/whatsapp: Meta delivery FAILURES are recorded (dashb
     expect(arg.data.errorMessage).toBe("131049: Healthy ecosystem — Blocked (ecosystem engagement)");
   });
 });
+
+describe("POST /v1/webhooks/whatsapp: Meta billing signal (pricing) is captured for metering", () => {
+  let app: FastifyInstance;
+  const statusBody = (status: string, extra: Record<string, unknown> = {}) => ({
+    object: "whatsapp_business_account",
+    entry: [{ id: "e1", changes: [{ field: "messages", value: { messaging_product: "whatsapp", metadata: { phone_number_id: "12345" }, statuses: [{ id: "wamid.out", status, timestamp: "1714180800", recipient_id: "919752250586", ...extra }] } }] }],
+  });
+  const send = (status: string, extra: Record<string, unknown> = {}) =>
+    app.inject({ method: "POST", url: "/v1/webhooks/whatsapp", headers: { "x-hub-signature-256": "sha256=mocked" }, payload: statusBody(status, extra) });
+
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    delete process.env["PUBLIC_API_ENABLED"];
+    io.to.mockReturnValue({ emit: io.emit });
+    app = await buildApp();
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-1" });
+    mockPrisma.message.findFirst.mockReset().mockResolvedValue({ id: "m1", status: "sent" });
+    mockPrisma.message.updateMany.mockReset().mockResolvedValue({ count: 1 });
+    mockPrisma.message.update.mockReset().mockResolvedValue({});
+    mockPrisma.campaignRecipient.findFirst.mockResolvedValue(null);
+  });
+  afterEach(async () => { await app.close(); });
+
+  it("stores Meta's type and category on the message, first report only", async () => {
+    expect((await send("sent", { pricing: { billable: true, pricing_model: "PMP", type: "regular", category: "marketing" } })).statusCode).toBe(200);
+    expect(mockPrisma.message.updateMany).toHaveBeenCalledWith({
+      where: { id: "m1", metaPricingType: null },
+      data: { metaPricingType: "regular", metaCategory: "marketing" },
+    });
+  });
+
+  it("records a free message as not billable", async () => {
+    await send("delivered", { pricing: { billable: false, pricing_model: "PMP", type: "free_customer_service", category: "service" } });
+    expect(mockPrisma.message.updateMany).toHaveBeenCalledWith({
+      where: { id: "m1", metaPricingType: null },
+      data: { metaPricingType: "free_customer_service", metaCategory: "service" },
+    });
+  });
+
+  it("captures pricing even when the status does not advance (already read) and still returns 200", async () => {
+    mockPrisma.message.findFirst.mockResolvedValue({ id: "m1", status: "read" });
+    expect((await send("delivered", { pricing: { type: "regular", category: "utility" } })).statusCode).toBe(200);
+    expect(mockPrisma.message.updateMany).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.message.update).not.toHaveBeenCalled();
+  });
+
+  it("does nothing extra when the status carries no pricing", async () => {
+    await send("delivered");
+    expect(mockPrisma.message.updateMany).not.toHaveBeenCalled();
+    expect(mockPrisma.message.update).toHaveBeenCalledWith({ where: { id: "m1" }, data: { status: "delivered" } });
+  });
+
+  it("ignores malformed pricing", async () => {
+    await send("sent", { pricing: "nope" });
+    await send("sent", { pricing: { type: 7 } });
+    expect(mockPrisma.message.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing for a message we do not know", async () => {
+    mockPrisma.message.findFirst.mockResolvedValue(null);
+    expect((await send("sent", { pricing: { type: "regular", category: "marketing" } })).statusCode).toBe(200);
+    expect(mockPrisma.message.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("a failing capture never blocks the status update or the 200", async () => {
+    mockPrisma.message.updateMany.mockRejectedValue(new Error("db down"));
+    const res = await send("delivered", { pricing: { type: "regular", category: "marketing" } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.message.update).toHaveBeenCalledWith({ where: { id: "m1" }, data: { status: "delivered" } });
+  });
+});

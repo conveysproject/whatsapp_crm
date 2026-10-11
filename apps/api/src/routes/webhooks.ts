@@ -9,6 +9,7 @@ import { forwardMetaStatusToApiClient } from "../lib/public-api/callbacks.js";
 import { safeErr } from "../lib/public-api/safe-err.js";
 import { fromMetaTemplateStatus } from "../lib/template-status.js";
 import { normalizeMetaError, formatMetaError, redactForLog, shortWamid } from "../lib/meta-error.js";
+import { extractMetaPricing } from "../lib/billing/meta-pricing.js";
 
 interface WaMediaObject {
   id: string;
@@ -46,6 +47,8 @@ interface WaStatusUpdate {
   recipient_id: string;
   errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string }; href?: string }>;
   conversation?: { id?: string; origin?: { type?: string }; expiration_timestamp?: string | number };
+  /** Meta's billing signal (sent/delivered/read only): { billable, pricing_model, type, category }. Parsed by extractMetaPricing. */
+  pricing?: unknown;
 }
 
 interface WaChangeValue {
@@ -152,6 +155,18 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                 where: { whatsappMessageId: su.id },
                 select: { id: true, status: true },
               });
+              if (msg) {
+                // Billing metering: remember whether Meta charges for this message (first report wins, never overwritten).
+                // Independent of the status ratchet below and never allowed to fail the webhook.
+                const mp = extractMetaPricing(su.pricing);
+                if (mp) {
+                  await fastify.prisma.message
+                    .updateMany({ where: { id: msg.id, metaPricingType: null }, data: { metaPricingType: mp.type, metaCategory: mp.category } })
+                    .catch((err: unknown) => {
+                      fastify.log.error({ error: safeErr(err) }, "meta pricing capture failed");
+                    });
+                }
+              }
               if (msg && process.env["PUBLIC_API_ENABLED"] === "true") {
                 // Public API clients: no-op for messages not sent through the API; never blocks the Meta 200.
                 await forwardMetaStatusToApiClient(fastify.prisma, msg.id, su).catch((err: unknown) => {

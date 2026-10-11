@@ -7,8 +7,8 @@ Model (owner decisions): only messages are billable; every outbound message coun
 
 | Band | Messages per month | Monthly bill (INR) | Monthly bill (USD) | Effective rate at the top of the band |
 |------|--------------------|--------------------|--------------------|----------------------------------------|
-| Free | up to 1,000 | ₹0 | $0 | free |
-| 1 | 1,001 to 10,000 | ₹999 | $12 | about ₹0.10 per message |
+| Free | up to 500 (owner decision 2026-10-11) | ₹0 | $0 | free |
+| 1 | 501 to 10,000 | ₹999 | $12 | about ₹0.10 per message |
 | 2 | 10,001 to 50,000 | ₹2,999 | $36 | about ₹0.06 per message |
 | 3 | 50,001 to 250,000 | ₹7,999 | $96 | about ₹0.03 per message |
 | Above | over 250,000 | custom quote | custom quote | decide: hard cap at ₹7,999 or custom |
