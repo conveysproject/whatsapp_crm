@@ -4,7 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 
 const mockPrisma = {
   billingStatement: { findMany: vi.fn(), create: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
-  organization: { findMany: vi.fn() },
+  organization: { findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
   messageUsageDaily: { findMany: vi.fn() },
   billingSetting: { findUnique: vi.fn() },
 };
@@ -26,6 +26,8 @@ describe("admin billing statements", () => {
     mockPrisma.billingStatement.findMany.mockReset().mockResolvedValue([]);
     mockPrisma.billingStatement.create.mockReset();
     mockPrisma.organization.findMany.mockReset().mockResolvedValue([]);
+    mockPrisma.organization.findUnique.mockReset();
+    mockPrisma.organization.update.mockReset();
     mockPrisma.messageUsageDaily.findMany.mockReset().mockResolvedValue([]);
     mockPrisma.billingSetting.findUnique.mockReset().mockResolvedValue(null);
   });
@@ -95,5 +97,23 @@ describe("admin billing statements", () => {
     expect((await app.inject({ method: "POST", url: "/v1/admin/billing/statements/status", payload: { organizationId: "a", month: "2026-10-14", status: "paid" } })).statusCode).toBe(200);
     mockPrisma.billingStatement.updateMany.mockResolvedValue({ count: 0 });
     expect((await app.inject({ method: "POST", url: "/v1/admin/billing/statements/status", payload: { organizationId: "a", month: "2026-10-14", status: "paid" } })).statusCode).toBe(409);
+  });
+  it("sets an organization's billing currency, keeping its other settings, and is super-admin only", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({ settings: { theme: "dark" } });
+    app = await buildAs("admin");
+    expect((await app.inject({ method: "PUT", url: "/v1/admin/billing/org-currency", payload: { organizationId: "o1", currency: "INR" } })).statusCode).toBe(403);
+    await app.close();
+    app = await buildAs("superAdmin");
+    for (const body of [{}, { organizationId: "o1", currency: "EUR" }, { organizationId: "", currency: "INR" }]) {
+      expect((await app.inject({ method: "PUT", url: "/v1/admin/billing/org-currency", payload: body })).statusCode, JSON.stringify(body)).toBe(400);
+    }
+    expect((await app.inject({ method: "PUT", url: "/v1/admin/billing/org-currency", payload: { organizationId: "o1", currency: "INR" } })).statusCode).toBe(200);
+    expect(mockPrisma.organization.update).toHaveBeenCalledWith({ where: { id: "o1" }, data: { settings: { theme: "dark", billingCurrency: "INR" } } });
+  });
+  it("returns 404 for an unknown organization", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue(null);
+    app = await buildAs("superAdmin");
+    expect((await app.inject({ method: "PUT", url: "/v1/admin/billing/org-currency", payload: { organizationId: "nope", currency: "USD" } })).statusCode).toBe(404);
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
   });
 });

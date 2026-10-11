@@ -10,6 +10,27 @@ export function currencyForPhone(phone: string | null | undefined): StatementCur
   return digits.length === 12 && digits.startsWith("91") ? "INR" : "USD";
 }
 
+export interface OrgCurrencyHints {
+  settings: unknown;
+  location: string | null | undefined;
+  phone: string | null | undefined;
+}
+
+/**
+ * The currency a customer is billed in: the owner's explicit choice (settings.billingCurrency) wins; otherwise a location
+ * that mentions India, then an Indian phone number, then USD. Reliable only through the explicit choice, which the owner
+ * can set per organization in Admin > Billing.
+ */
+export function currencyForOrg(org: OrgCurrencyHints): StatementCurrency {
+  const s = org.settings;
+  if (s && typeof s === "object" && !Array.isArray(s)) {
+    const v = (s as Record<string, unknown>)["billingCurrency"];
+    if (v === "INR" || v === "USD") return v;
+  }
+  if (typeof org.location === "string" && /\bindia\b/i.test(org.location)) return "INR";
+  return currencyForPhone(org.phone);
+}
+
 export interface PaymentLinkInput {
   statementId: string;
   organizationId: string;

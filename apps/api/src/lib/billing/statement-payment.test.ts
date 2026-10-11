@@ -75,8 +75,8 @@ describe("ensurePaymentLinks", () => {
     createLink.mockResolvedValue({ provider: "razorpay", url: "https://rzp.io/l/abc", ref: "plink_1" });
   });
 
-  it("creates an INR link for an Indian organization, sets a 7-day due date, stores the link and emails admins", async () => {
-    orgFindUnique.mockResolvedValue({ name: "Acme", phone: "+91 98765 43210" });
+  it("creates an INR link for an organization located in India, sets a 7-day due date, stores the link and emails admins", async () => {
+    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Pune, India", settings: {} });
     expect(await ensurePaymentLinks(prisma, now)).toBe(1);
     expect(createLink).toHaveBeenCalledWith(expect.objectContaining({ statementId: "s1", currency: "INR", amountMinor: 50000, customerEmail: "a@x.com" }));
     expect(updateMany).toHaveBeenCalledWith({
@@ -86,8 +86,14 @@ describe("ensurePaymentLinks", () => {
     expect(sendMail).toHaveBeenCalledTimes(1);
     expect(sendMail.mock.calls[0]![0]).toMatchObject({ to: ["a@x.com"], subject: expect.stringContaining("₹500.00") });
   });
-  it("uses USD for a non-Indian or unknown number", async () => {
-    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null });
+  it("an explicit billing currency set by the owner beats location and phone", async () => {
+    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Pune, India", settings: { billingCurrency: "USD" } });
+    createLink.mockResolvedValue({ provider: "stripe", url: "https://buy.stripe.com/x", ref: "plink_s" });
+    await ensurePaymentLinks(prisma, now);
+    expect(createLink).toHaveBeenCalledWith(expect.objectContaining({ currency: "USD" }));
+  });
+  it("uses USD for a non-Indian or unknown location", async () => {
+    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Dubai", settings: {} });
     createLink.mockResolvedValue({ provider: "stripe", url: "https://buy.stripe.com/x", ref: "plink_s" });
     await ensurePaymentLinks(prisma, now);
     expect(createLink).toHaveBeenCalledWith(expect.objectContaining({ currency: "USD", amountMinor: 500 }));

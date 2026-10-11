@@ -4,6 +4,7 @@ import { parseMonth } from "../lib/billing/metering.js";
 import { parseCycleKey } from "../lib/billing/cycle.js";
 import { generateStatements, issueStatements, setStatementStatus } from "../lib/billing/statements.js";
 import { ensurePaymentLinks } from "../lib/billing/statement-payment.js";
+import { currencyForOrg } from "../lib/billing/payment-links.js";
 
 const FORBIDDEN = { error: { code: "FORBIDDEN", message: "Super admin access required" } };
 
@@ -26,12 +27,13 @@ export const adminBillingStatementsRouter: FastifyPluginAsync = async (fastify) 
       take: 1000,
     });
     const orgs = rows.length > 0
-      ? await fastify.prisma.organization.findMany({ where: { id: { in: rows.map((r) => r.organizationId) } }, select: { id: true, name: true } })
+      ? await fastify.prisma.organization.findMany({ where: { id: { in: rows.map((r) => r.organizationId) } }, select: { id: true, name: true, phone: true, location: true, settings: true } })
       : [];
     const nameById = new Map(orgs.map((o) => [o.id, o.name]));
+    const currencyById = new Map(orgs.map((o) => [o.id, currencyForOrg(o)]));
     const includeInternal = request.query.includeInternal === "true";
     const data = rows
-      .map((r) => ({ ...r, name: nameById.get(r.organizationId) ?? "(deleted organization)" }))
+      .map((r) => ({ ...r, name: nameById.get(r.organizationId) ?? "(deleted organization)", payCurrency: currencyById.get(r.organizationId) ?? "USD" }))
       .filter((r) => includeInternal || !INTERNAL_ORG_NAMES.includes(r.name));
     const totalInr = data.reduce((s, r) => s + (r.amountInr ?? 0), 0);
     const totalUsd = data.reduce((s, r) => s + (r.amountUsd ?? 0), 0);
@@ -75,5 +77,19 @@ export const adminBillingStatementsRouter: FastifyPluginAsync = async (fastify) 
     const ok = await setStatementStatus(fastify.prisma, organizationId, month, status);
     if (!ok) return reply.status(409).send({ error: { code: "INVALID_TRANSITION", message: "Only an issued statement can be marked paid; only a draft or issued one can be voided" } });
     return reply.send({ data: { organizationId, month, status } });
+  });
+
+  // Explicit billing currency for one organization (INR = Razorpay link, USD = Stripe link). Affects links created afterwards.
+  fastify.put<{ Body: { organizationId?: unknown; currency?: unknown } }>("/admin/billing/org-currency", async (request, reply) => {
+    if (request.auth.role !== "superAdmin") return reply.status(403).send(FORBIDDEN);
+    const { organizationId, currency } = request.body ?? {};
+    if (typeof organizationId !== "string" || organizationId.length === 0 || (currency !== "INR" && currency !== "USD")) {
+      return reply.status(400).send({ error: { code: "INVALID_REQUEST", message: "organizationId and currency (INR or USD) are required" } });
+    }
+    const org = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { settings: true } });
+    if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
+    const current = org.settings && typeof org.settings === "object" && !Array.isArray(org.settings) ? (org.settings as Record<string, unknown>) : {};
+    await fastify.prisma.organization.update({ where: { id: organizationId }, data: { settings: { ...current, billingCurrency: currency } as never } });
+    return reply.send({ data: { organizationId, currency } });
   });
 };

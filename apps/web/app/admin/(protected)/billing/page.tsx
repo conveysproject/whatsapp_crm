@@ -18,7 +18,7 @@ type Mode = "follow" | "never" | "always";
 interface Rule { category: string; mode: Mode }
 interface RulesResponse { modes: Mode[]; rules: Rule[] }
 interface BandCfg { upTo: number; inr: number; usd: number }
-interface StatementRow { organizationId: string; name: string; month: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string }
+interface StatementRow { organizationId: string; name: string; month: string; payCurrency: "INR" | "USD"; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string }
 interface StatementsResponse { month: string; totals: { statements: number; inr: number; usd: number }; statements: StatementRow[] }
 interface BillingCfg { published: boolean; freeAllowance: number; alertsEnabled: boolean; chargingStartDate: string | null; bands: BandCfg[] }
 
@@ -113,6 +113,12 @@ export default function AdminBillingPage(): JSX.Element {
       void qc.invalidateQueries({ queryKey: ["admin-billing-statements"] });
     },
     onError: () => toast.error("Could not issue (set a charging start date in the prices first)"),
+  });
+  const setCurrency = useMutation({
+    mutationFn: (v: { organizationId: string; currency: "INR" | "USD" }) =>
+      adminFetch("/v1/admin/billing/org-currency", { method: "PUT", body: JSON.stringify(v) }),
+    onSuccess: () => { toast.success("Billing currency saved. It applies to links created from now on."); void qc.invalidateQueries({ queryKey: ["admin-billing-statements"] }); },
+    onError: () => toast.error("Could not save the billing currency"),
   });
   const setStatus = useMutation({
     mutationFn: (v: { organizationId: string; month: string; status: "paid" | "void" }) =>
@@ -263,12 +269,24 @@ export default function AdminBillingPage(): JSX.Element {
           <div className="overflow-x-auto bg-white border rounded mt-4">
             <p className="p-3 text-sm text-gray-600">{statementsQ.data.data.totals.statements} statements, total ₹{statementsQ.data.data.totals.inr.toLocaleString()} / ${statementsQ.data.data.totals.usd.toLocaleString()} if every one were charged</p>
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-gray-500"><tr><th className="p-2">Organization</th><th className="p-2">Cycle from</th><th className="p-2 text-right">Messages</th><th className="p-2">Band</th><th className="p-2">₹ / $</th><th className="p-2">Status</th><th className="p-2"></th></tr></thead>
+              <thead className="bg-gray-50 text-left text-gray-500"><tr><th className="p-2">Organization</th><th className="p-2">Cycle from</th><th className="p-2">Pays in</th><th className="p-2 text-right">Messages</th><th className="p-2">Band</th><th className="p-2">₹ / $</th><th className="p-2">Status</th><th className="p-2"></th></tr></thead>
               <tbody>
                 {statementsQ.data.data.statements.map((r) => (
                   <tr key={`${r.organizationId}-${r.month}`} className="border-t">
                     <td className="p-2">{r.name}</td>
                     <td className="p-2">{r.month}</td>
+                    <td className="p-2">
+                      <select
+                        aria-label={`Billing currency for ${r.name}`}
+                        value={r.payCurrency}
+                        disabled={r.status !== "draft" || setCurrency.isPending}
+                        onChange={(e) => setCurrency.mutate({ organizationId: r.organizationId, currency: e.target.value as "INR" | "USD" })}
+                        className="border rounded px-1 py-0.5 text-xs"
+                      >
+                        <option value="INR">₹ INR (Razorpay)</option>
+                        <option value="USD">$ USD (Stripe)</option>
+                      </select>
+                    </td>
                     <td className="p-2 text-right">{r.messages.toLocaleString()}</td>
                     <td className="p-2">{r.bandName}</td>
                     <td className="p-2">{r.amountInr === null ? "Custom quote" : `₹${r.amountInr.toLocaleString()} / $${(r.amountUsd ?? 0).toLocaleString()}`}</td>
@@ -283,7 +301,7 @@ export default function AdminBillingPage(): JSX.Element {
                     </td>
                   </tr>
                 ))}
-                {statementsQ.data.data.statements.length === 0 && <tr><td colSpan={7} className="p-4 text-center text-gray-500">No statements for cycles that started in this month.</td></tr>}
+                {statementsQ.data.data.statements.length === 0 && <tr><td colSpan={8} className="p-4 text-center text-gray-500">No statements for cycles that started in this month.</td></tr>}
               </tbody>
             </table>
           </div>

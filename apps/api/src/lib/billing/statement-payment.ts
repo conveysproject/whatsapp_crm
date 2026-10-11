@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { sendMail } from "../mail.js";
-import { createStatementPaymentLink, currencyForPhone, type PaymentProvider } from "./payment-links.js";
+import { createStatementPaymentLink, currencyForOrg, type PaymentProvider } from "./payment-links.js";
 
 export const DUE_DAYS = 7;
 /** Reminder schedule: days after the due date. Reminders only: nothing is ever blocked or limited. */
@@ -38,9 +38,9 @@ export async function ensurePaymentLinks(prisma: PrismaClient, now: Date = new D
   let created = 0;
   for (const st of pending) {
     try {
-      const org = await prisma.organization.findUnique({ where: { id: st.organizationId }, select: { name: true, phone: true } });
+      const org = await prisma.organization.findUnique({ where: { id: st.organizationId }, select: { name: true, phone: true, location: true, settings: true } });
       if (!org) continue;
-      const currency = currencyForPhone(org.phone);
+      const currency = currencyForOrg(org);
       const major = currency === "INR" ? st.amountInr : st.amountUsd;
       if (!major || major <= 0) continue;
       const amountMinor = major * 100;
