@@ -191,7 +191,7 @@ export default function LandingPage(): JSX.Element {
 
         /* FOOTER */
         .ft { padding: 4rem 0 2rem; border-top: 1px solid var(--bd); }
-        .ft-g { display: grid; grid-template-columns: 2.5fr 1fr 1fr 1fr; gap: 3rem; margin-bottom: 3rem; }
+        .ft-g { display: grid; grid-template-columns: 2.5fr 1fr 1fr 1.4fr; gap: 2.5rem; margin-bottom: 3rem; }
         .ft-tag { font-size: .83rem; color: var(--t2); line-height: 1.65; max-width: 255px; margin-bottom: .7rem; }
         .ft-made { font-size: .73rem; color: var(--t3); }
         .ft-ch { font-size: .67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--t3); margin-bottom: 1rem; }
@@ -481,7 +481,7 @@ export default function LandingPage(): JSX.Element {
             </div>
             {[
               {h:"Product",ls:["Features","Pricing","Automation","Analytics","Changelog"]},
-              {h:"Company",ls:["About","Blog","Careers","Contact"]},
+              {h:"Company",ls:["About","Blog","Careers"]},
             ].map(col => (
               <div key={col.h}>
                 <div className="ft-ch">{col.h}</div>
@@ -490,6 +490,16 @@ export default function LandingPage(): JSX.Element {
                 </ul>
               </div>
             ))}
+            <div>
+              <div className="ft-ch">Legal</div>
+              <ul className="ft-ls">
+                <li><Link href="/terms" className="ft-lk">Terms and Conditions</Link></li>
+                <li><Link href="/privacy" className="ft-lk">Privacy Policy</Link></li>
+                <li><Link href="/refund-policy" className="ft-lk">Refund Policy</Link></li>
+                <li><Link href="/cancellation-policy" className="ft-lk">Cancellation Policy</Link></li>
+                <li><Link href="/contact" className="ft-lk">Contact Us</Link></li>
+              </ul>
+            </div>
           </div>
           <div className="ft-bot">
             <span>© 2026 WBMSG. All rights reserved.</span>
