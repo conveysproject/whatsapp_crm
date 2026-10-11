@@ -1705,6 +1705,7 @@ model BillingStatement {
   issuedAt       DateTime? @map("issued_at")
   currency        String?
   amountMinor     Int?      @map("amount_minor")
+  taxMinor        Int?      @map("tax_minor")
   dueAt           DateTime? @map("due_at")
   paymentUrl      String?   @map("payment_url")
   paymentProvider String?   @map("payment_provider")

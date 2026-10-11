@@ -6,7 +6,8 @@ import { BillSummary } from "@/components/billing/BillSummary";
 import { BandProgress } from "@/components/billing/BandProgress";
 import { UsageDetails } from "@/components/billing/UsageDetails";
 import { BandTable } from "@/components/billing/BandTable";
-import { alertText, formatCount, formatInr, formatUsd, cycleStartLabel, dueDateLabel, statementStatusLabel, type MessageUsage } from "@/lib/message-usage";
+import { BillingDetailsCard } from "@/components/billing/BillingDetailsCard";
+import { alertText, formatCount, formatInr, formatUsd, formatMinor, cycleStartLabel, dueDateLabel, statementStatusLabel, type MessageUsage } from "@/lib/message-usage";
 
 interface SubscriptionData {
   planTier: string;
@@ -95,7 +96,10 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
                     <td className="py-2.5 pr-3">{cycleStartLabel(st.month)}</td>
                     <td className="py-2.5 pr-3">{formatCount(st.messages)}</td>
                     <td className="py-2.5 pr-3">{st.bandName}</td>
-                    <td className="py-2.5 pr-3">{formatInr(st.amountInr)} / {formatUsd(st.amountUsd)}</td>
+                    <td className="py-2.5 pr-3">
+                      {st.totalMinor !== null ? formatMinor(st.currency, st.totalMinor) : `${formatInr(st.amountInr)} / ${formatUsd(st.amountUsd)}`}
+                      {st.taxMinor !== null && st.taxMinor > 0 ? <span className="block text-xs text-gray-500">incl. GST {formatMinor(st.currency, st.taxMinor)}</span> : null}
+                    </td>
                     <td className="py-2.5">
                       <span className={statementStatusLabel(st.status, st.dueAt) === "Overdue" ? "font-semibold text-red-700" : ""}>{statementStatusLabel(st.status, st.dueAt)}</span>
                       {st.status === "issued" && st.dueAt ? <span className="block text-xs text-gray-500">Due {dueDateLabel(st.dueAt)}</span> : null}
@@ -114,6 +118,10 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
           </p>
         )}
       </section>
+
+      <div className="flex flex-wrap gap-4">
+        <BillingDetailsCard />
+      </div>
 
       <section data-testid="usage-alerts" className="bg-white rounded-xl border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-2">Usage alerts</h2>

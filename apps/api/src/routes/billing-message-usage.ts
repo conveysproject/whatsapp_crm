@@ -49,7 +49,7 @@ export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => 
     const statements = await Promise.resolve()
       .then(() => fastify.prisma.billingStatement.findMany({
         where: { organizationId, status: { in: ["issued", "no_payment", "paid"] } },
-        select: { month: true, messages: true, bandName: true, amountInr: true, amountUsd: true, status: true, dueAt: true, paymentUrl: true },
+        select: { month: true, messages: true, bandName: true, amountInr: true, amountUsd: true, status: true, dueAt: true, paymentUrl: true, currency: true, amountMinor: true, taxMinor: true },
         orderBy: { month: "desc" },
         take: 24,
       }))

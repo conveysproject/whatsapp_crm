@@ -45,9 +45,22 @@ describe("planFor", () => {
 });
 
 describe("parseBillingConfig", () => {
-  const good = { published: false, freeAllowance: 500, alertsEnabled: false, chargingStartDate: null, bands: [{ upTo: 1000, inr: 10, usd: 1 }, { upTo: 5000, inr: 20, usd: 2 }] };
+  const good = { published: false, freeAllowance: 500, alertsEnabled: false, chargingStartDate: null, gstRatePercent: 0, seller: { legalName: "Conveys Information Technology", address: "", gstin: "" }, bands: [{ upTo: 1000, inr: 10, usd: 1 }, { upTo: 5000, inr: 20, usd: 2 }] };
   it("accepts a valid config", () => {
     expect(parseBillingConfig(good)).toEqual({ ok: true, config: good });
+  });
+  it("accepts a GST rate and seller details, upper-casing the seller GST number", () => {
+    const r = parseBillingConfig({ ...good, gstRatePercent: 18, seller: { legalName: "Conveys IT", address: "Pune", gstin: "27aapfu0939f1zv" } });
+    expect(r.ok && r.config.gstRatePercent).toBe(18);
+    expect(r.ok && r.config.seller).toEqual({ legalName: "Conveys IT", address: "Pune", gstin: "27AAPFU0939F1ZV" });
+  });
+  it("defaults the GST rate to zero and the seller to the company name when absent", () => {
+    const rest: Record<string, unknown> = { ...good };
+    delete rest["gstRatePercent"];
+    delete rest["seller"];
+    const r = parseBillingConfig(rest);
+    expect(r.ok && r.config.gstRatePercent).toBe(0);
+    expect(r.ok && r.config.seller.legalName).toBe("Conveys Information Technology");
   });
   it("accepts a real charging start date", () => {
     const r = parseBillingConfig({ ...good, chargingStartDate: "2026-11-01" });
@@ -65,6 +78,8 @@ describe("parseBillingConfig", () => {
       { ...good, chargingStartDate: "2026-02-30" },
       { ...good, chargingStartDate: "soon" },
       { ...good, chargingStartDate: 20261101 },
+      { ...good, gstRatePercent: -1 }, { ...good, gstRatePercent: 18.5 }, { ...good, gstRatePercent: "18" }, { ...good, gstRatePercent: 41 },
+      { ...good, seller: { legalName: "A", address: "B", gstin: "BAD" } }, { ...good, seller: "x" }, { ...good, seller: { legalName: 5 } },
     ];
     for (const b of bad) expect(parseBillingConfig(b).ok, JSON.stringify(b)).toBe(false);
   });

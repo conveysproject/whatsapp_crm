@@ -1,6 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
 import { sendMail } from "../mail.js";
 import { createStatementPaymentLink, currencyForOrg, type PaymentProvider } from "./payment-links.js";
+import { readBillingDetails, statementRecipients } from "./billing-details.js";
+import { loadBillingConfig } from "./settings.js";
 
 export const DUE_DAYS = 7;
 /** Reminder schedule: days after the due date. Reminders only: nothing is ever blocked or limited. */
@@ -8,7 +10,7 @@ export const REMINDER_OFFSETS_DAYS = [3, 7, 14] as const;
 
 const DAY = 86_400_000;
 
-async function billingAdminEmails(prisma: PrismaClient, organizationId: string): Promise<string[]> {
+async function adminEmails(prisma: PrismaClient, organizationId: string): Promise<string[]> {
   const admins = await prisma.user.findMany({ where: { organizationId, role: "admin", isActive: true, deletedAt: null }, select: { email: true } });
   return admins.map((a) => a.email).filter(Boolean);
 }
@@ -35,6 +37,7 @@ export async function ensurePaymentLinks(prisma: PrismaClient, now: Date = new D
     select: { id: true, organizationId: true, month: true, messages: true, bandName: true, amountInr: true, amountUsd: true },
     take: 500,
   });
+  const config = await loadBillingConfig(prisma);
   let created = 0;
   for (const st of pending) {
     try {
@@ -43,14 +46,17 @@ export async function ensurePaymentLinks(prisma: PrismaClient, now: Date = new D
       const currency = currencyForOrg(org);
       const major = currency === "INR" ? st.amountInr : st.amountUsd;
       if (!major || major <= 0) continue;
-      const amountMinor = major * 100;
+      // GST applies to INR (domestic) statements only, and only when the owner has set a rate.
+      const baseMinor = major * 100;
+      const taxMinor = currency === "INR" && config.gstRatePercent > 0 ? Math.round((baseMinor * config.gstRatePercent) / 100) : null;
+      const amountMinor = baseMinor + (taxMinor ?? 0);
       const dueAt = new Date(now.getTime() + DUE_DAYS * DAY);
-      const emails = await billingAdminEmails(prisma, st.organizationId);
+      const emails = statementRecipients(readBillingDetails(org.settings), await adminEmails(prisma, st.organizationId));
       const description = `WBMSG messaging fee, billing period from ${st.month}`;
       const link = await createStatementPaymentLink({ statementId: st.id, organizationId: st.organizationId, currency, amountMinor, description, dueAt, customerEmail: emails[0] ?? null });
       const res = await prisma.billingStatement.updateMany({
         where: { id: st.id, status: "issued", paymentUrl: null },
-        data: { currency, amountMinor, dueAt, paymentUrl: link.url, paymentProvider: link.provider, paymentRef: link.ref, updatedAt: now },
+        data: { currency, amountMinor, taxMinor, dueAt, paymentUrl: link.url, paymentProvider: link.provider, paymentRef: link.ref, updatedAt: now },
       });
       if (res.count !== 1) continue;
       created++;
@@ -89,7 +95,8 @@ export async function sendPaymentReminders(prisma: PrismaClient, now: Date = new
     const claimed = await prisma.billingStatement.updateMany({ where: { id: st.id, status: "issued", remindersSent: st.remindersSent }, data: { remindersSent: st.remindersSent + 1 } });
     if (claimed.count !== 1) continue;
     try {
-      const emails = await billingAdminEmails(prisma, st.organizationId);
+      const org = await prisma.organization.findUnique({ where: { id: st.organizationId }, select: { settings: true } });
+      const emails = statementRecipients(readBillingDetails(org?.settings), await adminEmails(prisma, st.organizationId));
       if (emails.length === 0) continue;
       await sendMail({
         to: emails,

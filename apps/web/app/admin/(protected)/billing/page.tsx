@@ -20,7 +20,7 @@ interface RulesResponse { modes: Mode[]; rules: Rule[] }
 interface BandCfg { upTo: number; inr: number; usd: number }
 interface StatementRow { organizationId: string; name: string; month: string; payCurrency: "INR" | "USD"; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string; hasLink: boolean }
 interface StatementsResponse { month: string; totals: { statements: number; inr: number; usd: number }; statements: StatementRow[] }
-interface BillingCfg { published: boolean; freeAllowance: number; alertsEnabled: boolean; chargingStartDate: string | null; bands: BandCfg[] }
+interface BillingCfg { published: boolean; freeAllowance: number; alertsEnabled: boolean; chargingStartDate: string | null; gstRatePercent: number; seller: { legalName: string; address: string; gstin: string }; bands: BandCfg[] }
 
 const KNOWN_CATEGORIES = ["marketing", "utility", "authentication", "service", "authentication_international", "marketing_lite", "referral_conversion", "unknown"];
 const MODE_HELP: Record<Mode, string> = {
@@ -226,6 +226,17 @@ export default function AdminBillingPage(): JSX.Element {
               <input type="date" value={cfg.chargingStartDate ?? ""} onChange={(e) => setCfg({ ...cfg, chargingStartDate: e.target.value || null })} className="border rounded px-2 py-1" />
               <span className="text-gray-500">Empty = nothing can be issued or charged.</span>
             </label>
+            <label className="flex items-center gap-3">
+              <span className="w-48 text-gray-600">GST % added to INR statements</span>
+              <input type="number" min={0} max={40} value={cfg.gstRatePercent} onChange={(e) => setCfg({ ...cfg, gstRatePercent: Math.min(40, Math.max(0, Math.trunc(Number(e.target.value) || 0))) })} className="border rounded px-2 py-1 w-24" />
+              <span className="text-gray-500">0 = no tax line. Dollar statements are never taxed.</span>
+            </label>
+            <fieldset className="space-y-2">
+              <legend className="text-gray-600">Seller shown on statements and PDFs</legend>
+              <input aria-label="Seller legal name" placeholder="Legal name" value={cfg.seller.legalName} onChange={(e) => setCfg({ ...cfg, seller: { ...cfg.seller, legalName: e.target.value } })} className="border rounded px-2 py-1 w-full max-w-md block" />
+              <input aria-label="Seller GST number" placeholder="Seller GST number (optional)" value={cfg.seller.gstin} onChange={(e) => setCfg({ ...cfg, seller: { ...cfg.seller, gstin: e.target.value.toUpperCase() } })} className="border rounded px-2 py-1 w-full max-w-md block font-mono" />
+              <textarea aria-label="Seller address" placeholder="Seller address" rows={2} value={cfg.seller.address} onChange={(e) => setCfg({ ...cfg, seller: { ...cfg.seller, address: e.target.value } })} className="border rounded px-2 py-1 w-full max-w-md block" />
+            </fieldset>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={cfg.alertsEnabled} onChange={(e) => setCfg({ ...cfg, alertsEnabled: e.target.checked })} />
               <span>Email usage alerts to customers&apos; billing admins (50%, 80%, 95%, 100% of the free messages, new bands)</span>

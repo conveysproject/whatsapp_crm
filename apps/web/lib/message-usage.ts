@@ -19,7 +19,7 @@ export type Plan =
       cap: { upTo: number; inr: number; usd: number };
     };
 export interface Cycle { key: string; from: string; toExclusive: string; days: number }
-export interface Statement { month: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string; dueAt: string | null; paymentUrl: string | null }
+export interface Statement { month: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string; dueAt: string | null; paymentUrl: string | null; currency: string | null; totalMinor: number | null; taxMinor: number | null }
 export interface UsageAlert { kind: string; at: string }
 export interface ExpectedBill { messages: number; band: BandView }
 export interface MessageUsage {
@@ -102,6 +102,9 @@ function normalizeStatements(raw: unknown): Statement[] {
   for (const r of raw) {
     if (isRecord(r) && typeof r["month"] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r["month"]) && typeof r["bandName"] === "string") {
       out.push({ month: r["month"], messages: num(r["messages"]), bandName: r["bandName"], amountInr: nullableNum(r["amountInr"]), amountUsd: nullableNum(r["amountUsd"]), status: typeof r["status"] === "string" ? r["status"] : "issued",
+        currency: typeof r["currency"] === "string" ? r["currency"] : null,
+        totalMinor: nullableNum(r["amountMinor"]),
+        taxMinor: nullableNum(r["taxMinor"]),
         dueAt: typeof r["dueAt"] === "string" && !Number.isNaN(Date.parse(r["dueAt"])) ? r["dueAt"] : null,
         // Only a real https link is ever rendered as a payment link.
         paymentUrl: typeof r["paymentUrl"] === "string" && /^https:\/\//.test(r["paymentUrl"]) ? r["paymentUrl"] : null,
@@ -268,4 +271,10 @@ export function dueDateLabel(dueAt: string | null): string {
   if (!dueAt) return "";
   const d = new Date(dueAt);
   return Number.isNaN(d.getTime()) ? "" : `${dayLabel(d)} ${d.getUTCFullYear()}`;
+}
+
+/** "₹590.00" or "$5.00" from minor units. */
+export function formatMinor(currency: string | null, minor: number): string {
+  const v = (minor / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return currency === "USD" ? `$${v}` : `₹${v}`;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeMessageUsage, normalizePlan, alertText, bandAt, periodLabel, resetLabel, cycleStartLabel, statementStatusLabel, dueDateLabel, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
+import { normalizeMessageUsage, normalizePlan, alertText, bandAt, periodLabel, resetLabel, cycleStartLabel, statementStatusLabel, dueDateLabel, formatMinor, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
 
 describe("normalizeMessageUsage", () => {
   it("maps a full body", () => {
@@ -157,5 +157,18 @@ describe("statement payment fields", () => {
     expect(statementStatusLabel("paid", raw.dueAt, new Date("2026-12-01T00:00:00Z"))).toBe("Paid");
     expect(dueDateLabel(raw.dueAt)).toBe("8 Nov 2026");
     expect(dueDateLabel(null)).toBe("");
+  });
+});
+
+describe("statement totals", () => {
+  const raw = { month: "2026-10-14", messages: 1, bandName: "Band 1", amountInr: 500, amountUsd: 5, status: "issued" };
+  it("reads the payable total, tax and currency, and formats minor units", () => {
+    const st = normalizeMessageUsage({ statements: [{ ...raw, currency: "INR", amountMinor: 59000, taxMinor: 9000 }] })?.statements[0];
+    expect(st).toMatchObject({ currency: "INR", totalMinor: 59000, taxMinor: 9000 });
+    expect(formatMinor("INR", 59000)).toBe("₹590.00");
+    expect(formatMinor("USD", 500)).toBe("$5.00");
+  });
+  it("leaves them empty before a payment link exists", () => {
+    expect(normalizeMessageUsage({ statements: [raw] })?.statements[0]).toMatchObject({ currency: null, totalMinor: null, taxMinor: null });
   });
 });

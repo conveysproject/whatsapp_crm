@@ -65,15 +65,18 @@ describe("ensurePaymentLinks", () => {
   const updateMany = vi.fn();
   const orgFindUnique = vi.fn();
   const userFindMany = vi.fn();
+  const settingFindUnique = vi.fn();
   const prisma = {
     billingStatement: { findMany: stFindMany, updateMany },
     organization: { findUnique: orgFindUnique },
     user: { findMany: userFindMany },
+    billingSetting: { findUnique: settingFindUnique },
   } as unknown as PrismaClient;
   const st = { id: "s1", organizationId: "o1", month: "2026-10-14", messages: 3240, bandName: "Band 1", amountInr: 500, amountUsd: 5 };
 
   beforeEach(() => {
-    [stFindMany, updateMany, orgFindUnique, userFindMany, createLink, sendMail].forEach((m) => m.mockReset());
+    [stFindMany, updateMany, orgFindUnique, userFindMany, createLink, sendMail, settingFindUnique].forEach((m) => m.mockReset());
+    settingFindUnique.mockResolvedValue(null);
     stFindMany.mockResolvedValue([st]);
     updateMany.mockResolvedValue({ count: 1 });
     userFindMany.mockResolvedValue([{ email: "a@x.com" }]);
@@ -90,6 +93,26 @@ describe("ensurePaymentLinks", () => {
     });
     expect(sendMail).toHaveBeenCalledTimes(1);
     expect(sendMail.mock.calls[0]![0]).toMatchObject({ to: ["a@x.com"], subject: expect.stringContaining("₹500.00") });
+  });
+  it("adds GST to an INR statement when the owner has set a rate, and stores the tax", async () => {
+    settingFindUnique.mockResolvedValue({ value: { published: true, freeAllowance: 500, alertsEnabled: false, chargingStartDate: null, gstRatePercent: 18, bands: [{ upTo: 10000, inr: 500, usd: 5 }] } });
+    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Pune, India", settings: {} });
+    await ensurePaymentLinks(prisma, now);
+    expect(createLink).toHaveBeenCalledWith(expect.objectContaining({ currency: "INR", amountMinor: 59000 }));
+    expect(updateMany.mock.calls[0]![0].data).toMatchObject({ amountMinor: 59000, taxMinor: 9000 });
+  });
+  it("never adds GST to a USD statement", async () => {
+    settingFindUnique.mockResolvedValue({ value: { published: true, freeAllowance: 500, alertsEnabled: false, chargingStartDate: null, gstRatePercent: 18, bands: [{ upTo: 10000, inr: 500, usd: 5 }] } });
+    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Dubai", settings: {} });
+    createLink.mockResolvedValue({ provider: "razorpay", url: "https://rzp.io/l/usd", ref: "plink_usd" });
+    await ensurePaymentLinks(prisma, now);
+    expect(createLink).toHaveBeenCalledWith(expect.objectContaining({ currency: "USD", amountMinor: 500 }));
+    expect(updateMany.mock.calls[0]![0].data.taxMinor).toBeNull();
+  });
+  it("emails the billing email instead of the admins when one is set", async () => {
+    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Pune, India", settings: { billing: { billingEmail: "accounts@acme.in" } } });
+    await ensurePaymentLinks(prisma, now);
+    expect(sendMail.mock.calls[0]![0].to).toEqual(["accounts@acme.in"]);
   });
   it("an explicit billing currency set by the owner beats location and phone", async () => {
     orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Pune, India", settings: { billingCurrency: "USD" } });
@@ -129,14 +152,16 @@ describe("sendPaymentReminders", () => {
   const stFindMany = vi.fn();
   const updateMany = vi.fn();
   const userFindMany = vi.fn();
-  const prisma = { billingStatement: { findMany: stFindMany, updateMany }, user: { findMany: userFindMany } } as unknown as PrismaClient;
+  const orgFindUnique = vi.fn();
+  const prisma = { billingStatement: { findMany: stFindMany, updateMany }, user: { findMany: userFindMany }, organization: { findUnique: orgFindUnique } } as unknown as PrismaClient;
   const due = new Date("2026-11-01T00:00:00Z");
   const base = { id: "s1", organizationId: "o1", month: "2026-10-14", currency: "INR", amountMinor: 50000, dueAt: due, paymentUrl: "https://rzp.io/l/abc", remindersSent: 0 };
 
   beforeEach(() => {
-    [stFindMany, updateMany, userFindMany, sendMail].forEach((m) => m.mockReset());
+    [stFindMany, updateMany, userFindMany, sendMail, orgFindUnique].forEach((m) => m.mockReset());
     updateMany.mockResolvedValue({ count: 1 });
     userFindMany.mockResolvedValue([{ email: "a@x.com" }]);
+    orgFindUnique.mockResolvedValue({ settings: {} });
   });
 
   it("uses the 3, 7, 14 day schedule", () => {
@@ -152,6 +177,12 @@ describe("sendPaymentReminders", () => {
     expect(await sendPaymentReminders(prisma, new Date(due.getTime() + 3 * DAY))).toBe(1);
     expect(updateMany).toHaveBeenCalledWith({ where: { id: "s1", status: "issued", remindersSent: 0 }, data: { remindersSent: 1 } });
     expect(sendMail.mock.calls[0]![0]).toMatchObject({ to: ["a@x.com"], subject: expect.stringContaining("overdue") });
+  });
+  it("sends the reminder to the billing email when the organization has set one", async () => {
+    stFindMany.mockResolvedValue([base]);
+    orgFindUnique.mockResolvedValue({ settings: { billing: { billingEmail: "accounts@acme.in" } } });
+    await sendPaymentReminders(prisma, new Date(due.getTime() + 4 * DAY));
+    expect(sendMail.mock.calls[0]![0].to).toEqual(["accounts@acme.in"]);
   });
   it("sends only one reminder per run even when several are overdue", async () => {
     stFindMany.mockResolvedValue([base]);

@@ -1,3 +1,5 @@
+import { GSTIN_RE } from "./billing-details.js";
+
 /**
  * Monthly price bands for the message-volume bill. Pure functions, no I/O.
  * Config is platform-wide and owner-editable (see billing-settings.ts). `published` stays false until the owner
@@ -18,6 +20,10 @@ export interface BillingConfig {
   alertsEnabled: boolean;
   /** First billing-cycle start date (YYYY-MM-DD) that may be charged. null = nothing is ever issued. Cycles that started earlier are never billed. */
   chargingStartDate: string | null;
+  /** GST percentage added to INR statements (0 = no tax line). USD statements are never taxed. Owner decision; default 0. */
+  gstRatePercent: number;
+  /** Who is shown as the seller on statements and PDFs. Empty fields are left off the document. */
+  seller: { legalName: string; address: string; gstin: string };
 }
 
 /** Draft from docs/billing-price-bands-draft.md. Not final; never shown to customers while published is false. */
@@ -26,6 +32,8 @@ export const DEFAULT_BILLING_CONFIG: BillingConfig = {
   freeAllowance: 500,
   alertsEnabled: false,
   chargingStartDate: null,
+  gstRatePercent: 0,
+  seller: { legalName: "Conveys Information Technology", address: "", gstin: "" },
   bands: [
     { upTo: 10_000, inr: 999, usd: 12 },
     { upTo: 50_000, inr: 2999, usd: 36 },
@@ -50,6 +58,22 @@ export function parseBillingConfig(raw: unknown): { ok: true; config: BillingCon
   if (csd !== undefined && csd !== null && (typeof csd !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(csd) || Number.isNaN(Date.parse(`${csd}T00:00:00Z`)) || new Date(`${csd}T00:00:00Z`).toISOString().slice(0, 10) !== csd)) {
     return { ok: false, error: "chargingStartDate must be a real date in YYYY-MM-DD format, or empty" };
   }
+  const gst = o["gstRatePercent"];
+  if (gst !== undefined && (typeof gst !== "number" || !Number.isInteger(gst) || gst < 0 || gst > 40)) return { ok: false, error: "gstRatePercent must be a whole number from 0 to 40" };
+  let seller = DEFAULT_BILLING_CONFIG.seller;
+  if (o["seller"] !== undefined) {
+    const sr = o["seller"];
+    if (!sr || typeof sr !== "object" || Array.isArray(sr)) return { ok: false, error: "seller must be an object" };
+    const so = sr as Record<string, unknown>;
+    const t = (k: string): string | null => (so[k] === undefined ? "" : typeof so[k] === "string" ? (so[k] as string).trim() : null);
+    const legalName = t("legalName");
+    const address = t("address");
+    const gstin = t("gstin");
+    if (legalName === null || address === null || gstin === null) return { ok: false, error: "seller fields must be text" };
+    if (legalName.length > 120 || address.length > 300) return { ok: false, error: "seller text is too long" };
+    if (gstin !== "" && !GSTIN_RE.test(gstin.toUpperCase())) return { ok: false, error: "seller gstin must be a valid 15-character GST number" };
+    seller = { legalName, address, gstin: gstin.toUpperCase() };
+  }
   const bandsRaw = o["bands"];
   if (!Array.isArray(bandsRaw) || bandsRaw.length < 1 || bandsRaw.length > 12) return { ok: false, error: "bands must be a list of 1 to 12 bands" };
   const bands: Band[] = [];
@@ -67,7 +91,7 @@ export function parseBillingConfig(raw: unknown): { ok: true; config: BillingCon
     prevInr = r["inr"];
     prevUsd = r["usd"];
   }
-  return { ok: true, config: { published: o["published"], freeAllowance: o["freeAllowance"], alertsEnabled: o["alertsEnabled"] === true, chargingStartDate: typeof csd === "string" ? csd : null, bands } };
+  return { ok: true, config: { published: o["published"], freeAllowance: o["freeAllowance"], alertsEnabled: o["alertsEnabled"] === true, chargingStartDate: typeof csd === "string" ? csd : null, gstRatePercent: typeof gst === "number" ? gst : 0, seller, bands } };
 }
 
 export interface BandView {
