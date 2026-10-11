@@ -1,3 +1,4 @@
+import { clearCountRulesCache } from "../lib/billing/count-rules.js";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
@@ -23,6 +24,7 @@ const mockPrisma = {
   conversation: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   message: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   billableMessageEvent: { createMany: vi.fn() },
+  billingCountRule: { findMany: vi.fn().mockResolvedValue([]) },
   campaignRecipient: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn(), updateMany: vi.fn() },
   inboundMessageDump: { create: vi.fn().mockResolvedValue(undefined) },
 };
@@ -395,6 +397,8 @@ describe("POST /v1/webhooks/whatsapp: Meta billing signal (pricing) is captured 
     mockPrisma.message.updateMany.mockReset().mockResolvedValue({ count: 1 });
     mockPrisma.message.update.mockReset().mockResolvedValue({});
     mockPrisma.billableMessageEvent.createMany.mockReset().mockResolvedValue({ count: 1 });
+    mockPrisma.billingCountRule.findMany.mockReset().mockResolvedValue([]);
+    clearCountRulesCache();
     mockPrisma.campaignRecipient.findFirst.mockResolvedValue(null);
   });
   afterEach(async () => { await app.close(); });
@@ -411,6 +415,14 @@ describe("POST /v1/webhooks/whatsapp: Meta billing signal (pricing) is captured 
     mockPrisma.message.findFirst.mockResolvedValue({ id: "m2", status: "sent", organizationId: "org-1", sentAt: new Date(), source: null, direction: "outbound", isSystemMessage: true });
     await send("sent", { pricing: { type: "regular", category: "utility" } });
     expect(mockPrisma.billableMessageEvent.createMany).not.toHaveBeenCalled();
+  });
+
+  it("an editable rule can exclude a category Meta charges for", async () => {
+    mockPrisma.billingCountRule.findMany.mockResolvedValue([{ category: "utility", mode: "never" }]);
+    await send("sent", { pricing: { type: "regular", category: "utility" } });
+    expect(mockPrisma.billableMessageEvent.createMany).not.toHaveBeenCalled();
+    await send("sent", { pricing: { type: "regular", category: "marketing" } });
+    expect(mockPrisma.billableMessageEvent.createMany).toHaveBeenCalledTimes(1);
   });
 
   it("a failing billable record never blocks the 200", async () => {

@@ -1659,6 +1659,15 @@ model BillableMessageEvent {
   @@map("billable_message_events")
 }
 
+model BillingCountRule {
+  category  String   @id
+  mode      String   @default("follow")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  @@map("billing_count_rules")
+}
+
 model ApiRequestPayload {
   id                String   @id
   organizationId    String   @map("organization_id")

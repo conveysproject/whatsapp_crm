@@ -9,7 +9,8 @@ import { forwardMetaStatusToApiClient } from "../lib/public-api/callbacks.js";
 import { safeErr } from "../lib/public-api/safe-err.js";
 import { fromMetaTemplateStatus } from "../lib/template-status.js";
 import { normalizeMetaError, formatMetaError, redactForLog, shortWamid } from "../lib/meta-error.js";
-import { extractMetaPricing, isMetaBillable } from "../lib/billing/meta-pricing.js";
+import { extractMetaPricing } from "../lib/billing/meta-pricing.js";
+import { loadCountRules, shouldCount } from "../lib/billing/count-rules.js";
 
 interface WaMediaObject {
   id: string;
@@ -166,7 +167,7 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                       fastify.log.error({ error: safeErr(err) }, "meta pricing capture failed");
                     });
                   // Permanent billable record (no link to the message row, so deleting messages cannot lower the count).
-                  if (isMetaBillable(mp.type) && msg.direction === "outbound" && !msg.isSystemMessage) {
+                  if (msg.direction === "outbound" && !msg.isSystemMessage && shouldCount(await loadCountRules(fastify.prisma), mp.type, mp.category)) {
                     await fastify.prisma.billableMessageEvent
                       .createMany({
                         data: [{ messageId: msg.id, organizationId: msg.organizationId, sentAt: msg.sentAt, source: msg.source, category: mp.category }],
