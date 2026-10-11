@@ -43,8 +43,8 @@ export const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:
 /** Customer-facing names for the `source` recorded on a message (NULL is reported as "unknown"). */
 export const SOURCE_LABELS: Record<string, string> = {
   campaign: "Campaigns",
-  flow: "Flows and automations",
-  dashboard: "Sent from the inbox or dashboard",
+  flow: "Automations and bots",
+  dashboard: "Agent replies",
   api: "API",
   test: "Test sends",
   unknown: "Other messages",

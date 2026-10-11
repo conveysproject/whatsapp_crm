@@ -1,6 +1,6 @@
 import type { JSX } from "react";
 import Link from "next/link";
-import { barHeights, formatCount, formatInr, formatUsd, periodLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
+import { barHeights, chartDayLabel, chartDays, formatCount, formatInr, formatUsd, periodLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
 
 interface Props {
   usage: MessageUsage | null;
@@ -21,19 +21,20 @@ function updatedText(): string {
 }
 
 function DailyBars({ usage }: { usage: MessageUsage }): JSX.Element {
-  const heights = barHeights(usage.daily);
+  const days = chartDays(usage);
+  const heights = barHeights(days);
   return (
     <div
       role="img"
-      aria-label={`Messages per day this month, ${formatCount(usage.billable)} in total`}
+      aria-label={`Messages per day this period, ${formatCount(usage.billable)} in total`}
       className="flex items-end gap-0.5 h-16 border-b border-gray-200 dark:border-gray-700"
     >
-      {usage.daily.map((d, i) => (
+      {days.map((d, i) => (
         <div
           key={d.day}
-          title={`${d.day}: ${formatCount(d.billable)}`}
-          className="flex-1 min-w-0 rounded-t bg-green-600 dark:bg-green-500"
-          style={{ height: `${heights[i] ?? 0}%`, minHeight: heights[i] ? undefined : 2, opacity: heights[i] ? 1 : 0.25 }}
+          title={`${d.day}: ${d.future ? "not yet" : formatCount(d.billable)}`}
+          className={`flex-1 min-w-0 rounded-t ${d.future ? "bg-gray-200 dark:bg-gray-700" : "bg-green-600 dark:bg-green-500"}`}
+          style={{ height: d.future ? "4%" : `${heights[i] ?? 0}%`, minHeight: 2, opacity: !d.future && !heights[i] ? 0.25 : 1 }}
         />
       ))}
     </div>
@@ -85,6 +86,11 @@ export function MessageUsagePanel({ usage, variant }: Props): JSX.Element {
         </p>
       ) : null}
 
+      {!full && usage.plan?.published && (
+        <p data-testid="message-usage-cap" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          You will never pay more than {formatInr(usage.plan.cap.inr)} / {formatUsd(usage.plan.cap.usd)} a month.
+        </p>
+      )}
       {!full && usage.plan?.published && usage.plan.current.to !== null && (
         <div className="mt-3" data-testid="message-usage-progress">
           <div className="h-2.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden" role="img" aria-label={`${formatCount(usage.billable)} of ${formatCount(usage.plan.current.to)} messages in ${usage.plan.current.name}`}>
@@ -98,12 +104,12 @@ export function MessageUsagePanel({ usage, variant }: Props): JSX.Element {
       )}
 
 
-      {usage.daily.length > 0 && (
+      {chartDays(usage).length > 0 && (
         <div className="mt-4">
           <DailyBars usage={usage} />
           <div className="mt-1 flex justify-between text-xs text-gray-500 dark:text-gray-400">
-            <span>{usage.daily[0]?.day.slice(5)}</span>
-            <span>{usage.daily[usage.daily.length - 1]?.day.slice(5)}</span>
+            <span>{chartDayLabel(chartDays(usage)[0]!.day)}</span>
+            <span>{chartDayLabel(chartDays(usage)[chartDays(usage).length - 1]!.day)}</span>
           </div>
         </div>
       )}

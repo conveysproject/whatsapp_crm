@@ -13,7 +13,9 @@ import { Button } from "@/components/ui/Button";
 import { Toast, useToast } from "@/components/ui/Toast";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
 import { PermissionGate } from "@/components/PermissionGate";
-import { CampaignEstimate } from "@/components/billing/CampaignEstimate";
+import { LaunchConfirmDialog } from "@/components/billing/LaunchConfirmDialog";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { canViewBilling } from "@/lib/billing-page";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -48,6 +50,10 @@ export default function NewCampaignPage(): JSX.Element {
   const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("now");
   const [scheduledAt, setScheduledAt] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const { user: currentUser } = useCurrentUser();
+  // Only people who can see billing get the usage confirmation; everyone else launches directly as before.
+  const showUsageConfirm = canViewBilling(currentUser);
   const [mediaUrl, setMediaUrl] = useState("");
   const [cardMediaUrls, setCardMediaUrls] = useState<string[]>([]);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
@@ -502,8 +508,6 @@ export default function NewCampaignPage(): JSX.Element {
                   )}
                 </div>
 
-                <CampaignEstimate recipients={estimatedCount} />
-
                 {/* Summary card */}
                 <div className="rounded-xl border border-gray-200 bg-gray-50 divide-y divide-gray-200">
                   <div className="px-4 py-3">
@@ -527,6 +531,15 @@ export default function NewCampaignPage(): JSX.Element {
             )}
           </div>
 
+          <LaunchConfirmDialog
+            open={confirmOpen}
+            campaignName={name.trim()}
+            audience={{ mode: audienceMode === "groups" ? "groups" : audienceMode === "segment" ? "segment" : "all", groupIds: selectedGroupIds, segmentId }}
+            busy={saving}
+            onCancel={() => setConfirmOpen(false)}
+            onConfirm={() => { void handleLaunch().finally(() => setConfirmOpen(false)); }}
+          />
+
           {/* Navigation */}
           <div className="flex items-center justify-between">
             {step > 1 ? (
@@ -540,7 +553,7 @@ export default function NewCampaignPage(): JSX.Element {
               </Button>
             ) : (
               <Button
-                onClick={() => { void handleLaunch(); }}
+                onClick={() => { if (showUsageConfirm) setConfirmOpen(true); else void handleLaunch(); }}
                 disabled={saving || (scheduleMode === "later" && !scheduledAt)}
               >
                 {saving ? "Launching…" : "Launch Campaign"}

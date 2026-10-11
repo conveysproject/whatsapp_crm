@@ -8,6 +8,7 @@ import { UsageDetails } from "@/components/billing/UsageDetails";
 import { BandTable } from "@/components/billing/BandTable";
 import { BillingDetailsCard } from "@/components/billing/BillingDetailsCard";
 import { AlertPreferences } from "@/components/billing/AlertPreferences";
+import { HowYouPayCard } from "@/components/billing/HowYouPayCard";
 import { alertText, formatCount, formatInr, formatUsd, formatMinor, cycleStartLabel, dueDateLabel, statementStatusLabel, type MessageUsage } from "@/lib/message-usage";
 
 interface SubscriptionData {
@@ -66,6 +67,7 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
   return (
     <div className="max-w-5xl space-y-6">
       <div>
+        <nav aria-label="Breadcrumb" className="mb-2 text-sm text-gray-500">Settings / Billing</nav>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">Billing &amp; usage</h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
           One monthly bill, based on how many messages you send. WhatsApp&apos;s own message charges are billed to you by Meta, with no markup from WBMSG.
@@ -137,6 +139,7 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
       </section>
 
       <div className="flex flex-wrap gap-4">
+        <HowYouPayCard usage={messageUsage} />
         <BillingDetailsCard />
       </div>
 
