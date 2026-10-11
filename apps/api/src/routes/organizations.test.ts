@@ -64,6 +64,16 @@ describe("organizations routes", () => {
     expect((res.json() as { data: { name: string } }).data.name).toBe("Updated Corp");
   });
 
+  it("PATCH /v1/organizations/me never selects wabaAccessToken or stripeId on the update", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    await app.inject({ method: "PATCH", url: "/v1/organizations/me", payload: { name: "Updated Corp" } });
+    const call = vi.mocked(prisma.organization.update).mock.calls.at(-1)![0] as { select?: Record<string, boolean> };
+    expect(call.select).toBeDefined();
+    expect(call.select).not.toHaveProperty("wabaAccessToken");
+    expect(call.select).not.toHaveProperty("stripeId");
+    expect(call.select!["id"]).toBe(true);
+  });
+
   it("deep-merges nested settings.contactConfig (no sibling-key data loss)", async () => {
     const { prisma } = await import("../lib/prisma.js");
     vi.mocked(prisma.organization.findUnique).mockResolvedValueOnce({
@@ -116,5 +126,14 @@ describe("POST /v1/organizations/branding/logo", () => {
     expect(prisma.organization.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { logoImage: "https://cdn.example.com/logo.png" } })
     );
+  });
+
+  it("branding updates never select wabaAccessToken or stripeId", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    await app.inject({ method: "POST", url: "/v1/organizations/branding/favicon", payload: { url: "https://cdn.example.com/f.png" } });
+    const call = vi.mocked(prisma.organization.update).mock.calls.at(-1)![0] as { select?: Record<string, boolean> };
+    expect(call.select).toBeDefined();
+    expect(call.select).not.toHaveProperty("wabaAccessToken");
+    expect(call.select).not.toHaveProperty("stripeId");
   });
 });

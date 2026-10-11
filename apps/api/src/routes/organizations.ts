@@ -103,6 +103,7 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
           name: request.body.name,
           settings: settingsUpdate,
         },
+             select: ORG_PUBLIC_SELECT,
       });
       return { data: org };
     }
@@ -127,6 +128,7 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
         const data = await prisma.organization.update({
           where: { id: organizationId },
           data: { [field]: request.body.url },
+          select: ORG_PUBLIC_SELECT,
         });
         return reply.send({ data });
       }

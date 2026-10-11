@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const { rzpCreate, stripeCreate, rzpCancel, stripeUpdate } = vi.hoisted(() => ({ rzpCreate: vi.fn(), stripeCreate: vi.fn(), rzpCancel: vi.fn(), stripeUpdate: vi.fn() }));
+const { rzpCreate, rzpCancel } = vi.hoisted(() => ({ rzpCreate: vi.fn(), rzpCancel: vi.fn() }));
 vi.mock("razorpay", () => ({ default: vi.fn().mockImplementation(() => ({ paymentLink: { create: rzpCreate, cancel: rzpCancel } })) }));
-vi.mock("../stripe.js", () => ({ getStripe: () => ({ paymentLinks: { create: stripeCreate, update: stripeUpdate } }) }));
 
 import { currencyForPhone, currencyForOrg, createStatementPaymentLink, cancelStatementPaymentLink } from "./payment-links.js";
 
@@ -43,7 +42,6 @@ describe("createStatementPaymentLink", () => {
     process.env["RAZORPAY_KEY_ID"] = "rzp_test";
     process.env["RAZORPAY_KEY_SECRET"] = "secret";
     rzpCreate.mockReset().mockResolvedValue({ id: "plink_1", short_url: "https://rzp.io/l/abc" });
-    stripeCreate.mockReset().mockResolvedValue({ id: "plink_s", url: "https://buy.stripe.com/x" });
   });
   afterEach(() => {
     if (saved["id"] === undefined) delete process.env["RAZORPAY_KEY_ID"]; else process.env["RAZORPAY_KEY_ID"] = saved["id"];
@@ -57,20 +55,20 @@ describe("createStatementPaymentLink", () => {
     expect(arg).toMatchObject({ amount: 50000, currency: "INR", accept_partial: false, reference_id: "s1", notes: { statementId: "s1", organizationId: "o1", kind: "usage_statement" } });
     expect(arg.notify).toEqual({ sms: false, email: false });
   });
-  it("creates a one-use Stripe link in cents, tagged with the statement id", async () => {
+  it("creates a USD link through Razorpay too, in cents", async () => {
     const link = await createStatementPaymentLink({ ...base, currency: "USD", amountMinor: 500 });
-    expect(link).toEqual({ provider: "stripe", url: "https://buy.stripe.com/x", ref: "plink_s" });
-    const arg = stripeCreate.mock.calls[0]![0];
-    expect(arg.line_items[0].price_data).toMatchObject({ currency: "usd", unit_amount: 500 });
-    expect(arg.metadata).toMatchObject({ statementId: "s1", kind: "usage_statement" });
-    expect(arg.restrictions).toEqual({ completed_sessions: { limit: 1 } });
+    expect(link).toEqual({ provider: "razorpay", url: "https://rzp.io/l/abc", ref: "plink_1" });
+    expect(rzpCreate.mock.calls[0]![0]).toMatchObject({ amount: 500, currency: "USD", reference_id: "s1" });
+  });
+  it("fails clearly when Razorpay refuses a USD link (international payments not active yet)", async () => {
+    rzpCreate.mockRejectedValue(new Error("International payments are not enabled"));
+    await expect(createStatementPaymentLink({ ...base, currency: "USD" })).rejects.toThrow("not enabled");
   });
   it("refuses a non-positive or fractional amount before calling any gateway", async () => {
     for (const amountMinor of [0, -5, 10.5]) {
       await expect(createStatementPaymentLink({ ...base, currency: "INR", amountMinor })).rejects.toThrow("positive");
     }
     expect(rzpCreate).not.toHaveBeenCalled();
-    expect(stripeCreate).not.toHaveBeenCalled();
   });
   it("fails clearly when Razorpay keys are missing or the gateway returns no link", async () => {
     delete process.env["RAZORPAY_KEY_ID"];
@@ -78,7 +76,6 @@ describe("createStatementPaymentLink", () => {
     process.env["RAZORPAY_KEY_ID"] = "rzp_test";
     rzpCreate.mockResolvedValue({});
     await expect(createStatementPaymentLink({ ...base, currency: "INR" })).rejects.toThrow("no link");
-    stripeCreate.mockResolvedValue({});
     await expect(createStatementPaymentLink({ ...base, currency: "USD" })).rejects.toThrow("no link");
   });
 });
@@ -88,18 +85,17 @@ describe("cancelStatementPaymentLink", () => {
     process.env["RAZORPAY_KEY_ID"] = "rzp_test";
     process.env["RAZORPAY_KEY_SECRET"] = "secret";
     rzpCancel.mockReset().mockResolvedValue({});
-    stripeUpdate.mockReset().mockResolvedValue({});
   });
-  it("cancels a Razorpay link and deactivates a Stripe link", async () => {
+  it("cancels a Razorpay link and ignores any other provider", async () => {
     await cancelStatementPaymentLink("razorpay", "plink_1");
     expect(rzpCancel).toHaveBeenCalledWith("plink_1");
+    rzpCancel.mockClear();
     await cancelStatementPaymentLink("stripe", "plink_s");
-    expect(stripeUpdate).toHaveBeenCalledWith("plink_s", { active: false });
+    expect(rzpCancel).not.toHaveBeenCalled();
   });
   it("does nothing without a provider and link", async () => {
     await cancelStatementPaymentLink(null, null);
     await cancelStatementPaymentLink("razorpay", null);
     expect(rzpCancel).not.toHaveBeenCalled();
-    expect(stripeUpdate).not.toHaveBeenCalled();
   });
 });

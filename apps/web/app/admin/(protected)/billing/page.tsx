@@ -293,7 +293,7 @@ export default function AdminBillingPage(): JSX.Element {
                         className="border rounded px-1 py-0.5 text-xs"
                       >
                         <option value="INR">₹ INR (Razorpay)</option>
-                        <option value="USD">$ USD (Stripe)</option>
+                        <option value="USD">$ USD (Razorpay, international)</option>
                       </select>
                     </td>
                     <td className="p-2 text-right">{r.messages.toLocaleString()}</td>

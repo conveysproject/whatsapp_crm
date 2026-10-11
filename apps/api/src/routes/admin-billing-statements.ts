@@ -79,7 +79,7 @@ export const adminBillingStatementsRouter: FastifyPluginAsync = async (fastify) 
     return reply.send({ data: { organizationId, month, status } });
   });
 
-  // Explicit billing currency for one organization (INR = Razorpay link, USD = Stripe link). Affects links created afterwards.
+  // Explicit billing currency for one organization (both are Razorpay links; USD needs Razorpay international payments to be active). Affects links created afterwards.
   fastify.put<{ Body: { organizationId?: unknown; currency?: unknown } }>("/admin/billing/org-currency", async (request, reply) => {
     if (request.auth.role !== "superAdmin") return reply.status(403).send(FORBIDDEN);
     const { organizationId, currency } = request.body ?? {};

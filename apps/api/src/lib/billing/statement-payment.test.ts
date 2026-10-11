@@ -33,9 +33,14 @@ describe("markStatementPaid", () => {
     expect(updateMany).not.toHaveBeenCalled();
   });
   it("rejects another provider, another link, or another currency", async () => {
-    for (const bad of [{ provider: "stripe" as const }, { linkRef: "plink_other" }, { currency: "USD" }]) {
+    for (const bad of [{ linkRef: "plink_other" }, { currency: "USD" }]) {
       expect(await markStatementPaid(prisma, { ...ok, ...bad }, now), JSON.stringify(bad)).toBe("rejected");
     }
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+  it("rejects a statement whose stored link belongs to a different provider", async () => {
+    findUnique.mockResolvedValue({ ...issued, paymentProvider: "stripe" });
+    expect(await markStatementPaid(prisma, ok, now)).toBe("rejected");
     expect(updateMany).not.toHaveBeenCalled();
   });
   it("never pays a draft, void or unknown statement and is idempotent for a paid one", async () => {
@@ -88,13 +93,13 @@ describe("ensurePaymentLinks", () => {
   });
   it("an explicit billing currency set by the owner beats location and phone", async () => {
     orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Pune, India", settings: { billingCurrency: "USD" } });
-    createLink.mockResolvedValue({ provider: "stripe", url: "https://buy.stripe.com/x", ref: "plink_s" });
+    createLink.mockResolvedValue({ provider: "razorpay", url: "https://rzp.io/l/usd", ref: "plink_usd" });
     await ensurePaymentLinks(prisma, now);
     expect(createLink).toHaveBeenCalledWith(expect.objectContaining({ currency: "USD" }));
   });
   it("uses USD for a non-Indian or unknown location", async () => {
     orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Dubai", settings: {} });
-    createLink.mockResolvedValue({ provider: "stripe", url: "https://buy.stripe.com/x", ref: "plink_s" });
+    createLink.mockResolvedValue({ provider: "razorpay", url: "https://rzp.io/l/usd", ref: "plink_usd" });
     await ensurePaymentLinks(prisma, now);
     expect(createLink).toHaveBeenCalledWith(expect.objectContaining({ currency: "USD", amountMinor: 500 }));
   });
