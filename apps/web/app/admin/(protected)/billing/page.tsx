@@ -108,12 +108,12 @@ export default function AdminBillingPage(): JSX.Element {
   });
 
   const issue = useMutation({
-    mutationFn: () => adminFetch<{ data: { issued: number; noPayment: number; customQuote: number } }>("/v1/admin/billing/statements/issue", { method: "POST" }),
+    mutationFn: () => adminFetch<{ data: { issued: number; noPayment: number; customQuote: number } }>("/v1/admin/billing/statements/issue", { method: "POST", body: "{}" }),
     onSuccess: (r) => {
       toast.success(`Issued ${r.data.issued}, no payment needed ${r.data.noPayment}, custom quote left as draft ${r.data.customQuote}`);
       void qc.invalidateQueries({ queryKey: ["admin-billing-statements"] });
     },
-    onError: () => toast.error("Could not issue (set a charging start date in the prices first)"),
+    onError: (e: Error) => toast.error(e.message === "HTTP 409" ? "Could not issue: set and save a charging start date in the prices first" : `Could not issue (${e.message}). Nothing was changed.`),
   });
   const setCurrency = useMutation({
     mutationFn: (v: { organizationId: string; currency: "INR" | "USD" }) =>
