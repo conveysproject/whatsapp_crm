@@ -4,7 +4,8 @@ import type { PrismaClient } from "@prisma/client";
 
 const findMany = vi.fn();
 const findSetting = vi.fn();
-const mockPrisma = { messageUsageDaily: { findMany }, billingSetting: { findUnique: findSetting } };
+const findAlerts = vi.fn();
+const mockPrisma = { messageUsageDaily: { findMany }, billingSetting: { findUnique: findSetting }, billingAlertEvent: { findMany: findAlerts } };
 
 async function buildAs(role: string, permissions: Record<string, string> = {}, organizationId = "org-1"): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -22,6 +23,7 @@ describe("GET /v1/billing/message-usage", () => {
     vi.resetModules();
     findMany.mockReset().mockResolvedValue([]);
     findSetting.mockReset().mockResolvedValue(null);
+    findAlerts.mockReset().mockResolvedValue([]);
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-10T12:00:00Z"));
   });
@@ -106,6 +108,26 @@ describe("GET /v1/billing/message-usage", () => {
     expect(body.plan.published).toBe(true);
     expect(body.plan.current.inr).toBe(999);
     expect(body.expected.band.inr).toBe(999);
+    await app.close();
+  });
+  it("returns this month's alerts, dropping band alerts while prices are unpublished", async () => {
+    findAlerts.mockResolvedValue([
+      { kind: "free_50", createdAt: new Date("2026-10-04T10:00:00Z") },
+      { kind: "band_1", createdAt: new Date("2026-10-08T10:00:00Z") },
+    ]);
+    const app = await buildAs("admin");
+    const body = (await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).json<{ data: { alerts: Array<{ kind: string }> } }>().data;
+    expect(body.alerts.map((a) => a.kind)).toEqual(["free_50"]);
+    expect(findAlerts.mock.calls[0]![0].where).toEqual({ organizationId: "org-1", month: "2026-10" });
+    await app.close();
+  });
+
+  it("still returns usage when the alerts table cannot be read", async () => {
+    findAlerts.mockRejectedValue(new Error("no table"));
+    const app = await buildAs("admin");
+    const res = await app.inject({ method: "GET", url: "/v1/billing/message-usage" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { alerts: unknown[] } }>().data.alerts).toEqual([]);
     await app.close();
   });
 });

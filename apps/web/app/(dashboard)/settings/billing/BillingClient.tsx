@@ -6,7 +6,7 @@ import { BillSummary } from "@/components/billing/BillSummary";
 import { BandProgress } from "@/components/billing/BandProgress";
 import { UsageDetails } from "@/components/billing/UsageDetails";
 import { BandTable } from "@/components/billing/BandTable";
-import type { MessageUsage } from "@/lib/message-usage";
+import { alertText, type MessageUsage } from "@/lib/message-usage";
 
 interface SubscriptionData {
   planTier: string;
@@ -33,6 +33,9 @@ const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 export function BillingClient({ messageUsage, subscription, transactions }: Props): JSX.Element {
   const { getToken } = useAuth();
+  const alertLines = (messageUsage?.alerts ?? [])
+    .map((a) => ({ key: a.kind, text: alertText(a.kind, messageUsage?.plan ?? null) }))
+    .filter((l): l is { key: string; text: string } => l.text !== null);
 
   async function openPortal() {
     const token = await getToken();
@@ -81,8 +84,13 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
 
       <section data-testid="usage-alerts" className="bg-white rounded-xl border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-2">Usage alerts</h2>
+        {alertLines.length > 0 && (
+          <ul data-testid="usage-alert-list" className="mb-3 space-y-1.5 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3">
+            {alertLines.map((l) => <li key={l.key}>{l.text}</li>)}
+          </ul>
+        )}
         <p className="text-sm text-gray-600">
-          Billing admins will get a heads-up at 50%, 80%, 95% and 100% of the free allowance, and each time the bill moves to a new band, by email and in the app.
+          Billing admins get a heads-up at 50%, 80%, 95% and 100% of the free allowance, and each time the bill moves to a new band, in the app and, once alert emails are switched on, by email.
         </p>
       </section>
 

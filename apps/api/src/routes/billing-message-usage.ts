@@ -35,6 +35,11 @@ export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => 
     // Prices, band ranges and the bill are included only after the owner has published them (see lib/billing/bands.ts).
     const config = await loadBillingConfig(fastify.prisma);
     const plan = planFor(summary.billable, config);
+    // Alerts are a nice-to-have: a failure here must never break the usage numbers.
+    const alertRows = await Promise.resolve()
+      .then(() => fastify.prisma.billingAlertEvent.findMany({ where: { organizationId, month: monthStr }, select: { kind: true, createdAt: true }, orderBy: { createdAt: "asc" } }))
+      .catch(() => []);
+    const alerts = alertRows.filter((a) => config.published || a.kind.startsWith("free_")).map((a) => ({ kind: a.kind, at: a.createdAt.toISOString() }));
     const monthOver = now.getTime() >= range.toExclusive.getTime();
     const projectedTotal = monthOver ? summary.billable : projectMonthTotal(summary.billable, summary.daily.length, range.days);
     const projectedPlan = plan.published && projectedTotal !== null ? planFor(projectedTotal, config) : null;
@@ -46,6 +51,7 @@ export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => 
         toExclusive: range.toExclusive.toISOString(),
         ...summary,
         plan,
+        alerts,
         expected: projectedPlan && projectedPlan.published ? { messages: projectedTotal, band: projectedPlan.current } : null,
       },
     };

@@ -1677,6 +1677,20 @@ model BillingSetting {
   @@map("billing_settings")
 }
 
+model BillingAlertEvent {
+  id             String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  organizationId String    @map("organization_id")
+  month          String
+  kind           String
+  messages       Int
+  createdAt      DateTime  @default(now()) @map("created_at")
+  emailedAt      DateTime? @map("emailed_at")
+
+  @@unique([organizationId, month, kind], map: "billing_alert_events_org_month_kind_key")
+  @@index([month], map: "billing_alert_events_month_idx")
+  @@map("billing_alert_events")
+}
+
 model ApiRequestPayload {
   id                String   @id
   organizationId    String   @map("organization_id")

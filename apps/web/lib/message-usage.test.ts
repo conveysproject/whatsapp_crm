@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeMessageUsage, normalizePlan, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
+import { normalizeMessageUsage, normalizePlan, alertText, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
 
 describe("normalizeMessageUsage", () => {
   it("maps a full body", () => {
@@ -10,16 +10,16 @@ describe("normalizeMessageUsage", () => {
     expect(u).toEqual({
       month: "2026-10", billable: 9, bySource: { campaign: 4, api: 3, unknown: 2 },
       daily: [{ day: "2026-10-01", billable: 5 }, { day: "2026-10-02", billable: 4 }], updatedAt: "2026-10-10T11:05:00.000Z",
-      plan: null, expected: null,
+      plan: null, expected: null, alerts: [],
     });
   });
   it("never throws and degrades to safe defaults", () => {
     expect(normalizeMessageUsage(null)).toBeNull();
     expect(normalizeMessageUsage("x")).toBeNull();
     expect(normalizeMessageUsage([])).toBeNull();
-    expect(normalizeMessageUsage({})).toEqual({ month: "", billable: 0, bySource: {}, daily: [], updatedAt: null, plan: null, expected: null });
+    expect(normalizeMessageUsage({})).toEqual({ month: "", billable: 0, bySource: {}, daily: [], updatedAt: null, plan: null, expected: null, alerts: [] });
     expect(normalizeMessageUsage({ billable: -5, bySource: { a: "x", b: -1, c: 2 }, daily: [1, null, { day: 5 }, { day: "d", billable: "z" }] }))
-      .toEqual({ month: "", billable: 0, bySource: { c: 2 }, daily: [{ day: "d", billable: 0 }], updatedAt: null, plan: null, expected: null });
+      .toEqual({ month: "", billable: 0, bySource: { c: 2 }, daily: [{ day: "d", billable: 0 }], updatedAt: null, plan: null, expected: null, alerts: [] });
   });
 });
 
@@ -68,5 +68,19 @@ describe("plan helpers", () => {
     expect(bandRange({ name: "Free", from: 0, to: 500, inr: 0, usd: 0 })).toBe("up to 500");
     expect(bandRange({ name: "Band 1", from: 501, to: 10000, inr: 999, usd: 12 })).toBe("501 to 10,000");
     expect(bandRange({ name: "Above", from: 250001, to: null, inr: null, usd: null })).toBe("over 250,000");
+  });
+});
+
+describe("alerts", () => {
+  it("keeps only well-formed alert kinds", () => {
+    const u = normalizeMessageUsage({ alerts: [{ kind: "free_80", at: "t" }, { kind: "<b>x</b>", at: "t" }, { kind: "band_2", at: 5 }, null, { kind: "above", at: "t" }] });
+    expect(u?.alerts).toEqual([{ kind: "free_80", at: "t" }, { kind: "above", at: "t" }]);
+  });
+  it("words free-allowance alerts and hides band alerts until prices are published", () => {
+    const hidden = { published: false as const, freeAllowance: 500 };
+    expect(alertText("free_80", hidden)).toBe("You have used 80% of your 500 free messages this month.");
+    expect(alertText("free_100", hidden)).toBe("You have used all 500 free messages this month.");
+    expect(alertText("band_1", hidden)).toBeNull();
+    expect(alertText("nonsense", null)).toBeNull();
   });
 });

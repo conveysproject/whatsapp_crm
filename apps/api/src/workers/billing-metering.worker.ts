@@ -2,6 +2,7 @@ import { Queue, Worker } from "bullmq";
 import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
 import { runMeteringSweep } from "../lib/billing/metering-sweep.js";
+import { evaluateAlerts } from "../lib/billing/alerts.js";
 
 export { runMeteringSweep };
 
@@ -19,6 +20,10 @@ export function startBillingMeteringWorker() {
       const res = job.name === "nightly" ? await runMeteringSweep(prisma, new Date(), 5) : await runMeteringSweep(prisma);
       if (res.days.length === 0) console.error("[billing-metering] sweep produced no days");
       else console.log(`[billing-metering] ${job.name} days=${res.days.length} upserted=${res.upserted} removed=${res.removed}`);
+      if (job.name === "sweep") {
+        const al = await evaluateAlerts(prisma);
+        if (al.recorded > 0 || al.emailed > 0) console.log(`[billing-alerts] recorded=${al.recorded} emailed=${al.emailed}`);
+      }
     },
     { connection: redisConnection, concurrency: 1 }
   );

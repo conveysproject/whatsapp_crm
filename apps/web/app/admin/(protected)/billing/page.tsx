@@ -18,7 +18,7 @@ type Mode = "follow" | "never" | "always";
 interface Rule { category: string; mode: Mode }
 interface RulesResponse { modes: Mode[]; rules: Rule[] }
 interface BandCfg { upTo: number; inr: number; usd: number }
-interface BillingCfg { published: boolean; freeAllowance: number; bands: BandCfg[] }
+interface BillingCfg { published: boolean; freeAllowance: number; alertsEnabled: boolean; bands: BandCfg[] }
 
 const KNOWN_CATEGORIES = ["marketing", "utility", "authentication", "service", "authentication_international", "marketing_lite", "referral_conversion", "unknown"];
 const MODE_HELP: Record<Mode, string> = {
@@ -176,6 +176,10 @@ export default function AdminBillingPage(): JSX.Element {
             </table>
             <p className="text-gray-500">Above the last band customers see &quot;Custom quote&quot;.</p>
             <label className="flex items-center gap-2">
+              <input type="checkbox" checked={cfg.alertsEnabled} onChange={(e) => setCfg({ ...cfg, alertsEnabled: e.target.checked })} />
+              <span>Email usage alerts to customers&apos; billing admins (50%, 80%, 95%, 100% of the free messages, new bands)</span>
+            </label>
+            <label className="flex items-center gap-2">
               <input type="checkbox" checked={cfg.published} onChange={(e) => setCfg({ ...cfg, published: e.target.checked })} />
               <span className={cfg.published ? "font-semibold text-red-700" : ""}>Show prices to customers</span>
             </label>
@@ -184,6 +188,7 @@ export default function AdminBillingPage(): JSX.Element {
               disabled={saveSettings.isPending}
               onClick={() => {
                 if (cfg.published && !settings.data?.data.published && !window.confirm("Customers will immediately see these prices on their billing page. Continue?")) return;
+                if (cfg.alertsEnabled && !settings.data?.data.alertsEnabled && !window.confirm("Every customer organization that has reached an alert level this month will be emailed within the hour. Continue?")) return;
                 saveSettings.mutate(cfg);
               }}
               className="bg-gray-900 text-white rounded px-4 py-1.5"

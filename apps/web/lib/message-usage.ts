@@ -18,6 +18,7 @@ export type Plan =
       next: BandView | null;
       cap: { upTo: number; inr: number; usd: number };
     };
+export interface UsageAlert { kind: string; at: string }
 export interface ExpectedBill { messages: number; band: BandView }
 export interface MessageUsage {
   month: string;
@@ -27,6 +28,7 @@ export interface MessageUsage {
   updatedAt: string | null;
   plan: Plan | null;
   expected: ExpectedBill | null;
+  alerts: UsageAlert[];
 }
 
 export const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -81,6 +83,30 @@ export function normalizePlan(raw: unknown): Plan | null {
   };
 }
 
+function normalizeAlerts(raw: unknown): UsageAlert[] {
+  if (!Array.isArray(raw)) return [];
+  const out: UsageAlert[] = [];
+  for (const a of raw) {
+    if (isRecord(a) && typeof a["kind"] === "string" && /^(free_\d{1,3}|band_\d{1,2}|above)$/.test(a["kind"]) && typeof a["at"] === "string") out.push({ kind: a["kind"], at: a["at"] });
+  }
+  return out;
+}
+
+/** Plain-language text for an alert kind, or null for a kind this version does not know. Band names come from the published plan. */
+export function alertText(kind: string, plan: Plan | null): string | null {
+  const free = /^free_(\d+)$/.exec(kind);
+  const allowance = plan ? formatCount(plan.freeAllowance) : null;
+  if (free) {
+    if (!allowance) return `You have used ${free[1]}% of your free messages this month.`;
+    return free[1] === "100" ? `You have used all ${allowance} free messages this month.` : `You have used ${free[1]}% of your ${allowance} free messages this month.`;
+  }
+  if (!plan || !plan.published) return null;
+  if (kind === "above") return "Your volume is above the top band. We will contact you with a custom quote.";
+  const b = /^band_(\d+)$/.exec(kind);
+  const band = b ? plan.bands[Number(b[1])] : undefined;
+  return band ? `Your bill moved to ${band.name}.` : null;
+}
+
 function normalizeExpected(raw: unknown): ExpectedBill | null {
   if (!isRecord(raw)) return null;
   const band = normalizeBand(raw["band"]);
@@ -109,6 +135,7 @@ export function normalizeMessageUsage(raw: unknown): MessageUsage | null {
     updatedAt: typeof raw["updatedAt"] === "string" ? raw["updatedAt"] : null,
     plan: normalizePlan(raw["plan"]),
     expected: normalizeExpected(raw["expected"]),
+    alerts: normalizeAlerts(raw["alerts"]),
   };
 }
 

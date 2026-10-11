@@ -43,7 +43,7 @@ describe("planFor", () => {
 });
 
 describe("parseBillingConfig", () => {
-  const good = { published: false, freeAllowance: 500, bands: [{ upTo: 1000, inr: 10, usd: 1 }, { upTo: 5000, inr: 20, usd: 2 }] };
+  const good = { published: false, freeAllowance: 500, alertsEnabled: false, bands: [{ upTo: 1000, inr: 10, usd: 1 }, { upTo: 5000, inr: 20, usd: 2 }] };
   it("accepts a valid config", () => {
     expect(parseBillingConfig(good)).toEqual({ ok: true, config: good });
   });
@@ -55,6 +55,7 @@ describe("parseBillingConfig", () => {
       { ...good, bands: [{ upTo: 1000, inr: 10, usd: 1 }, { upTo: 2000, inr: 5, usd: 2 }] },
       { ...good, bands: [{ upTo: 1000, inr: "10", usd: 1 }] },
       { ...good, bands: [{ upTo: 1000, inr: -1, usd: 1 }] },
+      { ...good, alertsEnabled: "yes" },
     ];
     for (const b of bad) expect(parseBillingConfig(b).ok, JSON.stringify(b)).toBe(false);
   });
