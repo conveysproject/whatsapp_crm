@@ -71,7 +71,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     <OnboardingProvider status={status}>
       <ImpersonationProvider impersonating={impersonating} />
       <Toaster richColors position="top-right" />
-      <div className="flex h-screen overflow-hidden bg-gray-50">
+      {/* relative: hidden (sr-only) and other absolutely positioned elements are contained and clipped by this frame instead of stretching the window's own scroll height */}
+      <div className="relative flex h-screen overflow-hidden bg-gray-50">
         <Sidebar />
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           <ImpersonationBanner impersonating={impersonating} />

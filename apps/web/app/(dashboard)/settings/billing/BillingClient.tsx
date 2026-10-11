@@ -103,7 +103,7 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
                   <th className="py-2 pr-3 font-semibold">Band</th>
                   <th className="py-2 pr-3 font-semibold">Amount</th>
                   <th className="py-2 pr-3 font-semibold">Status</th>
-                  <th className="py-2 font-semibold"><span className="sr-only">Download</span></th>
+                  <th className="py-2 font-semibold">Invoice</th>
                 </tr>
               </thead>
               <tbody>
