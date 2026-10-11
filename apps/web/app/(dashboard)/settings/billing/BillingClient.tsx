@@ -65,7 +65,7 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
           <UsageDetails usage={messageUsage} />
           <BandTable usage={messageUsage} />
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Counts update every hour{messageUsage.updatedAt ? ` (last update ${messageUsage.updatedAt.slice(0, 16).replace("T", " ")} UTC)` : ""}.
+            Counts are refreshed every hour. A message is counted once Meta reports that it is chargeable.
           </p>
         </>
       ) : (

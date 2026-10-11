@@ -8,11 +8,8 @@ interface Props {
   variant: "compact" | "full";
 }
 
-function updatedText(updatedAt: string | null): string {
-  if (!updatedAt) return "Counts update every hour.";
-  const d = new Date(updatedAt);
-  if (Number.isNaN(d.getTime())) return "Counts update every hour.";
-  return `Updated ${d.toISOString().slice(0, 16).replace("T", " ")} UTC. Counts update every hour.`;
+function updatedText(): string {
+  return "Counts are refreshed every hour.";
 }
 
 function DailyBars({ usage }: { usage: MessageUsage }): JSX.Element {
@@ -118,7 +115,7 @@ export function MessageUsagePanel({ usage, variant }: Props): JSX.Element {
         </div>
       )}
 
-      <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{updatedText(usage.updatedAt)}</p>
+      <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{updatedText()}</p>
     </section>
   );
 }
