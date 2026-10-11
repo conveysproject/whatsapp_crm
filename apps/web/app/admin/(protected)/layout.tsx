@@ -52,6 +52,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <Link href="/admin/organizations" className="text-sm text-gray-300 hover:text-white">Organizations</Link>
           <Link href="/admin/super-admins" className="text-sm text-gray-300 hover:text-white">Super Admins</Link>
           <Link href="/admin/platform-config" className="text-sm text-gray-300 hover:text-white">Platform Config</Link>
+          <Link href="/admin/billing" className="text-sm text-gray-300 hover:text-white">Billing</Link>
           <Link href="/admin/audit-logs" className="text-sm text-gray-300 hover:text-white">Audit Logs</Link>
         </div>
         <AdminSignOutButton email={user.email} />
