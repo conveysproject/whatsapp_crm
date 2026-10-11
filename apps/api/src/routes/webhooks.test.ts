@@ -22,6 +22,7 @@ const mockPrisma = {
   organization: { findFirst: vi.fn() },
   conversation: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   message: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+  billableMessageEvent: { createMany: vi.fn() },
   campaignRecipient: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn(), updateMany: vi.fn() },
   inboundMessageDump: { create: vi.fn().mockResolvedValue(undefined) },
 };
@@ -390,12 +391,32 @@ describe("POST /v1/webhooks/whatsapp: Meta billing signal (pricing) is captured 
     io.to.mockReturnValue({ emit: io.emit });
     app = await buildApp();
     mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-1" });
-    mockPrisma.message.findFirst.mockReset().mockResolvedValue({ id: "m1", status: "sent" });
+    mockPrisma.message.findFirst.mockReset().mockResolvedValue({ id: "m1", status: "sent", organizationId: "org-1", sentAt: new Date("2026-10-12T05:00:00Z"), source: "campaign", direction: "outbound", isSystemMessage: false });
     mockPrisma.message.updateMany.mockReset().mockResolvedValue({ count: 1 });
     mockPrisma.message.update.mockReset().mockResolvedValue({});
+    mockPrisma.billableMessageEvent.createMany.mockReset().mockResolvedValue({ count: 1 });
     mockPrisma.campaignRecipient.findFirst.mockResolvedValue(null);
   });
   afterEach(async () => { await app.close(); });
+
+  it("writes a permanent billable record only for a chargeable outbound message", async () => {
+    await send("sent", { pricing: { type: "regular", category: "marketing" } });
+    expect(mockPrisma.billableMessageEvent.createMany).toHaveBeenCalledWith({
+      data: [{ messageId: "m1", organizationId: "org-1", sentAt: new Date("2026-10-12T05:00:00Z"), source: "campaign", category: "marketing" }],
+      skipDuplicates: true,
+    });
+    mockPrisma.billableMessageEvent.createMany.mockClear();
+    await send("sent", { pricing: { type: "free_customer_service", category: "service" } });
+    expect(mockPrisma.billableMessageEvent.createMany).not.toHaveBeenCalled();
+    mockPrisma.message.findFirst.mockResolvedValue({ id: "m2", status: "sent", organizationId: "org-1", sentAt: new Date(), source: null, direction: "outbound", isSystemMessage: true });
+    await send("sent", { pricing: { type: "regular", category: "utility" } });
+    expect(mockPrisma.billableMessageEvent.createMany).not.toHaveBeenCalled();
+  });
+
+  it("a failing billable record never blocks the 200", async () => {
+    mockPrisma.billableMessageEvent.createMany.mockRejectedValue(new Error("db down"));
+    expect((await send("delivered", { pricing: { type: "regular", category: "marketing" } })).statusCode).toBe(200);
+  });
 
   it("stores Meta's type and category on the message, first report only", async () => {
     expect((await send("sent", { pricing: { billable: true, pricing_model: "PMP", type: "regular", category: "marketing" } })).statusCode).toBe(200);

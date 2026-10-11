@@ -44,20 +44,25 @@ export const META_PRICING_CUTOVER = new Date("2026-10-12T00:00:00.000Z");
 
 /**
  * Billable outbound messages of one UTC day, per organization and source. Literals (not parameters) for the enum comparisons.
- * Days on or after META_PRICING_CUTOVER additionally require meta_pricing_type = 'regular' (a message Meta did not
- * report as billable, or has not reported on yet, is not counted).
+ * Days before META_PRICING_CUTOVER use the previous rule over the messages table (estimates). From the cutover day on the
+ * count comes from billable_message_events, written when Meta first reports a message as chargeable; it has no link to
+ * the messages table, so deleting messages never lowers a count.
  */
 export async function computeDailyUsage(prisma: PrismaClient, day: Date): Promise<DailyOrgCount[]> {
   const start = utcDayStart(day);
   const end = new Date(start.getTime() + 86_400_000);
-  const metaFilter = start.getTime() >= META_PRICING_CUTOVER.getTime() ? Prisma.sql`AND meta_pricing_type = 'regular'` : Prisma.empty;
-  const rows = await prisma.$queryRaw<Array<{ organization_id: string; source: string | null; n: number }>>(
-    Prisma.sql`SELECT organization_id, source, count(*)::int AS n FROM messages
-      WHERE sent_at >= ${start} AND sent_at < ${end}
-        AND direction = 'outbound' AND status IN ('sent','delivered','read') AND is_system_message = false
-        ${metaFilter}
-      GROUP BY organization_id, source`,
-  );
+  const rows = start.getTime() >= META_PRICING_CUTOVER.getTime()
+    ? await prisma.$queryRaw<Array<{ organization_id: string; source: string | null; n: number }>>(
+        Prisma.sql`SELECT organization_id, source, count(*)::int AS n FROM billable_message_events
+          WHERE sent_at >= ${start} AND sent_at < ${end}
+          GROUP BY organization_id, source`,
+      )
+    : await prisma.$queryRaw<Array<{ organization_id: string; source: string | null; n: number }>>(
+        Prisma.sql`SELECT organization_id, source, count(*)::int AS n FROM messages
+          WHERE sent_at >= ${start} AND sent_at < ${end}
+            AND direction = 'outbound' AND status IN ('sent','delivered','read') AND is_system_message = false
+          GROUP BY organization_id, source`,
+      );
   const byOrg = new Map<string, DailyOrgCount>();
   for (const r of rows) {
     const entry = byOrg.get(r.organization_id) ?? { organizationId: r.organization_id, billable: 0, bySource: {} };

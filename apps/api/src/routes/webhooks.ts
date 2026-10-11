@@ -9,7 +9,7 @@ import { forwardMetaStatusToApiClient } from "../lib/public-api/callbacks.js";
 import { safeErr } from "../lib/public-api/safe-err.js";
 import { fromMetaTemplateStatus } from "../lib/template-status.js";
 import { normalizeMetaError, formatMetaError, redactForLog, shortWamid } from "../lib/meta-error.js";
-import { extractMetaPricing } from "../lib/billing/meta-pricing.js";
+import { extractMetaPricing, isMetaBillable } from "../lib/billing/meta-pricing.js";
 
 interface WaMediaObject {
   id: string;
@@ -153,7 +153,7 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
               // Update conversation Message if one exists for this wamid
               const msg = await fastify.prisma.message.findFirst({
                 where: { whatsappMessageId: su.id },
-                select: { id: true, status: true },
+                select: { id: true, status: true, organizationId: true, sentAt: true, source: true, direction: true, isSystemMessage: true },
               });
               if (msg) {
                 // Billing metering: remember whether Meta charges for this message (first report wins, never overwritten).
@@ -165,6 +165,17 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
                     .catch((err: unknown) => {
                       fastify.log.error({ error: safeErr(err) }, "meta pricing capture failed");
                     });
+                  // Permanent billable record (no link to the message row, so deleting messages cannot lower the count).
+                  if (isMetaBillable(mp.type) && msg.direction === "outbound" && !msg.isSystemMessage) {
+                    await fastify.prisma.billableMessageEvent
+                      .createMany({
+                        data: [{ messageId: msg.id, organizationId: msg.organizationId, sentAt: msg.sentAt, source: msg.source, category: mp.category }],
+                        skipDuplicates: true,
+                      })
+                      .catch((err: unknown) => {
+                        fastify.log.error({ error: safeErr(err) }, "billable event record failed");
+                      });
+                  }
                 }
               }
               if (msg && process.env["PUBLIC_API_ENABLED"] === "true") {

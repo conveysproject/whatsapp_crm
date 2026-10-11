@@ -113,7 +113,7 @@ Update 2026-10-10: question 7 was approved and run read-only. Result: the `messa
 
 ### Before these numbers can drive charges (required for Phase 2B)
 
-- Counts are rebuilt from rows that still exist, so customers can lower billed volume by deleting messages (`DELETE /conversations/:id/history` in `routes/conversations.ts`, and `message-cleanup` deleting by `createdAt` with no server-side minimum for `delete_whatsapp_message_days` in `routes/vendor-settings.ts`). Make billing deletion-proof: an append-only billable-event ledger written when a message first reaches a billable status, or soft delete. Also enforce a server-side retention minimum of at least 7 days.
+- DONE (migration `20261011010000_billable_message_events`): from 2026-10-12 UTC the count is read from `billable_message_events`, written by the status webhook when Meta first reports a message as `regular`. It has no link to `messages`, so deleting messages (history delete, `message-cleanup`) cannot lower a count. A retention minimum is therefore not needed for counting. Remaining gap: a message deleted in the minutes before Meta reports its status is never recorded.
 - Days older than the re-sweep window (5 days) can drift (late Meta failures overcount). Close days (immutable) after N days, or record corrections explicitly.
 - The UTC bucketing relies on the database session time zone being UTC; cast explicitly if that ever changes.
 - The interactive transaction in `storeDailyUsage` has the default 5 s timeout; set a longer timeout or use `createMany`/`ON CONFLICT` when organizations number in the thousands.

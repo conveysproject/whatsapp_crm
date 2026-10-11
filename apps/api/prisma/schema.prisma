@@ -1646,6 +1646,19 @@ model MessageUsageDaily {
   @@map("message_usage_daily")
 }
 
+model BillableMessageEvent {
+  messageId      String   @id @map("message_id")
+  organizationId String   @map("organization_id")
+  sentAt         DateTime @map("sent_at")
+  source         String?
+  category       String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([organizationId, sentAt], map: "billable_message_events_org_sent_idx")
+  @@index([sentAt], map: "billable_message_events_sent_idx")
+  @@map("billable_message_events")
+}
+
 model ApiRequestPayload {
   id                String   @id
   organizationId    String   @map("organization_id")
