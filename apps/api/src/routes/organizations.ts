@@ -103,7 +103,7 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
           name: request.body.name,
           settings: settingsUpdate,
         },
-             select: ORG_PUBLIC_SELECT,
+        select: ORG_PUBLIC_SELECT,
       });
       return { data: org };
     }
