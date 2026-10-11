@@ -4,6 +4,7 @@ import { buildMessageUsage } from "../lib/billing/message-usage.js";
 import { planFor, projectMonthTotal } from "../lib/billing/bands.js";
 import { loadBillingConfig } from "../lib/billing/settings.js";
 import { cycleContaining, parseCycleKey } from "../lib/billing/cycle.js";
+import { kindWanted, readAlertPrefs } from "../lib/billing/alert-prefs.js";
 
 export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => {
   // The caller's own organization's billable outbound message count for one billing cycle (default: the current one).
@@ -25,7 +26,7 @@ export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => 
       at = start;
     }
 
-    const org = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { createdAt: true } });
+    const org = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { createdAt: true, settings: true } });
     if (!org) {
       return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
     }
@@ -56,7 +57,8 @@ export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => 
       .catch(() => []);
     // The payment link is shown only while a statement is actually due.
     const statementsOut = statements.map((st) => ({ ...st, paymentUrl: st.status === "issued" ? st.paymentUrl : null }));
-    const alerts = alertRows.filter((a) => config.published || a.kind.startsWith("free_")).map((a) => ({ kind: a.kind, at: a.createdAt.toISOString() }));
+    const prefs = readAlertPrefs(org.settings);
+    const alerts = alertRows.filter((a) => prefs.inApp && kindWanted(prefs, a.kind) && (config.published || a.kind.startsWith("free_"))).map((a) => ({ kind: a.kind, at: a.createdAt.toISOString() }));
     const cycleOver = now.getTime() >= cycle.endExclusive.getTime();
     const projectedTotal = cycleOver ? summary.billable : projectMonthTotal(summary.billable, summary.daily.length, cycle.days);
     const projectedPlan = plan.published && projectedTotal !== null ? planFor(projectedTotal, config) : null;

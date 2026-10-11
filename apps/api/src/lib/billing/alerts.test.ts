@@ -128,6 +128,31 @@ describe("evaluateAlerts", () => {
     expect(updateMany).toHaveBeenCalledWith({ where: { id: { in: ["e1"] }, emailedAt: null }, data: { emailedAt: now } });
   });
 
+  it("does not email an alert the organization switched off, and never sends it later", async () => {
+    findUnique.mockResolvedValue({ value: { ...DEFAULT_BILLING_CONFIG, alertsEnabled: true } });
+    orgRows.mockResolvedValue([{ id: "o1", createdAt: new Date("2026-03-14T09:00:00Z"), settings: { billingAlerts: { step50: false, step80: false, step95: true, step100: true, newBand: true, email: true, inApp: true } } }]);
+    findMany.mockImplementation(async (args: { where: { emailedAt: unknown } }) =>
+      args.where.emailedAt === null
+        ? [
+            { id: "e1", organizationId: "o1", month: "2026-10-14", kind: "free_50", messages: 430 },
+            { id: "e2", organizationId: "o1", month: "2026-10-14", kind: "free_80", messages: 430 },
+          ]
+        : []);
+    const res = await evaluateAlerts(prisma, now);
+    expect(res.emailed).toBe(0);
+    expect(sendMail).not.toHaveBeenCalled();
+    expect(updateMany).toHaveBeenCalledWith({ where: { id: { in: ["e1", "e2"] }, emailedAt: null }, data: { emailedAt: now } });
+  });
+
+  it("sends nothing by email when the organization turned email off", async () => {
+    findUnique.mockResolvedValue({ value: { ...DEFAULT_BILLING_CONFIG, alertsEnabled: true } });
+    orgRows.mockResolvedValue([{ id: "o1", createdAt: new Date("2026-03-14T09:00:00Z"), settings: { billingAlerts: { step50: true, step80: true, step95: true, step100: true, newBand: true, email: false, inApp: true } } }]);
+    findMany.mockImplementation(async (args: { where: { emailedAt: unknown } }) =>
+      args.where.emailedAt === null ? [{ id: "e1", organizationId: "o1", month: "2026-10-14", kind: "free_80", messages: 430 }] : []);
+    expect((await evaluateAlerts(prisma, now)).emailed).toBe(0);
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+
   it("never throws when the database fails", async () => {
     dayRows.mockRejectedValue(new Error("down"));
     await expect(evaluateAlerts(prisma, now)).resolves.toEqual({ recorded: 0, emailed: 0 });

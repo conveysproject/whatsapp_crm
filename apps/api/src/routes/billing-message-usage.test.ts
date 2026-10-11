@@ -63,7 +63,7 @@ describe("GET /v1/billing/message-usage", () => {
   it("scopes the query to the caller's organization and its own billing cycle, defaulting to the current one", async () => {
     const app = await buildAs("admin", {}, "org-7");
     await app.inject({ method: "GET", url: "/v1/billing/message-usage" });
-    expect(findOrg).toHaveBeenCalledWith({ where: { id: "org-7" }, select: { createdAt: true } });
+    expect(findOrg).toHaveBeenCalledWith({ where: { id: "org-7" }, select: { createdAt: true, settings: true } });
     expect(findMany).toHaveBeenCalledWith({
       where: { organizationId: "org-7", day: { gte: new Date("2026-09-14T00:00:00.000Z"), lt: new Date("2026-10-14T00:00:00.000Z") } },
       select: { day: true, billableCount: true, bySource: true, computedAt: true },
@@ -157,6 +157,19 @@ describe("GET /v1/billing/message-usage", () => {
     const res = await app.inject({ method: "GET", url: "/v1/billing/message-usage?cycle=2026-08-14" });
     const data = res.json<{ data: { cycle: { key: string; from: string; toExclusive: string; days: number } } }>().data;
     expect(data.cycle).toEqual({ key: "2026-08-14", from: "2026-08-14T00:00:00.000Z", toExclusive: "2026-09-14T00:00:00.000Z", days: 31 });
+    await app.close();
+  });
+  it("hides in-app alerts the organization switched off", async () => {
+    findOrg.mockResolvedValue({ createdAt: new Date("2026-03-14T09:00:00Z"), settings: { billingAlerts: { step50: false, step80: true, step95: true, step100: true, newBand: true, email: true, inApp: true } } });
+    findAlerts.mockResolvedValue([
+      { kind: "free_50", createdAt: new Date("2026-10-04T10:00:00Z") },
+      { kind: "free_80", createdAt: new Date("2026-10-06T10:00:00Z") },
+    ]);
+    const app = await buildAs("admin");
+    const body = (await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).json<{ data: { alerts: Array<{ kind: string }> } }>().data;
+    expect(body.alerts.map((a) => a.kind)).toEqual(["free_80"]);
+    findOrg.mockResolvedValue({ createdAt: new Date("2026-03-14T09:00:00Z"), settings: { billingAlerts: { step50: true, step80: true, step95: true, step100: true, newBand: true, email: true, inApp: false } } });
+    expect((await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).json<{ data: { alerts: unknown[] } }>().data.alerts).toEqual([]);
     await app.close();
   });
 });

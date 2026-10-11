@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { sendMail } from "../mail.js";
 import { bandViews, type BillingConfig } from "./bands.js";
 import { loadBillingConfig } from "./settings.js";
+import { kindWanted, readAlertPrefs } from "./alert-prefs.js";
 import { cycleContaining } from "./cycle.js";
 
 const FREE_STEPS = [50, 80, 95, 100] as const;
@@ -68,8 +69,9 @@ export async function evaluateAlerts(prisma: PrismaClient, now: Date = new Date(
     const since = new Date(now.getTime() - 32 * 86_400_000);
     const days = await prisma.messageUsageDaily.findMany({ where: { day: { gte: since } }, select: { organizationId: true, day: true, billableCount: true } });
     const orgIds = [...new Set(days.map((d) => d.organizationId))];
-    const orgs = orgIds.length > 0 ? await prisma.organization.findMany({ where: { id: { in: orgIds } }, select: { id: true, createdAt: true } }) : [];
+    const orgs = orgIds.length > 0 ? await prisma.organization.findMany({ where: { id: { in: orgIds } }, select: { id: true, createdAt: true, settings: true } }) : [];
     const keyByOrg = new Map<string, string>();
+    const settingsByOrg = new Map<string, unknown>(orgs.map((o) => [o.id, o.settings]));
     const rows: Array<{ organizationId: string; month: string; kind: string; messages: number }> = [];
     for (const org of orgs) {
       const cycle = cycleContaining(org.createdAt, now);
@@ -84,14 +86,14 @@ export async function evaluateAlerts(prisma: PrismaClient, now: Date = new Date(
       const res = await prisma.billingAlertEvent.createMany({ data: rows, skipDuplicates: true });
       recorded = res.count;
     }
-    if (config.alertsEnabled) emailed = await emailUnsent(prisma, keyByOrg, config.freeAllowance, now);
+    if (config.alertsEnabled) emailed = await emailUnsent(prisma, keyByOrg, settingsByOrg, config.freeAllowance, now);
   } catch (err) {
     console.warn("[billing-alerts] evaluation failed", err instanceof Error ? err.name : "error");
   }
   return { recorded, emailed };
 }
 
-async function emailUnsent(prisma: PrismaClient, keyByOrg: Map<string, string>, freeAllowance: number, now: Date): Promise<number> {
+async function emailUnsent(prisma: PrismaClient, keyByOrg: Map<string, string>, settingsByOrg: Map<string, unknown>, freeAllowance: number, now: Date): Promise<number> {
   const since = new Date(now.getTime() - 35 * 86_400_000);
   const unsent = await prisma.billingAlertEvent.findMany({ where: { emailedAt: null, createdAt: { gte: since } }, select: { id: true, organizationId: true, month: true, kind: true, messages: true } });
   // Only the organization's current cycle; older unsent rows (and legacy calendar-month rows) are never sent late.
@@ -101,7 +103,15 @@ async function emailUnsent(prisma: PrismaClient, keyByOrg: Map<string, string>, 
   const alreadySent = new Set(legacy.map((l) => `${l.organizationId}|${l.kind}`));
   const covered = pending.filter((e) => alreadySent.has(`${e.organizationId}|${e.kind}`));
   if (covered.length > 0) await prisma.billingAlertEvent.updateMany({ where: { id: { in: covered.map((e) => e.id) }, emailedAt: null }, data: { emailedAt: now } });
-  const toSend = pending.filter((e) => !alreadySent.has(`${e.organizationId}|${e.kind}`));
+  const candidates = pending.filter((e) => !alreadySent.has(`${e.organizationId}|${e.kind}`));
+  // The organization's own preferences: an alert it switched off (or all email) is marked handled so it is never sent late.
+  const wanted = (e: (typeof candidates)[number]): boolean => {
+    const prefs = readAlertPrefs(settingsByOrg.get(e.organizationId));
+    return prefs.email && kindWanted(prefs, e.kind);
+  };
+  const toSend = candidates.filter(wanted);
+  const declined = candidates.filter((e) => !wanted(e));
+  if (declined.length > 0) await prisma.billingAlertEvent.updateMany({ where: { id: { in: declined.map((e) => e.id) }, emailedAt: null }, data: { emailedAt: now } });
   const byOrg = new Map<string, typeof toSend>();
   for (const p of toSend) byOrg.set(p.organizationId, [...(byOrg.get(p.organizationId) ?? []), p]);
   let sent = 0;

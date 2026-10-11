@@ -7,6 +7,7 @@ import { BandProgress } from "@/components/billing/BandProgress";
 import { UsageDetails } from "@/components/billing/UsageDetails";
 import { BandTable } from "@/components/billing/BandTable";
 import { BillingDetailsCard } from "@/components/billing/BillingDetailsCard";
+import { AlertPreferences } from "@/components/billing/AlertPreferences";
 import { alertText, formatCount, formatInr, formatUsd, formatMinor, cycleStartLabel, dueDateLabel, statementStatusLabel, type MessageUsage } from "@/lib/message-usage";
 
 interface SubscriptionData {
@@ -146,9 +147,7 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
             {alertLines.map((l) => <li key={l.key}>{l.text}</li>)}
           </ul>
         )}
-        <p className="text-sm text-gray-600">
-          Billing admins get a heads-up at 50%, 80%, 95% and 100% of the free allowance, and each time the bill moves to a new band, in the app and, once alert emails are switched on, by email.
-        </p>
+        <AlertPreferences />
       </section>
 
       <p className="text-sm text-gray-500">

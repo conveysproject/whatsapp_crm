@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { canAccessSub } from "../lib/permissions.js";
 import { parseBillingDetails, readBillingDetails } from "../lib/billing/billing-details.js";
+import { parseAlertPrefs, readAlertPrefs } from "../lib/billing/alert-prefs.js";
 
 const FORBIDDEN = { error: { code: "FORBIDDEN", message: "settings_billing permission required" } };
 
@@ -24,5 +25,26 @@ export const billingDetailsRouter: FastifyPluginAsync = async (fastify) => {
     const current = org.settings && typeof org.settings === "object" && !Array.isArray(org.settings) ? (org.settings as Record<string, unknown>) : {};
     await fastify.prisma.organization.update({ where: { id: organizationId }, data: { settings: { ...current, billing: parsed.details } as never } });
     return reply.send({ data: parsed.details });
+  });
+
+  // Usage-alert preferences of the caller's own organization. Alerts are recorded either way; these choose what is shown and emailed.
+  fastify.get("/billing/alert-preferences", async (request, reply) => {
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "settings_access", "settings_billing")) return reply.status(403).send(FORBIDDEN);
+    const org = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { settings: true } });
+    if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
+    return reply.send({ data: readAlertPrefs(org.settings) });
+  });
+
+  fastify.put<{ Body: unknown }>("/billing/alert-preferences", async (request, reply) => {
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "settings_access", "settings_billing")) return reply.status(403).send(FORBIDDEN);
+    const parsed = parseAlertPrefs(request.body);
+    if (!parsed.ok) return reply.status(400).send({ error: { code: "INVALID_PREFERENCES", message: parsed.error } });
+    const org = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { settings: true } });
+    if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
+    const current = org.settings && typeof org.settings === "object" && !Array.isArray(org.settings) ? (org.settings as Record<string, unknown>) : {};
+    await fastify.prisma.organization.update({ where: { id: organizationId }, data: { settings: { ...current, billingAlerts: parsed.prefs } as never } });
+    return reply.send({ data: parsed.prefs });
   });
 };

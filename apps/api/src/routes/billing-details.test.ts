@@ -56,4 +56,23 @@ describe("billing details", () => {
     expect((await app.inject({ method: "PUT", url: "/v1/billing/details", payload: valid })).statusCode).toBe(404);
     await app.close();
   });
+
+  it("reads and saves alert preferences for the callers own organization only", async () => {
+    findUnique.mockResolvedValue({ settings: { theme: "dark" } });
+    const prefs = { step50: false, step80: true, step95: true, step100: true, newBand: true, email: true, inApp: false };
+    const app = await buildAs("admin", {}, "org-7");
+    expect((await app.inject({ method: "GET", url: "/v1/billing/alert-preferences" })).json<{ data: { step50: boolean } }>().data.step50).toBe(true);
+    expect((await app.inject({ method: "PUT", url: "/v1/billing/alert-preferences", payload: { step50: "no" } })).statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
+    expect((await app.inject({ method: "PUT", url: "/v1/billing/alert-preferences", payload: { ...prefs, organizationId: "someone-else" } })).statusCode).toBe(200);
+    expect(update).toHaveBeenCalledWith({ where: { id: "org-7" }, data: { settings: { theme: "dark", billingAlerts: prefs } } });
+    await app.close();
+  });
+  it("refuses alert preferences to roles without settings_billing", async () => {
+    const app = await buildAs("agent");
+    expect((await app.inject({ method: "GET", url: "/v1/billing/alert-preferences" })).statusCode).toBe(403);
+    expect((await app.inject({ method: "PUT", url: "/v1/billing/alert-preferences", payload: {} })).statusCode).toBe(403);
+    expect(update).not.toHaveBeenCalled();
+    await app.close();
+  });
 });
