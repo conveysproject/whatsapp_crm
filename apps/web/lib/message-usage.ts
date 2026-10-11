@@ -205,3 +205,9 @@ export function bandRange(b: BandView): string {
   if (b.from === 0) return `up to ${formatCount(b.to)}`;
   return `${formatCount(b.from)} to ${formatCount(b.to)}`;
 }
+
+/** The published band that a message count falls in, or null when prices are not published. */
+export function bandAt(plan: Plan, count: number): BandView | null {
+  if (!plan.published) return null;
+  return plan.bands.find((b) => count >= b.from && (b.to === null || count <= b.to)) ?? null;
+}

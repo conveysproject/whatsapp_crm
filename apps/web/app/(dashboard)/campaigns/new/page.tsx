@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { Toast, useToast } from "@/components/ui/Toast";
 import { WhatsAppGate } from "@/components/WhatsAppGate";
 import { PermissionGate } from "@/components/PermissionGate";
+import { CampaignEstimate } from "@/components/billing/CampaignEstimate";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -500,6 +501,8 @@ export default function NewCampaignPage(): JSX.Element {
                     />
                   )}
                 </div>
+
+                <CampaignEstimate recipients={estimatedCount} />
 
                 {/* Summary card */}
                 <div className="rounded-xl border border-gray-200 bg-gray-50 divide-y divide-gray-200">

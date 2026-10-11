@@ -1,6 +1,6 @@
 import type { JSX } from "react";
 import Link from "next/link";
-import { barHeights, formatCount, formatInr, formatUsd, monthLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
+import { alertText, barHeights, formatCount, formatInr, formatUsd, monthLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
 
 interface Props {
   usage: MessageUsage | null;
@@ -47,6 +47,7 @@ export function MessageUsagePanel({ usage, variant }: Props): JSX.Element {
   }
   const rows = sourceRows(usage.bySource);
   const full = variant === "full";
+  const headsUp = [...usage.alerts].reverse().map((al) => alertText(al.kind, usage.plan)).find((t): t is string => t !== null) ?? null;
 
   return (
     <section
@@ -79,6 +80,12 @@ export function MessageUsagePanel({ usage, variant }: Props): JSX.Element {
           {formatCount(Math.min(usage.billable, usage.plan.freeAllowance))} of {formatCount(usage.plan.freeAllowance)} free messages used. Nothing is charged today.
         </p>
       ) : null}
+
+      {!full && headsUp && (
+        <p data-testid="message-usage-heads-up" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span className="font-semibold">Heads-up: </span>{headsUp}
+        </p>
+      )}
 
       {usage.daily.length > 0 && (
         <div className="mt-4">

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeMessageUsage, normalizePlan, alertText, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
+import { normalizeMessageUsage, normalizePlan, alertText, bandAt, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
 
 describe("normalizeMessageUsage", () => {
   it("maps a full body", () => {
@@ -94,5 +94,26 @@ describe("statements", () => {
     ] });
     expect(u?.statements.map((s) => s.month)).toEqual(["2026-09", "2026-08"]);
     expect(u?.statements[1]?.amountInr).toBeNull();
+  });
+});
+
+describe("bandAt", () => {
+  const plan = normalizePlan({
+    published: true, freeAllowance: 500, position: "band", remainingToNextBand: 1, next: null,
+    current: { name: "Band 1", from: 501, to: 10000, inr: 500, usd: 5 }, cap: { upTo: 10000, inr: 500, usd: 5 },
+    bands: [
+      { name: "Free", from: 0, to: 500, inr: 0, usd: 0 },
+      { name: "Band 1", from: 501, to: 10000, inr: 500, usd: 5 },
+      { name: "Above", from: 10001, to: null, inr: null, usd: null },
+    ],
+  })!;
+  it("finds the band at the boundaries", () => {
+    expect(bandAt(plan, 0)?.name).toBe("Free");
+    expect(bandAt(plan, 500)?.name).toBe("Free");
+    expect(bandAt(plan, 501)?.name).toBe("Band 1");
+    expect(bandAt(plan, 10001)?.name).toBe("Above");
+  });
+  it("returns null while unpublished", () => {
+    expect(bandAt({ published: false, freeAllowance: 500 }, 600)).toBeNull();
   });
 });
