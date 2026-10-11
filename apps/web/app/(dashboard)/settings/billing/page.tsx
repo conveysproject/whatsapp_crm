@@ -2,7 +2,8 @@ import type { JSX } from "react";
 import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { normalizeUsage, canViewBilling } from "@/lib/billing-page";
+import { canViewBilling } from "@/lib/billing-page";
+import { normalizeMessageUsage, type MessageUsage } from "@/lib/message-usage";
 import type { CurrentUser } from "@/lib/can";
 import { BillingClient } from "./BillingClient";
 
@@ -21,14 +22,6 @@ interface Transaction {
   status: string;
   gateway: string;
   createdAt: string;
-}
-
-interface Plan {
-  tier: string;
-  name: string;
-  priceInr: number | null;
-  priceUsd: number | null;
-  limits: { contacts: number | null; messages: number | null };
 }
 
 async function fetchJson<T>(url: string, token: string): Promise<T | null> {
@@ -53,22 +46,12 @@ export default async function BillingPage(): Promise<JSX.Element> {
   const user = await getCurrentUser(token);
   if (!canViewBilling(user)) redirect("/settings");
 
-  const [rawUsage, subscription, plans, transactions] = await Promise.all([
-    fetchJson<unknown>(`${API_URL}/v1/billing/usage`, token),
+  const [rawMessageUsage, subscription, transactions] = await Promise.all([
+    fetchJson<unknown>(`${API_URL}/v1/billing/message-usage`, token),
     fetchJson<SubscriptionData>(`${API_URL}/v1/billing/subscriptions`, token),
-    fetch(`${API_URL}/v1/billing/plans`, { headers: await serverApiHeaders(token), cache: "no-store" })
-      .then((r) => r.ok ? r.json() as Promise<{ data: Plan[] }> : { data: [] })
-      .then((j) => j.data)
-      .catch(() => [] as Plan[]),
     fetchJson<Transaction[]>(`${API_URL}/v1/billing/transactions`, token),
   ]);
+  const messageUsage: MessageUsage | null = normalizeMessageUsage(rawMessageUsage);
 
-  return (
-    <BillingClient
-      usage={normalizeUsage(rawUsage)}
-      subscription={subscription}
-      plans={plans}
-      transactions={transactions ?? []}
-    />
-  );
+  return <BillingClient messageUsage={messageUsage} subscription={subscription} transactions={transactions ?? []} />;
 }

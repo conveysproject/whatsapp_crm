@@ -1,9 +1,9 @@
 "use client";
 
-import { JSX, useState } from "react";
+import type { JSX } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
-import type { BillingUsage } from "@/lib/billing-page";
+import { MessageUsagePanel } from "@/components/billing/MessageUsagePanel";
+import type { MessageUsage } from "@/lib/message-usage";
 
 interface SubscriptionData {
   planTier: string;
@@ -20,88 +20,16 @@ interface Transaction {
   createdAt: string;
 }
 
-interface Plan {
-  tier: string;
-  name: string;
-  priceInr: number | null;
-  priceUsd: number | null;
-  limits: { contacts: number | null; messages: number | null };
-}
-
 interface Props {
-  usage: BillingUsage | null;
+  messageUsage: MessageUsage | null;
   subscription: SubscriptionData | null;
-  plans: Plan[];
   transactions: Transaction[];
 }
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
-function UsageBar({ used, limit, label }: { used: number; limit: number | null; label: string }): JSX.Element {
-  const pct = limit ? Math.min((used / limit) * 100, 100) : 0;
-  return (
-    <div className="mb-4">
-      <div className="flex justify-between text-sm mb-1">
-        <span className="text-gray-600">{label}</span>
-        <span className="text-gray-500">
-          {used.toLocaleString()} / {limit ? limit.toLocaleString() : "Unlimited"}
-        </span>
-      </div>
-      {limit && (
-        <div className="w-full bg-gray-100 rounded-full h-2">
-          <div
-            className={`h-2 rounded-full transition-all ${pct > 85 ? "bg-red-500" : "bg-green-500"}`}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function BillingClient({ usage, subscription, plans, transactions }: Props): JSX.Element {
+export function BillingClient({ messageUsage, subscription, transactions }: Props): JSX.Element {
   const { getToken } = useAuth();
-  const router = useRouter();
-  const [switching, setSwitching] = useState<string | null>(null);
-  const [switchNote, setSwitchNote] = useState<string | null>(null);
-
-  async function switchPlan(tier: string) {
-    setSwitching(tier);
-    setSwitchNote(null);
-    const token = await getToken();
-    const res = await fetch(`${API_URL}/v1/billing/switch-plan`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ planTier: tier }),
-    });
-    setSwitching(null);
-    if (res.ok) {
-      const body = (await res.json().catch(() => null)) as { data?: { pending?: boolean } } | null;
-      if (body?.data?.pending === true) setSwitchNote("Plan change requested. It applies once the payment is confirmed.");
-      router.refresh();
-    }
-  }
-
-  async function subscribe(tier: string) {
-    setSwitching(tier);
-    try {
-      const token = await getToken();
-      const here = `${window.location.origin}/settings/billing`;
-      const res = await fetch(`${API_URL}/v1/billing/checkout`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ planTier: tier, successUrl: `${here}?status=success`, cancelUrl: here }),
-      });
-      if (res.ok) {
-        const json = await res.json() as { data?: { url?: string } };
-        if (json.data?.url) {
-          window.location.href = json.data.url;
-          return;
-        }
-      }
-    } catch { /* fall through to re-enable the button */ }
-    setSwitching(null);
-  }
 
   async function openPortal() {
     const token = await getToken();
@@ -115,97 +43,51 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
     }
   }
 
-  const currentPlan = subscription?.planTier ?? usage?.plan ?? "starter";
-
   return (
     <div className="max-w-2xl space-y-6">
-      <h1 className="text-xl font-semibold text-gray-900">Billing & Usage</h1>
+      <h1 className="text-xl font-semibold text-gray-900">Billing &amp; Usage</h1>
 
-      {/* Current plan + usage */}
-      {usage && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-medium text-gray-800">Current Plan</h2>
-            <span className="capitalize bg-green-100 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full">
-              {currentPlan}
-            </span>
-          </div>
-          {subscription?.stripe && (
-            <p className="text-xs text-gray-500 mb-4">
+      <MessageUsagePanel usage={messageUsage} variant="full" />
+
+      <section data-testid="how-billing-works" className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="font-medium text-gray-800 mb-2">How billing works</h2>
+        <ul className="list-disc pl-5 space-y-1.5 text-sm text-gray-600">
+          <li>Your WBMSG bill will be based on how many messages you send each month, in simple volume bands, with a monthly maximum.</li>
+          <li>WhatsApp&apos;s own per-message charges are billed to you directly by Meta. WBMSG adds no markup to them.</li>
+          <li>Pricing is not final yet. Nothing is charged for messages today, and we will share the bands before any charge starts.</li>
+        </ul>
+        <p className="mt-3 text-sm text-gray-500">
+          Questions about billing? <a href="mailto:info@conveys.in" className="text-green-700 hover:underline">info@conveys.in</a>
+        </p>
+      </section>
+
+      {(subscription?.stripe || subscription?.manual) && (
+        <section className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="font-medium text-gray-800 mb-2">Your subscription</h2>
+          {subscription.stripe && (
+            <p className="text-sm text-gray-600">
               Renews {new Date(subscription.stripe.currentPeriodEnd).toLocaleDateString(undefined, { dateStyle: "medium" })} · Status: {subscription.stripe.status}
             </p>
           )}
-          {subscription?.manual && (
-            <p className="text-xs text-gray-500 mb-4">
+          {subscription.manual && (
+            <p className="text-sm text-gray-600">
               Manual subscription · {subscription.manual.chargesFrequency} · Status: {subscription.manual.status}
               {subscription.manual.expiresAt ? ` · Expires: ${new Date(subscription.manual.expiresAt).toLocaleDateString(undefined, { dateStyle: "medium" })}` : ""}
             </p>
           )}
-          {usage.rows.map((r) => <UsageBar key={r.key} used={r.used} limit={r.limit} label={r.label} />)}
-        </div>
+          {subscription.stripe && (
+            <button
+              onClick={() => { void openPortal(); }}
+              className="mt-4 text-sm border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50"
+            >
+              Open Billing Portal
+            </button>
+          )}
+        </section>
       )}
 
-      {/* Plan comparison */}
-      {plans.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="font-medium text-gray-800 mb-4">Plans</h2>
-          <div className="grid grid-cols-1 gap-3">
-            {plans.map((p) => {
-              const isCurrent = currentPlan === p.tier;
-              const canSwitch = !isCurrent && p.tier !== "enterprise" && !!subscription?.stripe;
-              return (
-                <div
-                  key={p.tier}
-                  className={`flex items-center justify-between p-4 rounded-lg border ${isCurrent ? "border-green-500 bg-green-50" : "border-gray-200"}`}
-                >
-                  <div>
-                    <div className="font-medium text-gray-800">{p.name}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      {p.limits.contacts ? `${p.limits.contacts.toLocaleString()} contacts` : "Unlimited contacts"}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {p.priceUsd != null && (
-                      <span className="text-sm font-semibold text-gray-800">
-                        ${p.priceUsd}/mo
-                      </span>
-                    )}
-                    {canSwitch && (
-                      <button
-                        onClick={() => { void switchPlan(p.tier); }}
-                        disabled={switching === p.tier}
-                        className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 disabled:opacity-50"
-                      >
-                        {switching === p.tier ? "Switching…" : (p.priceUsd && p.priceUsd > (plans.find((pp) => pp.tier === currentPlan)?.priceUsd ?? 0) ? "Upgrade" : "Downgrade")}
-                      </button>
-                    )}
-                    {!isCurrent && !canSwitch && p.tier !== "enterprise" && (
-                      <button
-                        onClick={() => { void subscribe(p.tier); }}
-                        disabled={switching === p.tier}
-                        className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 disabled:opacity-50"
-                      >
-                        {switching === p.tier ? "Redirecting…" : "Subscribe"}
-                      </button>
-                    )}
-                    {p.tier === "enterprise" && (
-                      <a href="mailto:info@conveys.in" className="text-xs text-green-600 hover:underline">
-                        Contact us
-                      </a>
-                    )}
-                    {isCurrent && <span className="text-xs text-green-700 font-medium">Current</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {switchNote && <p className="mt-3 text-xs text-gray-600">{switchNote}</p>}
-        </div>
-      )}
-
-      {/* Transaction history */}
       {transactions.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <section className="bg-white rounded-xl border border-gray-200 p-6">
           <h2 className="font-medium text-gray-800 mb-4">Transaction History</h2>
           <div className="divide-y divide-gray-100">
             {transactions.map((t) => (
@@ -216,27 +98,13 @@ export function BillingClient({ usage, subscription, plans, transactions }: Prop
                   </p>
                   <p className="text-xs text-gray-500 capitalize">{t.gateway} · {new Date(t.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}</p>
                 </div>
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${t.status === "paid" || t.status === "success" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${t.status === "paid" || t.status === "success" || t.status === "completed" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
                   {t.status}
                 </span>
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Stripe portal */}
-      {subscription?.stripe && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="font-medium text-gray-800 mb-2">Manage Subscription</h2>
-          <p className="text-sm text-gray-500 mb-4">View invoices and update payment details in the Stripe portal.</p>
-          <button
-            onClick={() => { void openPortal(); }}
-            className="text-sm border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50"
-          >
-            Open Billing Portal
-          </button>
-        </div>
+        </section>
       )}
     </div>
   );

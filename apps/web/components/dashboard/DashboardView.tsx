@@ -16,7 +16,7 @@ import { AttentionList, DisconnectedBanner } from "./AttentionList";
 import { CampaignFunnel } from "./CampaignFunnel";
 import { DashboardErrorState, DashboardNoAccess, DashboardSkeleton } from "./DashboardStates";
 import { KpiGrid } from "./KpiGrid";
-import { PlanUsageStrip } from "./PlanUsageStrip";
+import { MessageUsageCard } from "./MessageUsageCard";
 import { SetupPrompt } from "./SetupPrompt";
 import { RangePicker } from "./RangePicker";
 
@@ -71,7 +71,7 @@ export function DashboardBody({ getToken, range, onRangeChange, slots }: Dashboa
         <DisconnectedBanner items={d.attention} />
         <AttentionList items={d.attention} />
         <KpiGrid kpis={d.kpis} />
-        {showBilling && <PlanUsageStrip getToken={getToken} />}
+        {showBilling && <MessageUsageCard getToken={getToken} />}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <CampaignFunnel funnel={d.campaignFunnel} />
           {slots?.volumeChart?.(CHART_DAYS[range])}

@@ -50,22 +50,23 @@ function stubDashboard(reply: Record<string, unknown> = body()): void {
 const BILLING_USER = { id: 'u4', fullName: 'Bo Billing', email: 'd@x.com', role: 'custom', permissions: { analytics_access: 'allow', settings_access: 'allow', 'settings_access@settings_billing': 'allow' } };
 const LEADER_USER = { id: 'u5', fullName: 'Lee Lead', email: 'e@x.com', role: 'custom', permissions: { analytics_access: 'allow', 'analytics_access@analytics_agent_performance': 'allow' } };
 
-const USAGE = {
+const MESSAGE_USAGE = {
   data: {
-    plan: 'pro',
-    unavailableFeatures: [],
-    gates: {
-      contacts: { current: 10, limit: 100, allowed: true },
-      campaigns: { current: 85, limit: 100, allowed: true },
-      chatbots: { current: 3, limit: 3, allowed: false },
-      flows: { current: 1, limit: null, allowed: true },
-      custom_fields: { current: 0, limit: 10, allowed: true },
-      team_members: { current: 2, limit: 5, allowed: true },
-    },
+    month: '2026-10',
+    from: '2026-10-01T00:00:00.000Z',
+    toExclusive: '2026-11-01T00:00:00.000Z',
+    billable: 3240,
+    bySource: { campaign: 1820, unknown: 1420 },
+    daily: [
+      { day: '2026-10-01', billable: 40 },
+      { day: '2026-10-02', billable: 120 },
+      { day: '2026-10-03', billable: 0 },
+    ],
+    updatedAt: '2026-10-10T11:05:00.000Z',
   },
 };
-function stubUsage(reply: unknown = USAGE, statusCode = 200): void {
-  cy.intercept({ method: 'GET', pathname: '/v1/billing/usage' }, { statusCode, body: reply }).as('usage');
+function stubUsage(reply: unknown = MESSAGE_USAGE, statusCode = 200): void {
+  cy.intercept({ method: 'GET', pathname: '/v1/billing/message-usage' }, { statusCode, body: reply }).as('usage');
 }
 const AGENTS = Array.from({ length: 8 }, (_, i) => ({
   userId: 'a' + i, displayName: 'Agent ' + i, openConversations: i, resolvedToday: 10 - i, avgFirstResponseSecs: 60, slaBreaches: 0,
@@ -304,47 +305,34 @@ describe('Dashboard v2', () => {
     cy.contains('a', 'New Template').should('have.attr', 'href', '/templates/new');
   });
 
-  it('plan strip shows plan, six gates, bar colours and the upgrade link when a gate is blocked', () => {
+  it('messages card shows this month\'s count and links to billing', () => {
     stubUser(BILLING_USER);
+    stubUsage();
     stubDashboard();
     mount();
-    cy.get('[data-testid="plan-badge"]').should('have.text', 'pro');
-    cy.get('[data-testid^="plan-gate-"]').should('have.length', 6);
-    cy.get('[data-testid="plan-gate-contacts"]').should('contain', '10 / 100');
-    cy.get('[data-testid="plan-gate-flows"]').should('contain', '1 / Unlimited');
-    cy.get('[data-testid="plan-gate-contacts"] [data-testid="plan-bar"]').should('have.class', 'bg-blue-500');
-    cy.get('[data-testid="plan-gate-campaigns"] [data-testid="plan-bar"]').should('have.class', 'bg-amber-400');
-    cy.get('[data-testid="plan-gate-chatbots"] [data-testid="plan-bar"]').should('have.class', 'bg-red-500');
-    cy.get('[data-testid="plan-upgrade"]').should('have.attr', 'href', '/settings/billing');
+    cy.get('[data-testid="message-usage-total"]').should('have.text', '3,240');
+    cy.get('[data-testid="message-usage"]').should('contain', 'October 2026');
+    cy.get('[data-testid="message-usage"]').contains('a', 'View billing').should('have.attr', 'href', '/settings/billing');
   });
 
-  it('plan strip has no upgrade link when nothing is blocked', () => {
-    stubUser(BILLING_USER);
-    stubUsage({ data: { plan: 'pro', gates: {} } });
-    stubDashboard();
-    mount();
-    cy.get('[data-testid="plan-usage"]').should('be.visible');
-    cy.get('[data-testid="plan-upgrade"]').should('not.exist');
-  });
-
-  it('plan strip is hidden and not fetched without settings_billing', () => {
+  it('messages card is hidden and not fetched without settings_billing', () => {
     stubUser(CUSTOM);
     let calls = 0;
-    cy.intercept({ method: 'GET', pathname: '/v1/billing/usage' }, (req) => { calls += 1; req.reply({ body: USAGE }); });
+    cy.intercept({ method: 'GET', pathname: '/v1/billing/message-usage' }, (req) => { calls += 1; req.reply(MESSAGE_USAGE); });
     stubDashboard();
     mount();
     cy.get('[data-testid="kpi-open"]').should('be.visible');
-    cy.get('[data-testid="plan-usage"]').should('not.exist');
-    cy.get('[data-testid="plan-usage-unavailable"]').should('not.exist');
+    cy.get('[data-testid="message-usage"]').should('not.exist');
+    cy.get('[data-testid="message-usage-unavailable"]').should('not.exist');
     cy.then(() => expect(calls).to.eq(0));
   });
 
-  it('plan strip failure shows a small note and the page still renders', () => {
+  it('messages card failure shows a small note and the page still renders', () => {
     stubUser(BILLING_USER);
     stubUsage({ error: 'x' }, 500);
     stubDashboard();
     mount();
-    cy.get('[data-testid="plan-usage-unavailable"]').should('contain', 'Plan usage unavailable');
+    cy.get('[data-testid="message-usage-unavailable"]').should('contain', 'Message count is unavailable');
     cy.get('[data-testid="kpi-open"]').should('be.visible');
   });
 
