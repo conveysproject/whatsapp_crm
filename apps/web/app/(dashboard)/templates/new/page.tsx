@@ -41,7 +41,7 @@ export default async function NewTemplatePage({
   return (
     <PermissionGate permission="templates_access" sub="templates_create">
       <Suspense>
-        <TemplateForm initialState={initialState} />
+        <TemplateForm initialState={initialState} startStep={lib && getLibraryTemplate(lib) ? 2 : 1} />
       </Suspense>
     </PermissionGate>
   );

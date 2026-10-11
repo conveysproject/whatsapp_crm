@@ -350,12 +350,14 @@ function Step3({ state, onChange, errors }: {
 
 // ─── Root ────────────────────────────────────────────────────────────────────
 
-export function TemplateForm({ initialState = INITIAL_STATE, templateId }: { initialState?: TemplateFormState; templateId?: string }): JSX.Element {
+export function TemplateForm({ initialState = INITIAL_STATE, templateId, startStep }: { initialState?: TemplateFormState; templateId?: string; startStep?: 1 | 2 }): JSX.Element {
   const { getToken } = useAuth();
   const router = useRouter();
   const [state, setState] = useState<TemplateFormState>(initialState);
-  // Skip step 1 (category selection) when pre-filled from the template library
-  const [step, setStep] = useState(initialState !== INITIAL_STATE ? 2 : 1);
+  // Skip step 1 (category selection) when pre-filled from the template library.
+  // Server pages must pass startStep: INITIAL_STATE is serialized across the
+  // server→client boundary, so the reference check below never matches there.
+  const [step, setStep] = useState<number>(startStep ?? (initialState !== INITIAL_STATE ? 2 : 1));
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
