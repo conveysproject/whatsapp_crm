@@ -22,7 +22,7 @@ export const adminBillingStatementsRouter: FastifyPluginAsync = async (fastify) 
     }
     const rows = await fastify.prisma.billingStatement.findMany({
       where: { month: { startsWith: `${month}-` } },
-      select: { organizationId: true, month: true, messages: true, bandName: true, amountInr: true, amountUsd: true, status: true },
+      select: { organizationId: true, month: true, messages: true, bandName: true, amountInr: true, amountUsd: true, status: true, paymentUrl: true },
       orderBy: { messages: "desc" },
       take: 1000,
     });
@@ -33,7 +33,7 @@ export const adminBillingStatementsRouter: FastifyPluginAsync = async (fastify) 
     const currencyById = new Map(orgs.map((o) => [o.id, currencyForOrg(o)]));
     const includeInternal = request.query.includeInternal === "true";
     const data = rows
-      .map((r) => ({ ...r, name: nameById.get(r.organizationId) ?? "(deleted organization)", payCurrency: currencyById.get(r.organizationId) ?? "USD" }))
+      .map(({ paymentUrl, ...r }) => ({ ...r, hasLink: paymentUrl !== null, name: nameById.get(r.organizationId) ?? "(deleted organization)", payCurrency: currencyById.get(r.organizationId) ?? "USD" }))
       .filter((r) => includeInternal || !INTERNAL_ORG_NAMES.includes(r.name));
     const totalInr = data.reduce((s, r) => s + (r.amountInr ?? 0), 0);
     const totalUsd = data.reduce((s, r) => s + (r.amountUsd ?? 0), 0);

@@ -18,7 +18,7 @@ type Mode = "follow" | "never" | "always";
 interface Rule { category: string; mode: Mode }
 interface RulesResponse { modes: Mode[]; rules: Rule[] }
 interface BandCfg { upTo: number; inr: number; usd: number }
-interface StatementRow { organizationId: string; name: string; month: string; payCurrency: "INR" | "USD"; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string }
+interface StatementRow { organizationId: string; name: string; month: string; payCurrency: "INR" | "USD"; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string; hasLink: boolean }
 interface StatementsResponse { month: string; totals: { statements: number; inr: number; usd: number }; statements: StatementRow[] }
 interface BillingCfg { published: boolean; freeAllowance: number; alertsEnabled: boolean; chargingStartDate: string | null; bands: BandCfg[] }
 
@@ -108,9 +108,13 @@ export default function AdminBillingPage(): JSX.Element {
   });
 
   const issue = useMutation({
-    mutationFn: () => adminFetch<{ data: { issued: number; noPayment: number; customQuote: number } }>("/v1/admin/billing/statements/issue", { method: "POST", body: "{}" }),
+    mutationFn: () => adminFetch<{ data: { issued: number; noPayment: number; customQuote: number; paymentLinks: number } }>("/v1/admin/billing/statements/issue", { method: "POST", body: "{}" }),
     onSuccess: (r) => {
-      toast.success(`Issued ${r.data.issued}, no payment needed ${r.data.noPayment}, custom quote left as draft ${r.data.customQuote}`);
+      if (r.data.issued > 0 && r.data.paymentLinks < r.data.issued) {
+        toast.warning(`Issued ${r.data.issued}, but only ${r.data.paymentLinks} payment link(s) were created. The rest show "no link yet" and are retried daily. Check the payment settings.`);
+      } else {
+        toast.success(`Issued ${r.data.issued} (payment links created: ${r.data.paymentLinks}), no payment needed ${r.data.noPayment}, left as draft ${r.data.customQuote}`);
+      }
       void qc.invalidateQueries({ queryKey: ["admin-billing-statements"] });
     },
     onError: (e: Error) => toast.error(e.message === "HTTP 409" ? "Could not issue: set and save a charging start date in the prices first" : `Could not issue (${e.message}). Nothing was changed.`),
@@ -295,7 +299,10 @@ export default function AdminBillingPage(): JSX.Element {
                     <td className="p-2 text-right">{r.messages.toLocaleString()}</td>
                     <td className="p-2">{r.bandName}</td>
                     <td className="p-2">{r.amountInr === null ? "Custom quote" : `₹${r.amountInr.toLocaleString()} / $${(r.amountUsd ?? 0).toLocaleString()}`}</td>
-                    <td className="p-2">{r.status}</td>
+                    <td className="p-2">
+                      {r.status}
+                      {r.status === "issued" && !r.hasLink ? <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">no link yet</span> : null}
+                    </td>
                     <td className="p-2 whitespace-nowrap">
                       {r.status === "issued" && (
                         <button type="button" onClick={() => setStatus.mutate({ organizationId: r.organizationId, month: r.month, status: "paid" })} className="text-xs border rounded px-2 py-0.5 mr-1">Mark paid</button>
