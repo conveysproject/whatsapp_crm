@@ -79,3 +79,37 @@ export async function generateStatements(prisma: PrismaClient, day: Date, now: D
   }
   return { created, refreshed, skipped };
 }
+
+export type StatementStatus = "draft" | "issued" | "no_payment" | "paid" | "void";
+
+/**
+ * Issues DRAFT statements for cycles that started on or after the owner's charging start date. Does not collect money.
+ * A zero amount becomes "no_payment" (visible, nothing due); a custom-quote volume (no amount) stays a draft for the
+ * owner to handle by hand. With no charging start date set nothing is issued.
+ */
+export async function issueStatements(prisma: PrismaClient, now: Date = new Date()): Promise<{ configured: boolean; issued: number; noPayment: number; customQuote: number }> {
+  const config = await loadBillingConfig(prisma);
+  if (!config.chargingStartDate) return { configured: false, issued: 0, noPayment: 0, customQuote: 0 };
+  const drafts = await prisma.billingStatement.findMany({
+    where: { status: "draft", month: { gte: config.chargingStartDate } },
+    select: { id: true, amountInr: true },
+    take: 5000,
+  });
+  let issued = 0;
+  let noPayment = 0;
+  let customQuote = 0;
+  for (const d of drafts) {
+    if (d.amountInr === null) { customQuote++; continue; }
+    const status: StatementStatus = d.amountInr === 0 ? "no_payment" : "issued";
+    const res = await prisma.billingStatement.updateMany({ where: { id: d.id, status: "draft" }, data: { status, issuedAt: now, updatedAt: now } });
+    if (res.count === 1) { if (status === "issued") issued++; else noPayment++; }
+  }
+  return { configured: true, issued, noPayment, customQuote };
+}
+
+/** Owner marks an issued statement paid, or voids a draft or issued one. Anything else is refused. */
+export async function setStatementStatus(prisma: PrismaClient, organizationId: string, month: string, to: "paid" | "void", now: Date = new Date()): Promise<boolean> {
+  const from: StatementStatus[] = to === "paid" ? ["issued"] : ["draft", "issued"];
+  const res = await prisma.billingStatement.updateMany({ where: { organizationId, month, status: { in: from } }, data: { status: to, updatedAt: now } });
+  return res.count === 1;
+}

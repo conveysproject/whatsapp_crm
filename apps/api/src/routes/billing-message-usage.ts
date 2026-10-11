@@ -45,10 +45,10 @@ export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => 
     const alertRows = await Promise.resolve()
       .then(() => fastify.prisma.billingAlertEvent.findMany({ where: { organizationId, month: cycle.key }, select: { kind: true, createdAt: true }, orderBy: { createdAt: "asc" } }))
       .catch(() => []);
-    // Only statements the owner has issued are visible to customers; drafts are internal.
+    // Only statements the owner has issued (or settled) are visible to customers; drafts and voided ones are internal.
     const statements = await Promise.resolve()
       .then(() => fastify.prisma.billingStatement.findMany({
-        where: { organizationId, status: "issued" },
+        where: { organizationId, status: { in: ["issued", "no_payment", "paid"] } },
         select: { month: true, messages: true, bandName: true, amountInr: true, amountUsd: true, status: true },
         orderBy: { month: "desc" },
         take: 24,

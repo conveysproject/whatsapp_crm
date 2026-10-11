@@ -141,7 +141,7 @@ describe("GET /v1/billing/message-usage", () => {
     const app = await buildAs("admin");
     const body = (await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).json<{ data: { statements: unknown[] } }>().data;
     expect(body.statements).toHaveLength(1);
-    expect(findStatements.mock.calls[0]![0].where).toEqual({ organizationId: "org-1", status: "issued" });
+    expect(findStatements.mock.calls[0]![0].where).toEqual({ organizationId: "org-1", status: { in: ["issued", "no_payment", "paid"] } });
     await app.close();
   });
   it("returns 404 when the organization does not exist and queries no usage", async () => {

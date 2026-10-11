@@ -43,9 +43,13 @@ describe("planFor", () => {
 });
 
 describe("parseBillingConfig", () => {
-  const good = { published: false, freeAllowance: 500, alertsEnabled: false, bands: [{ upTo: 1000, inr: 10, usd: 1 }, { upTo: 5000, inr: 20, usd: 2 }] };
+  const good = { published: false, freeAllowance: 500, alertsEnabled: false, chargingStartDate: null, bands: [{ upTo: 1000, inr: 10, usd: 1 }, { upTo: 5000, inr: 20, usd: 2 }] };
   it("accepts a valid config", () => {
     expect(parseBillingConfig(good)).toEqual({ ok: true, config: good });
+  });
+  it("accepts a real charging start date", () => {
+    const r = parseBillingConfig({ ...good, chargingStartDate: "2026-11-01" });
+    expect(r.ok && r.config.chargingStartDate).toBe("2026-11-01");
   });
   it("rejects bad shapes and values", () => {
     const bad: unknown[] = [
@@ -56,6 +60,9 @@ describe("parseBillingConfig", () => {
       { ...good, bands: [{ upTo: 1000, inr: "10", usd: 1 }] },
       { ...good, bands: [{ upTo: 1000, inr: -1, usd: 1 }] },
       { ...good, alertsEnabled: "yes" },
+      { ...good, chargingStartDate: "2026-02-30" },
+      { ...good, chargingStartDate: "soon" },
+      { ...good, chargingStartDate: 20261101 },
     ];
     for (const b of bad) expect(parseBillingConfig(b).ok, JSON.stringify(b)).toBe(false);
   });

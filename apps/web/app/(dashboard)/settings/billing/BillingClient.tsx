@@ -6,7 +6,7 @@ import { BillSummary } from "@/components/billing/BillSummary";
 import { BandProgress } from "@/components/billing/BandProgress";
 import { UsageDetails } from "@/components/billing/UsageDetails";
 import { BandTable } from "@/components/billing/BandTable";
-import { alertText, formatCount, formatInr, formatUsd, cycleStartLabel, type MessageUsage } from "@/lib/message-usage";
+import { alertText, formatCount, formatInr, formatUsd, cycleStartLabel, statementStatusLabel, type MessageUsage } from "@/lib/message-usage";
 
 interface SubscriptionData {
   planTier: string;
@@ -85,7 +85,8 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
                   <th className="py-2 pr-3 font-semibold">Billing period</th>
                   <th className="py-2 pr-3 font-semibold">Messages</th>
                   <th className="py-2 pr-3 font-semibold">Band</th>
-                  <th className="py-2 font-semibold">Amount</th>
+                  <th className="py-2 pr-3 font-semibold">Amount</th>
+                  <th className="py-2 font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -94,7 +95,8 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
                     <td className="py-2.5 pr-3">{cycleStartLabel(st.month)}</td>
                     <td className="py-2.5 pr-3">{formatCount(st.messages)}</td>
                     <td className="py-2.5 pr-3">{st.bandName}</td>
-                    <td className="py-2.5">{formatInr(st.amountInr)} / {formatUsd(st.amountUsd)}</td>
+                    <td className="py-2.5 pr-3">{formatInr(st.amountInr)} / {formatUsd(st.amountUsd)}</td>
+                    <td className="py-2.5">{statementStatusLabel(st.status)}</td>
                   </tr>
                 ))}
               </tbody>

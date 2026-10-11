@@ -20,7 +20,7 @@ interface RulesResponse { modes: Mode[]; rules: Rule[] }
 interface BandCfg { upTo: number; inr: number; usd: number }
 interface StatementRow { organizationId: string; name: string; month: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string }
 interface StatementsResponse { month: string; totals: { statements: number; inr: number; usd: number }; statements: StatementRow[] }
-interface BillingCfg { published: boolean; freeAllowance: number; alertsEnabled: boolean; bands: BandCfg[] }
+interface BillingCfg { published: boolean; freeAllowance: number; alertsEnabled: boolean; chargingStartDate: string | null; bands: BandCfg[] }
 
 const KNOWN_CATEGORIES = ["marketing", "utility", "authentication", "service", "authentication_international", "marketing_lite", "referral_conversion", "unknown"];
 const MODE_HELP: Record<Mode, string> = {
@@ -104,6 +104,21 @@ export default function AdminBillingPage(): JSX.Element {
     mutationFn: () => adminFetch("/v1/admin/billing/statements/generate", { method: "POST", body: JSON.stringify({ date: stDay }) }),
     onSuccess: () => { toast.success("Draft statements prepared"); void qc.invalidateQueries({ queryKey: ["admin-billing-statements"] }); },
     onError: () => toast.error("Could not prepare statements (the date may be in the future)"),
+  });
+
+  const issue = useMutation({
+    mutationFn: () => adminFetch<{ data: { issued: number; noPayment: number; customQuote: number } }>("/v1/admin/billing/statements/issue", { method: "POST" }),
+    onSuccess: (r) => {
+      toast.success(`Issued ${r.data.issued}, no payment needed ${r.data.noPayment}, custom quote left as draft ${r.data.customQuote}`);
+      void qc.invalidateQueries({ queryKey: ["admin-billing-statements"] });
+    },
+    onError: () => toast.error("Could not issue (set a charging start date in the prices first)"),
+  });
+  const setStatus = useMutation({
+    mutationFn: (v: { organizationId: string; month: string; status: "paid" | "void" }) =>
+      adminFetch("/v1/admin/billing/statements/status", { method: "POST", body: JSON.stringify(v) }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["admin-billing-statements"] }); },
+    onError: () => toast.error("That change is not allowed for this statement"),
   });
 
   const modeOf = (category: string): Mode => rules.data?.data.rules.find((r) => r.category === category)?.mode ?? "follow";
@@ -195,6 +210,11 @@ export default function AdminBillingPage(): JSX.Element {
               </tbody>
             </table>
             <p className="text-gray-500">Above the last band customers see &quot;Custom quote&quot;.</p>
+            <label className="flex items-center gap-3">
+              <span className="w-48 text-gray-600">Charging starts (cycles starting on/after)</span>
+              <input type="date" value={cfg.chargingStartDate ?? ""} onChange={(e) => setCfg({ ...cfg, chargingStartDate: e.target.value || null })} className="border rounded px-2 py-1" />
+              <span className="text-gray-500">Empty = nothing can be issued or charged.</span>
+            </label>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={cfg.alertsEnabled} onChange={(e) => setCfg({ ...cfg, alertsEnabled: e.target.checked })} />
               <span>Email usage alerts to customers&apos; billing admins (50%, 80%, 95%, 100% of the free messages, new bands)</span>
@@ -220,8 +240,8 @@ export default function AdminBillingPage(): JSX.Element {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold text-gray-900">Draft statements</h2>
-        <p className="text-sm text-gray-500 mt-1">Prepared automatically every day for the customers whose billing cycle ended that day (cycles start on each customer&apos;s registration day). These are drafts only: customers cannot see them and nobody is charged.</p>
+        <h2 className="text-lg font-semibold text-gray-900">Statements</h2>
+        <p className="text-sm text-gray-500 mt-1">Prepared automatically every day for the customers whose billing cycle ended that day (cycles start on each customer&apos;s registration day). Drafts are invisible to customers. Issuing (below) shows a statement to the customer; it collects no money. You mark payments received yourself.</p>
         <div className="flex items-center gap-3 mt-4">
           <label className="text-sm text-gray-600 flex items-center gap-2">Cycles started in
             <input type="month" value={stMonth} onChange={(e) => setStMonth(e.target.value)} className="border rounded px-2 py-1 text-sm" />
@@ -230,12 +250,20 @@ export default function AdminBillingPage(): JSX.Element {
             <input type="date" value={stDay} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setStDay(e.target.value)} className="border rounded px-2 py-1 text-sm" />
           </label>
           <button type="button" disabled={prepare.isPending} onClick={() => prepare.mutate()} className="text-sm bg-gray-900 text-white rounded px-3 py-1">Prepare drafts</button>
+          <button
+            type="button"
+            disabled={issue.isPending}
+            onClick={() => { if (window.confirm("Customers will see these statements as due on their billing page. Nothing is collected automatically. Continue?")) issue.mutate(); }}
+            className="text-sm bg-red-700 text-white rounded px-3 py-1"
+          >
+            Issue drafts
+          </button>
         </div>
         {statementsQ.data && (
           <div className="overflow-x-auto bg-white border rounded mt-4">
             <p className="p-3 text-sm text-gray-600">{statementsQ.data.data.totals.statements} statements, total ₹{statementsQ.data.data.totals.inr.toLocaleString()} / ${statementsQ.data.data.totals.usd.toLocaleString()} if every one were charged</p>
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-gray-500"><tr><th className="p-2">Organization</th><th className="p-2">Cycle from</th><th className="p-2 text-right">Messages</th><th className="p-2">Band</th><th className="p-2">₹ / $</th><th className="p-2">Status</th></tr></thead>
+              <thead className="bg-gray-50 text-left text-gray-500"><tr><th className="p-2">Organization</th><th className="p-2">Cycle from</th><th className="p-2 text-right">Messages</th><th className="p-2">Band</th><th className="p-2">₹ / $</th><th className="p-2">Status</th><th className="p-2"></th></tr></thead>
               <tbody>
                 {statementsQ.data.data.statements.map((r) => (
                   <tr key={`${r.organizationId}-${r.month}`} className="border-t">
@@ -245,9 +273,17 @@ export default function AdminBillingPage(): JSX.Element {
                     <td className="p-2">{r.bandName}</td>
                     <td className="p-2">{r.amountInr === null ? "Custom quote" : `₹${r.amountInr.toLocaleString()} / $${(r.amountUsd ?? 0).toLocaleString()}`}</td>
                     <td className="p-2">{r.status}</td>
+                    <td className="p-2 whitespace-nowrap">
+                      {r.status === "issued" && (
+                        <button type="button" onClick={() => setStatus.mutate({ organizationId: r.organizationId, month: r.month, status: "paid" })} className="text-xs border rounded px-2 py-0.5 mr-1">Mark paid</button>
+                      )}
+                      {(r.status === "draft" || r.status === "issued") && (
+                        <button type="button" onClick={() => { if (window.confirm("Void this statement?")) setStatus.mutate({ organizationId: r.organizationId, month: r.month, status: "void" }); }} className="text-xs border rounded px-2 py-0.5">Void</button>
+                      )}
+                    </td>
                   </tr>
                 ))}
-                {statementsQ.data.data.statements.length === 0 && <tr><td colSpan={6} className="p-4 text-center text-gray-500">No draft statements for cycles that started in this month.</td></tr>}
+                {statementsQ.data.data.statements.length === 0 && <tr><td colSpan={7} className="p-4 text-center text-gray-500">No statements for cycles that started in this month.</td></tr>}
               </tbody>
             </table>
           </div>

@@ -74,4 +74,26 @@ describe("admin billing statements", () => {
     expect(res.json<{ data: { created: number } }>().data.created).toBe(1);
     expect(mockPrisma.billingStatement.create.mock.calls[0]![0].data).toMatchObject({ status: "draft", month: "2026-08-14" });
   });
+  it("issue and status endpoints are super-admin only", async () => {
+    app = await buildAs("admin");
+    expect((await app.inject({ method: "POST", url: "/v1/admin/billing/statements/issue" })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: "/v1/admin/billing/statements/status", payload: { organizationId: "a", month: "2026-10-14", status: "paid" } })).statusCode).toBe(403);
+    expect(mockPrisma.billingStatement.updateMany).not.toHaveBeenCalled();
+  });
+  it("refuses to issue without a charging start date", async () => {
+    app = await buildAs("superAdmin");
+    const res = await app.inject({ method: "POST", url: "/v1/admin/billing/statements/issue" });
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("CHARGING_NOT_CONFIGURED");
+  });
+  it("validates and applies a status change", async () => {
+    mockPrisma.billingStatement.updateMany.mockReset().mockResolvedValue({ count: 1 });
+    app = await buildAs("superAdmin");
+    for (const body of [{}, { organizationId: "a", month: "2026-10", status: "paid" }, { organizationId: "a", month: "2026-10-14", status: "draft" }]) {
+      expect((await app.inject({ method: "POST", url: "/v1/admin/billing/statements/status", payload: body })).statusCode, JSON.stringify(body)).toBe(400);
+    }
+    expect((await app.inject({ method: "POST", url: "/v1/admin/billing/statements/status", payload: { organizationId: "a", month: "2026-10-14", status: "paid" } })).statusCode).toBe(200);
+    mockPrisma.billingStatement.updateMany.mockResolvedValue({ count: 0 });
+    expect((await app.inject({ method: "POST", url: "/v1/admin/billing/statements/status", payload: { organizationId: "a", month: "2026-10-14", status: "paid" } })).statusCode).toBe(409);
+  });
 });

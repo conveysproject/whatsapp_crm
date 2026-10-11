@@ -19,7 +19,7 @@ export type Plan =
       cap: { upTo: number; inr: number; usd: number };
     };
 export interface Cycle { key: string; from: string; toExclusive: string; days: number }
-export interface Statement { month: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null }
+export interface Statement { month: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string }
 export interface UsageAlert { kind: string; at: string }
 export interface ExpectedBill { messages: number; band: BandView }
 export interface MessageUsage {
@@ -101,7 +101,7 @@ function normalizeStatements(raw: unknown): Statement[] {
   const out: Statement[] = [];
   for (const r of raw) {
     if (isRecord(r) && typeof r["month"] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r["month"]) && typeof r["bandName"] === "string") {
-      out.push({ month: r["month"], messages: num(r["messages"]), bandName: r["bandName"], amountInr: nullableNum(r["amountInr"]), amountUsd: nullableNum(r["amountUsd"]) });
+      out.push({ month: r["month"], messages: num(r["messages"]), bandName: r["bandName"], amountInr: nullableNum(r["amountInr"]), amountUsd: nullableNum(r["amountUsd"]), status: typeof r["status"] === "string" ? r["status"] : "issued" });
     }
   }
   return out;
@@ -250,4 +250,11 @@ export function resetLabel(cycle: Cycle | null): string {
 export function cycleStartLabel(key: string): string {
   const d = new Date(`${key}T00:00:00.000Z`);
   return Number.isNaN(d.getTime()) ? key : `Cycle from ${dayLabel(d)} ${d.getUTCFullYear()}`;
+}
+
+/** Customer-facing wording for a statement status. */
+export function statementStatusLabel(status: string): string {
+  if (status === "paid") return "Paid";
+  if (status === "no_payment") return "No payment needed";
+  return "Due";
 }

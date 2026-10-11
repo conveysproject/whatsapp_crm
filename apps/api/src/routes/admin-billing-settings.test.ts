@@ -15,7 +15,7 @@ async function buildAs(role: "superAdmin" | "admin"): Promise<FastifyInstance> {
   return app;
 }
 
-const valid = { published: true, freeAllowance: 500, alertsEnabled: false, bands: [{ upTo: 10000, inr: 999, usd: 12 }] };
+const valid = { published: true, freeAllowance: 500, alertsEnabled: false, chargingStartDate: null, bands: [{ upTo: 10000, inr: 999, usd: 12 }] };
 
 describe("admin billing settings", () => {
   let app: FastifyInstance;

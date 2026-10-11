@@ -16,6 +16,8 @@ export interface BillingConfig {
   bands: Band[];
   /** Owner switch: email billing admins when a usage threshold is reached. Off until the owner turns it on. */
   alertsEnabled: boolean;
+  /** First billing-cycle start date (YYYY-MM-DD) that may be charged. null = nothing is ever issued. Cycles that started earlier are never billed. */
+  chargingStartDate: string | null;
 }
 
 /** Draft from docs/billing-price-bands-draft.md. Not final; never shown to customers while published is false. */
@@ -23,6 +25,7 @@ export const DEFAULT_BILLING_CONFIG: BillingConfig = {
   published: false,
   freeAllowance: 500,
   alertsEnabled: false,
+  chargingStartDate: null,
   bands: [
     { upTo: 10_000, inr: 999, usd: 12 },
     { upTo: 50_000, inr: 2999, usd: 36 },
@@ -43,6 +46,10 @@ export function parseBillingConfig(raw: unknown): { ok: true; config: BillingCon
   if (typeof o["published"] !== "boolean") return { ok: false, error: "published must be true or false" };
   if (!isInt(o["freeAllowance"], 0)) return { ok: false, error: "freeAllowance must be a whole number, 0 or more" };
   if (o["alertsEnabled"] !== undefined && typeof o["alertsEnabled"] !== "boolean") return { ok: false, error: "alertsEnabled must be true or false" };
+  const csd = o["chargingStartDate"];
+  if (csd !== undefined && csd !== null && (typeof csd !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(csd) || Number.isNaN(Date.parse(`${csd}T00:00:00Z`)) || new Date(`${csd}T00:00:00Z`).toISOString().slice(0, 10) !== csd)) {
+    return { ok: false, error: "chargingStartDate must be a real date in YYYY-MM-DD format, or empty" };
+  }
   const bandsRaw = o["bands"];
   if (!Array.isArray(bandsRaw) || bandsRaw.length < 1 || bandsRaw.length > 12) return { ok: false, error: "bands must be a list of 1 to 12 bands" };
   const bands: Band[] = [];
@@ -60,7 +67,7 @@ export function parseBillingConfig(raw: unknown): { ok: true; config: BillingCon
     prevInr = r["inr"];
     prevUsd = r["usd"];
   }
-  return { ok: true, config: { published: o["published"], freeAllowance: o["freeAllowance"], alertsEnabled: o["alertsEnabled"] === true, bands } };
+  return { ok: true, config: { published: o["published"], freeAllowance: o["freeAllowance"], alertsEnabled: o["alertsEnabled"] === true, chargingStartDate: typeof csd === "string" ? csd : null, bands } };
 }
 
 export interface BandView {

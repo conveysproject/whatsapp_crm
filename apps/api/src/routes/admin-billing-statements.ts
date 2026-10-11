@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { INTERNAL_ORG_NAMES } from "../lib/billing/internal-orgs.js";
 import { parseMonth } from "../lib/billing/metering.js";
 import { parseCycleKey } from "../lib/billing/cycle.js";
-import { generateStatements } from "../lib/billing/statements.js";
+import { generateStatements, issueStatements, setStatementStatus } from "../lib/billing/statements.js";
 
 const FORBIDDEN = { error: { code: "FORBIDDEN", message: "Super admin access required" } };
 
@@ -51,5 +51,26 @@ export const adminBillingStatementsRouter: FastifyPluginAsync = async (fastify) 
       }
       throw err;
     }
+  });
+
+  // Issues drafts whose cycle started on/after the owner's charging start date. Collects no money.
+  fastify.post("/admin/billing/statements/issue", async (request, reply) => {
+    if (request.auth.role !== "superAdmin") return reply.status(403).send(FORBIDDEN);
+    const res = await issueStatements(fastify.prisma);
+    if (!res.configured) {
+      return reply.status(409).send({ error: { code: "CHARGING_NOT_CONFIGURED", message: "Set a charging start date in the prices settings first" } });
+    }
+    return reply.send({ data: res });
+  });
+
+  fastify.post<{ Body: { organizationId?: unknown; month?: unknown; status?: unknown } }>("/admin/billing/statements/status", async (request, reply) => {
+    if (request.auth.role !== "superAdmin") return reply.status(403).send(FORBIDDEN);
+    const { organizationId, month, status } = request.body ?? {};
+    if (typeof organizationId !== "string" || organizationId.length === 0 || typeof month !== "string" || !parseCycleKey(month) || (status !== "paid" && status !== "void")) {
+      return reply.status(400).send({ error: { code: "INVALID_REQUEST", message: "organizationId, month (YYYY-MM-DD) and status (paid or void) are required" } });
+    }
+    const ok = await setStatementStatus(fastify.prisma, organizationId, month, status);
+    if (!ok) return reply.status(409).send({ error: { code: "INVALID_TRANSITION", message: "Only an issued statement can be marked paid; only a draft or issued one can be voided" } });
+    return reply.send({ data: { organizationId, month, status } });
   });
 };

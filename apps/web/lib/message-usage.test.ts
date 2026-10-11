@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeMessageUsage, normalizePlan, alertText, bandAt, periodLabel, resetLabel, cycleStartLabel, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
+import { normalizeMessageUsage, normalizePlan, alertText, bandAt, periodLabel, resetLabel, cycleStartLabel, statementStatusLabel, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
 
 describe("normalizeMessageUsage", () => {
   it("maps a full body", () => {
@@ -130,5 +130,15 @@ describe("cycle labels", () => {
     expect(periodLabel(y!.cycle)).toBe("31 Dec to 30 Jan 2027");
     expect(periodLabel(null)).toBe("");
     expect(normalizeMessageUsage({ cycle: { key: "x", from: "y", toExclusive: "z" } })?.cycle).toBeNull();
+  });
+});
+
+describe("statement status", () => {
+  it("words each status for customers and defaults a missing one to due", () => {
+    expect(statementStatusLabel("paid")).toBe("Paid");
+    expect(statementStatusLabel("no_payment")).toBe("No payment needed");
+    expect(statementStatusLabel("issued")).toBe("Due");
+    const u = normalizeMessageUsage({ statements: [{ month: "2026-10-14", messages: 1, bandName: "Band 1", amountInr: 5, amountUsd: 1 }] });
+    expect(u?.statements[0]?.status).toBe("issued");
   });
 });
