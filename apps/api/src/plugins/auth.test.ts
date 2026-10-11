@@ -274,9 +274,15 @@ describe("auth plugin — user impersonation", () => {
     app.get("/v1/admin/organizations", async () => ({ ok: true }));
     app.post("/v1/admin/organizations/:id/impersonate", async () => ({ ok: true }));
     app.get("/v1/contacts", async (req) => ({ org: req.auth.organizationId }));
+    app.get("/v1/super-admins", async () => ({ ok: true }));
+    app.post("/v1/billing/manual/:id/approve", async () => ({ ok: true }));
     await app.ready();
     const h = { "x-impersonate-token": "tok" };
     expect((await app.inject({ method: "GET", url: "/v1/contacts", headers: h })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/v1/super-admins", headers: h })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: "/v1/billing/manual/ms-1/approve", headers: h })).statusCode).toBe(403);
+    expect((await app.inject({ method: "GET", url: "/v1/%61dmin/organizations", headers: h })).statusCode).toBe(403);
+    expect((await app.inject({ method: "GET", url: "/V1/ADMIN/organizations", headers: h })).statusCode).toBe(403);
     expect((await app.inject({ method: "GET", url: "/v1/admin/organizations?x=1", headers: h })).statusCode).toBe(403);
     expect((await app.inject({ method: "POST", url: "/v1/admin/organizations/o/impersonate", headers: h })).statusCode).toBe(403);
     await app.close();

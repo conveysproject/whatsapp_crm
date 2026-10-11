@@ -2,6 +2,7 @@ import fp from "fastify-plugin";
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { verifyClerkToken } from "../lib/clerk.js";
 import { defaultsForRole } from "../lib/default-role-permissions.js";
+import { isPlatformOnlyPath } from "../lib/demo-guard.js";
 import { redis } from "../lib/redis.js";
 import type { AuthContext } from "../types/fastify.js";
 
@@ -99,7 +100,10 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       // context. Every other payload without targetUserId is rejected below.
       if (payload.isDemo === true && !payload.targetUserId && payload.organizationId && payload.issuedBy === undefined) {
         // The demo session is a public, anonymous superAdmin: it must never reach platform admin routes.
-        if ((request.url.split("?")[0] ?? "").startsWith("/v1/admin")) {
+        const rawPath = request.url.split("?")[0] ?? "";
+        let decodedPath = rawPath;
+        try { decodedPath = decodeURIComponent(rawPath); } catch { /* malformed escapes: the raw path is still checked */ }
+        if ([rawPath, decodedPath, request.routeOptions?.url ?? ""].some(isPlatformOnlyPath)) {
           return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Not available in demo mode" } });
         }
         request.auth = { userId: "demo", organizationId: payload.organizationId, role: "superAdmin", permissions: {}, teamId: null, teamRole: null };
