@@ -24,6 +24,7 @@ import { searchRouter } from "./search.js";
 import { billingRouter } from "./billing.js";
 import { billingMessageUsageRouter } from "./billing-message-usage.js";
 import { billingDetailsRouter } from "./billing-details.js";
+import { billingStatementPdfRouter } from "./billing-statement-pdf.js";
 import { billingWebhookRouter } from "./billing-webhook.js";
 import { billingGatewayWebhooksRouter } from "./billing-gateway-webhooks.js";
 import { clerkWebhookRouter } from "./clerk-webhook.js";
@@ -91,6 +92,7 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(billingRouter, { prefix: "/v1" });
   await fastify.register(billingMessageUsageRouter, { prefix: "/v1" });
   await fastify.register(billingDetailsRouter, { prefix: "/v1" });
+  await fastify.register(billingStatementPdfRouter, { prefix: "/v1" });
   await fastify.register(billingWebhookRouter, { prefix: "/v1" });
   await fastify.register(billingGatewayWebhooksRouter, { prefix: "/v1" });
   await fastify.register(clerkWebhookRouter);
