@@ -67,21 +67,19 @@ export function AlertPreferences(): JSX.Element {
   return (
     <div data-testid="alert-preferences">
       <p className="text-sm text-gray-600 mb-3">Get a heads-up before your bill changes. Sent to billing admins.</p>
-      <fieldset className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-800">
-        <legend className="sr-only">Tell me at</legend>
+      <div role="group" aria-label="Tell me at" className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-800">
         {WHEN.map((w) => (
           <label key={w.key} className="flex items-center gap-2">
             <input type="checkbox" className={box} checked={prefs[w.key]} onChange={toggle(w.key)} disabled={q.isPending} />
             {w.label}
           </label>
         ))}
-      </fieldset>
-      <fieldset className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-800">
-        <legend className="sr-only">Tell me by</legend>
+      </div>
+      <div role="group" aria-label="Tell me by" className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-800">
         <label className="flex items-center gap-2"><input type="checkbox" className={box} checked={prefs.email} onChange={toggle("email")} disabled={q.isPending} /> Email</label>
         <label className="flex items-center gap-2"><input type="checkbox" className={box} checked={prefs.inApp} onChange={toggle("inApp")} disabled={q.isPending} /> In the app</label>
         <label className="flex items-center gap-2"><input type="checkbox" className={box} checked={prefs.newBand} onChange={toggle("newBand")} disabled={q.isPending} /> New band reached</label>
-      </fieldset>
+      </div>
       {save.isError && <p role="alert" className="mt-2 text-sm text-red-700">Could not save. Please try again.</p>}
     </div>
   );
