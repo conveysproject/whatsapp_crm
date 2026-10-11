@@ -3,7 +3,8 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
 const findMany = vi.fn();
-const mockPrisma = { messageUsageDaily: { findMany } };
+const findSetting = vi.fn();
+const mockPrisma = { messageUsageDaily: { findMany }, billingSetting: { findUnique: findSetting } };
 
 async function buildAs(role: string, permissions: Record<string, string> = {}, organizationId = "org-1"): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -20,6 +21,7 @@ describe("GET /v1/billing/message-usage", () => {
   beforeEach(() => {
     vi.resetModules();
     findMany.mockReset().mockResolvedValue([]);
+    findSetting.mockReset().mockResolvedValue(null);
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-10T12:00:00Z"));
   });
@@ -85,6 +87,25 @@ describe("GET /v1/billing/message-usage", () => {
     const data = res.json<{ data: { billable: number; updatedAt: string | null } }>().data;
     expect(data.billable).toBe(0);
     expect(data.updatedAt).toBeNull();
+    await app.close();
+  });
+  it("hides prices, bands and the bill until the owner publishes them", async () => {
+    findMany.mockResolvedValue([{ day: new Date("2026-10-05T00:00:00Z"), billableCount: 3240, bySource: {}, computedAt: new Date() }]);
+    const app = await buildAs("admin");
+    const body = (await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).json<{ data: { plan: unknown; expected: unknown } }>().data;
+    expect(body.plan).toEqual({ published: false, freeAllowance: 500 });
+    expect(body.expected).toBeNull();
+    await app.close();
+  });
+
+  it("includes the band, bill and projection once published", async () => {
+    findSetting.mockResolvedValue({ value: { published: true, freeAllowance: 500, bands: [{ upTo: 10000, inr: 999, usd: 12 }] } });
+    findMany.mockResolvedValue([{ day: new Date("2026-10-05T00:00:00Z"), billableCount: 2000, bySource: {}, computedAt: new Date() }]);
+    const app = await buildAs("admin");
+    const body = (await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).json<{ data: { plan: { published: boolean; current: { inr: number } }; expected: { band: { inr: number } } } }>().data;
+    expect(body.plan.published).toBe(true);
+    expect(body.plan.current.inr).toBe(999);
+    expect(body.expected.band.inr).toBe(999);
     await app.close();
   });
 });

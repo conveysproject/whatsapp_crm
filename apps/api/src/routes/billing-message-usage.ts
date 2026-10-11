@@ -2,6 +2,8 @@ import type { FastifyPluginAsync } from "fastify";
 import { canAccessSub } from "../lib/permissions.js";
 import { parseMonth } from "../lib/billing/metering.js";
 import { buildMessageUsage } from "../lib/billing/message-usage.js";
+import { planFor, projectMonthTotal } from "../lib/billing/bands.js";
+import { loadBillingConfig } from "../lib/billing/settings.js";
 
 function currentMonth(now: Date): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -29,12 +31,22 @@ export const billingMessageUsageRouter: FastifyPluginAsync = async (fastify) => 
       orderBy: { day: "asc" },
     });
 
+    const summary = buildMessageUsage(rows, range.from, range.toExclusive, now);
+    // Prices, band ranges and the bill are included only after the owner has published them (see lib/billing/bands.ts).
+    const config = await loadBillingConfig(fastify.prisma);
+    const plan = planFor(summary.billable, config);
+    const monthOver = now.getTime() >= range.toExclusive.getTime();
+    const projectedTotal = monthOver ? summary.billable : projectMonthTotal(summary.billable, summary.daily.length, range.days);
+    const projectedPlan = plan.published && projectedTotal !== null ? planFor(projectedTotal, config) : null;
+
     return {
       data: {
         month: monthStr,
         from: range.from.toISOString(),
         toExclusive: range.toExclusive.toISOString(),
-        ...buildMessageUsage(rows, range.from, range.toExclusive, now),
+        ...summary,
+        plan,
+        expected: projectedPlan && projectedPlan.published ? { messages: projectedTotal, band: projectedPlan.current } : null,
       },
     };
   });

@@ -39,6 +39,7 @@ import { webhookActionsRouter } from "./webhook-actions.js";
 import { adminRouter } from "./admin.js";
 import { adminBillingRouter } from "./admin-billing.js";
 import { adminBillingRulesRouter } from "./admin-billing-rules.js";
+import { adminBillingSettingsRouter } from "./admin-billing-settings.js";
 import { bootstrapRouter } from "./bootstrap.js";
 import { superAdminsRouter } from "./super-admins.js";
 import { tagsRouter } from "./labels.js";
@@ -102,6 +103,7 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(adminRouter, { prefix: "/v1" });
   await fastify.register(adminBillingRouter, { prefix: "/v1" });
   await fastify.register(adminBillingRulesRouter, { prefix: "/v1" });
+  await fastify.register(adminBillingSettingsRouter, { prefix: "/v1" });
   await fastify.register(bootstrapRouter, { prefix: "/v1" });
   await fastify.register(superAdminsRouter, { prefix: "/v1" });
   await fastify.register(tagsRouter, { prefix: "/v1" });
