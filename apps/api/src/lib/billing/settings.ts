@@ -19,6 +19,6 @@ export async function saveBillingConfig(prisma: PrismaClient, config: BillingCon
   await prisma.billingSetting.upsert({
     where: { key: KEY },
     create: { key: KEY, value: config as never, updatedBy: userId },
-    update: { value: config as never, updatedBy: userId },
+    update: { value: config as never, updatedBy: userId, updatedAt: new Date() },
   });
 }

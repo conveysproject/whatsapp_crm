@@ -48,5 +48,6 @@ describe("admin billing settings", () => {
     expect(mockPrisma.billingSetting.upsert).not.toHaveBeenCalled();
     expect((await app.inject({ method: "PUT", url: "/v1/admin/billing/settings", payload: valid })).statusCode).toBe(200);
     expect(mockPrisma.billingSetting.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: { key: "config", value: valid, updatedBy: "u-1" } }));
+    expect(mockPrisma.billingSetting.upsert.mock.calls[0]![0].update.updatedAt).toBeInstanceOf(Date);
   });
 });

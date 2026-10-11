@@ -30,7 +30,7 @@ export const adminBillingRulesRouter: FastifyPluginAsync = async (fastify) => {
     const row = await fastify.prisma.billingCountRule.upsert({
       where: { category },
       create: { category, mode: mode as CountMode, updatedBy: request.auth.userId },
-      update: { mode: mode as CountMode, updatedBy: request.auth.userId },
+      update: { mode: mode as CountMode, updatedBy: request.auth.userId, updatedAt: new Date() },
       select: { category: true, mode: true, updatedAt: true },
     });
     clearCountRulesCache();
