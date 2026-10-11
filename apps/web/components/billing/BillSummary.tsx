@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import { formatCount, formatInr, formatUsd, monthLabel, bandRange, type MessageUsage } from "@/lib/message-usage";
+import { formatCount, formatInr, formatUsd, periodLabel, resetLabel, bandRange, type MessageUsage } from "@/lib/message-usage";
 
 function Card({ label, children, note, testId }: { label: string; children: React.ReactNode; note: string; testId?: string }): JSX.Element {
   return (
@@ -24,7 +24,7 @@ export function BillSummary({ usage }: { usage: MessageUsage }): JSX.Element {
   const plan = usage.plan;
   return (
     <div className="flex flex-wrap gap-4">
-      <Card label="Messages this month" testId="bill-messages" note={`${monthLabel(usage.month)} (UTC), resets on the 1st`}>
+      <Card label="Messages this month" testId="bill-messages" note={usage.cycle ? `${periodLabel(usage.cycle)} (UTC), resets on ${resetLabel(usage.cycle)}` : "Current billing period"}>
         {formatCount(usage.billable)}
       </Card>
 
@@ -36,7 +36,7 @@ export function BillSummary({ usage }: { usage: MessageUsage }): JSX.Element {
           <Card
             label="Expected this month"
             testId="bill-expected"
-            note={usage.expected ? `Next invoice on the 1st · never more than ${formatInr(plan.cap.inr)}` : "Shown once there are a few days of data"}
+            note={usage.expected ? `Next statement on ${resetLabel(usage.cycle) || "your next billing date"} · never more than ${formatInr(plan.cap.inr)}` : "Shown once there are a few days of data"}
           >
             {usage.expected ? <Price inr={usage.expected.band.inr} usd={usage.expected.band.usd} /> : <span className="text-gray-500">Not yet</span>}
           </Card>
@@ -45,7 +45,7 @@ export function BillSummary({ usage }: { usage: MessageUsage }): JSX.Element {
         <Card
           label="Your bill"
           testId="bill-unpublished"
-          note={`Your first ${formatCount(plan?.freeAllowance ?? 500)} messages a month are free. Pricing is not final and nothing is charged today.`}
+          note={`Your first ${formatCount(plan?.freeAllowance ?? 500)} messages in each billing period are free. Pricing is not final and nothing is charged today.`}
         >
           <span>₹0</span>
         </Card>

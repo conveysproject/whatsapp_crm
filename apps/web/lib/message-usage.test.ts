@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeMessageUsage, normalizePlan, alertText, bandAt, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
+import { normalizeMessageUsage, normalizePlan, alertText, bandAt, periodLabel, resetLabel, cycleStartLabel, bandRange, formatInr, sourceRows, monthLabel, formatCount, barHeights } from "./message-usage";
 
 describe("normalizeMessageUsage", () => {
   it("maps a full body", () => {
@@ -10,16 +10,16 @@ describe("normalizeMessageUsage", () => {
     expect(u).toEqual({
       month: "2026-10", billable: 9, bySource: { campaign: 4, api: 3, unknown: 2 },
       daily: [{ day: "2026-10-01", billable: 5 }, { day: "2026-10-02", billable: 4 }], updatedAt: "2026-10-10T11:05:00.000Z",
-      plan: null, expected: null, alerts: [], statements: [],
+      plan: null, expected: null, alerts: [], statements: [], cycle: null,
     });
   });
   it("never throws and degrades to safe defaults", () => {
     expect(normalizeMessageUsage(null)).toBeNull();
     expect(normalizeMessageUsage("x")).toBeNull();
     expect(normalizeMessageUsage([])).toBeNull();
-    expect(normalizeMessageUsage({})).toEqual({ month: "", billable: 0, bySource: {}, daily: [], updatedAt: null, plan: null, expected: null, alerts: [], statements: [] });
+    expect(normalizeMessageUsage({})).toEqual({ month: "", billable: 0, bySource: {}, daily: [], updatedAt: null, plan: null, expected: null, alerts: [], statements: [], cycle: null });
     expect(normalizeMessageUsage({ billable: -5, bySource: { a: "x", b: -1, c: 2 }, daily: [1, null, { day: 5 }, { day: "d", billable: "z" }] }))
-      .toEqual({ month: "", billable: 0, bySource: { c: 2 }, daily: [{ day: "d", billable: 0 }], updatedAt: null, plan: null, expected: null, alerts: [], statements: [] });
+      .toEqual({ month: "", billable: 0, bySource: { c: 2 }, daily: [{ day: "d", billable: 0 }], updatedAt: null, plan: null, expected: null, alerts: [], statements: [], cycle: null });
   });
 });
 
@@ -88,11 +88,11 @@ describe("alerts", () => {
 describe("statements", () => {
   it("keeps well-formed statements only", () => {
     const u = normalizeMessageUsage({ statements: [
-      { month: "2026-09", messages: 3000, bandName: "Band 1", amountInr: 999, amountUsd: 12 },
+      { month: "2026-09-14", messages: 3000, bandName: "Band 1", amountInr: 999, amountUsd: 12 },
       { month: "bad", messages: 1, bandName: "x" },
-      { month: "2026-08", messages: 9, bandName: "Above", amountInr: null, amountUsd: null },
+      { month: "2026-08-14", messages: 9, bandName: "Above", amountInr: null, amountUsd: null },
     ] });
-    expect(u?.statements.map((s) => s.month)).toEqual(["2026-09", "2026-08"]);
+    expect(u?.statements.map((s) => s.month)).toEqual(["2026-09-14", "2026-08-14"]);
     expect(u?.statements[1]?.amountInr).toBeNull();
   });
 });
@@ -115,5 +115,20 @@ describe("bandAt", () => {
   });
   it("returns null while unpublished", () => {
     expect(bandAt({ published: false, freeAllowance: 500 }, 600)).toBeNull();
+  });
+});
+
+describe("cycle labels", () => {
+  const u = normalizeMessageUsage({ cycle: { key: "2026-10-14", from: "2026-10-14T00:00:00.000Z", toExclusive: "2026-11-14T00:00:00.000Z", days: 31 } });
+  it("describes the cycle from its first to its last day", () => {
+    expect(periodLabel(u!.cycle)).toBe("14 Oct to 13 Nov 2026");
+    expect(resetLabel(u!.cycle)).toBe("14 Nov 2026");
+    expect(cycleStartLabel("2026-10-14")).toBe("Cycle from 14 Oct 2026");
+  });
+  it("copes with a year boundary and missing or malformed cycles", () => {
+    const y = normalizeMessageUsage({ cycle: { key: "2026-12-31", from: "2026-12-31T00:00:00.000Z", toExclusive: "2027-01-31T00:00:00.000Z", days: 31 } });
+    expect(periodLabel(y!.cycle)).toBe("31 Dec to 30 Jan 2027");
+    expect(periodLabel(null)).toBe("");
+    expect(normalizeMessageUsage({ cycle: { key: "x", from: "y", toExclusive: "z" } })?.cycle).toBeNull();
   });
 });

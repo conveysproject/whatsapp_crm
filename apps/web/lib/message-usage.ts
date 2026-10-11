@@ -18,6 +18,7 @@ export type Plan =
       next: BandView | null;
       cap: { upTo: number; inr: number; usd: number };
     };
+export interface Cycle { key: string; from: string; toExclusive: string; days: number }
 export interface Statement { month: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null }
 export interface UsageAlert { kind: string; at: string }
 export interface ExpectedBill { messages: number; band: BandView }
@@ -31,6 +32,8 @@ export interface MessageUsage {
   expected: ExpectedBill | null;
   alerts: UsageAlert[];
   statements: Statement[];
+  /** The customer's own billing cycle (starts on their registration day, UTC). */
+  cycle: Cycle | null;
 }
 
 export const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -85,11 +88,19 @@ export function normalizePlan(raw: unknown): Plan | null {
   };
 }
 
+function normalizeCycle(raw: unknown): Cycle | null {
+  if (!isRecord(raw)) return null;
+  const { key, from, toExclusive } = raw;
+  if (typeof key !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(key) || typeof from !== "string" || typeof toExclusive !== "string") return null;
+  if (Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(toExclusive))) return null;
+  return { key, from, toExclusive, days: num(raw["days"]) };
+}
+
 function normalizeStatements(raw: unknown): Statement[] {
   if (!Array.isArray(raw)) return [];
   const out: Statement[] = [];
   for (const r of raw) {
-    if (isRecord(r) && typeof r["month"] === "string" && /^\d{4}-\d{2}$/.test(r["month"]) && typeof r["bandName"] === "string") {
+    if (isRecord(r) && typeof r["month"] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r["month"]) && typeof r["bandName"] === "string") {
       out.push({ month: r["month"], messages: num(r["messages"]), bandName: r["bandName"], amountInr: nullableNum(r["amountInr"]), amountUsd: nullableNum(r["amountUsd"]) });
     }
   }
@@ -150,6 +161,7 @@ export function normalizeMessageUsage(raw: unknown): MessageUsage | null {
     expected: normalizeExpected(raw["expected"]),
     alerts: normalizeAlerts(raw["alerts"]),
     statements: normalizeStatements(raw["statements"]),
+    cycle: normalizeCycle(raw["cycle"]),
   };
 }
 
@@ -210,4 +222,32 @@ export function bandRange(b: BandView): string {
 export function bandAt(plan: Plan, count: number): BandView | null {
   if (!plan.published) return null;
   return plan.bands.find((b) => count >= b.from && (b.to === null || count <= b.to)) ?? null;
+}
+
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function dayLabel(d: Date): string {
+  return `${d.getUTCDate()} ${MONTH_SHORT[d.getUTCMonth()]}`;
+}
+
+/** "14 Oct to 13 Nov 2026": the cycle's first and last day (UTC). Falls back to the raw key for a bad value. */
+export function periodLabel(cycle: Cycle | null): string {
+  if (!cycle) return "";
+  const from = new Date(cycle.from);
+  const last = new Date(new Date(cycle.toExclusive).getTime() - 86_400_000);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(last.getTime())) return cycle.key;
+  return `${dayLabel(from)} to ${dayLabel(last)} ${last.getUTCFullYear()}`;
+}
+
+/** "14 Nov 2026": the day the next cycle starts (when counts reset and the next statement is prepared). */
+export function resetLabel(cycle: Cycle | null): string {
+  if (!cycle) return "";
+  const d = new Date(cycle.toExclusive);
+  return Number.isNaN(d.getTime()) ? "" : `${dayLabel(d)} ${d.getUTCFullYear()}`;
+}
+
+/** "Cycle from 14 Oct 2026" for a statement whose key is the cycle's start date. */
+export function cycleStartLabel(key: string): string {
+  const d = new Date(`${key}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? key : `Cycle from ${dayLabel(d)} ${d.getUTCFullYear()}`;
 }

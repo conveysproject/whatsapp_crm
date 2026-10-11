@@ -5,7 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 const mockPrisma = {
   billingStatement: { findMany: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
   organization: { findMany: vi.fn() },
-  messageUsageDaily: { groupBy: vi.fn() },
+  messageUsageDaily: { findMany: vi.fn() },
   billingSetting: { findUnique: vi.fn() },
 };
 
@@ -26,7 +26,7 @@ describe("admin billing statements", () => {
     mockPrisma.billingStatement.findMany.mockReset().mockResolvedValue([]);
     mockPrisma.billingStatement.create.mockReset();
     mockPrisma.organization.findMany.mockReset().mockResolvedValue([]);
-    mockPrisma.messageUsageDaily.groupBy.mockReset().mockResolvedValue([]);
+    mockPrisma.messageUsageDaily.findMany.mockReset().mockResolvedValue([]);
     mockPrisma.billingSetting.findUnique.mockReset().mockResolvedValue(null);
   });
   afterEach(async () => { await app.close(); });
@@ -34,18 +34,19 @@ describe("admin billing statements", () => {
   it("is super-admin only", async () => {
     app = await buildAs("admin");
     expect((await app.inject({ method: "GET", url: "/v1/admin/billing/statements?month=2026-10" })).statusCode).toBe(403);
-    expect((await app.inject({ method: "POST", url: "/v1/admin/billing/statements/generate", payload: { month: "2026-10" } })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: "/v1/admin/billing/statements/generate", payload: { date: "2026-11-14" } })).statusCode).toBe(403);
     expect(mockPrisma.billingStatement.findMany).not.toHaveBeenCalled();
   });
   it("validates the month", async () => {
     app = await buildAs("superAdmin");
     expect((await app.inject({ method: "GET", url: "/v1/admin/billing/statements?month=bad" })).statusCode).toBe(400);
-    expect((await app.inject({ method: "POST", url: "/v1/admin/billing/statements/generate", payload: { month: 5 } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/v1/admin/billing/statements/generate", payload: { date: 5 } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/v1/admin/billing/statements/generate", payload: { date: "2026-02-30" } })).statusCode).toBe(400);
   });
   it("lists statements with totals and hides our own organizations by default", async () => {
     mockPrisma.billingStatement.findMany.mockResolvedValue([
-      { organizationId: "a", messages: 3000, bandName: "Band 1", amountInr: 999, amountUsd: 12, status: "draft" },
-      { organizationId: "b", messages: 9000, bandName: "Band 1", amountInr: 999, amountUsd: 12, status: "draft" },
+      { organizationId: "a", month: "2026-10-14", messages: 3000, bandName: "Band 1", amountInr: 999, amountUsd: 12, status: "draft" },
+      { organizationId: "b", month: "2026-10-20", messages: 9000, bandName: "Band 1", amountInr: 999, amountUsd: 12, status: "draft" },
     ]);
     mockPrisma.organization.findMany.mockResolvedValue([{ id: "a", name: "Acme" }, { id: "b", name: "Conveys Information Technology" }]);
     app = await buildAs("superAdmin");
@@ -53,19 +54,24 @@ describe("admin billing statements", () => {
     expect(body.statements.map((s) => s.name)).toEqual(["Acme"]);
     expect(body.totals).toMatchObject({ statements: 1, inr: 999 });
   });
-  it("refuses to prepare an unfinished month", async () => {
+  it("filters the list to cycles that started in the requested calendar month", async () => {
     app = await buildAs("superAdmin");
-    const now = new Date();
-    const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-    const res = await app.inject({ method: "POST", url: "/v1/admin/billing/statements/generate", payload: { month } });
-    expect(res.statusCode).toBe(400);
-    expect(res.json<{ error: { code: string } }>().error.code).toBe("MONTH_NOT_FINISHED");
+    await app.inject({ method: "GET", url: "/v1/admin/billing/statements?month=2026-10" });
+    expect(mockPrisma.billingStatement.findMany.mock.calls[0]![0].where).toEqual({ month: { startsWith: "2026-10-" } });
   });
-  it("prepares drafts for a finished month", async () => {
-    mockPrisma.messageUsageDaily.groupBy.mockResolvedValue([{ organizationId: "a", _sum: { billableCount: 3240 } }]);
+  it("refuses to prepare a day that has not arrived", async () => {
     app = await buildAs("superAdmin");
-    const res = await app.inject({ method: "POST", url: "/v1/admin/billing/statements/generate", payload: { month: "2026-09" } });
+    const future = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+    const res = await app.inject({ method: "POST", url: "/v1/admin/billing/statements/generate", payload: { date: future } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("DATE_NOT_ARRIVED");
+  });
+  it("prepares drafts for the cycles that ended on a past day", async () => {
+    mockPrisma.organization.findMany.mockResolvedValue([{ id: "a", createdAt: new Date("2026-03-14T08:00:00Z") }]);
+    mockPrisma.messageUsageDaily.findMany.mockResolvedValue([{ organizationId: "a", day: new Date("2026-09-01T00:00:00Z"), billableCount: 3240 }]);
+    app = await buildAs("superAdmin");
+    const res = await app.inject({ method: "POST", url: "/v1/admin/billing/statements/generate", payload: { date: "2026-09-14" } });
     expect(res.json<{ data: { created: number } }>().data.created).toBe(1);
-    expect(mockPrisma.billingStatement.create.mock.calls[0]![0].data.status).toBe("draft");
+    expect(mockPrisma.billingStatement.create.mock.calls[0]![0].data).toMatchObject({ status: "draft", month: "2026-08-14" });
   });
 });

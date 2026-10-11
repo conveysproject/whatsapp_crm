@@ -18,7 +18,7 @@ type Mode = "follow" | "never" | "always";
 interface Rule { category: string; mode: Mode }
 interface RulesResponse { modes: Mode[]; rules: Rule[] }
 interface BandCfg { upTo: number; inr: number; usd: number }
-interface StatementRow { organizationId: string; name: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string }
+interface StatementRow { organizationId: string; name: string; month: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string }
 interface StatementsResponse { month: string; totals: { statements: number; inr: number; usd: number }; statements: StatementRow[] }
 interface BillingCfg { published: boolean; freeAllowance: number; alertsEnabled: boolean; bands: BandCfg[] }
 
@@ -93,16 +93,17 @@ export default function AdminBillingPage(): JSX.Element {
     setCfg({ ...cfg, bands: cfg.bands.map((b, j) => (j === i ? { ...b, [key]: Number.isFinite(n) ? Math.trunc(n) : 0 } : b)) });
   };
 
-  const [stMonth, setStMonth] = useState(previousMonthKey());
+  const [stMonth, setStMonth] = useState(currentMonth());
+  const [stDay, setStDay] = useState(new Date().toISOString().slice(0, 10));
   const statementsQ = useQuery<{ data: StatementsResponse }>({
     queryKey: ["admin-billing-statements", stMonth],
     queryFn: () => adminFetch(`/v1/admin/billing/statements?month=${stMonth}`),
     enabled: /^\d{4}-\d{2}$/.test(stMonth),
   });
   const prepare = useMutation({
-    mutationFn: () => adminFetch("/v1/admin/billing/statements/generate", { method: "POST", body: JSON.stringify({ month: stMonth }) }),
+    mutationFn: () => adminFetch("/v1/admin/billing/statements/generate", { method: "POST", body: JSON.stringify({ date: stDay }) }),
     onSuccess: () => { toast.success("Draft statements prepared"); void qc.invalidateQueries({ queryKey: ["admin-billing-statements"] }); },
-    onError: () => toast.error("Could not prepare statements (the month may not be finished)"),
+    onError: () => toast.error("Could not prepare statements (the date may be in the future)"),
   });
 
   const modeOf = (category: string): Mode => rules.data?.data.rules.find((r) => r.category === category)?.mode ?? "follow";
@@ -113,7 +114,7 @@ export default function AdminBillingPage(): JSX.Element {
     <div className="max-w-6xl mx-auto px-6 py-8 space-y-10">
       <section>
         <h1 className="text-xl font-semibold text-gray-900">Message usage</h1>
-        <p className="text-sm text-gray-500 mt-1">Messages Meta charges for, per organization (UTC months). Counts before 12 October 2026 are estimates.</p>
+        <p className="text-sm text-gray-500 mt-1">Messages Meta charges for, per organization, by calendar month (UTC) for comparing organizations. Customers are billed on their own cycle, starting on their registration day. Counts before 12 October 2026 are estimates.</p>
         <div className="flex items-center gap-4 mt-4">
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="border rounded px-2 py-1 text-sm" />
           <label className="text-sm text-gray-600 flex items-center gap-2">
@@ -220,27 +221,33 @@ export default function AdminBillingPage(): JSX.Element {
 
       <section>
         <h2 className="text-lg font-semibold text-gray-900">Draft statements</h2>
-        <p className="text-sm text-gray-500 mt-1">Prepared automatically on the 1st for the month that just ended. These are drafts only: customers cannot see them and nobody is charged.</p>
+        <p className="text-sm text-gray-500 mt-1">Prepared automatically every day for the customers whose billing cycle ended that day (cycles start on each customer&apos;s registration day). These are drafts only: customers cannot see them and nobody is charged.</p>
         <div className="flex items-center gap-3 mt-4">
-          <input type="month" value={stMonth} onChange={(e) => setStMonth(e.target.value)} className="border rounded px-2 py-1 text-sm" />
-          <button type="button" disabled={prepare.isPending} onClick={() => prepare.mutate()} className="text-sm bg-gray-900 text-white rounded px-3 py-1">Prepare drafts for this month</button>
+          <label className="text-sm text-gray-600 flex items-center gap-2">Cycles started in
+            <input type="month" value={stMonth} onChange={(e) => setStMonth(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+          </label>
+          <label className="text-sm text-gray-600 flex items-center gap-2">Re-run for cycles that ended on
+            <input type="date" value={stDay} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setStDay(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+          </label>
+          <button type="button" disabled={prepare.isPending} onClick={() => prepare.mutate()} className="text-sm bg-gray-900 text-white rounded px-3 py-1">Prepare drafts</button>
         </div>
         {statementsQ.data && (
           <div className="overflow-x-auto bg-white border rounded mt-4">
             <p className="p-3 text-sm text-gray-600">{statementsQ.data.data.totals.statements} statements, total ₹{statementsQ.data.data.totals.inr.toLocaleString()} / ${statementsQ.data.data.totals.usd.toLocaleString()} if every one were charged</p>
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-gray-500"><tr><th className="p-2">Organization</th><th className="p-2 text-right">Messages</th><th className="p-2">Band</th><th className="p-2">₹ / $</th><th className="p-2">Status</th></tr></thead>
+              <thead className="bg-gray-50 text-left text-gray-500"><tr><th className="p-2">Organization</th><th className="p-2">Cycle from</th><th className="p-2 text-right">Messages</th><th className="p-2">Band</th><th className="p-2">₹ / $</th><th className="p-2">Status</th></tr></thead>
               <tbody>
                 {statementsQ.data.data.statements.map((r) => (
-                  <tr key={r.organizationId} className="border-t">
+                  <tr key={`${r.organizationId}-${r.month}`} className="border-t">
                     <td className="p-2">{r.name}</td>
+                    <td className="p-2">{r.month}</td>
                     <td className="p-2 text-right">{r.messages.toLocaleString()}</td>
                     <td className="p-2">{r.bandName}</td>
                     <td className="p-2">{r.amountInr === null ? "Custom quote" : `₹${r.amountInr.toLocaleString()} / $${(r.amountUsd ?? 0).toLocaleString()}`}</td>
                     <td className="p-2">{r.status}</td>
                   </tr>
                 ))}
-                {statementsQ.data.data.statements.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-gray-500">No draft statements for this month.</td></tr>}
+                {statementsQ.data.data.statements.length === 0 && <tr><td colSpan={6} className="p-4 text-center text-gray-500">No draft statements for cycles that started in this month.</td></tr>}
               </tbody>
             </table>
           </div>

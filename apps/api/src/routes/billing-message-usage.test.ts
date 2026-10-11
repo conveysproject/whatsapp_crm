@@ -6,7 +6,8 @@ const findMany = vi.fn();
 const findSetting = vi.fn();
 const findAlerts = vi.fn();
 const findStatements = vi.fn();
-const mockPrisma = { messageUsageDaily: { findMany }, billingSetting: { findUnique: findSetting }, billingAlertEvent: { findMany: findAlerts }, billingStatement: { findMany: findStatements } };
+const findOrg = vi.fn();
+const mockPrisma = { messageUsageDaily: { findMany }, billingSetting: { findUnique: findSetting }, billingAlertEvent: { findMany: findAlerts }, billingStatement: { findMany: findStatements }, organization: { findUnique: findOrg } };
 
 async function buildAs(role: string, permissions: Record<string, string> = {}, organizationId = "org-1"): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -26,6 +27,8 @@ describe("GET /v1/billing/message-usage", () => {
     findSetting.mockReset().mockResolvedValue(null);
     findAlerts.mockReset().mockResolvedValue([]);
     findStatements.mockReset().mockResolvedValue([]);
+    // Registered 14 March: billing cycles run from the 14th to the 13th.
+    findOrg.mockReset().mockResolvedValue({ createdAt: new Date("2026-03-14T09:00:00Z") });
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-10T12:00:00Z"));
   });
@@ -46,22 +49,23 @@ describe("GET /v1/billing/message-usage", () => {
     await app.close();
   });
 
-  it("rejects an invalid month, including array and empty values", async () => {
+  it("rejects an invalid cycle, including array and empty values", async () => {
     const app = await buildAs("admin");
-    for (const q of ["month=2026-13", "month=abc", "month=", "month=2026-10&month=2026-09"]) {
+    for (const q of ["cycle=2026-13-01", "cycle=abc", "cycle=", "cycle=2026-02-30", "cycle=2026-10-01&cycle=2026-10-02"]) {
       const res = await app.inject({ method: "GET", url: `/v1/billing/message-usage?${q}` });
       expect(res.statusCode, q).toBe(400);
-      expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_MONTH");
+      expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_CYCLE");
     }
     expect(findMany).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("scopes the query to the caller's organization and the UTC month, defaulting to this month", async () => {
+  it("scopes the query to the caller's organization and its own billing cycle, defaulting to the current one", async () => {
     const app = await buildAs("admin", {}, "org-7");
     await app.inject({ method: "GET", url: "/v1/billing/message-usage" });
+    expect(findOrg).toHaveBeenCalledWith({ where: { id: "org-7" }, select: { createdAt: true } });
     expect(findMany).toHaveBeenCalledWith({
-      where: { organizationId: "org-7", day: { gte: new Date("2026-10-01T00:00:00.000Z"), lt: new Date("2026-11-01T00:00:00.000Z") } },
+      where: { organizationId: "org-7", day: { gte: new Date("2026-09-14T00:00:00.000Z"), lt: new Date("2026-10-14T00:00:00.000Z") } },
       select: { day: true, billableCount: true, bySource: true, computedAt: true },
       orderBy: { day: "asc" },
     });
@@ -73,14 +77,14 @@ describe("GET /v1/billing/message-usage", () => {
       { day: new Date("2026-10-02T00:00:00.000Z"), billableCount: 5, bySource: { campaign: 3, unknown: 2 }, computedAt: new Date("2026-10-10T11:05:00Z") },
     ]);
     const app = await buildAs("admin");
-    const res = await app.inject({ method: "GET", url: "/v1/billing/message-usage?month=2026-10" });
+    const res = await app.inject({ method: "GET", url: "/v1/billing/message-usage" });
     expect(res.statusCode).toBe(200);
     const data = res.json<{ data: { month: string; billable: number; bySource: Record<string, number>; daily: Array<{ day: string; billable: number }>; updatedAt: string } }>().data;
-    expect(data.month).toBe("2026-10");
+    expect(data.month).toBe("2026-09-14");
     expect(data.billable).toBe(5);
     expect(data.bySource).toEqual({ campaign: 3, unknown: 2 });
-    expect(data.daily).toHaveLength(10);
-    expect(data.daily[1]).toEqual({ day: "2026-10-02", billable: 5 });
+    expect(data.daily).toHaveLength(27);
+    expect(data.daily.find((d) => d.day === "2026-10-02")).toEqual({ day: "2026-10-02", billable: 5 });
     expect(data.updatedAt).toBe("2026-10-10T11:05:00.000Z");
     await app.close();
   });
@@ -120,7 +124,7 @@ describe("GET /v1/billing/message-usage", () => {
     const app = await buildAs("admin");
     const body = (await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).json<{ data: { alerts: Array<{ kind: string }> } }>().data;
     expect(body.alerts.map((a) => a.kind)).toEqual(["free_50"]);
-    expect(findAlerts.mock.calls[0]![0].where).toEqual({ organizationId: "org-1", month: "2026-10" });
+    expect(findAlerts.mock.calls[0]![0].where).toEqual({ organizationId: "org-1", month: "2026-09-14" });
     await app.close();
   });
 
@@ -138,6 +142,21 @@ describe("GET /v1/billing/message-usage", () => {
     const body = (await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).json<{ data: { statements: unknown[] } }>().data;
     expect(body.statements).toHaveLength(1);
     expect(findStatements.mock.calls[0]![0].where).toEqual({ organizationId: "org-1", status: "issued" });
+    await app.close();
+  });
+  it("returns 404 when the organization does not exist and queries no usage", async () => {
+    findOrg.mockResolvedValue(null);
+    const app = await buildAs("admin");
+    expect((await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).statusCode).toBe(404);
+    expect(findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("returns an earlier cycle on request and describes the cycle", async () => {
+    const app = await buildAs("admin");
+    const res = await app.inject({ method: "GET", url: "/v1/billing/message-usage?cycle=2026-08-14" });
+    const data = res.json<{ data: { cycle: { key: string; from: string; toExclusive: string; days: number } } }>().data;
+    expect(data.cycle).toEqual({ key: "2026-08-14", from: "2026-08-14T00:00:00.000Z", toExclusive: "2026-09-14T00:00:00.000Z", days: 31 });
     await app.close();
   });
 });

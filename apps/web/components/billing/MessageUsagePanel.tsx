@@ -1,6 +1,6 @@
 import type { JSX } from "react";
 import Link from "next/link";
-import { alertText, barHeights, formatCount, formatInr, formatUsd, monthLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
+import { alertText, barHeights, formatCount, formatInr, formatUsd, periodLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
 
 interface Props {
   usage: MessageUsage | null;
@@ -65,7 +65,7 @@ export function MessageUsagePanel({ usage, variant }: Props): JSX.Element {
       </div>
       <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span data-testid="message-usage-total" className="text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-50">{formatCount(usage.billable)}</span>
-        <span className="text-sm text-gray-500 dark:text-gray-400">{monthLabel(usage.month)}</span>
+        <span className="text-sm text-gray-500 dark:text-gray-400">{periodLabel(usage.cycle)}</span>
       </div>
 
       {usage.plan?.published ? (

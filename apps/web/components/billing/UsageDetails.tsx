@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import { barHeights, formatCount, monthLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
+import { barHeights, formatCount, periodLabel, sourceRows, type MessageUsage } from "@/lib/message-usage";
 
 /** "Messages per day" chart and the "What was counted" list, side by side (stacked on phones). */
 export function UsageDetails({ usage }: { usage: MessageUsage }): JSX.Element {
@@ -9,7 +9,7 @@ export function UsageDetails({ usage }: { usage: MessageUsage }): JSX.Element {
     <div className="flex flex-wrap gap-4 items-stretch">
       <section className="flex-[2_1_420px] min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-6">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Messages per day</h2>
-        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">{monthLabel(usage.month)}, counted in UTC days</p>
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">{periodLabel(usage.cycle)}, counted in UTC days</p>
         <div
           role="img"
           aria-label={`Messages per day, ${formatCount(usage.billable)} in total`}

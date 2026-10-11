@@ -52,9 +52,10 @@ const LEADER_USER = { id: 'u5', fullName: 'Lee Lead', email: 'e@x.com', role: 'c
 
 const MESSAGE_USAGE = {
   data: {
-    month: '2026-10',
+    month: '2026-10-01',
     from: '2026-10-01T00:00:00.000Z',
     toExclusive: '2026-11-01T00:00:00.000Z',
+    cycle: { key: '2026-10-01', from: '2026-10-01T00:00:00.000Z', toExclusive: '2026-11-01T00:00:00.000Z', days: 31 },
     billable: 3240,
     bySource: { campaign: 1820, unknown: 1420 },
     daily: [
@@ -311,7 +312,7 @@ describe('Dashboard v2', () => {
     stubDashboard();
     mount();
     cy.get('[data-testid="message-usage-total"]').should('have.text', '3,240');
-    cy.get('[data-testid="message-usage"]').should('contain', 'October 2026');
+    cy.get('[data-testid="message-usage"]').should('contain', '1 Oct to 31 Oct 2026');
     cy.get('[data-testid="message-usage"]').contains('a', 'View billing').should('have.attr', 'href', '/settings/billing');
   });
 

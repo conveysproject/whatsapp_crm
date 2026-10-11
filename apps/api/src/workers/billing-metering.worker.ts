@@ -3,7 +3,8 @@ import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
 import { runMeteringSweep } from "../lib/billing/metering-sweep.js";
 import { evaluateAlerts } from "../lib/billing/alerts.js";
-import { generateStatements, previousMonth } from "../lib/billing/statements.js";
+import { generateStatements } from "../lib/billing/statements.js";
+import { utcDayStart } from "../lib/billing/metering.js";
 
 export { runMeteringSweep };
 
@@ -18,9 +19,13 @@ export function startBillingMeteringWorker() {
     "billing-metering",
     async (job) => {
       if (job.name === "statements") {
-        // 1st of the month, after the nightly re-sweep: prepare DRAFT statements for the month that just ended. Never charges.
-        const res = await generateStatements(prisma, previousMonth(new Date()));
-        console.log(`[billing-statements] created=${res.created} refreshed=${res.refreshed} skipped=${res.skipped}`);
+        // Daily: prepare DRAFT statements for the organizations whose billing cycle ended today. The two days before are
+        // repeated so a missed run is caught up (idempotent). Never charges.
+        const today = utcDayStart(new Date());
+        for (let back = 2; back >= 0; back--) {
+          const res = await generateStatements(prisma, new Date(today.getTime() - back * 86_400_000));
+          if (res.created + res.refreshed + res.skipped > 0) console.log(`[billing-statements] day-${back} created=${res.created} refreshed=${res.refreshed} skipped=${res.skipped}`);
+        }
         return;
       }
       // "nightly" re-sweeps the last 5 UTC days (keep below the 7-day retention minimum); "sweep" is yesterday + today.
@@ -41,5 +46,5 @@ export function startBillingMeteringWorker() {
 export async function scheduleBillingMeteringCron() {
   await billingMeteringQueue.add("sweep", {}, { repeat: { pattern: "5 * * * *" }, jobId: "billing-metering-cron" }); // minute 5 of every hour
   await billingMeteringQueue.add("nightly", {}, { repeat: { pattern: "35 0 * * *" }, jobId: "billing-metering-nightly-cron" }); // 00:35 UTC, last 5 days
-  await billingMeteringQueue.add("statements", {}, { repeat: { pattern: "50 0 1 * *" }, jobId: "billing-statements-cron" }); // 00:50 UTC on the 1st
+  await billingMeteringQueue.add("statements", {}, { repeat: { pattern: "50 0 * * *" }, jobId: "billing-statements-daily-cron" }); // 00:50 UTC every day
 }

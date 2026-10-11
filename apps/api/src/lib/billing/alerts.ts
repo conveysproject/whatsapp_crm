@@ -2,7 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { sendMail } from "../mail.js";
 import { bandViews, type BillingConfig } from "./bands.js";
 import { loadBillingConfig } from "./settings.js";
-import { parseMonth } from "./metering.js";
+import { cycleContaining } from "./cycle.js";
 
 const FREE_STEPS = [50, 80, 95, 100] as const;
 
@@ -24,7 +24,8 @@ export function kindsReached(count: number, config: BillingConfig): string[] {
   return kinds;
 }
 
-export function monthKey(now: Date): string {
+/** Legacy calendar-month key (YYYY-MM) used before billing cycles; read only to avoid re-emailing. */
+export function legacyMonthKey(now: Date): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
@@ -54,42 +55,55 @@ export function highestKind(kinds: string[]): string | null {
 }
 
 /**
- * Records newly reached thresholds for every organization (idempotent) and, only when the owner has switched
- * usage-alert emails on, emails billing admins one message per organization per run (the highest unsent threshold).
- * Never throws: a failure is logged by name only and retried on the next run.
+ * Records newly reached thresholds for every organization on its own billing cycle (idempotent) and, only when the
+ * owner has switched usage-alert emails on, emails billing admins one message per organization per run (the highest
+ * unsent threshold). Never throws: a failure is logged by name only and retried on the next run.
  */
 export async function evaluateAlerts(prisma: PrismaClient, now: Date = new Date()): Promise<{ recorded: number; emailed: number }> {
   let recorded = 0;
   let emailed = 0;
   try {
     const config = await loadBillingConfig(prisma);
-    const month = monthKey(now);
-    const range = parseMonth(month)!;
-    const totals = await prisma.messageUsageDaily.groupBy({
-      by: ["organizationId"],
-      where: { day: { gte: range.from, lt: range.toExclusive } },
-      _sum: { billableCount: true },
-    });
+    // A cycle is at most 31 days; fetch a little more than that and sum each organization over its own cycle.
+    const since = new Date(now.getTime() - 32 * 86_400_000);
+    const days = await prisma.messageUsageDaily.findMany({ where: { day: { gte: since } }, select: { organizationId: true, day: true, billableCount: true } });
+    const orgIds = [...new Set(days.map((d) => d.organizationId))];
+    const orgs = orgIds.length > 0 ? await prisma.organization.findMany({ where: { id: { in: orgIds } }, select: { id: true, createdAt: true } }) : [];
+    const keyByOrg = new Map<string, string>();
     const rows: Array<{ organizationId: string; month: string; kind: string; messages: number }> = [];
-    for (const t of totals) {
-      const count = t._sum.billableCount ?? 0;
-      for (const kind of kindsReached(count, config)) rows.push({ organizationId: t.organizationId, month, kind, messages: count });
+    for (const org of orgs) {
+      const cycle = cycleContaining(org.createdAt, now);
+      keyByOrg.set(org.id, cycle.key);
+      let count = 0;
+      for (const d of days) {
+        if (d.organizationId === org.id && d.day >= cycle.start && d.day < cycle.endExclusive) count += d.billableCount;
+      }
+      for (const kind of kindsReached(count, config)) rows.push({ organizationId: org.id, month: cycle.key, kind, messages: count });
     }
     if (rows.length > 0) {
       const res = await prisma.billingAlertEvent.createMany({ data: rows, skipDuplicates: true });
       recorded = res.count;
     }
-    if (config.alertsEnabled) emailed = await emailUnsent(prisma, month, config.freeAllowance, now);
+    if (config.alertsEnabled) emailed = await emailUnsent(prisma, keyByOrg, config.freeAllowance, now);
   } catch (err) {
     console.warn("[billing-alerts] evaluation failed", err instanceof Error ? err.name : "error");
   }
   return { recorded, emailed };
 }
 
-async function emailUnsent(prisma: PrismaClient, month: string, freeAllowance: number, now: Date): Promise<number> {
-  const pending = await prisma.billingAlertEvent.findMany({ where: { month, emailedAt: null }, select: { id: true, organizationId: true, kind: true, messages: true } });
-  const byOrg = new Map<string, typeof pending>();
-  for (const p of pending) byOrg.set(p.organizationId, [...(byOrg.get(p.organizationId) ?? []), p]);
+async function emailUnsent(prisma: PrismaClient, keyByOrg: Map<string, string>, freeAllowance: number, now: Date): Promise<number> {
+  const since = new Date(now.getTime() - 35 * 86_400_000);
+  const unsent = await prisma.billingAlertEvent.findMany({ where: { emailedAt: null, createdAt: { gte: since } }, select: { id: true, organizationId: true, month: true, kind: true, messages: true } });
+  // Only the organization's current cycle; older unsent rows (and legacy calendar-month rows) are never sent late.
+  const pending = unsent.filter((e) => keyByOrg.get(e.organizationId) === e.month);
+  // Switching from calendar months to cycles must not re-send what the calendar-month rows already emailed.
+  const legacy = await prisma.billingAlertEvent.findMany({ where: { month: legacyMonthKey(now), emailedAt: { not: null } }, select: { organizationId: true, kind: true } });
+  const alreadySent = new Set(legacy.map((l) => `${l.organizationId}|${l.kind}`));
+  const covered = pending.filter((e) => alreadySent.has(`${e.organizationId}|${e.kind}`));
+  if (covered.length > 0) await prisma.billingAlertEvent.updateMany({ where: { id: { in: covered.map((e) => e.id) }, emailedAt: null }, data: { emailedAt: now } });
+  const toSend = pending.filter((e) => !alreadySent.has(`${e.organizationId}|${e.kind}`));
+  const byOrg = new Map<string, typeof toSend>();
+  for (const p of toSend) byOrg.set(p.organizationId, [...(byOrg.get(p.organizationId) ?? []), p]);
   let sent = 0;
   for (const [organizationId, events] of byOrg) {
     try {
@@ -97,7 +111,7 @@ async function emailUnsent(prisma: PrismaClient, month: string, freeAllowance: n
       const topEvent = events.find((e) => e.kind === top);
       if (!topEvent) continue;
       const admins = await prisma.user.findMany({ where: { organizationId, role: "admin", isActive: true, deletedAt: null }, select: { email: true } });
-      const to = admins.map((a) => a.email).filter(Boolean);
+      const to = admins.map((x) => x.email).filter(Boolean);
       if (to.length > 0) {
         const msg = alertMessage(topEvent.kind, topEvent.messages, freeAllowance);
         await sendMail({ to, subject: msg.subject, html: `<p>${msg.text}</p><p>See details in Settings &gt; Billing.</p>` });
