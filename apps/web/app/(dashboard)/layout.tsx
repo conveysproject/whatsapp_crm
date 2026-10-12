@@ -13,13 +13,36 @@ import { Toaster } from "sonner";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
-async function getOrgStatus(token: string): Promise<{
+type OrgStatus = {
   provisioned: boolean;
   wabaConnected: boolean;
   numberProvisioned: boolean;
   orgName?: string;
-}> {
-  try {
+};
+
+class OrgStatusUnavailableError extends Error {}
+
+// Only 403/404 from the API mean "this user has no organization yet". Anything else
+// (5xx, 401, timeout, network) is transient: retry once, then throw so the user sees an
+// error instead of being sent to /business-details when they are already registered.
+async function getOrgStatus(token: string): Promise<OrgStatus> {
+  let lastFailure = "";
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const result = await fetchOrgStatus(token);
+      if (result) return result;
+      return { provisioned: false, wabaConnected: false, numberProvisioned: false };
+    } catch (err) {
+      lastFailure = err instanceof Error ? err.message : String(err);
+      console.error(`[dashboard-layout] org status attempt ${attempt} failed: ${lastFailure}`);
+    }
+  }
+  throw new OrgStatusUnavailableError(`Could not load organization status: ${lastFailure}`);
+}
+
+// Returns null when the org definitively does not exist; throws on any transient failure.
+async function fetchOrgStatus(token: string): Promise<OrgStatus | null> {
+  {
     const [orgRes, statusRes] = await Promise.all([
       fetch(`${API_URL}/v1/organizations/me`, {
         headers: await serverApiHeaders(token),
@@ -30,7 +53,8 @@ async function getOrgStatus(token: string): Promise<{
         cache: "no-store",
       }),
     ]);
-    if (!orgRes.ok) return { provisioned: false, wabaConnected: false, numberProvisioned: false };
+    if (orgRes.status === 403 || orgRes.status === 404) return null;
+    if (!orgRes.ok) throw new Error(`/organizations/me returned ${orgRes.status}`);
     const org = (await orgRes.json().catch(() => null)) as { data?: { name?: string } } | null;
     const status = statusRes.ok
       ? (await statusRes.json() as { wabaConnected: boolean; numberProvisioned: boolean })
@@ -41,8 +65,6 @@ async function getOrgStatus(token: string): Promise<{
       numberProvisioned: status.numberProvisioned,
       orgName: org?.data?.name,
     };
-  } catch {
-    return { provisioned: false, wabaConnected: false, numberProvisioned: false };
   }
 }
 
