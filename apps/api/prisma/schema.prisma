@@ -1711,6 +1711,7 @@ model BillingStatement {
   paymentProvider String?   @map("payment_provider")
   paymentRef      String?   @map("payment_ref")
   paidAt          DateTime? @map("paid_at")
+  paidRef         String?   @map("paid_ref")
   remindersSent   Int       @default(0) @map("reminders_sent")
 
   @@index([status], map: "billing_statements_status_idx")

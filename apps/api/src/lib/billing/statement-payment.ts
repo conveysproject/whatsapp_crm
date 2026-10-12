@@ -116,14 +116,17 @@ export async function sendPaymentReminders(prisma: PrismaClient, now: Date = new
 
 export type PaidResult = "paid" | "already_paid" | "not_found" | "rejected";
 
+const PAYMENT_ID = /^[A-Za-z0-9_]{1,64}$/;
+
 /**
  * Marks a statement paid from a verified gateway webhook. Accepts only when the statement is issued, the webhook came
  * from the same provider and named the same payment link that was created for it, the currency matches and the paid
- * amount covers the amount due. Anything else changes nothing.
+ * amount covers the amount due. Anything else changes nothing. On success the gateway's payment id is kept for the
+ * invoice and the billing contact is emailed a "payment received" note (best effort, once).
  */
 export async function markStatementPaid(
   prisma: PrismaClient,
-  input: { statementId: string; provider: PaymentProvider; linkRef: string; currency: string; amountMinor: number },
+  input: { statementId: string; provider: PaymentProvider; linkRef: string; currency: string; amountMinor: number; paymentId?: string },
   now: Date = new Date(),
 ): Promise<PaidResult> {
   const st = await prisma.billingStatement.findUnique({
@@ -136,10 +139,33 @@ export async function markStatementPaid(
   if (st.paymentProvider !== input.provider || !st.paymentRef || st.paymentRef !== input.linkRef) return "rejected";
   if (!st.currency || st.currency.toUpperCase() !== input.currency.toUpperCase()) return "rejected";
   if (!st.amountMinor || !Number.isFinite(input.amountMinor) || input.amountMinor < st.amountMinor) return "rejected";
+  const paidRef = input.paymentId && PAYMENT_ID.test(input.paymentId) ? input.paymentId : null;
   const res = await prisma.billingStatement.updateMany({
     where: { id: input.statementId, status: "issued" },
-    data: { status: "paid", paidAt: now, updatedAt: now, paymentRef: input.linkRef },
+    data: { status: "paid", paidAt: now, updatedAt: now, paymentRef: input.linkRef, paidRef },
   });
-  return res.count === 1 ? "paid" : "already_paid";
+  if (res.count !== 1) return "already_paid";
+  await sendPaymentReceived(prisma, input.statementId).catch((err: unknown) =>
+    console.warn("[billing-pay] payment-received email failed", err instanceof Error ? err.name : "error"));
+  return "paid";
 }
 
+/** "Payment received" note to the billing contact (billing email if set, otherwise the admins). Throws on failure; the caller logs. */
+export async function sendPaymentReceived(prisma: PrismaClient, statementId: string): Promise<boolean> {
+  const st = await prisma.billingStatement.findUnique({
+    where: { id: statementId },
+    select: { organizationId: true, month: true, bandName: true, messages: true, currency: true, amountMinor: true, paidRef: true },
+  });
+  if (!st || !st.currency || !st.amountMinor) return false;
+  const org = await prisma.organization.findUnique({ where: { id: st.organizationId }, select: { settings: true } });
+  const to = statementRecipients(readBillingDetails(org?.settings), await adminEmails(prisma, st.organizationId));
+  if (to.length === 0) return false;
+  await sendMail({
+    to,
+    subject: `WBMSG: payment received, ${money(st.currency, st.amountMinor)}`,
+    html: `<p>Thank you. We have received your payment of <strong>${money(st.currency, st.amountMinor)}</strong> for the WBMSG billing period starting ${esc(st.month)}.</p>
+<p>${st.messages.toLocaleString("en-US")} messages counted (${esc(st.bandName)}).${st.paidRef ? ` Payment reference: ${esc(st.paidRef)}.` : ""}</p>
+<p>You can download the invoice any time from Settings &gt; Billing.</p>`,
+  });
+  return true;
+}

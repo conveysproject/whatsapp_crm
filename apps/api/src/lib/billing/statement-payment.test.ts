@@ -9,7 +9,7 @@ vi.mock("./payment-links.js", async (orig) => ({
 }));
 vi.mock("../mail.js", () => ({ sendMail }));
 
-import { ensurePaymentLinks, sendPaymentReminders, markStatementPaid, REMINDER_OFFSETS_DAYS } from "./statement-payment.js";
+import { ensurePaymentLinks, sendPaymentReminders, markStatementPaid, sendPaymentReceived, REMINDER_OFFSETS_DAYS } from "./statement-payment.js";
 
 const DAY = 86_400_000;
 const now = new Date("2026-11-20T10:00:00Z");
@@ -199,5 +199,67 @@ describe("sendPaymentReminders", () => {
     stFindMany.mockResolvedValue([]);
     await sendPaymentReminders(prisma, now);
     expect(stFindMany.mock.calls[0]![0].where).toEqual({ status: "issued", paymentUrl: { not: null }, dueAt: { not: null }, remindersSent: { lt: 3 } });
+  });
+});
+
+describe("payment received: reference and confirmation email", () => {
+  const findUnique = vi.fn();
+  const updateMany = vi.fn();
+  const orgFindUnique = vi.fn();
+  const userFindMany = vi.fn();
+  const prisma = {
+    billingStatement: { findUnique, updateMany },
+    organization: { findUnique: orgFindUnique },
+    user: { findMany: userFindMany },
+  } as unknown as PrismaClient;
+  const issued = { status: "issued", currency: "INR", amountMinor: 1000, paymentProvider: "razorpay", paymentRef: "plink_1" };
+  const ok = { statementId: "s1", provider: "razorpay" as const, linkRef: "plink_1", currency: "INR", amountMinor: 1000 };
+  const full = { organizationId: "o1", month: "2026-10-12", bandName: "Free", messages: 3, currency: "INR", amountMinor: 1000, paidRef: "pay_Abc123" };
+
+  beforeEach(() => {
+    [findUnique, updateMany, orgFindUnique, userFindMany, sendMail].forEach((m) => m.mockReset());
+    updateMany.mockResolvedValue({ count: 1 });
+    orgFindUnique.mockResolvedValue({ settings: {} });
+    userFindMany.mockResolvedValue([{ email: "a@x.com" }]);
+    // first read is the validation read, the second is the email's read (after the update)
+    findUnique.mockResolvedValueOnce(issued).mockResolvedValue(full);
+  });
+
+  it("keeps the gateway payment id on the statement and emails the billing contact", async () => {
+    expect(await markStatementPaid(prisma, { ...ok, paymentId: "pay_Abc123" }, now)).toBe("paid");
+    expect(updateMany.mock.calls[0]![0].data).toMatchObject({ status: "paid", paidAt: now, paidRef: "pay_Abc123" });
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    expect(sendMail.mock.calls[0]![0]).toMatchObject({ to: ["a@x.com"], subject: expect.stringContaining("payment received") });
+    expect(sendMail.mock.calls[0]![0].html).toContain("pay_Abc123");
+  });
+  it("stores nothing for a malformed or missing payment id and still marks the statement paid", async () => {
+    for (const paymentId of ["bad id!", "x".repeat(65), "", undefined]) {
+      findUnique.mockReset().mockResolvedValueOnce(issued).mockResolvedValue(full);
+      updateMany.mockClear();
+      expect(await markStatementPaid(prisma, { ...ok, paymentId }, now), String(paymentId)).toBe("paid");
+      expect(updateMany.mock.calls[0]![0].data.paidRef, String(paymentId)).toBeNull();
+    }
+  });
+  it("sends no email when another webhook already settled the statement", async () => {
+    updateMany.mockResolvedValue({ count: 0 });
+    expect(await markStatementPaid(prisma, { ...ok, paymentId: "pay_Abc123" }, now)).toBe("already_paid");
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+  it("still reports paid when the confirmation email fails", async () => {
+    sendMail.mockRejectedValue(new Error("mail down"));
+    expect(await markStatementPaid(prisma, { ...ok, paymentId: "pay_Abc123" }, now)).toBe("paid");
+  });
+  it("sends the receipt to the billing email when one is set, and nothing when there is nobody to send to", async () => {
+    findUnique.mockReset().mockResolvedValue(full);
+    orgFindUnique.mockResolvedValue({ settings: { billing: { billingEmail: "accounts@acme.in" } } });
+    expect(await sendPaymentReceived(prisma, "s1")).toBe(true);
+    expect(sendMail.mock.calls[0]![0].to).toEqual(["accounts@acme.in"]);
+    sendMail.mockClear();
+    orgFindUnique.mockResolvedValue({ settings: {} });
+    userFindMany.mockResolvedValue([]);
+    expect(await sendPaymentReceived(prisma, "s1")).toBe(false);
+    expect(sendMail).not.toHaveBeenCalled();
+    findUnique.mockResolvedValue({ ...full, amountMinor: null });
+    expect(await sendPaymentReceived(prisma, "s1")).toBe(false);
   });
 });

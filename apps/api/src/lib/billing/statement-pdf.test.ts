@@ -6,6 +6,8 @@ const base: StatementPdfInput = {
   issuedAt: new Date("2026-11-14T00:50:00Z"),
   dueAt: new Date("2026-11-21T00:50:00Z"),
   status: "issued",
+  paidAt: null,
+  paymentReference: null,
   periodStart: new Date("2026-10-14T00:00:00Z"),
   periodEnd: new Date("2026-11-13T00:00:00Z"),
   seller: { legalName: "Conveys Information Technology", address: "Pune", gstin: "27AAPFU0939F1ZV" },
@@ -19,6 +21,11 @@ describe("buildStatementPdf", () => {
     expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
     expect(pdf.length).toBeGreaterThan(1500);
     expect(pdf.subarray(-8).toString("latin1")).toContain("%%EOF");
+  });
+  it("renders a paid statement with its payment date and reference", async () => {
+    const pdf = await buildStatementPdf({ ...base, status: "paid", paidAt: new Date("2026-11-15T07:00:00Z"), paymentReference: "pay_TmziVzjESa0MIG" });
+    expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+    expect(pdf.length).toBeGreaterThan(1500);
   });
   it("copes with no tax, no billing details, a paid status and very long text", async () => {
     const minimal = await buildStatementPdf({

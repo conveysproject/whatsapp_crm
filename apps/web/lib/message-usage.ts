@@ -19,7 +19,7 @@ export type Plan =
       cap: { upTo: number; inr: number; usd: number };
     };
 export interface Cycle { key: string; from: string; toExclusive: string; days: number }
-export interface Statement { month: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string; dueAt: string | null; paymentUrl: string | null; currency: string | null; totalMinor: number | null; taxMinor: number | null }
+export interface Statement { month: string; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string; dueAt: string | null; paymentUrl: string | null; currency: string | null; totalMinor: number | null; taxMinor: number | null; paidAt: string | null; paidRef: string | null }
 export interface UsageAlert { kind: string; at: string }
 export interface ExpectedBill { messages: number; band: BandView }
 export interface MessageUsage {
@@ -107,6 +107,9 @@ function normalizeStatements(raw: unknown): Statement[] {
         currency: typeof r["currency"] === "string" ? r["currency"] : null,
         totalMinor: nullableNum(r["amountMinor"]),
         taxMinor: nullableNum(r["taxMinor"]),
+        paidAt: typeof r["paidAt"] === "string" && !Number.isNaN(Date.parse(r["paidAt"])) ? r["paidAt"] : null,
+        // A gateway payment id such as pay_AbC123; anything else is dropped rather than displayed.
+        paidRef: typeof r["paidRef"] === "string" && /^[A-Za-z0-9_]{1,64}$/.test(r["paidRef"]) ? r["paidRef"] : null,
         dueAt: typeof r["dueAt"] === "string" && !Number.isNaN(Date.parse(r["dueAt"])) ? r["dueAt"] : null,
         // Only a real https link is ever rendered as a payment link.
         paymentUrl: typeof r["paymentUrl"] === "string" && /^https:\/\//.test(r["paymentUrl"]) ? r["paymentUrl"] : null,

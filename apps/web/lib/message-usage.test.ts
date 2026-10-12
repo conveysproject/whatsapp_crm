@@ -199,3 +199,18 @@ describe("chart helpers", () => {
     expect(normalizeMessageUsage({})?.failed).toBe(0);
   });
 });
+
+describe("paid statement details", () => {
+  const raw = { month: "2026-10-14", messages: 1, bandName: "Band 1", amountInr: 500, amountUsd: 5, status: "paid" };
+  it("keeps the payment date and a well-formed payment reference", () => {
+    const st = normalizeMessageUsage({ statements: [{ ...raw, paidAt: "2026-10-12T06:49:45.197Z", paidRef: "pay_TmziVzjESa0MIG" }] })?.statements[0];
+    expect(st).toMatchObject({ paidAt: "2026-10-12T06:49:45.197Z", paidRef: "pay_TmziVzjESa0MIG" });
+  });
+  it("drops a malformed date or reference", () => {
+    for (const bad of [{ paidAt: "not a date", paidRef: "<b>x</b>" }, { paidAt: 5, paidRef: 7 }, { paidRef: "x".repeat(65) }, {}]) {
+      const st = normalizeMessageUsage({ statements: [{ ...raw, ...bad }] })?.statements[0];
+      expect(st?.paidRef).toBeNull();
+      expect(st?.paidAt).toBeNull();
+    }
+  });
+});

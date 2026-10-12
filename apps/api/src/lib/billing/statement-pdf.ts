@@ -5,6 +5,9 @@ export interface StatementPdfInput {
   issuedAt: Date | null;
   dueAt: Date | null;
   status: string;
+  /** When the payment arrived and the gateway's payment id; shown only for a paid statement. */
+  paidAt: Date | null;
+  paymentReference: string | null;
   periodStart: Date;
   /** Last day of the billing period (inclusive). */
   periodEnd: Date;
@@ -52,6 +55,10 @@ export function buildStatementPdf(i: StatementPdfInput): Promise<Buffer> {
       .text(`Issued: ${i.issuedAt ? dateText(i.issuedAt) : "-"}`)
       .text(`Billing period: ${dateText(i.periodStart)} to ${dateText(i.periodEnd)}`)
       .text(`Status: ${STATUS_TEXT[i.status] ?? i.status}${i.status === "issued" && i.dueAt ? `, due ${dateText(i.dueAt)}` : ""}`);
+    if (i.status === "paid") {
+      if (i.paidAt) doc.text(`Paid on: ${dateText(i.paidAt)}`);
+      if (i.paymentReference) doc.text(`Payment reference: ${i.paymentReference}`);
+    }
 
     doc.moveDown(1);
     const top = doc.y;

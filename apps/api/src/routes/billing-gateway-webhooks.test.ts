@@ -81,7 +81,7 @@ describe("razorpay webhook: usage statement payment links", () => {
 
   it("marks the statement paid for a correctly signed payment_link.paid and never activates a plan", async () => {
     expect((await send(body())).statusCode).toBe(200);
-    expect(markPaidMock).toHaveBeenCalledWith(expect.anything(), { statementId: "s1", provider: "razorpay", linkRef: "plink_1", currency: "INR", amountMinor: 50000 });
+    expect(markPaidMock).toHaveBeenCalledWith(expect.anything(), { statementId: "s1", provider: "razorpay", linkRef: "plink_1", paymentId: "pay_1", currency: "INR", amountMinor: 50000 });
     expect(activatePlanMock).not.toHaveBeenCalled();
   });
   it("rejects a bad signature before touching any statement", async () => {

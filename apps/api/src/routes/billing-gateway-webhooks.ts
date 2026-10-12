@@ -45,7 +45,7 @@ export const billingGatewayWebhooksRouter: FastifyPluginAsync = async (fastify) 
       const statementId = link?.notes?.statementId ?? link?.reference_id;
       if (statementId && link?.id) {
         const result = await markStatementPaid(fastify.prisma, {
-          statementId, provider: "razorpay", linkRef: link.id,
+          statementId, provider: "razorpay", linkRef: link.id, paymentId: entity?.id,
           currency: link.currency ?? entity?.currency ?? "", amountMinor: link.amount_paid ?? entity?.amount ?? NaN,
         });
         if (result === "rejected") fastify.log.warn({ statementId }, "razorpay statement payment rejected (manual review)");

@@ -184,4 +184,15 @@ describe("GET /v1/billing/message-usage", () => {
     expect((await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).json<{ data: { failed: number } }>().data.failed).toBe(0);
     await app.close();
   });
+  it("shows the payment date and reference only on a paid statement", async () => {
+    findStatements.mockResolvedValue([
+      { month: "2026-09-14", messages: 5, bandName: "Band 1", amountInr: 500, amountUsd: 5, status: "paid", dueAt: null, paymentUrl: "https://rzp.io/l/x", currency: "INR", amountMinor: 50000, taxMinor: null, paidAt: new Date("2026-10-12T06:49:45Z"), paidRef: "pay_Abc123" },
+      { month: "2026-10-14", messages: 5, bandName: "Band 1", amountInr: 500, amountUsd: 5, status: "issued", dueAt: new Date("2026-10-21T00:00:00Z"), paymentUrl: "https://rzp.io/l/y", currency: "INR", amountMinor: 50000, taxMinor: null, paidAt: new Date("2026-10-12T06:49:45Z"), paidRef: "pay_leak" },
+    ]);
+    const app = await buildAs("admin");
+    const rows = (await app.inject({ method: "GET", url: "/v1/billing/message-usage" })).json<{ data: { statements: Array<{ status: string; paidAt: string | null; paidRef: string | null; paymentUrl: string | null }> } }>().data.statements;
+    expect(rows[0]).toMatchObject({ status: "paid", paidAt: "2026-10-12T06:49:45.000Z", paidRef: "pay_Abc123", paymentUrl: null });
+    expect(rows[1]).toMatchObject({ status: "issued", paidAt: null, paidRef: null, paymentUrl: "https://rzp.io/l/y" });
+    await app.close();
+  });
 });

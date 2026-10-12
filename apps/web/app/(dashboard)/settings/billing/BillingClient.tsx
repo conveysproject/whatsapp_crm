@@ -119,6 +119,8 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
                     <td className="py-2.5">
                       <span className={statementStatusLabel(st.status, st.dueAt) === "Overdue" ? "font-semibold text-red-700" : ""}>{statementStatusLabel(st.status, st.dueAt)}</span>
                       {st.status === "issued" && st.dueAt ? <span className="block text-xs text-gray-500">Due {dueDateLabel(st.dueAt)}</span> : null}
+                      {st.status === "paid" && st.paidAt ? <span className="block text-xs text-gray-500">Paid on {dueDateLabel(st.paidAt)}</span> : null}
+                      {st.status === "paid" && st.paidRef ? <span className="block text-xs text-gray-500 font-mono">Ref {st.paidRef}</span> : null}
                       {st.status === "issued" && st.paymentUrl ? (
                         <a href={st.paymentUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-800">Pay now</a>
                       ) : null}

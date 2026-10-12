@@ -17,7 +17,7 @@ export const billingStatementPdfRouter: FastifyPluginAsync = async (fastify) => 
 
     const st = await fastify.prisma.billingStatement.findFirst({
       where: { organizationId, month: request.params.cycle, status: { in: ["issued", "no_payment", "paid"] } },
-      select: { id: true, month: true, messages: true, bandName: true, amountInr: true, amountUsd: true, status: true, currency: true, amountMinor: true, taxMinor: true, dueAt: true, issuedAt: true },
+      select: { id: true, month: true, messages: true, bandName: true, amountInr: true, amountUsd: true, status: true, currency: true, amountMinor: true, taxMinor: true, dueAt: true, issuedAt: true, paidAt: true, paidRef: true },
     });
     if (!st) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Statement not found" } });
     const org = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true, createdAt: true, settings: true } });
@@ -36,6 +36,8 @@ export const billingStatementPdfRouter: FastifyPluginAsync = async (fastify) => 
       issuedAt: st.issuedAt,
       dueAt: st.dueAt,
       status: st.status,
+      paidAt: st.status === "paid" ? st.paidAt : null,
+      paymentReference: st.status === "paid" ? st.paidRef : null,
       periodStart: cycle.start,
       periodEnd: new Date(cycle.endExclusive.getTime() - 86_400_000),
       seller: config.seller,
