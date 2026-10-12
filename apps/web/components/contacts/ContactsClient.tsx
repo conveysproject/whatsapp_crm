@@ -102,6 +102,17 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [selectedTag, setSelectedTag] = useState("");
   const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState("");
+  const { data: groupOptions = [] } = useQuery<{ id: string; title: string }[]>({
+    queryKey: ["contact-group-options"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await clientFetch(`${API_URL}/v1/contact-groups`, { token: token ?? "", silent: true });
+      if (!res.ok) return [];
+      return (await res.json() as { data: { id: string; title: string }[] }).data;
+    },
+    staleTime: 60_000,
+  });
 
   const { toast, toastState, setToastOpen } = useToast();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,12 +147,12 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
     + (isVisible("tags") ? 1 : 0)
     + (isVisible("assigned_user_id") ? 1 : 0);
 
-  const search = useCallback(async (q: string, tag: string) => {
+  const search = useCallback(async (q: string, tag: string, groupId: string) => {
     const token = await getToken();
     if (!token) return;
     setSearching(true);
     try {
-      const url = `${API_URL}/v1/contacts/search?q=${encodeURIComponent(q)}${tag ? `&tag=${encodeURIComponent(tag)}` : ""}`;
+      const url = `${API_URL}/v1/contacts?limit=500&q=${encodeURIComponent(q)}${tag ? `&tag=${encodeURIComponent(tag)}` : ""}${groupId ? `&groupId=${encodeURIComponent(groupId)}` : ""}`;
       const res = await clientFetch(url, { token, silent: true });
       if (res.ok) setContacts((await res.json() as { data: ContactWithLabels[] }).data);
     } finally { setSearching(false); }
@@ -149,10 +160,10 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!query.trim() && !selectedTag) { setContacts(initialContacts); return; }
-    debounceRef.current = setTimeout(() => { void search(query, selectedTag); }, 300);
+    if (!query.trim() && !selectedTag && !selectedGroupId) { setContacts(initialContacts); return; }
+    debounceRef.current = setTimeout(() => { void search(query, selectedTag, selectedGroupId); }, 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, selectedTag, search, initialContacts]);
+  }, [query, selectedTag, selectedGroupId, search, initialContacts]);
 
   useEffect(() => {
     void (async () => {
@@ -414,6 +425,19 @@ export function ContactsClient({ initialContacts, userRole }: Props): JSX.Elemen
                   <option value="">All tags</option>
                   {availableTags.map((t) => (
                     <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              )}
+
+              {groupOptions.length > 0 && (
+                <select
+                  value={selectedGroupId}
+                  onChange={(e) => { setSelectedGroupId(e.target.value); setPage(1); }}
+                  className="h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  <option value="">All groups</option>
+                  {groupOptions.map((g) => (
+                    <option key={g.id} value={g.id}>{g.title}</option>
                   ))}
                 </select>
               )}

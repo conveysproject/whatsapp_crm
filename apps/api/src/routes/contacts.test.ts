@@ -159,6 +159,30 @@ describe("GET /v1/contacts", () => {
       expect.objectContaining({ where: expect.objectContaining({ organizationId: "org-1" }) })
     );
   });
+
+  it("filters by tag and group together, scoped to the org", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([]);
+    const res = await app.inject({ method: "GET", url: "/v1/contacts?tag=bni%20leads&groupId=g-1" });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.contact.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: "org-1",
+          tags: { has: "bni leads" },
+          groupContacts: { some: { contactGroupId: "g-1", contactGroup: { organizationId: "org-1" } } },
+        }),
+      })
+    );
+  });
+
+  it("allows a limit above 100 up to 500", async () => {
+    mockPrisma.contact.findMany.mockResolvedValue([]);
+    await app.inject({ method: "GET", url: "/v1/contacts?limit=500" });
+    expect(mockPrisma.contact.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 501 }));
+    mockPrisma.contact.findMany.mockClear();
+    await app.inject({ method: "GET", url: "/v1/contacts?limit=9999" });
+    expect(mockPrisma.contact.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 501 }));
+  });
 });
 
 describe("POST /v1/contacts", () => {

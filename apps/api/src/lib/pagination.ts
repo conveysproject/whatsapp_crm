@@ -22,10 +22,11 @@ export interface PaginationOptions {
 }
 
 export function parsePaginationParams(
-  query: Record<string, string | string[] | undefined>
+  query: Record<string, string | string[] | undefined>,
+  maxLimit = 100
 ): PaginationOptions {
   const cursor = typeof query["cursor"] === "string" ? query["cursor"] : undefined;
   const limitRaw = typeof query["limit"] === "string" ? parseInt(query["limit"], 10) : 50;
-  const limit = Math.min(Math.max(isNaN(limitRaw) ? 50 : limitRaw, 1), 100);
+  const limit = Math.min(Math.max(isNaN(limitRaw) ? 50 : limitRaw, 1), maxLimit);
   return { cursor, limit };
 }

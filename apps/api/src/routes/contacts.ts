@@ -346,9 +346,10 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
       nonSalesClosureFilter = { leadStatusId: { in: ids } };
     }
     const query = request.query as Record<string, string>;
-    const { cursor, limit } = parsePaginationParams(query);
+    const { cursor, limit } = parsePaginationParams(query, 500);
     const q = query["q"]?.trim() ?? "";
     const tagFilter = query["tag"];
+    const groupId = query["groupId"];
 
     const countryId = query["countryId"] ? parseInt(query["countryId"], 10) : undefined;
     const visWhere = await contactVisibilityWhere(fastify.prisma, request.auth);
@@ -359,11 +360,13 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
         ...(nonSalesClosureFilter ?? {}),
         ...(cursor ? { id: { gt: cursor } } : {}),
         ...(tagFilter ? { tags: { has: tagFilter } } : {}),
-        ...(countryId && !isNaN(countryId) ? { countryId } : {}),
+        ...(groupId ? { groupContacts: { some: { contactGroupId: groupId, contactGroup: { organizationId } } } } : {}),
+        ...(countryId &&!isNaN(countryId) ? { countryId } : {}),
         ...(q ? {
           OR: [
             { name: { contains: q, mode: "insensitive" } },
             { phoneNumber: { contains: q } },
+            { email: { contains: q, mode: "insensitive" } },
           ],
         } : {}),
         organizationId,
