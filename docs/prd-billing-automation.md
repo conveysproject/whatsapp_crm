@@ -21,3 +21,6 @@ Status: owner decisions 2026-10-12. Billing must run without manual steps; a cus
 
 ## Rollback
 Set `blockingMode` to `off` (instant, no deploy) to stop all blocking and banners. Set `autoIssueEnabled` to off to stop automatic issuing.
+
+## Cancellation (added 2026-10-12)
+Owner decisions: an admin presses "Cancel my account" in Settings > Billing and confirms; the owner approves in Admin > Billing > Cancellation requests (an email announces each request). On approval: sending stops at once, whatever the blocking mode (error code `ACCOUNT_CANCELLED`, HTTP 402); a final statement is issued for the part-cycle with the same bands applied to the messages counted so far (no proration), subject to the charging start date and never for the owner's own organizations; the customer keeps sign-in and export access for 30 days. After 30 days the owner deletes the data by hand; the daily summary email lists accounts due. The owner can dismiss a request or reactivate a cancelled account (sending resumes within a minute). A customer can withdraw a request until it is approved.

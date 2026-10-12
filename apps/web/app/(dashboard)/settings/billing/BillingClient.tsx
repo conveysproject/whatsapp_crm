@@ -9,6 +9,7 @@ import { BandTable } from "@/components/billing/BandTable";
 import { BillingDetailsCard } from "@/components/billing/BillingDetailsCard";
 import { AlertPreferences } from "@/components/billing/AlertPreferences";
 import { HowYouPayCard } from "@/components/billing/HowYouPayCard";
+import { CancelAccountCard } from "@/components/billing/CancelAccountCard";
 import { alertText, formatCount, formatInr, formatUsd, formatMinor, cycleStartLabel, dueDateLabel, statementStatusLabel, type MessageUsage } from "@/lib/message-usage";
 
 interface SubscriptionData {
@@ -154,6 +155,8 @@ export function BillingClient({ messageUsage, subscription, transactions }: Prop
         )}
         <AlertPreferences />
       </section>
+
+      <CancelAccountCard />
 
       <p className="text-sm text-gray-500">
         WhatsApp conversation charges are billed to you directly by Meta.{" "}

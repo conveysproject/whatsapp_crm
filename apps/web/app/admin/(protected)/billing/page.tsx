@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
 import { OverduePanel } from "./_components/OverduePanel";
+import { CancellationsPanel } from "./_components/CancellationsPanel";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -346,6 +347,8 @@ export default function AdminBillingPage(): JSX.Element {
       </section>
 
       <OverduePanel />
+
+      <CancellationsPanel />
 
       <section>
         <h2 className="text-lg font-semibold text-gray-900">Counting rules</h2>

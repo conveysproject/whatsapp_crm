@@ -99,16 +99,19 @@ describe("runBillingAutomation", () => {
   const stFindMany = vi.fn();
   const settingFindUnique = vi.fn();
   const orgFindMany = vi.fn();
+  const cancelFindMany = vi.fn();
   const prisma = {
     billingSetting: { findUnique: settingFindUnique },
     billingStatement: { findMany: stFindMany },
     organization: { findMany: orgFindMany },
     billingAlertEvent: { findMany: vi.fn().mockResolvedValue([]), createMany: vi.fn() },
+    billingCancellation: { findMany: cancelFindMany },
     user: { findMany: vi.fn().mockResolvedValue([]) },
   } as unknown as PrismaClient;
 
   beforeEach(() => {
-    [stFindMany, settingFindUnique, orgFindMany, sendMail, issueStatements, ensurePaymentLinks].forEach((m) => m.mockReset());
+    [stFindMany, settingFindUnique, orgFindMany, sendMail, issueStatements, ensurePaymentLinks, cancelFindMany].forEach((m) => m.mockReset());
+    cancelFindMany.mockResolvedValue([]);
     stFindMany.mockResolvedValue([]);
     orgFindMany.mockResolvedValue([]);
     issueStatements.mockResolvedValue({ configured: true, issued: 2, noPayment: 1, customQuote: 0 });
@@ -136,6 +139,20 @@ describe("runBillingAutomation", () => {
     expect((await runBillingAutomation(prisma, now)).summarySent).toBe(true);
     expect(sendMail.mock.calls[0]![0].to).toBe("info@conveys.in");
     expect(sendMail.mock.calls[0]![0].html).toContain("Acme");
+  });
+  it("tells the owner about cancellation requests and cancelled accounts whose data is due for deletion", async () => {
+    settingFindUnique.mockResolvedValue({ value: { ...DEFAULT_BILLING_CONFIG } });
+    orgFindMany.mockResolvedValue([{ id: "o1", name: "Leaver Co" }, { id: "o2", name: "Gone Co" }]);
+    cancelFindMany.mockImplementation(async (args: { where: { status: string } }) =>
+      args.where.status === "requested"
+        ? [{ organizationId: "o1", requestedAt: new Date("2026-11-19T00:00:00Z") }]
+        : [{ organizationId: "o2", approvedAt: new Date("2026-10-01T00:00:00Z") }]);
+    expect((await runBillingAutomation(prisma, now)).summarySent).toBe(true);
+    const html = sendMail.mock.calls[0]![0].html as string;
+    expect(html).toContain("Cancellation requests waiting for your approval");
+    expect(html).toContain("Leaver Co");
+    expect(html).toContain("delete their data");
+    expect(html).toContain("Gone Co");
   });
   it("one failing step never stops the others", async () => {
     settingFindUnique.mockResolvedValue({ value: { ...DEFAULT_BILLING_CONFIG, autoIssueEnabled: true } });

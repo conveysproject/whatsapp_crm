@@ -10,18 +10,25 @@ const DAY = 86_400_000;
 const STANDING_TTL_MS = 60_000;
 const ORG_LOOKUP_TTL_MS = 5 * 60_000;
 
-/** Thrown instead of sending when an organization is blocked for non-payment. HTTP 402. */
+export type BlockReason = "overdue" | "cancelled";
+
+/** Thrown instead of sending when an organization is blocked for non-payment or has been cancelled. HTTP 402. */
 export class BillingBlockedError extends Error {
   readonly statusCode = 402;
-  readonly code = "BILLING_OVERDUE";
-  constructor(readonly organizationId: string, readonly blockedSince: Date | null) {
-    super("Sending is paused because a WBMSG statement is overdue. Pay it in Settings > Billing and sending resumes right away.");
+  readonly code: "BILLING_OVERDUE" | "ACCOUNT_CANCELLED";
+  constructor(readonly organizationId: string, readonly blockedSince: Date | null, readonly reason: BlockReason = "overdue") {
+    super(
+      reason === "cancelled"
+        ? "Sending is off because this WBMSG account has been cancelled. If this is a mistake, write to info@conveys.in."
+        : "Sending is paused because a WBMSG statement is overdue. Pay it in Settings > Billing and sending resumes right away.",
+    );
     this.name = "BillingBlockedError";
+    this.code = reason === "cancelled" ? "ACCOUNT_CANCELLED" : "BILLING_OVERDUE";
   }
 }
 
 export type BlockingMode = "off" | "watch" | "enforce";
-export type StandingState = "ok" | "overdue" | "blocked";
+export type StandingState = "ok" | "overdue" | "blocked" | "cancelled";
 
 export interface Standing {
   state: StandingState;
@@ -60,9 +67,10 @@ export function standingFrom(input: StandingInput): Standing {
   };
 }
 
-/** Whether sending must actually be refused: past the grace period AND the owner has switched enforcement on. */
+/** Whether sending must actually be refused: a cancelled account, or past the grace period with enforcement switched on. */
 export function isEnforcedBlock(s: Standing): boolean {
-  return s.state === "blocked" && s.mode === "enforce";
+  // A cancelled account is always refused, whatever the blocking mode: cancellation is not a billing experiment.
+  return s.state === "cancelled" || (s.state === "blocked" && s.mode === "enforce");
 }
 
 interface BlockSettings { exempt: boolean; pauseUntil: Date | null }
@@ -86,6 +94,9 @@ export function isExempt(orgName: string | null | undefined, settings: unknown, 
 /** Reads one organization's standing from the database. Uses the stored config; any missing piece reads as "fine". */
 export async function loadStanding(prisma: PrismaClient, organizationId: string, now: Date = new Date(), config?: BillingConfig): Promise<Standing> {
   const cfg = config ?? (await loadBillingConfig(prisma));
+  // An approved cancellation turns sending off. A failed lookup here must not hide the overdue rules below.
+  const cancelled = await prisma.billingCancellation.findUnique({ where: { organizationId }, select: { status: true } }).catch(() => null);
+  if (cancelled?.status === "approved") return { state: "cancelled", mode: cfg.blockingMode, dueAt: null, blockAt: null, overdueMonths: [] };
   if (cfg.blockingMode === "off") return { ...OK_STANDING, mode: "off" };
   const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true, settings: true } });
   if (!org) return { ...OK_STANDING, mode: cfg.blockingMode };
@@ -151,7 +162,7 @@ export async function assertSendingAllowed(phoneNumberId: string, prisma: Prisma
     console.warn("[billing-block] standing check failed, allowing the send", err instanceof Error ? err.name : "error");
     return;
   }
-  if (isEnforcedBlock(standing)) throw new BillingBlockedError(organizationId, standing.blockAt);
+  if (isEnforcedBlock(standing)) throw new BillingBlockedError(organizationId, standing.blockAt, standing.state === "cancelled" ? "cancelled" : "overdue");
   if (standing.state === "blocked" && standing.mode === "watch") {
     // Watch mode: nothing is refused. Say so once per organization per UTC day so the owner can see what enforcement would do.
     const day = now.toISOString().slice(0, 10);

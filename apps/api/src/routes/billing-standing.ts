@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { cachedStanding } from "../lib/billing/send-guard.js";
+import { cachedStanding, isEnforcedBlock } from "../lib/billing/send-guard.js";
 
 /**
  * The caller's own organization's payment standing, for the warning banner. Any signed-in member may read it (so an
@@ -13,8 +13,8 @@ export const billingStandingRouter: FastifyPluginAsync = async (fastify) => {
       return reply.send({
         data: {
           state: s.state,
-          // "watch" never refuses a send, so it is reported as a warning only
-          paused: s.state === "blocked" && s.mode === "enforce",
+          // "watch" never refuses a send, so it is reported as a warning only; a cancelled account is always paused
+          paused: isEnforcedBlock(s),
           dueAt: s.dueAt ? s.dueAt.toISOString() : null,
           blockAt: s.blockAt ? s.blockAt.toISOString() : null,
         },

@@ -7,7 +7,8 @@ vi.mock("../lib/prisma.js", () => ({ prisma: {} }));
 const orgFindUnique = vi.fn();
 const stFindMany = vi.fn();
 const settingFindUnique = vi.fn();
-const mockPrisma = { organization: { findUnique: orgFindUnique }, billingStatement: { findMany: stFindMany }, billingSetting: { findUnique: settingFindUnique } };
+const cancelFind = vi.fn();
+const mockPrisma = { organization: { findUnique: orgFindUnique }, billingStatement: { findMany: stFindMany }, billingSetting: { findUnique: settingFindUnique }, billingCancellation: { findUnique: cancelFind } };
 
 async function buildAs(role: string, organizationId = "org-1"): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -26,7 +27,8 @@ const cfg = (mode: string) => ({ value: { published: true, freeAllowance: 500, a
 describe("GET /v1/billing/standing", () => {
   beforeEach(async () => {
     vi.resetModules();
-    [orgFindUnique, stFindMany, settingFindUnique].forEach((m) => m.mockReset());
+    [orgFindUnique, stFindMany, settingFindUnique, cancelFind].forEach((m) => m.mockReset());
+    cancelFind.mockResolvedValue(null);
     orgFindUnique.mockResolvedValue({ name: "Acme", settings: {} });
     settingFindUnique.mockResolvedValue(cfg("enforce"));
     stFindMany.mockResolvedValue([]);
@@ -60,6 +62,13 @@ describe("GET /v1/billing/standing", () => {
     const app2 = await buildAs("admin");
     expect((await app2.inject({ method: "GET", url: "/v1/billing/standing" })).json<{ data: { state: string; paused: boolean } }>().data).toMatchObject({ state: "blocked", paused: false });
     await app2.close();
+  });
+  it("reports a cancelled account as cancelled and paused, whatever the blocking mode", async () => {
+    cancelFind.mockResolvedValue({ status: "approved" });
+    settingFindUnique.mockResolvedValue(cfg("off"));
+    const app = await buildAs("agent");
+    expect((await app.inject({ method: "GET", url: "/v1/billing/standing" })).json<{ data: { state: string; paused: boolean } }>().data).toMatchObject({ state: "cancelled", paused: true });
+    await app.close();
   });
   it("reports fine when blocking is off, and never fails the page when the lookup breaks", async () => {
     settingFindUnique.mockResolvedValue(cfg("off"));

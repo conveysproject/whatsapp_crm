@@ -5,9 +5,11 @@ import { issueStatements } from "./statements.js";
 import { ensurePaymentLinks } from "./statement-payment.js";
 import { readBillingDetails, statementRecipients } from "./billing-details.js";
 import { BLOCK_GRACE_DAYS, isExempt } from "./send-guard.js";
+import { ownerEmail } from "./owner-email.js";
+import { deletionDue } from "./cancellation.js";
 
 const DAY = 86_400_000;
-export const OWNER_SUMMARY_TO = (): string => process.env["BILLING_OWNER_EMAIL"] ?? "info@conveys.in";
+export const OWNER_SUMMARY_TO = ownerEmail;
 
 const esc = (t: string): string => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
@@ -20,6 +22,10 @@ export interface OwnerSummaryData {
   newlyBlocked: string[];
   wouldBlock: string[];
   noLink: string[];
+  /** Cancelled accounts whose 30 days are over: their data is waiting for the owner to delete it. */
+  deleteData?: string[];
+  /** Cancellation requests waiting for the owner's approval. */
+  cancelRequests?: string[];
 }
 
 /** The owner's daily email, or null on a quiet day. Pure. */
@@ -31,6 +37,8 @@ export function buildOwnerSummary(d: OwnerSummaryData): { subject: string; html:
     ["Newly blocked from sending", d.newlyBlocked],
     ["Would be blocked (watch mode, nothing was blocked)", d.wouldBlock],
     ["Issued but no payment link yet (customer cannot pay; never blocked)", d.noLink],
+    ["Cancellation requests waiting for your approval", d.cancelRequests ?? []],
+    ["Cancelled accounts past 30 days: delete their data", d.deleteData ?? []],
   ];
   if (sections.every(([, rows]) => rows.length === 0)) return null;
   const body = sections
@@ -150,6 +158,8 @@ export async function runBillingAutomation(prisma: PrismaClient, now: Date = new
       newlyBlocked: await labels(prisma, sweep.blocked.map((s) => ({ organizationId: s.organizationId, text: s.month }))),
       wouldBlock: await labels(prisma, sweep.wouldBlock.map((s) => ({ organizationId: s.organizationId, text: s.month }))),
       noLink: await labels(prisma, noLink.map((s) => ({ organizationId: s.organizationId, text: s.month }))),
+      cancelRequests: await labels(prisma, (await prisma.billingCancellation.findMany({ where: { status: "requested" }, select: { organizationId: true, requestedAt: true }, take: 100 })).map((c) => ({ organizationId: c.organizationId, text: `requested ${c.requestedAt.toISOString().slice(0, 10)}` }))),
+      deleteData: await labels(prisma, (await deletionDue(prisma, now)).map((c) => ({ organizationId: c.organizationId, text: `cancelled ${c.approvedAt.toISOString().slice(0, 10)}` }))),
     });
     if (summary) {
       await sendMail({ to: OWNER_SUMMARY_TO(), subject: summary.subject, html: summary.html });

@@ -8,6 +8,7 @@ const { prismaMock } = vi.hoisted(() => ({
     vendorSetting: { findFirst: vi.fn() },
     billingStatement: { findMany: vi.fn() },
     billingSetting: { findUnique: vi.fn() },
+    billingCancellation: { findUnique: vi.fn() },
   },
 }));
 vi.mock("./prisma.js", () => ({ prisma: prismaMock }));
@@ -36,7 +37,8 @@ describe("every send to Meta goes through the payment guard", () => {
     resetSendGuardCaches();
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockReset().mockResolvedValue({ ok: true, json: async () => ({ messages: [{ id: "wamid.1" }] }) });
-    [prismaMock.organization.findFirst, prismaMock.organization.findUnique, prismaMock.vendorSetting.findFirst, prismaMock.billingStatement.findMany, prismaMock.billingSetting.findUnique].forEach((m) => m.mockReset());
+    [prismaMock.organization.findFirst, prismaMock.organization.findUnique, prismaMock.vendorSetting.findFirst, prismaMock.billingStatement.findMany, prismaMock.billingSetting.findUnique, prismaMock.billingCancellation.findUnique].forEach((m) => m.mockReset());
+    prismaMock.billingCancellation.findUnique.mockResolvedValue(null);
     prismaMock.organization.findFirst.mockResolvedValue({ id: "o1" });
     prismaMock.organization.findUnique.mockResolvedValue({ name: "Acme", settings: {} });
     prismaMock.billingSetting.findUnique.mockResolvedValue(config("enforce"));
@@ -53,6 +55,15 @@ describe("every send to Meta goes through the payment guard", () => {
       prismaMock.billingStatement.findMany.mockResolvedValue([]);
       await expect(send()).resolves.toBeDefined();
       expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  }
+
+  for (const [name, send] of senders) {
+    it(`${name} refuses a cancelled account and never calls Meta`, async () => {
+      prismaMock.billingCancellation.findUnique.mockResolvedValue({ status: "approved" });
+      prismaMock.billingStatement.findMany.mockResolvedValue([]);
+      await expect(send()).rejects.toMatchObject({ code: "ACCOUNT_CANCELLED" });
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   }
 

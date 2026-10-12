@@ -1720,6 +1720,20 @@ model BillingStatement {
   @@map("billing_statements")
 }
 
+model BillingCancellation {
+  organizationId String    @id @map("organization_id")
+  status         String
+  requestedAt    DateTime  @default(now()) @map("requested_at")
+  requestedBy    String?   @map("requested_by")
+  reason         String?
+  approvedAt     DateTime? @map("approved_at")
+  approvedBy     String?   @map("approved_by")
+  updatedAt      DateTime  @default(now()) @map("updated_at")
+
+  @@index([status], map: "billing_cancellations_status_idx")
+  @@map("billing_cancellations")
+}
+
 model ApiRequestPayload {
   id                String   @id
   organizationId    String   @map("organization_id")

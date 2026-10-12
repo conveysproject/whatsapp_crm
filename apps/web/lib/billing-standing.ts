@@ -1,5 +1,5 @@
 /** The payment standing of the signed-in organization, for the warning banner (GET /v1/billing/standing). */
-export type StandingState = "ok" | "overdue" | "blocked";
+export type StandingState = "ok" | "overdue" | "blocked" | "cancelled";
 
 export interface Standing {
   state: StandingState;
@@ -22,7 +22,7 @@ function dateOrNull(v: unknown): string | null {
 /** Never throws; anything unexpected reads as "fine" so a banner cannot appear by accident. */
 export function normalizeStanding(raw: unknown): Standing {
   if (!isRecord(raw)) return OK;
-  const state = raw["state"] === "overdue" || raw["state"] === "blocked" ? raw["state"] : "ok";
+  const state = raw["state"] === "overdue" || raw["state"] === "blocked" || raw["state"] === "cancelled" ? raw["state"] : "ok";
   if (state === "ok") return OK;
   return { state, paused: raw["paused"] === true, dueAt: dateOrNull(raw["dueAt"]), blockAt: dateOrNull(raw["blockAt"]) };
 }
@@ -43,6 +43,9 @@ export interface Banner {
 /** What to tell the user, or null when there is nothing to say. `canPay` is whether the viewer can open the billing page. */
 export function bannerFor(s: Standing, canPay: boolean): Banner | null {
   if (s.state === "ok") return null;
+  if (s.state === "cancelled") {
+    return { tone: "danger", message: "This WBMSG account has been cancelled and sending WhatsApp messages is off. You can still sign in and export your data. If this is a mistake, write to info@conveys.in." };
+  }
   const who = canPay ? "Pay it in Settings > Billing" : "Ask a billing admin to pay it";
   if (s.paused) {
     return { tone: "danger", message: `Sending WhatsApp messages is paused because a WBMSG statement is overdue. ${who} and sending resumes right away.` };

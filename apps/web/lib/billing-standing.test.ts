@@ -38,6 +38,15 @@ describe("bannerFor", () => {
     expect(bannerFor({ state: "overdue", paused: false, dueAt: null, blockAt: "2026-11-08T00:00:00.000Z" }, false)!.message).toContain("Ask a billing admin");
     expect(bannerFor({ state: "blocked", paused: true, dueAt: null, blockAt: null }, false)!.message).toContain("Ask a billing admin");
   });
+  it("tells a cancelled account that sending is off and how to reach us, for everyone", () => {
+    for (const canPay of [true, false]) {
+      const b = bannerFor({ state: "cancelled", paused: true, dueAt: null, blockAt: null }, canPay)!;
+      expect(b.tone).toBe("danger");
+      expect(b.message).toContain("cancelled");
+      expect(b.message).toContain("info@conveys.in");
+    }
+    expect(normalizeStanding({ state: "cancelled", paused: true })).toMatchObject({ state: "cancelled", paused: true });
+  });
   it("copes with a missing date", () => {
     expect(bannerFor({ state: "overdue", paused: false, dueAt: null, blockAt: null }, true)!.message).toContain("soon");
     expect(standingDate(null)).toBe("");

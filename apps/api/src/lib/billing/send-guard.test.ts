@@ -73,16 +73,19 @@ describe("loadStanding and assertSendingAllowed", () => {
   const vsFindFirst = vi.fn();
   const stFindMany = vi.fn();
   const settingFindUnique = vi.fn();
+  const cancelFind = vi.fn();
   const prisma = {
     organization: { findUnique: orgFindUnique, findFirst: orgFindFirst },
     vendorSetting: { findFirst: vsFindFirst },
     billingStatement: { findMany: stFindMany },
     billingSetting: { findUnique: settingFindUnique },
+    billingCancellation: { findUnique: cancelFind },
   } as unknown as PrismaClient;
   const cfg = (mode: string): { value: BillingConfig } => ({ value: { ...DEFAULT_BILLING_CONFIG, blockingMode: mode as never } });
 
   beforeEach(() => {
-    [orgFindUnique, orgFindFirst, vsFindFirst, stFindMany, settingFindUnique].forEach((m) => m.mockReset());
+    [orgFindUnique, orgFindFirst, vsFindFirst, stFindMany, settingFindUnique, cancelFind].forEach((m) => m.mockReset());
+    cancelFind.mockResolvedValue(null);
     resetSendGuardCaches();
     orgFindUnique.mockResolvedValue({ name: "Acme", settings: {} });
     orgFindFirst.mockResolvedValue({ id: "o1" });
@@ -140,6 +143,31 @@ describe("loadStanding and assertSendingAllowed", () => {
     stFindMany.mockRejectedValue(new Error("db down"));
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     await expect(assertSendingAllowed("pn1", prisma, now)).resolves.toBeUndefined();
+  });
+  it("always refuses a cancelled account, with its own error, even when blocking is off", async () => {
+    cancelFind.mockResolvedValue({ status: "approved" });
+    for (const mode of ["off", "watch", "enforce"]) {
+      resetSendGuardCaches();
+      settingFindUnique.mockResolvedValue(cfg(mode));
+      stFindMany.mockResolvedValue([]);
+      const err = await assertSendingAllowed("pn1", prisma, now).catch((e: unknown) => e);
+      expect(err, mode).toBeInstanceOf(BillingBlockedError);
+      expect((err as BillingBlockedError).code).toBe("ACCOUNT_CANCELLED");
+      expect((err as Error).message).toContain("cancelled");
+    }
+  });
+  it("does not block for a request that is only requested or was withdrawn", async () => {
+    stFindMany.mockResolvedValue([]);
+    for (const status of ["requested", "withdrawn"]) {
+      resetSendGuardCaches();
+      cancelFind.mockResolvedValue({ status });
+      await expect(assertSendingAllowed("pn1", prisma, now), status).resolves.toBeUndefined();
+    }
+  });
+  it("still applies the overdue rules when the cancellation lookup fails", async () => {
+    cancelFind.mockRejectedValue(new Error("no table yet"));
+    const err = await assertSendingAllowed("pn1", prisma, now).catch((e: unknown) => e);
+    expect((err as BillingBlockedError).code).toBe("BILLING_OVERDUE");
   });
   it("caches a standing for a minute, and paying clears it at once", async () => {
     await expect(assertSendingAllowed("pn1", prisma, now)).rejects.toBeInstanceOf(BillingBlockedError);
