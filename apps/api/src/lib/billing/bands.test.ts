@@ -45,7 +45,7 @@ describe("planFor", () => {
 });
 
 describe("parseBillingConfig", () => {
-  const good = { published: false, freeAllowance: 500, alertsEnabled: false, chargingStartDate: null, gstRatePercent: 0, seller: { legalName: "Conveys Information Technology", address: "", gstin: "" }, bands: [{ upTo: 1000, inr: 10, usd: 1 }, { upTo: 5000, inr: 20, usd: 2 }] };
+  const good = { published: false, freeAllowance: 500, alertsEnabled: false, chargingStartDate: null, gstRatePercent: 0, seller: { legalName: "Conveys Information Technology", address: "", gstin: "" }, autoIssueEnabled: false, blockingMode: "watch", bands: [{ upTo: 1000, inr: 10, usd: 1 }, { upTo: 5000, inr: 20, usd: 2 }] };
   it("accepts a valid config", () => {
     expect(parseBillingConfig(good)).toEqual({ ok: true, config: good });
   });
@@ -61,6 +61,19 @@ describe("parseBillingConfig", () => {
     const r = parseBillingConfig(rest);
     expect(r.ok && r.config.gstRatePercent).toBe(0);
     expect(r.ok && r.config.seller.legalName).toBe("Conveys Information Technology");
+  });
+  it("defaults to no auto-issue and watch-only blocking when absent, and accepts each mode", () => {
+    const rest: Record<string, unknown> = { ...good };
+    delete rest["autoIssueEnabled"];
+    delete rest["blockingMode"];
+    const d = parseBillingConfig(rest);
+    expect(d.ok && d.config.autoIssueEnabled).toBe(false);
+    expect(d.ok && d.config.blockingMode).toBe("watch");
+    for (const mode of ["off", "watch", "enforce"]) {
+      const r = parseBillingConfig({ ...good, blockingMode: mode, autoIssueEnabled: true });
+      expect(r.ok && r.config.blockingMode).toBe(mode);
+      expect(r.ok && r.config.autoIssueEnabled).toBe(true);
+    }
   });
   it("accepts a real charging start date", () => {
     const r = parseBillingConfig({ ...good, chargingStartDate: "2026-11-01" });
@@ -78,6 +91,7 @@ describe("parseBillingConfig", () => {
       { ...good, chargingStartDate: "2026-02-30" },
       { ...good, chargingStartDate: "soon" },
       { ...good, chargingStartDate: 20261101 },
+      { ...good, autoIssueEnabled: "yes" }, { ...good, blockingMode: "block" }, { ...good, blockingMode: 1 },
       { ...good, gstRatePercent: -1 }, { ...good, gstRatePercent: 18.5 }, { ...good, gstRatePercent: "18" }, { ...good, gstRatePercent: 41 },
       { ...good, seller: { legalName: "A", address: "B", gstin: "BAD" } }, { ...good, seller: "x" }, { ...good, seller: { legalName: 5 } },
     ];

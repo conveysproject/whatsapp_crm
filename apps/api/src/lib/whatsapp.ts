@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "./prisma.js";
 import { onPhoneStatusPending } from "./register-phone-enqueue.js";
 import { normalizeMetaError, redactForLog, type MetaDeliveryError } from "./meta-error.js";
+import { assertSendingAllowed } from "./billing/send-guard.js";
 
 const WA_BASE = "https://graph.facebook.com/v25.0";
 
@@ -36,6 +37,8 @@ export async function sendTextMessage(
   text: string,
   accessToken: string
 ): Promise<WaSendResult> {
+  // Payment-based pause: refuses the send (HTTP 402) when this organization is overdue and enforcement is on.
+  await assertSendingAllowed(phoneNumberId);
   // GAP-S51: demo mode — prefix all outgoing messages with [DEMO] to prevent real sends being mistaken
   const body = process.env["IS_DEMO_MODE"] === "true" ? `[DEMO] ${text}` : text;
   const res = await fetch(`${WA_BASE}/${phoneNumberId}/messages`, {
@@ -67,6 +70,8 @@ export async function sendMediaMessage(
   caption: string | undefined,
   accessToken: string
 ): Promise<WaSendResult> {
+  // Payment-based pause: refuses the send (HTTP 402) when this organization is overdue and enforcement is on.
+  await assertSendingAllowed(phoneNumberId);
   const mediaType = contentType === "document" ? "document"
     : contentType === "video" ? "video"
     : contentType === "audio" ? "audio"
@@ -134,6 +139,8 @@ export async function sendTemplateMessage(
   components: WaTemplateComponent[],
   accessToken: string
 ): Promise<WaSendResult> {
+  // Payment-based pause: refuses the send (HTTP 402) when this organization is overdue and enforcement is on.
+  await assertSendingAllowed(phoneNumberId);
   const res = await fetch(`${WA_BASE}/${phoneNumberId}/messages`, {
     method: "POST",
     headers: {
@@ -165,6 +172,8 @@ export async function sendInteractiveMessage(
   interactive: WaInteractivePayload,
   accessToken: string
 ): Promise<WaSendResult> {
+  // Payment-based pause: refuses the send (HTTP 402) when this organization is overdue and enforcement is on.
+  await assertSendingAllowed(phoneNumberId);
   const res = await fetch(`${WA_BASE}/${phoneNumberId}/messages`, {
     method: "POST",
     headers: {
@@ -192,6 +201,8 @@ export async function sendLocationMessage(
   location: { latitude: string; longitude: string; name: string; address: string },
   accessToken: string
 ): Promise<WaSendResult> {
+  // Payment-based pause: refuses the send (HTTP 402) when this organization is overdue and enforcement is on.
+  await assertSendingAllowed(phoneNumberId);
   const res = await fetch(`${WA_BASE}/${phoneNumberId}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -830,6 +841,8 @@ export async function sendMarketingTemplateMessage(
   components: WaTemplateComponent[],
   accessToken: string
 ): Promise<WaSendResult> {
+  // Payment-based pause: refuses the send (HTTP 402) when this organization is overdue and enforcement is on.
+  await assertSendingAllowed(phoneNumberId);
   const res = await fetch(`${WA_BASE}/${phoneNumberId}/marketing_messages`, {
     method: "POST",
     headers: {

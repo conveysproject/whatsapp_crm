@@ -24,6 +24,10 @@ export interface BillingConfig {
   gstRatePercent: number;
   /** Who is shown as the seller on statements and PDFs. Empty fields are left off the document. */
   seller: { legalName: string; address: string; gstin: string };
+  /** Issue statements automatically when a billing month ends (daily job). Off until the owner turns it on. */
+  autoIssueEnabled: boolean;
+  /** off = no warnings or blocking; watch = warn and record who WOULD be blocked, block nothing; enforce = refuse sends 7 days after the due date. */
+  blockingMode: "off" | "watch" | "enforce";
 }
 
 /** Draft from docs/billing-price-bands-draft.md. Not final; never shown to customers while published is false. */
@@ -34,6 +38,8 @@ export const DEFAULT_BILLING_CONFIG: BillingConfig = {
   chargingStartDate: null,
   gstRatePercent: 0,
   seller: { legalName: "Conveys Information Technology", address: "", gstin: "" },
+  autoIssueEnabled: false,
+  blockingMode: "watch",
   bands: [
     { upTo: 10_000, inr: 999, usd: 12 },
     { upTo: 50_000, inr: 2999, usd: 36 },
@@ -74,6 +80,9 @@ export function parseBillingConfig(raw: unknown): { ok: true; config: BillingCon
     if (gstin !== "" && !GSTIN_RE.test(gstin.toUpperCase())) return { ok: false, error: "seller gstin must be a valid 15-character GST number" };
     seller = { legalName, address, gstin: gstin.toUpperCase() };
   }
+  if (o["autoIssueEnabled"] !== undefined && typeof o["autoIssueEnabled"] !== "boolean") return { ok: false, error: "autoIssueEnabled must be true or false" };
+  const bm = o["blockingMode"];
+  if (bm !== undefined && bm !== "off" && bm !== "watch" && bm !== "enforce") return { ok: false, error: "blockingMode must be off, watch or enforce" };
   const bandsRaw = o["bands"];
   if (!Array.isArray(bandsRaw) || bandsRaw.length < 1 || bandsRaw.length > 12) return { ok: false, error: "bands must be a list of 1 to 12 bands" };
   const bands: Band[] = [];
@@ -91,7 +100,7 @@ export function parseBillingConfig(raw: unknown): { ok: true; config: BillingCon
     prevInr = r["inr"];
     prevUsd = r["usd"];
   }
-  return { ok: true, config: { published: o["published"], freeAllowance: o["freeAllowance"], alertsEnabled: o["alertsEnabled"] === true, chargingStartDate: typeof csd === "string" ? csd : null, gstRatePercent: typeof gst === "number" ? gst : 0, seller, bands } };
+  return { ok: true, config: { published: o["published"], freeAllowance: o["freeAllowance"], alertsEnabled: o["alertsEnabled"] === true, chargingStartDate: typeof csd === "string" ? csd : null, gstRatePercent: typeof gst === "number" ? gst : 0, seller, autoIssueEnabled: o["autoIssueEnabled"] === true, blockingMode: bm === "off" || bm === "enforce" ? bm : "watch", bands } };
 }
 
 export interface BandView {
