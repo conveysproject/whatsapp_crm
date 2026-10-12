@@ -3,6 +3,7 @@ import { serverApiHeaders, getImpersonationCookie } from "@/lib/server-api";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { SetupBanner } from "@/components/SetupBanner";
+import { BillingStandingBanner } from "@/components/billing/BillingStandingBanner";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { ImpersonationProvider } from "@/components/ImpersonationProvider";
 import { BreadcrumbNav } from "@/components/layout/BreadcrumbNav";
@@ -100,6 +101,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <ImpersonationBanner impersonating={impersonating} />
           <TopBar orgName={impersonating ? status.orgName : (orgSlug ?? undefined)} userId={userId ?? undefined} />
           <SetupBanner />
+          <BillingStandingBanner />
           <main className="flex flex-col flex-1 px-4 py-4 overflow-auto min-h-0">
             {/* <BreadcrumbNav /> */}
             {children}

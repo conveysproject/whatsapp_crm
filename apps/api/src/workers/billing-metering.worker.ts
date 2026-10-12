@@ -5,6 +5,7 @@ import { runMeteringSweep } from "../lib/billing/metering-sweep.js";
 import { evaluateAlerts } from "../lib/billing/alerts.js";
 import { generateStatements } from "../lib/billing/statements.js";
 import { ensurePaymentLinks, sendPaymentReminders } from "../lib/billing/statement-payment.js";
+import { runBillingAutomation } from "../lib/billing/automation.js";
 import { utcDayStart } from "../lib/billing/metering.js";
 
 export { runMeteringSweep };
@@ -31,6 +32,9 @@ export function startBillingMeteringWorker() {
         const links = await ensurePaymentLinks(prisma);
         const reminders = await sendPaymentReminders(prisma);
         if (links + reminders > 0) console.log(`[billing-pay] links=${links} reminders=${reminders}`);
+        // Automatic issuing (if switched on), pause notices (watch or enforce) and the owner's daily summary. Each step is isolated.
+        const auto = await runBillingAutomation(prisma);
+        if (auto.issued + auto.links + auto.blocked + auto.wouldBlock > 0 || auto.summarySent) console.log(`[billing-auto] issued=${auto.issued} links=${auto.links} blocked=${auto.blocked} wouldBlock=${auto.wouldBlock} summary=${auto.summarySent}`);
         return;
       }
       // "nightly" re-sweeps the last 5 UTC days (keep below the 7-day retention minimum); "sweep" is yesterday + today.

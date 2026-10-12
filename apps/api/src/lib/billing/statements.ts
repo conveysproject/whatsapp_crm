@@ -2,6 +2,8 @@ import type { PrismaClient } from "@prisma/client";
 import { planFor, type BillingConfig } from "./bands.js";
 import { loadBillingConfig } from "./settings.js";
 import { cancelStatementPaymentLink } from "./payment-links.js";
+import { clearStandingCache } from "./send-guard.js";
+import { INTERNAL_ORG_NAMES } from "./internal-orgs.js";
 import { cycleEndingOn, type Cycle } from "./cycle.js";
 import { utcDayStart } from "./metering.js";
 
@@ -32,7 +34,7 @@ export async function generateStatements(prisma: PrismaClient, day: Date, now: D
   if (boundary.getTime() !== day.getTime()) throw new Error("day must be a UTC midnight");
   if (boundary.getTime() > utcDayStart(now).getTime()) throw new Error("day has not arrived");
 
-  const orgs = await prisma.organization.findMany({ select: { id: true, createdAt: true } });
+  const orgs = (await prisma.organization.findMany({ select: { id: true, createdAt: true, name: true } })).filter((o) => !INTERNAL_ORG_NAMES.includes(o.name));
   const ended = new Map<string, Cycle>();
   for (const o of orgs) {
     const c = cycleEndingOn(o.createdAt, boundary);
@@ -117,6 +119,7 @@ export async function setStatementStatus(prisma: PrismaClient, organizationId: s
   const link = await prisma.billingStatement.findFirst({ where: { organizationId, month, status: { in: from } }, select: { paymentProvider: true, paymentRef: true } });
   const res = await prisma.billingStatement.updateMany({ where: { organizationId, month, status: { in: from } }, data: { status: to, ...(to === "paid" ? { paidAt: now } : {}), updatedAt: now } });
   if (res.count !== 1) return false;
+  clearStandingCache(organizationId);
   if (link?.paymentRef) {
     await cancelStatementPaymentLink(link.paymentProvider, link.paymentRef).catch((err: unknown) =>
       console.warn("[billing-pay] could not cancel payment link", err instanceof Error ? err.message.slice(0, 80) : "error"));

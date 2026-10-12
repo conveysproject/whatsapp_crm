@@ -2,6 +2,7 @@ import { Worker } from "bullmq";
 import { redisConnection } from "../lib/queue.js";
 import { prisma } from "../lib/prisma.js";
 import { sendTextMessage, sendTemplateMessage } from "../lib/whatsapp.js";
+import { BillingBlockedError } from "../lib/billing/send-guard.js";
 import { describeSendFailure } from "../lib/meta-error.js";
 import { buildTemplateComponents, contactBodyVars } from "../lib/template-components.js";
 import { evaluateSegment, type FilterRule } from "../lib/segment-evaluator.js";
@@ -317,6 +318,25 @@ export const campaignWorker = new Worker<CampaignJob>(
 
         sent++;
       } catch (err) {
+        if (err instanceof BillingBlockedError) {
+          // Sending is paused for non-payment. Fail this recipient and everyone still waiting with the reason, then stop:
+          // nothing is held or re-sent automatically.
+          const reason = err.message;
+          await prisma.campaignRecipient.update({ where: { id: recipient.id }, data: { status: "failed", errorMessage: reason, retries: { increment: 1 } } });
+          failed++;
+          const rest = phones.slice(i + 1);
+          if (rest.length > 0) {
+            const existing = await prisma.campaignRecipient.findMany({ where: { campaignId, phoneNumber: { in: rest } }, select: { phoneNumber: true } });
+            const have = new Set(existing.map((e) => e.phoneNumber));
+            await prisma.campaignRecipient.updateMany({ where: { campaignId, phoneNumber: { in: rest }, status: "pending" }, data: { status: "failed", errorMessage: reason } });
+            const missing = rest.filter((p) => !have.has(p));
+            if (missing.length > 0) {
+              await prisma.campaignRecipient.createMany({ data: missing.map((p) => ({ campaignId, organizationId, phoneNumber: p, status: "failed", errorMessage: reason })) });
+            }
+            failed += rest.length;
+          }
+          break;
+        }
         const errorMessage = describeSendFailure(err);
         if (isTransientError(err) && (recipient.retries ?? 0) < 3) {
           await prisma.campaignRecipient.update({

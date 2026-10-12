@@ -3,6 +3,7 @@ import { JSX, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
 import { toast } from "sonner";
+import { OverduePanel } from "./_components/OverduePanel";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -20,7 +21,7 @@ interface RulesResponse { modes: Mode[]; rules: Rule[] }
 interface BandCfg { upTo: number; inr: number; usd: number }
 interface StatementRow { organizationId: string; name: string; month: string; payCurrency: "INR" | "USD"; messages: number; bandName: string; amountInr: number | null; amountUsd: number | null; status: string; hasLink: boolean }
 interface StatementsResponse { month: string; totals: { statements: number; inr: number; usd: number }; statements: StatementRow[] }
-interface BillingCfg { published: boolean; freeAllowance: number; alertsEnabled: boolean; chargingStartDate: string | null; gstRatePercent: number; seller: { legalName: string; address: string; gstin: string }; bands: BandCfg[] }
+interface BillingCfg { published: boolean; freeAllowance: number; alertsEnabled: boolean; chargingStartDate: string | null; gstRatePercent: number; seller: { legalName: string; address: string; gstin: string }; autoIssueEnabled: boolean; blockingMode: "off" | "watch" | "enforce"; bands: BandCfg[] }
 
 const KNOWN_CATEGORIES = ["marketing", "utility", "authentication", "service", "authentication_international", "marketing_lite", "referral_conversion", "unknown"];
 const MODE_HELP: Record<Mode, string> = {
@@ -238,6 +239,18 @@ export default function AdminBillingPage(): JSX.Element {
               <textarea aria-label="Seller address" placeholder="Seller address" rows={2} value={cfg.seller.address} onChange={(e) => setCfg({ ...cfg, seller: { ...cfg.seller, address: e.target.value } })} className="border rounded px-2 py-1 w-full max-w-md block" />
             </fieldset>
             <label className="flex items-center gap-2">
+              <input type="checkbox" checked={cfg.autoIssueEnabled} onChange={(e) => setCfg({ ...cfg, autoIssueEnabled: e.target.checked })} />
+              <span>Issue statements automatically when each billing month ends (daily job; you can still void any statement)</span>
+            </label>
+            <label className="flex items-center gap-3">
+              <span className="w-48 text-gray-600">Pause sending when unpaid</span>
+              <select value={cfg.blockingMode} onChange={(e) => setCfg({ ...cfg, blockingMode: e.target.value as "off" | "watch" | "enforce" })} className="border rounded px-2 py-1">
+                <option value="off">Off: no warnings, no blocking</option>
+                <option value="watch">Watch: warn and record, block nothing</option>
+                <option value="enforce">Enforce: refuse sends 7 days after the due date</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2">
               <input type="checkbox" checked={cfg.alertsEnabled} onChange={(e) => setCfg({ ...cfg, alertsEnabled: e.target.checked })} />
               <span>Email usage alerts to customers&apos; billing admins (50%, 80%, 95%, 100% of the free messages, new bands)</span>
             </label>
@@ -250,6 +263,7 @@ export default function AdminBillingPage(): JSX.Element {
               disabled={saveSettings.isPending}
               onClick={() => {
                 if (cfg.published && !settings.data?.data.published && !window.confirm("Customers will immediately see these prices on their billing page. Continue?")) return;
+                if (cfg.blockingMode === "enforce" && settings.data?.data.blockingMode !== "enforce" && !window.confirm("Customers with a statement more than 7 days overdue will be unable to send WhatsApp messages right away. Check the Overdue customers list first. Continue?")) return;
                 if (cfg.alertsEnabled && !settings.data?.data.alertsEnabled && !window.confirm("Every customer organization that has reached an alert level this month will be emailed within the hour. Continue?")) return;
                 saveSettings.mutate(cfg);
               }}
@@ -330,6 +344,8 @@ export default function AdminBillingPage(): JSX.Element {
           </div>
         )}
       </section>
+
+      <OverduePanel />
 
       <section>
         <h2 className="text-lg font-semibold text-gray-900">Counting rules</h2>

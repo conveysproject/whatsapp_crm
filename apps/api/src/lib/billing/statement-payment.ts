@@ -3,6 +3,7 @@ import { sendMail } from "../mail.js";
 import { createStatementPaymentLink, currencyForOrg, type PaymentProvider } from "./payment-links.js";
 import { readBillingDetails, statementRecipients } from "./billing-details.js";
 import { loadBillingConfig } from "./settings.js";
+import { clearStandingCache } from "./send-guard.js";
 
 export const DUE_DAYS = 7;
 /** Reminder schedule: days after the due date. Reminders only: nothing is ever blocked or limited. */
@@ -131,7 +132,7 @@ export async function markStatementPaid(
 ): Promise<PaidResult> {
   const st = await prisma.billingStatement.findUnique({
     where: { id: input.statementId },
-    select: { status: true, currency: true, amountMinor: true, paymentProvider: true, paymentRef: true },
+    select: { status: true, organizationId: true, currency: true, amountMinor: true, paymentProvider: true, paymentRef: true },
   });
   if (!st) return "not_found";
   if (st.status === "paid") return "already_paid";
@@ -145,6 +146,8 @@ export async function markStatementPaid(
     data: { status: "paid", paidAt: now, updatedAt: now, paymentRef: input.linkRef, paidRef },
   });
   if (res.count !== 1) return "already_paid";
+  // Paying lifts a sending pause within seconds instead of waiting for the one-minute standing cache.
+  if (typeof st.organizationId === "string") clearStandingCache(st.organizationId);
   await sendPaymentReceived(prisma, input.statementId).catch((err: unknown) =>
     console.warn("[billing-pay] payment-received email failed", err instanceof Error ? err.name : "error"));
   return "paid";
