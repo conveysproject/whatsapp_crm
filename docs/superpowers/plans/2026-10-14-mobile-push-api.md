@@ -329,7 +329,7 @@ Check: `cd apps/web && pnpm tsc --noEmit` → no new errors. Manual check (recor
 
 - [ ] **Step 6: Security audit + commit**
 
-Audit: grep that every `getIo()?.to(` target in `apps/api/src` is `org:${…organizationId}` or `user:${…}` built from server data (never from client input): `grep -rn "getIo()?.to(" apps/api/src --include=*.ts | grep -v test`. Note in the commit body: impersonation sessions now receive real-time events for the admin's own org only (read-only impersonation keeps working via polling/refresh).
+Audit: grep that every `getIo()?.to(` target in `apps/api/src` is `org:${…organizationId}` or `user:${…}` built from server data (never from client input): `grep -rn "getIo()?.to(" apps/api/src --include=*.ts | grep -v test`. Note in the commit body: on the web, a super admin using "Login As" now receives real-time events for their own org only (impersonation keeps working via refresh). Super admins never use the mobile app (owner rule, PRD §3), so mobile is unaffected.
 
 ```bash
 git add apps/api/src/plugins/socketio.ts apps/api/src/plugins/socketio.test.ts apps/api/package.json pnpm-lock.yaml apps/web/hooks/useSocket.ts
