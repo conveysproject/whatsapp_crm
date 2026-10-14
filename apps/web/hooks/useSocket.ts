@@ -18,8 +18,10 @@ export function useSocket(organizationId: string | undefined, userId?: string): 
     }
 
     async function connect() {
-      const token = await getToken();
-      socket.auth = { token };
+      // Function form: socket.io calls this on every (re)connect, so an expired Clerk token is never reused.
+      socket.auth = (cb: (data: { token: string | null }) => void) => {
+        void getToken().then((token) => cb({ token }));
+      };
       socket.on("connect", joinRooms);
       socket.connect();
     }
