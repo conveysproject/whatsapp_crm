@@ -17,7 +17,8 @@ import type { FlowDefinition, FlowSession } from "../lib/flow-runner.js";
 import { applyAssignmentRules } from "../lib/assignment-engine.js";
 import { runAutomationTrigger } from "../lib/automation-trigger.js";
 import { runIntentMatching } from "../lib/intent-matcher.js";
-import Expo from "expo-server-sdk";
+import { pushToUser } from "../lib/push.js";
+import { newMessagePush } from "../lib/push-events.js";
 
 function interpolateAutoReply(
   text: string,
@@ -48,8 +49,6 @@ function matchesAutoReply(triggerType: string, triggerKeyword: string, body: str
     default: return false;
   }
 }
-
-const expo = new Expo();
 
 function isBotInWindow(startTime: string | undefined, endTime: string | undefined, timezone: string | undefined): boolean {
   if (!startTime || !endTime) return true;
@@ -168,24 +167,6 @@ export const inboundWorker = new Worker<InboundMessageJob>(
           conversationId: conversation.id,
           assignedTo: assignment.assignTo,
         });
-        const profile = await prisma.user.findUnique({
-          where: { id: assignment.assignTo },
-          select: { pushToken: true },
-        });
-        if (profile?.pushToken && Expo.isExpoPushToken(profile.pushToken)) {
-          const tickets = await expo.sendPushNotificationsAsync([{
-            to: profile.pushToken,
-            title: whatsappContactPhone,
-            body: (body ?? "New voice message").slice(0, 100),
-            sound: "default",
-          }]);
-          const shouldDelete = tickets.some(
-            (t) => t.status === "error" && (t.details as { error?: string } | undefined)?.error === "DeviceNotRegistered"
-          );
-          if (shouldDelete) {
-            await prisma.user.update({ where: { id: assignment.assignTo }, data: { pushToken: null } });
-          }
-        }
       }
 
       // Trigger new_conversation flows
@@ -282,6 +263,12 @@ export const inboundWorker = new Worker<InboundMessageJob>(
           message: `New message from ${displayName}`,
           action: `/inbox?conversation=${conversation.id}`,
         });
+        void pushToUser(
+          prisma,
+          organizationId,
+          refreshed.assignedTo,
+          newMessagePush({ contactName: displayName, body: body ?? null, contentType, conversationId: conversation.id }),
+        );
       } catch (err) {
         console.error("[worker:inbound] Failed to create inbound notification", err);
       }
