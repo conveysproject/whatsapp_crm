@@ -81,4 +81,18 @@ describe("pushToUser", () => {
     });
     expect(mockSend.mock.calls[0][0][0].badge).toBe(3);
   });
+
+  it("still sends without a badge (and logs) when the unread count fails", async () => {
+    mockPrisma.conversation.count.mockRejectedValue(new Error("db down"));
+    mockPrisma.userDevice.findMany.mockResolvedValue([{ deviceToken: A }]);
+    mockPrisma.user.findUnique.mockResolvedValue({ pushToken: null });
+    mockSend.mockResolvedValue([{ status: "ok" }]);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { pushToUser } = await import("./push.js");
+    await pushToUser(prisma, "org-1", "u-1", { title: "t", body: "b", data: { type: "new_message" } });
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect("badge" in mockSend.mock.calls[0][0][0]).toBe(false);
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("badge count failed user=u-1"));
+    errSpy.mockRestore();
+  });
 });

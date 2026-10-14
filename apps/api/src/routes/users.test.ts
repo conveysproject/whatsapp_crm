@@ -6,7 +6,7 @@ const { mockRedisDel } = vi.hoisted(() => ({ mockRedisDel: vi.fn().mockResolvedV
 vi.mock("../lib/redis.js", () => ({ redis: { del: mockRedisDel } }));
 
 const mockPrisma = {
-  user: { findMany: vi.fn(), update: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
+  user: { findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
   organizationMember: {
     findFirst: vi.fn(),
     update: vi.fn(),
@@ -218,6 +218,10 @@ describe("device tokens", () => {
       data: { userId: "user-1", deviceType: null, deviceId: null },
     });
     expect(mockPrisma.userDevice.create).not.toHaveBeenCalled();
+    expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+      where: { pushToken: "ExponentPushToken[a]", id: { not: "user-1" } },
+      data: { pushToken: null },
+    });
   });
 
   it("rejects a missing token", async () => {
@@ -230,5 +234,24 @@ describe("device tokens", () => {
     const res = await app.inject({ method: "DELETE", url: "/v1/users/device-token", payload: { token: "ExponentPushToken[a]" } });
     expect(res.statusCode).toBe(204);
     expect(mockPrisma.userDevice.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1", deviceToken: "ExponentPushToken[a]" } });
+    expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: "user-1", pushToken: "ExponentPushToken[a]" },
+      data: { pushToken: null },
+    });
+  });
+});
+
+describe("GET /v1/users", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("excludes inactive and soft-deleted users", async () => {
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    const res = await app.inject({ method: "GET", url: "/v1/users" });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { organizationId: "org-1", isActive: true, deletedAt: null } }),
+    );
   });
 });

@@ -6,7 +6,7 @@ import { invalidateAuthCache } from "../lib/auth-cache.js";
 export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/users", async (request) => {
     const users = await fastify.prisma.user.findMany({
-      where: { organizationId: request.auth.organizationId, isActive: true },
+      where: { organizationId: request.auth.organizationId, isActive: true, deletedAt: null },
       select: {
         id: true, email: true, fullName: true, role: true, mobileNumber: true, lastSignInAt: true, createdAt: true,
         memberships: {
@@ -139,6 +139,11 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
           data: { userId: request.auth.userId, deviceToken: token, deviceType: platform ?? null, deviceId: deviceId ?? null },
         });
       }
+      // Phone handover: the previous owner's legacy pushToken must stop receiving pushes too.
+      await fastify.prisma.user.updateMany({
+        where: { pushToken: token, id: { not: request.auth.userId } },
+        data: { pushToken: null },
+      });
       return reply.send({ data: { registered: true } });
     }
   );
@@ -157,6 +162,10 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       await fastify.prisma.userDevice.deleteMany({ where: { userId: request.auth.userId, deviceToken: request.body.token } });
+      await fastify.prisma.user.updateMany({
+        where: { id: request.auth.userId, pushToken: request.body.token },
+        data: { pushToken: null },
+      });
       return reply.status(204).send();
     }
   );

@@ -82,7 +82,8 @@ export async function pushToUser(
   let badge: number | undefined;
   try {
     badge = await unreadChatCount(prisma, organizationId, userId);
-  } catch {
+  } catch (err) {
+    console.error(`[push] badge count failed user=${userId}: ${(err as Error).message}`);
     badge = undefined;
   }
   await sendPushToUser(prisma, userId, { ...payload, ...(badge !== undefined ? { badge } : {}) });

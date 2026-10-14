@@ -475,6 +475,15 @@ describe("POST /v1/conversations/:id/assign — assignee validation and push", (
     });
   });
 
+  it("does not push when assigning to yourself", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1", whatsappContactId: null });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "user-1" });
+    mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", assignedTo: "user-1" });
+    const res = await app.inject({ method: "POST", url: "/v1/conversations/conv-1/assign", payload: { assignedTo: "user-1" } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPushToUser).not.toHaveBeenCalled();
+  });
+
   it("does not push to yourself and allows unassigning (null)", async () => {
     mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1", whatsappContactId: null });
     mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", assignedTo: null });
