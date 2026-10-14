@@ -6,6 +6,9 @@ vi.mock("../lib/io-ref.js", () => ({
   getIo: vi.fn().mockReturnValue({ to: vi.fn().mockReturnValue({ emit: vi.fn() }) }),
 }));
 
+const { mockPushToUser, mockUnread } = vi.hoisted(() => ({ mockPushToUser: vi.fn().mockResolvedValue(undefined), mockUnread: vi.fn() }));
+vi.mock("../lib/push.js", () => ({ pushToUser: mockPushToUser, unreadChatCount: mockUnread }));
+
 const mockPrisma = {
   conversation: {
     findMany: vi.fn(),
@@ -18,7 +21,10 @@ const mockPrisma = {
   },
   user: {
     findMany: vi.fn().mockResolvedValue([]),
+    findFirst: vi.fn(),
   },
+  notification: { create: vi.fn() },
+  flow: { findMany: vi.fn().mockResolvedValue([]) },
   team: {
     findFirst: vi.fn().mockResolvedValue(null),
   },
@@ -160,6 +166,7 @@ describe("POST /v1/conversations/:id/assign", () => {
   afterEach(async () => { await app.close(); });
 
   it("assigns conversation to agent", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "user-2" });
     mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1" });
     mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", assignedTo: "user-2" });
     const res = await app.inject({
@@ -433,5 +440,61 @@ describe("impersonated (edit mode) side-effect suppression", () => {
     expect((await app.inject({ method: "GET", url: "/v1/conversations/conv-1/messages" })).statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: "/v1/conversations" })).statusCode).toBe(200);
     expect(mockPrisma.conversation.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /v1/conversations/:id/assign — assignee validation and push", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns 404 and creates nothing when the assignee is not an active user of this org", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1", whatsappContactId: null });
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "POST", url: "/v1/conversations/conv-1/assign", payload: { assignedTo: "user-from-other-org" } });
+    expect(res.statusCode).toBe(404);
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+      where: { id: "user-from-other-org", organizationId: "org-1", isActive: true, deletedAt: null },
+      select: { id: true },
+    });
+    expect(mockPrisma.conversation.update).not.toHaveBeenCalled();
+    expect(mockPrisma.notification.create).not.toHaveBeenCalled();
+    expect(mockPushToUser).not.toHaveBeenCalled();
+  });
+
+  it("pushes to the assignee with the conversation id", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1", whatsappContactId: null });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "user-2" });
+    mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", assignedTo: "user-2" });
+    const res = await app.inject({ method: "POST", url: "/v1/conversations/conv-1/assign", payload: { assignedTo: "user-2" } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPushToUser).toHaveBeenCalledWith(expect.anything(), "org-1", "user-2", {
+      title: "Conversation assigned to you",
+      body: "A conversation has been assigned to you",
+      data: { type: "conversation_assigned", conversationId: "conv-1" },
+    });
+  });
+
+  it("does not push to yourself and allows unassigning (null)", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1", whatsappContactId: null });
+    mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", assignedTo: null });
+    const res = await app.inject({ method: "POST", url: "/v1/conversations/conv-1/assign", payload: { assignedTo: null } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+    expect(mockPushToUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /v1/conversations/unread-count", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns the caller's unread assigned chat count", async () => {
+    mockUnread.mockResolvedValue(4);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/unread-count" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ data: { count: 4 } });
+    expect(mockUnread).toHaveBeenCalledWith(expect.anything(), "org-1", "user-1");
   });
 });

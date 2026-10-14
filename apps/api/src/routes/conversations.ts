@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyInstance } from "fastify";
 import type { ConversationStatus } from "@prisma/client";
 import type { ConversationId } from "@WBMSG/shared";
 import { getIo } from "../lib/io-ref.js";
+import { pushToUser, unreadChatCount } from "../lib/push.js";
 import { summarizeConversation } from "../lib/claude.js";
 import { canAccess, maskPhone, shouldHidePhone } from "../lib/permissions.js";
 import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
@@ -89,6 +90,12 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       conversationLabel: undefined,
     }));
     return reply.send({ data });
+  });
+
+  // Mobile app icon badge: unread chats assigned to the caller.
+  fastify.get("/conversations/unread-count", async (request) => {
+    const count = await unreadChatCount(fastify.prisma, request.auth.organizationId, request.auth.userId);
+    return { data: { count } };
   });
 
   // ── Full-text search across contact names and message bodies ───────────
@@ -237,6 +244,16 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       if (!conversation) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
       }
+      const assignee = request.body.assignedTo;
+      if (assignee) {
+        const target = await fastify.prisma.user.findFirst({
+          where: { id: assignee, organizationId, isActive: true, deletedAt: null },
+          select: { id: true },
+        });
+        if (!target) {
+          return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Assignee not found" } });
+        }
+      }
       const updated = await fastify.prisma.conversation.update({
         where: { id: conversation.id },
         data: { assignedTo: request.body.assignedTo },
@@ -266,6 +283,13 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
             message: "A conversation has been assigned to you",
             action: `/inbox?conversation=${conversation.id}`,
           });
+          if (request.body.assignedTo !== request.auth.userId) {
+            void pushToUser(fastify.prisma, organizationId, request.body.assignedTo, {
+              title: "Conversation assigned to you",
+              body: "A conversation has been assigned to you",
+              data: { type: "conversation_assigned", conversationId: conversation.id },
+            });
+          }
         } catch (err) {
           fastify.log.error(err, "Failed to create assignment notification");
         }
