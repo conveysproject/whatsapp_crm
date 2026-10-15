@@ -154,6 +154,7 @@ export default function AppLayout() {
           <RealtimeBridge />
           <PushBridge />
           <UnreadBadge />
+          {/* Tasks 6-7 declare the modal sub-routes (conversation/[id]/assign|label|template|canned) here. */}
           <Stack screenOptions={{ headerShown: false }} />
         </MeProvider>
       );
