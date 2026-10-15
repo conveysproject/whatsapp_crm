@@ -28,6 +28,9 @@ beforeEach(() => {
 afterEach(() => jest.useRealTimers());
 
 describe("queryKeysFor", () => {
+  it("refreshes open threads on delivery status changes", () => {
+    expect(queryKeysFor("message:status", { whatsappMessageId: "wamid.1", status: "read" })).toEqual([["messages"]]);
+  });
   it("maps a new message to the list, the thread and the badge", () => {
     expect(queryKeysFor("new-message", { conversationId: "c-1" })).toEqual([["conversations"], ["unread-count"], ["messages", "c-1"]]);
   });

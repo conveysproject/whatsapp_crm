@@ -4,7 +4,9 @@ import * as Notifications from "expo-notifications";
 import { Redirect, Stack, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from "react-native";
+import { getActiveConversation, notificationPresentation } from "../../lib/active-conversation";
 import { useApi } from "../../lib/api-context";
+import { useUnreadBadge } from "../../lib/badge";
 import { config } from "../../lib/config";
 import { MeProvider } from "../../lib/me-context";
 import { refreshBadge, flushPendingUnregister, registerDevice, shouldAskForPushPermission, takeUnhandledResponseRoute } from "../../lib/push";
@@ -72,8 +74,14 @@ function RealtimeBridge() {
 }
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: true }),
+  handleNotification: async (notification) =>
+    notificationPresentation(notification.request.content.data, getActiveConversation()),
 });
+
+function UnreadBadge() {
+  useUnreadBadge();
+  return null;
+}
 
 // The OS keeps returning the launch notification for the whole process; only the first PushBridge mount may act on it.
 let coldStartChecked = false;
@@ -145,6 +153,7 @@ export default function AppLayout() {
         <MeProvider me={gate.data.me}>
           <RealtimeBridge />
           <PushBridge />
+          <UnreadBadge />
           <Stack screenOptions={{ headerShown: false }} />
         </MeProvider>
       );
