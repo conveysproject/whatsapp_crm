@@ -105,9 +105,8 @@ export default function ChatScreen() {
         onBack={() => router.back()}
         onContact={() => { if (c.contact) router.push({ pathname: "/contact/[id]", params: { id: c.contact.id } }); }}
         onStatus={chooseStatus}
-        // Sub-routes are created in Tasks 6-7, so they aren't in the typed route table yet.
-        onAssign={() => router.push({ pathname: "/conversation/[id]/assign", params: { id } } as never)}
-        onLabel={() => router.push({ pathname: "/conversation/[id]/label", params: { id } } as never)}
+        onAssign={() => router.push({ pathname: "/conversation/[id]/assign", params: { id } })}
+        onLabel={() => router.push({ pathname: "/conversation/[id]/label", params: { id } })}
       />
       <View style={[styles.window, c.serviceWindowActive ? styles.windowOpen : styles.windowClosed]}>
         <Text style={[styles.windowText, { color: c.serviceWindowActive ? colors.brandDark : colors.warning }]}>
