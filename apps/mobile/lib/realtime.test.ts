@@ -28,6 +28,11 @@ beforeEach(() => {
 afterEach(() => jest.useRealTimers());
 
 describe("queryKeysFor", () => {
+  it("refreshes campaign data on campaign events", () => {
+    for (const ev of ["campaign:progress", "campaign:completed", "campaign:aborted", "campaign:expired"]) {
+      expect(queryKeysFor(ev, { campaignId: "k-1" })).toEqual([["campaigns"], ["dashboard"]]);
+    }
+  });
   it("refreshes open threads on delivery status changes", () => {
     expect(queryKeysFor("message:status", { whatsappMessageId: "wamid.1", status: "read" })).toEqual([["messages"]]);
   });
@@ -43,7 +48,7 @@ describe("queryKeysFor", () => {
     expect(queryKeysFor("notification", {})).toEqual([["notifications"], ["unread-count"]]);
   });
   it("ignores unknown events and bad payloads", () => {
-    expect(queryKeysFor("campaign:progress", {})).toEqual([]);
+    expect(queryKeysFor("typing:start", {})).toEqual([]);
     expect(queryKeysFor("new-message", null)).toEqual([["conversations"], ["unread-count"]]);
   });
 });

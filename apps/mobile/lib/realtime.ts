@@ -21,6 +21,11 @@ export function queryKeysFor(event: string, payload: unknown): ReadonlyArray<rea
     case "message:status":
       // The server only sends the WhatsApp message id, so refresh every open thread.
       return [["messages"]];
+    case "campaign:progress":
+    case "campaign:completed":
+    case "campaign:aborted":
+    case "campaign:expired":
+      return [["campaigns"], ["dashboard"]];
     default:
       return [];
   }
