@@ -18,7 +18,8 @@ export async function resolveGate(api: Api): Promise<Gate> {
     const { data } = await api<{ data: Me }>("/users/me");
     return data.role === "superAdmin" ? { kind: "super_admin" } : { kind: "ok", me: data };
   } catch (err) {
-    if (err instanceof ApiError && [401, 403, 404].includes(err.status)) return { kind: "no_account" };
+    // 403: API returns FORBIDDEN for a Clerk user with no DB row. 401 (expired/invalid token) stays retryable.
+    if (err instanceof ApiError && [403, 404].includes(err.status)) return { kind: "no_account" };
     return { kind: "error", message: (err as Error).message };
   }
 }

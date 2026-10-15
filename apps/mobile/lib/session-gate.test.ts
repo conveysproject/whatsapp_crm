@@ -14,13 +14,14 @@ describe("resolveGate", () => {
   it("blocks super admins", async () => {
     expect(await resolveGate(apiReturning(async () => ({ data: { ...me, role: "superAdmin" } })))).toEqual({ kind: "super_admin" });
   });
-  it("treats 401/403/404 as no WBMSG account", async () => {
-    for (const status of [401, 403, 404]) {
+  it("treats 403/404 as no WBMSG account", async () => {
+    for (const status of [403, 404]) {
       const gate = await resolveGate(apiReturning(async () => { throw new ApiError(status, "X", "x"); }));
       expect(gate).toEqual({ kind: "no_account" });
     }
   });
-  it("reports other failures as retryable errors", async () => {
+  it("reports 401 (expired or invalid token) and other failures as retryable errors", async () => {
+    expect(await resolveGate(apiReturning(async () => { throw new ApiError(401, "X", "expired"); }))).toEqual({ kind: "error", message: "expired" });
     expect(await resolveGate(apiReturning(async () => { throw new ApiError(500, "X", "boom"); }))).toEqual({ kind: "error", message: "boom" });
     expect(await resolveGate(apiReturning(async () => { throw new TypeError("Network request failed"); }))).toEqual({ kind: "error", message: "Network request failed" });
   });
