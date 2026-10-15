@@ -21,7 +21,7 @@ const mockAuth = {
   userId: "user-1",
   organizationId: "org-1",
   role: "agent" as const,
-  permissions: { inbox_access: "allow" },
+  permissions: { inbox_access: "allow" } as Record<string, string>,
   teamId: null as string | null,
   teamRole: null as "lead" | "member" | null,
 };
@@ -370,5 +370,22 @@ describe("POST /v1/conversations/:id/messages - template analytics columns", () 
     const data = (mockPrisma.message.create.mock.calls[0]![0] as { data: Record<string, unknown> }).data;
     expect(data).not.toHaveProperty("templateId");
     expect(data).not.toHaveProperty("source");
+  });
+});
+
+describe("assigned_chats_only on POST /v1/conversations/:id/messages", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); mockAuth.permissions = { inbox_access: "allow" }; });
+
+  it("404s for a conversation not assigned to the agent", async () => {
+    mockAuth.permissions = { inbox_access: "allow", assigned_chats_only: "allow" };
+    mockPrisma.conversation.findFirst.mockResolvedValue(null);
+    const res = await app.inject({
+      method: "POST", url: "/v1/conversations/conv-1/messages",
+      headers: { "content-type": "application/json" }, payload: { text: "Hello" },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(mockPrisma.conversation.findFirst.mock.calls[0][0].where).toMatchObject({ id: "conv-1", organizationId: "org-1", assignedTo: "user-1" });
   });
 });

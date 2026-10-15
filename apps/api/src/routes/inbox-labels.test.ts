@@ -147,3 +147,21 @@ describe("DELETE /v1/inbox-labels/:id", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("assigned_chats_only on /v1/conversations/:id/label", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); mockAuth.permissions = {}; });
+
+  it("PUT and DELETE 404 for a conversation not assigned to the agent", async () => {
+    mockAuth.permissions = { assigned_chats_only: "allow" };
+    mockPrisma.conversation.findFirst.mockResolvedValue(null);
+    const put = await app.inject({ method: "PUT", url: "/v1/conversations/conv-1/label", payload: { name: "Billing" } });
+    const del = await app.inject({ method: "DELETE", url: "/v1/conversations/conv-1/label" });
+    expect(put.statusCode).toBe(404);
+    expect(del.statusCode).toBe(404);
+    for (const call of mockPrisma.conversation.findFirst.mock.calls) {
+      expect(call[0].where).toMatchObject({ id: "conv-1", assignedTo: "user-1" });
+    }
+  });
+});

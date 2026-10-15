@@ -1,3 +1,4 @@
+import { conversationAccessWhere } from "../lib/conversation-access.js";
 import type { FastifyPluginAsync } from "fastify";
 import { generateSuggestions, detectIntent, analyzeSentiment, generateSmartReplies, detectIntentWithConfidence, buildAiContext, summarizeConversation, AI_CONTEXT_LONG } from "../lib/claude.js";
 import { findTopRelevantSections, generateAnswerFromSections } from "../lib/ai-rag.js";
@@ -22,7 +23,7 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
       const { organizationId } = request.auth;
 
       const conversation = await fastify.prisma.conversation.findFirst({
-        where: { id: request.params.id, organizationId },
+        where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
       });
       if (!conversation) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });

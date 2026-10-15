@@ -6,33 +6,8 @@ import { pushToUser, unreadChatCount } from "../lib/push.js";
 import { summarizeConversation } from "../lib/claude.js";
 import { canAccess, maskPhone, shouldHidePhone } from "../lib/permissions.js";
 import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
-import { buildVisibilityWhere, type VisibilityAuth } from "../lib/visibility.js";
+import { conversationVisibilityWhere, conversationAccessWhere } from "../lib/conversation-access.js";
 import type { AuthContext } from "../types/fastify.js";
-
-async function conversationVisibilityWhere(
-  prisma: FastifyInstance["prisma"],
-  auth: AuthContext,
-): Promise<Record<string, unknown> | undefined> {
-  if (auth.role === "superAdmin" || auth.role === "admin" || auth.role === "viewer") return undefined;
-  let teamViewAll = false;
-  let teamMemberIds: string[] = [];
-  if (auth.teamId) {
-    const [team, members] = await Promise.all([
-      prisma.team.findFirst({ where: { id: auth.teamId, organizationId: auth.organizationId }, select: { viewAllContacts: true } }),
-      prisma.user.findMany({ where: { organizationId: auth.organizationId, teamId: auth.teamId }, select: { id: true } }),
-    ]);
-    teamViewAll = team?.viewAllContacts ?? false;
-    teamMemberIds = members.map((m) => m.id);
-  }
-  const va: VisibilityAuth = {
-    userId: auth.userId,
-    role: auth.role,
-    teamId: auth.teamId,
-    teamRole: auth.teamRole,
-    teamViewAll,
-  };
-  return buildVisibilityWhere(va, teamMemberIds, "assignedTo");
-}
 
 const listInclude = {
   contact: { select: { id: true, firstName: true, lastName: true, phoneNumber: true, tags: true } },
@@ -161,14 +136,14 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     "/conversations/:id/messages",
     async (request, reply) => {
       const { organizationId } = request.auth;
-      const visWhere = await conversationVisibilityWhere(fastify.prisma, request.auth);
       const conversation = await fastify.prisma.conversation.findFirst({
-        where: { ...(visWhere ?? {}), id: request.params.id, organizationId },
+        where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
       });
       if (!conversation) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
       }
-      const limit = Math.min(parseInt(request.query.limit ?? "50", 10), 100);
+      const parsedLimit = parseInt(request.query.limit ?? "50", 10);
+      const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 50;
       const cursor = request.query.cursor;
       let keyset: Record<string, unknown> = {};
       if (cursor) {
@@ -201,9 +176,8 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     "/conversations/:id/history",
     async (request, reply) => {
       const { organizationId } = request.auth;
-      const visWhere = await conversationVisibilityWhere(fastify.prisma, request.auth);
       const conversation = await fastify.prisma.conversation.findFirst({
-        where: { ...(visWhere ?? {}), id: request.params.id, organizationId },
+        where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
       });
       if (!conversation) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
@@ -225,9 +199,8 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       if (!validStatuses.includes(status)) {
         return reply.status(400).send({ error: { code: "INVALID_STATUS", message: `status must be one of: ${validStatuses.join(", ")}` } });
       }
-      const visWhere = await conversationVisibilityWhere(fastify.prisma, request.auth);
       const conversation = await fastify.prisma.conversation.findFirst({
-        where: { ...(visWhere ?? {}), id: request.params.id, organizationId },
+        where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
       });
       if (!conversation) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
@@ -256,9 +229,8 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     "/conversations/:id/assign",
     async (request, reply) => {
       const { organizationId } = request.auth;
-      const visWhere = await conversationVisibilityWhere(fastify.prisma, request.auth);
       const conversation = await fastify.prisma.conversation.findFirst({
-        where: { ...(visWhere ?? {}), id: request.params.id, organizationId },
+        where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
       });
       if (!conversation) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
@@ -322,9 +294,8 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     "/conversations/:id/read",
     async (request, reply) => {
       const { organizationId } = request.auth;
-      const visWhere = await conversationVisibilityWhere(fastify.prisma, request.auth);
       const conversation = await fastify.prisma.conversation.findFirst({
-        where: { ...(visWhere ?? {}), id: request.params.id, organizationId },
+        where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
       });
       if (!conversation) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
@@ -346,6 +317,13 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       const { organizationId, userId } = request.auth;
       // Impersonated session: never show a typing indicator to the tenant.
       if (request.auth.impersonation) return reply.status(204).send();
+      const conversation = await fastify.prisma.conversation.findFirst({
+        where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
+        select: { id: true },
+      });
+      if (!conversation) {
+        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
+      }
       getIo()?.to(`org:${organizationId}`).emit("typing", {
         conversationId: request.params.id,
         userId,
@@ -358,9 +336,8 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
   // ── AI conversation summary ────────────────────────────────────────────
   fastify.post<{ Params: { id: ConversationId } }>("/conversations/:id/summarize", async (request, reply) => {
     const { organizationId } = request.auth;
-    const visWhere = await conversationVisibilityWhere(fastify.prisma, request.auth);
     const conversation = await fastify.prisma.conversation.findFirst({
-      where: { ...(visWhere ?? {}), id: request.params.id, organizationId },
+      where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
       include: { contact: { select: { id: true, pastAiSummary: true } } },
     });
     if (!conversation) {

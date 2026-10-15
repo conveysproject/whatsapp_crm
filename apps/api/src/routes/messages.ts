@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { conversationAccessWhere } from "../lib/conversation-access.js";
 import { sendTextMessage, sendMediaMessage, sendInteractiveMessage, sendTemplateMessage, WaApiError } from "../lib/whatsapp.js";
 import { formatMetaError, redactForLog } from "../lib/meta-error.js";
 import type { WaInteractivePayload } from "../lib/whatsapp.js";
@@ -196,7 +197,7 @@ export const messagesRouter: FastifyPluginAsync = async (fastify) => {
       const body = request.body;
 
       const conversation = await fastify.prisma.conversation.findFirst({
-        where: { id: request.params.id, organizationId },
+        where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
         include: {
           organization: { select: { phoneNumberId: true, wabaAccessToken: true } },
           contact: { select: { firstName: true, lastName: true, phoneNumber: true, email: true } },

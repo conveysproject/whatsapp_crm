@@ -321,3 +321,17 @@ describe("POST /v1/ai/creator/flow/refine", () => {
     expect(body.data.flowDefinition.nodes).toHaveLength(3);
   });
 });
+
+describe("assigned_chats_only on POST /v1/conversations/:id/suggestions", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); mockAuth.permissions = {}; });
+
+  it("404s for a conversation not assigned to the agent", async () => {
+    mockAuth.permissions = { assigned_chats_only: "allow" };
+    mockPrisma.conversation.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "POST", url: "/v1/conversations/conv-1/suggestions" });
+    expect(res.statusCode).toBe(404);
+    expect(mockPrisma.conversation.findFirst.mock.calls[0][0].where).toMatchObject({ id: "conv-1", assignedTo: "user-1" });
+  });
+});

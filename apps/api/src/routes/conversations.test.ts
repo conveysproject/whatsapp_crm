@@ -597,3 +597,37 @@ describe("GET /v1/conversations/:id/messages keyset paging", () => {
     expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_CURSOR");
   });
 });
+
+describe("assigned_chats_only on conversation-by-id routes", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildAppAsAgent(); });
+  afterEach(async () => { await app.close(); mockAuthOverride.permissions = { inbox_access: "allow" }; });
+
+  const cases: Array<[string, string, string, unknown?]> = [
+    ["GET", "/v1/conversations/conv-1/messages", "messages"],
+    ["DELETE", "/v1/conversations/conv-1/history", "history"],
+    ["POST", "/v1/conversations/conv-1/status", "status", { status: "open" }],
+    ["POST", "/v1/conversations/conv-1/assign", "assign", { assignedTo: null }],
+    ["POST", "/v1/conversations/conv-1/read", "read"],
+    ["POST", "/v1/conversations/conv-1/typing", "typing", { isTyping: true }],
+    ["POST", "/v1/conversations/conv-1/summarize", "summarize"],
+  ];
+  for (const [method, url, name, payload] of cases) {
+    it(`${name}: 404 when not assigned to the agent`, async () => {
+      mockAuthOverride.permissions = { inbox_access: "allow", assigned_chats_only: "allow" };
+      mockPrisma.conversation.findFirst.mockResolvedValue(null);
+      const res = await app.inject({ method: method as "GET", url, payload: payload as object | undefined });
+      expect(res.statusCode).toBe(404);
+      expect(mockPrisma.conversation.findFirst.mock.calls[0][0].where).toMatchObject({ id: "conv-1", organizationId: "org-1", assignedTo: "agent-1" });
+    });
+  }
+
+  it("messages: clamps NaN/negative limit to a sane value", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1" });
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    await app.inject({ method: "GET", url: "/v1/conversations/conv-1/messages?limit=abc" });
+    await app.inject({ method: "GET", url: "/v1/conversations/conv-1/messages?limit=-5" });
+    expect(mockPrisma.message.findMany.mock.calls[0][0].take).toBe(51);
+    expect(mockPrisma.message.findMany.mock.calls[1][0].take).toBe(2);
+  });
+});
