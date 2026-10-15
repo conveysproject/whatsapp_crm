@@ -87,6 +87,13 @@ describe("sendErrorMessage", () => {
     expect(sendErrorMessage(new ApiError(400, "WHATSAPP_NOT_CONNECTED", "x"))).toBe("WhatsApp isn't connected for this workspace.");
     expect(sendErrorMessage(new ApiError(403, "FORBIDDEN", "x"))).toBe("You don't have permission to send messages.");
   });
+  it("explains upload and missing-conversation problems", () => {
+    expect(sendErrorMessage(new ApiError(400, "WA_NOT_CONFIGURED", "x"))).toBe("WhatsApp isn't connected for this workspace.");
+    expect(sendErrorMessage(new ApiError(400, "NO_FILE", "x"))).toBe("No file was attached.");
+    expect(sendErrorMessage(new ApiError(413, "PAYLOAD_TOO_LARGE", "x"))).toBe("That file is too large to send on WhatsApp.");
+    expect(sendErrorMessage(new ApiError(413, "WHATEVER", "x"))).toBe("That file is too large to send on WhatsApp.");
+    expect(sendErrorMessage(new ApiError(404, "NOT_FOUND", "x"))).toBe("This conversation no longer exists.");
+  });
   it("falls back to a neutral message", () => {
     expect(sendErrorMessage(new TypeError("Network request failed"))).toBe("Couldn't send. Check your connection and try again.");
     expect(sendErrorMessage(new ApiError(500, "INTERNAL", "boom"))).toBe("Couldn't send. Check your connection and try again.");

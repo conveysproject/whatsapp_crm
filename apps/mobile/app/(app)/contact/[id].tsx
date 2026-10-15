@@ -5,6 +5,7 @@ import { ChevronLeft, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { OptionSheet } from "../../../components/OptionSheet";
 import { ApiError } from "../../../lib/api";
 import { useApi } from "../../../lib/api-context";
 import { colors, font, radius, space } from "../../../lib/theme";
@@ -37,10 +38,11 @@ export default function ContactScreen() {
   const [tagDraft, setTagDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   useEffect(() => { if (contact.data) setNotes(contact.data.notes ?? ""); }, [contact.data?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = () => void qc.invalidateQueries({ queryKey: key });
-  const patch = useMutation({ mutationFn: (body: { tags?: string[]; leadStatusId?: string }) => api(`/contacts/${id}`, { method: "PATCH", body }), onMutate: () => setError(null), onSuccess: refresh, onError: (e) => setError(editError(e)) });
+  const patch = useMutation({ mutationFn: (body: { tags?: string[]; leadStatusId?: string }) => api(`/contacts/${id}`, { method: "PATCH", body }), onMutate: () => setError(null), onSuccess: () => { refresh(); void qc.invalidateQueries({ queryKey: ["conversations"] }); }, onError: (e) => setError(editError(e)) });
   const saveNotes = useMutation({ mutationFn: (n: string) => api(`/contacts/${id}/notes`, { method: "PUT", body: { notes: n } }), onMutate: () => { setError(null); setSaved(false); }, onSuccess: () => { setSaved(true); refresh(); }, onError: (e) => setError(editError(e)) });
   const toggleBot = useMutation({ mutationFn: (disabled: boolean) => api(`/contacts/${id}/toggle-bot`, { method: "POST", body: { disabled } }), onMutate: () => setError(null), onSuccess: refresh, onError: (e) => setError(editError(e)) });
   const block = useMutation({ mutationFn: (on: boolean) => api(`/contacts/${id}/${on ? "block" : "unblock"}`, { method: "POST" }), onMutate: () => setError(null), onSuccess: refresh, onError: (e) => setError(editError(e)) });
@@ -63,10 +65,6 @@ export default function ContactScreen() {
   const customRows = (fields.data?.data ?? []).filter((f) => { const v = cfValue(f); return v !== undefined && v !== null && v !== ""; });
   const blocked = c.waBlockedAt !== null;
 
-  function chooseLeadStatus() {
-    const list = statuses.data?.data ?? [];
-    Alert.alert("Lead status", undefined, [...list.map((s) => ({ text: s.name, onPress: () => patch.mutate({ leadStatusId: s.id }) })), { text: "Cancel", style: "cancel" as const }]);
-  }
   function addTag() {
     const t = tagDraft.trim();
     if (!t || c.tags.includes(t)) return;
@@ -90,7 +88,7 @@ export default function ContactScreen() {
 
         <Text style={styles.sec}>DETAILS</Text>
         <View style={styles.card}>
-          <Pressable accessibilityRole="button" onPress={chooseLeadStatus} style={styles.row}><Text style={styles.k}>Lead status</Text><Text style={styles.v}>{c.leadStatus?.name ?? "None"}</Text></Pressable>
+          <Pressable accessibilityRole="button" onPress={() => setStatusOpen(true)} style={styles.row}><Text style={styles.k}>Lead status</Text><Text style={styles.v}>{c.leadStatus?.name ?? "None"}</Text></Pressable>
           <View style={styles.row}><Text style={styles.k}>Assigned to</Text><Text style={styles.v}>{c.assignedUser?.fullName ?? "Nobody"}</Text></View>
           {c.email ? <View style={styles.row}><Text style={styles.k}>Email</Text><Text style={styles.v}>{c.email}</Text></View> : null}
           {groupNames.length ? <View style={styles.row}><Text style={styles.k}>Groups</Text><Text style={styles.v}>{groupNames.join(", ")}</Text></View> : null}
@@ -100,11 +98,11 @@ export default function ContactScreen() {
         <Text style={styles.sec}>TAGS</Text>
         <View style={styles.tags}>
           {c.tags.map((t) => (
-            <Pressable key={t} accessibilityRole="button" accessibilityLabel={`Remove tag ${t}`} onPress={() => patch.mutate({ tags: c.tags.filter((x) => x !== t) })} style={styles.tag}>
+            <Pressable key={t} accessibilityRole="button" accessibilityLabel={`Remove tag ${t}`} disabled={patch.isPending} onPress={() => patch.mutate({ tags: c.tags.filter((x) => x !== t) })} style={[styles.tag, patch.isPending && styles.disabled]}>
               <Text style={styles.tagText}>{t}</Text><X size={12} color={colors.textMuted} />
             </Pressable>
           ))}
-          <TextInput value={tagDraft} onChangeText={setTagDraft} onSubmitEditing={addTag} placeholder="Add tag…" accessibilityLabel="Add tag" returnKeyType="done" autoCapitalize="none" style={styles.tagInput} />
+          <TextInput value={tagDraft} onChangeText={setTagDraft} onSubmitEditing={addTag} placeholder="Add tag…" accessibilityLabel="Add tag" editable={!patch.isPending} returnKeyType="done" autoCapitalize="none" style={styles.tagInput} />
         </View>
 
         {customRows.length ? (
@@ -144,6 +142,13 @@ export default function ContactScreen() {
           </Pressable>
         </View>
       </ScrollView>
+      <OptionSheet
+        visible={statusOpen}
+        title="Lead status"
+        options={(statuses.data?.data ?? []).map((st) => ({ label: st.name, value: st.id }))}
+        onSelect={(v) => patch.mutate({ leadStatusId: v })}
+        onClose={() => setStatusOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -163,13 +168,13 @@ const styles = StyleSheet.create({
   k: { flex: 1, fontFamily: font.regular, fontSize: 14, color: colors.textMuted },
   v: { fontFamily: font.medium, fontSize: 14, color: colors.text, flexShrink: 1, textAlign: "right" },
   tags: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, alignItems: "center" },
-  tag: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 32, paddingHorizontal: space.md, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  tag: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44, paddingHorizontal: space.md, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   tagText: { fontFamily: font.semibold, fontSize: 13, color: colors.text },
-  tagInput: { minWidth: 110, minHeight: 32, paddingHorizontal: space.md, borderRadius: 16, borderWidth: 1, borderStyle: "dashed", borderColor: colors.brand, fontFamily: font.regular, fontSize: 13 },
+  tagInput: { minWidth: 110, minHeight: 44, paddingHorizontal: space.md, borderRadius: 22, borderWidth: 1, borderStyle: "dashed", borderColor: colors.brand, fontFamily: font.regular, fontSize: 13 },
   notes: { minHeight: 80, fontFamily: font.regular, fontSize: 15, lineHeight: 21, color: colors.text, textAlignVertical: "top" },
   notesBar: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: space.md },
   saved: { fontFamily: font.semibold, fontSize: 12, color: colors.brand },
-  small: { minHeight: 36, paddingHorizontal: space.md, borderRadius: radius.sm, backgroundColor: colors.brand, justifyContent: "center" },
+  small: { minHeight: 44, paddingHorizontal: space.md, borderRadius: radius.sm, backgroundColor: colors.brand, justifyContent: "center" },
   smallText: { fontFamily: font.semibold, fontSize: 13, color: "#FFFFFF" },
   disabled: { opacity: 0.5 },
   danger: { fontFamily: font.semibold, fontSize: 15, color: colors.danger },

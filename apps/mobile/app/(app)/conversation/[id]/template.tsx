@@ -6,6 +6,7 @@ import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, Vie
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useApi } from "../../../../lib/api-context";
 import { keys, sendErrorMessage } from "../../../../lib/conversations";
+import { trimThreadToNewestPage } from "../../../../lib/thread-refresh";
 import { colors, font, radius, space } from "../../../../lib/theme";
 
 interface Template { id: string; name: string; category: string; language: string; status: string; headerText: string | null; bodyText: string | null; footerText: string | null }
@@ -24,6 +25,7 @@ export default function TemplateScreen() {
     mutationFn: (t: Template) => api(`/conversations/${id}/messages`, { method: "POST", body: { contentType: "template", templateId: t.id } }),
     onMutate: () => setError(null),
     onSuccess: () => {
+      trimThreadToNewestPage(qc, id);
       void qc.invalidateQueries({ queryKey: keys.messages(id) });
       void qc.invalidateQueries({ queryKey: ["conversations"] });
       router.back();

@@ -11,6 +11,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, Text
 import { useApi } from "../../lib/api-context";
 import { canSendFreeForm, keys, sendErrorMessage, type ConversationItem } from "../../lib/conversations";
 import { contentTypeForMime, uploadMedia } from "../../lib/media-upload";
+import { trimThreadToNewestPage } from "../../lib/thread-refresh";
 import { colors, font, radius, space } from "../../lib/theme";
 
 const drafts = new Map<string, string>();
@@ -47,6 +48,7 @@ export function Composer({ conversation }: { conversation: ConversationItem }) {
   });
 
   const afterSend = () => {
+    trimThreadToNewestPage(qc, id);
     void qc.invalidateQueries({ queryKey: keys.messages(id) });
     void qc.invalidateQueries({ queryKey: ["conversations"] });
   };
@@ -89,7 +91,7 @@ export function Composer({ conversation }: { conversation: ConversationItem }) {
 
   if (!freeForm) {
     return (
-      <View style={styles.bar}>
+      <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, space.md) }]}>
         {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
         <Pressable accessibilityRole="button" style={styles.templateBtn} onPress={() => router.push(`/conversation/${id}/template`)}>
           <FileText size={18} color="#FFFFFF" /><Text style={styles.templateText}>Send template</Text>
@@ -99,13 +101,13 @@ export function Composer({ conversation }: { conversation: ConversationItem }) {
   }
 
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, space.md) }]}>
       {suggestions.data && suggestions.data.length > 0 && !text ? (
         <View>
           <View style={styles.sugHead}><Sparkles size={14} color="#6D28D9" /><Text style={styles.sugTitle}>Smart replies</Text></View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sugRow}>
             {suggestions.data.map((s) => (
-              <Pressable key={s} accessibilityRole="button" onPress={() => setText(s)} style={styles.sug}><Text style={styles.sugText} numberOfLines={1}>{s}</Text></Pressable>
+              <Pressable key={s} accessibilityRole="button" onPress={() => setText(s)} hitSlop={{ top: 4, bottom: 4 }} style={styles.sug}><Text style={styles.sugText} numberOfLines={1}>{s}</Text></Pressable>
             ))}
           </ScrollView>
         </View>
@@ -138,8 +140,8 @@ export function Composer({ conversation }: { conversation: ConversationItem }) {
         <Pressable style={styles.backdrop} onPress={() => setMenu(false)} accessibilityLabel="Close menu" />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + space.lg }]} accessibilityRole="menu">
           {[
-            { label: "Attach photo or video", Icon: ImageIcon, onPress: () => void pickPhoto() },
-            { label: "Attach document", Icon: FileText, onPress: () => void pickDocument() },
+            { label: "Attach photo or video", Icon: ImageIcon, onPress: () => { setMenu(false); setTimeout(() => void pickPhoto(), 350); } },
+            { label: "Attach document", Icon: FileText, onPress: () => { setMenu(false); setTimeout(() => void pickDocument(), 350); } },
             { label: "Canned responses", Icon: Zap, onPress: () => { setMenu(false); router.push(`/conversation/${id}/canned`); } },
             { label: "Send template", Icon: MessageSquareText, onPress: () => { setMenu(false); router.push(`/conversation/${id}/template`); } },
           ].map(({ label, Icon, onPress }) => (

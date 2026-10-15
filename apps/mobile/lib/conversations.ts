@@ -96,6 +96,7 @@ export function canSendFreeForm(c: Pick<ConversationItem, "serviceWindowActive">
 
 export function sendErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
+    if (err.status === 413) return "That file is too large to send on WhatsApp.";
     switch (err.code) {
       case "BILLING_OVERDUE":
         return "Sending is paused because a WBMSG statement is overdue. An admin can pay it on the web dashboard.";
@@ -105,8 +106,13 @@ export function sendErrorMessage(err: unknown): string {
         return "Only approved templates can be sent.";
       case "TEMPLATE_NOT_FOUND":
         return "That template no longer exists.";
+      case "WA_NOT_CONFIGURED":
       case "WHATSAPP_NOT_CONNECTED":
         return "WhatsApp isn't connected for this workspace.";
+      case "NO_FILE":
+        return "No file was attached.";
+      case "NOT_FOUND":
+        return "This conversation no longer exists.";
       case "NO_WA_CONTACT":
         return "This contact has no WhatsApp number.";
       case "FORBIDDEN":

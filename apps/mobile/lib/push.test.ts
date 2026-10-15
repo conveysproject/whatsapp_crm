@@ -123,6 +123,17 @@ describe("unregister and sign-out", () => {
     expect(mockStore["wbmsg.pushTokenPending"]).toBe("ExponentPushToken[a]");
   });
 
+  it("resets the OS badge after sign-out, and a badge failure does not break sign-out", async () => {
+    const api = jest.fn().mockResolvedValue({}) as unknown as Api;
+    const signOut = jest.fn(async () => undefined);
+    mockNotif.setBadgeCountAsync.mockResolvedValue(undefined);
+    await signOutAndUnregister(api, signOut);
+    expect(mockNotif.setBadgeCountAsync).toHaveBeenCalledWith(0);
+    mockNotif.setBadgeCountAsync.mockRejectedValueOnce(new Error("no badge"));
+    await expect(signOutAndUnregister(api, signOut)).resolves.toBeUndefined();
+    expect(signOut).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps the token as pending when the DELETE fails", async () => {
     mockStore["wbmsg.pushToken"] = "ExponentPushToken[a]";
     const api = jest.fn().mockRejectedValue(new Error("offline")) as unknown as Api;

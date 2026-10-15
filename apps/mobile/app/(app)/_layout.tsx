@@ -11,6 +11,7 @@ import { config } from "../../lib/config";
 import { MeProvider } from "../../lib/me-context";
 import { refreshBadge, flushPendingUnregister, registerDevice, shouldAskForPushPermission, takeUnhandledResponseRoute } from "../../lib/push";
 import { connectRealtime, isForegroundRefreshable, queryKeysFor } from "../../lib/realtime";
+import { trimThreadToNewestPage } from "../../lib/thread-refresh";
 import { resolveGate } from "../../lib/session-gate";
 import { colors, font, radius, space } from "../../lib/theme";
 
@@ -59,7 +60,10 @@ function RealtimeBridge() {
       url: config.apiUrl,
       getToken: () => getToken(),
       onEvent: (event, payload) => {
-        for (const queryKey of queryKeysFor(event, payload)) void queryClient.invalidateQueries({ queryKey });
+        for (const queryKey of queryKeysFor(event, payload)) {
+          if (queryKey[0] === "messages") trimThreadToNewestPage(queryClient, typeof queryKey[1] === "string" ? queryKey[1] : undefined);
+          void queryClient.invalidateQueries({ queryKey });
+        }
       },
     });
     const sub = AppState.addEventListener("change", (state) => {

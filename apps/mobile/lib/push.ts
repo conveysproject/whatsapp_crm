@@ -82,6 +82,12 @@ export async function signOutAndUnregister(api: Api, signOut: () => Promise<unkn
     // Offline: the server prunes the token when Expo reports it dead, or when the next user registers this phone.
   }
   await signOut();
+  // Shared phone: don't leave this user's unread count on the OS icon.
+  try {
+    await Notifications.setBadgeCountAsync(0);
+  } catch {
+    // Cosmetic.
+  }
 }
 
 export async function shouldAskForPushPermission(userId: string): Promise<boolean> {

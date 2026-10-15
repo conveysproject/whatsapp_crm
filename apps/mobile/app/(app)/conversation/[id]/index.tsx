@@ -1,10 +1,11 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo } from "react";
-import { ActionSheetIOS, ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChatHeader } from "../../../../components/chat/ChatHeader";
 import { Composer } from "../../../../components/chat/Composer";
+import { OptionSheet } from "../../../../components/OptionSheet";
 import { MessageBubble } from "../../../../components/chat/MessageBubble";
 import { getActiveConversation, setActiveConversation } from "../../../../lib/active-conversation";
 import { ApiError } from "../../../../lib/api";
@@ -60,24 +61,12 @@ export default function ChatScreen() {
     onError: () => Alert.alert("Couldn't change the status", "Check your connection and try again."),
   });
 
-  function chooseStatus() {
-    const options: { label: string; value: ConversationStatus }[] = [
-      { label: "Open", value: "open" },
-      { label: "Pending", value: "pending" },
-      { label: "Resolved", value: "resolved" },
-    ];
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: [...options.map((o) => o.label), "Cancel"], cancelButtonIndex: options.length, title: "Conversation status" },
-        (i) => { const o = options[i]; if (o) setStatus.mutate(o.value); },
-      );
-    } else {
-      Alert.alert("Conversation status", undefined, [
-        ...options.map((o) => ({ text: o.label, onPress: () => setStatus.mutate(o.value) })),
-        { text: "Cancel", style: "cancel" as const },
-      ]);
-    }
-  }
+  const [statusOpen, setStatusOpen] = useState(false);
+  const statusOptions = [
+    { label: "Open", value: "open" },
+    { label: "Pending", value: "pending" },
+    { label: "Resolved", value: "resolved" },
+  ];
 
   if (conv.isLoading) return <View style={styles.center}><ActivityIndicator color={colors.brand} /></View>;
   if (conv.error && !conv.data) {
@@ -104,7 +93,7 @@ export default function ChatScreen() {
         assigneeName={assigneeName}
         onBack={() => router.back()}
         onContact={() => { if (c.contact) router.push({ pathname: "/contact/[id]", params: { id: c.contact.id } }); }}
-        onStatus={chooseStatus}
+        onStatus={() => setStatusOpen(true)}
         onAssign={() => router.push({ pathname: "/conversation/[id]/assign", params: { id } })}
         onLabel={() => router.push({ pathname: "/conversation/[id]/label", params: { id } })}
       />
@@ -113,7 +102,7 @@ export default function ChatScreen() {
           {c.serviceWindowActive ? `24-hour window open${hours !== null ? ` · ${hours}h left` : ""}` : "24-hour window closed. Send an approved template to restart."}
         </Text>
       </View>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={0}>
+      <KeyboardAvoidingView style={styles.flex} behavior="padding" keyboardVerticalOffset={0}>
         <FlatList
           inverted
           data={messages}
@@ -127,6 +116,13 @@ export default function ChatScreen() {
         />
         <Composer conversation={c} />
       </KeyboardAvoidingView>
+      <OptionSheet
+        visible={statusOpen}
+        title="Conversation status"
+        options={statusOptions}
+        onSelect={(v) => setStatus.mutate(v as ConversationStatus)}
+        onClose={() => setStatusOpen(false)}
+      />
     </SafeAreaView>
   );
 }
