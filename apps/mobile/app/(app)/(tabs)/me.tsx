@@ -9,7 +9,8 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import { useApi } from "../../../lib/api-context";
 import { config } from "../../../lib/config";
 import { useMe } from "../../../lib/me-context";
-import { registerDevice, signOutAndUnregister } from "../../../lib/push";
+import { markPushPermissionAsked, registerDevice, signOutAndUnregister } from "../../../lib/push";
+import type { Gate } from "../../../lib/session-gate";
 import { colors, font, space } from "../../../lib/theme";
 
 export default function MeScreen() {
@@ -31,12 +32,16 @@ export default function MeScreen() {
 
   const org = useQuery({ queryKey: ["organization"], queryFn: async () => (await api<{ data: { name: string } }>("/organizations/me")).data, staleTime: 10 * 60_000 });
   const [availability, setAvailability] = useState<"online" | "away">(me.availability === "away" ? "away" : "online");
+  const confirmedAvailability = useRef<"online" | "away">(me.availability === "away" ? "away" : "online");
   const [availError, setAvailError] = useState<string | null>(null);
   const saveAvailability = useMutation({
     mutationFn: (a: "online" | "away") => api("/users/me/availability", { method: "PATCH", body: { availability: a } }),
     onMutate: (a) => { setAvailError(null); setAvailability(a); },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["gate", userId] }),
-    onError: () => { setAvailability(me.availability === "away" ? "away" : "online"); setAvailError("Couldn't update your status. Try again."); },
+    onSuccess: (_d, a) => {
+      confirmedAvailability.current = a;
+      qc.setQueryData<Gate>(["gate", userId], (g) => (g && g.kind === "ok" ? { ...g, me: { ...g.me, availability: a } } : g));
+    },
+    onError: () => { setAvailability(confirmedAvailability.current); setAvailError("Couldn't update your status. Try again."); },
   });
   const [pushStatus, setPushStatus] = useState<string>("undetermined");
   useEffect(() => {
@@ -49,9 +54,12 @@ export default function MeScreen() {
     if (pushStatus === "granted") return;
     if (pushStatus === "denied") return void Linking.openSettings();
     await registerDevice(api).catch(() => null);
+    if (userId) await markPushPermissionAsked(userId).catch(() => null);
     const p = await Notifications.getPermissionsAsync();
     if (mounted.current) setPushStatus(p.status);
   }
+
+  const pushValue = pushStatus === "granted" ? "On" : pushStatus === "denied" ? "Off · Open settings" : "Turn on";
 
   async function onSignOut() {
     if (busy) return;
@@ -80,9 +88,9 @@ export default function MeScreen() {
 
       <Text style={styles.sec}>APP</Text>
       <View style={styles.card}>
-        <Pressable accessibilityRole="button" onPress={() => void onPushRow()} style={styles.row}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Notifications on this phone, ${pushValue}`} onPress={() => void onPushRow()} style={styles.row}>
           <Text style={styles.rowText}>Notifications on this phone</Text>
-          <Text style={styles.rowValue}>{pushStatus === "granted" ? "On" : pushStatus === "denied" ? "Off · Open settings" : "Turn on"}</Text>
+          <Text style={styles.rowValue}>{pushValue}</Text>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={() => router.push("/canned-responses")} style={styles.row}>
           <Text style={styles.rowText}>Canned responses</Text>
