@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync, FastifyInstance } from "fastify";
-import type { ConversationStatus } from "@prisma/client";
+import type { ConversationStatus, Prisma } from "@prisma/client";
 import type { ConversationId } from "@WBMSG/shared";
 import { getIo } from "../lib/io-ref.js";
 import { pushToUser, unreadChatCount } from "../lib/push.js";
@@ -34,6 +34,29 @@ async function conversationVisibilityWhere(
   return buildVisibilityWhere(va, teamMemberIds, "assignedTo");
 }
 
+const listInclude = {
+  contact: { select: { id: true, firstName: true, lastName: true, phoneNumber: true, tags: true } },
+  messages: { orderBy: { sentAt: "desc" as const }, take: 1, select: { id: true, body: true, direction: true, contentType: true } },
+  conversationLabel: { include: { inboxLabel: { select: { id: true, name: true, color: true } } } },
+} satisfies Prisma.ConversationInclude;
+
+type ListRow = Prisma.ConversationGetPayload<{ include: typeof listInclude }>;
+
+// GAP-S07: serviceWindowActive = lastInboundAt within 24h (non-template messages allowed)
+function toListItem(c: ListRow, hidePhone: boolean, now: number) {
+  return {
+    ...c,
+    contact: hidePhone && c.contact ? { ...c.contact, phoneNumber: maskPhone(c.contact.phoneNumber) } : c.contact,
+    serviceWindowActive: c.lastInboundAt != null && now - c.lastInboundAt.getTime() < 86_400_000,
+    lastMessage: c.messages?.[0] ?? null,
+    messages: undefined,  // remove the array from response
+    label: c.conversationLabel
+      ? { id: c.conversationLabel.inboxLabel.id, name: c.conversationLabel.inboxLabel.name, color: c.conversationLabel.inboxLabel.color }
+      : null,
+    conversationLabel: undefined,
+  };
+}
+
 export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
   // Section gate (Phase 2 / D15): every inbox/conversation route requires inbox_access.
   fastify.addHook("preHandler", async (request, reply) => {
@@ -65,11 +88,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
 
     const conversations = await fastify.prisma.conversation.findMany({
       where,
-      include: {
-        contact: { select: { id: true, firstName: true, lastName: true, phoneNumber: true, tags: true } },
-        messages: { orderBy: { sentAt: "desc" }, take: 1, select: { id: true, body: true, direction: true, contentType: true } },
-        conversationLabel: { include: { inboxLabel: { select: { id: true, name: true, color: true } } } },
-      },
+      include: listInclude,
       orderBy: { lastMessageAt: "desc" },
       skip: (pageNum - 1) * 50,
       take: 50,
@@ -78,17 +97,7 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
     const hidePhone = shouldHidePhone(permissions);
     const now = Date.now();
     // GAP-S07: serviceWindowActive = lastInboundAt within 24h (non-template messages allowed)
-    const data = conversations.map((c) => ({
-      ...c,
-      contact: hidePhone && c.contact ? { ...c.contact, phoneNumber: maskPhone(c.contact.phoneNumber) } : c.contact,
-      serviceWindowActive: c.lastInboundAt != null && now - c.lastInboundAt.getTime() < 86_400_000,
-      lastMessage: c.messages?.[0] ?? null,
-      messages: undefined,  // remove the array from response
-      label: c.conversationLabel
-        ? { id: c.conversationLabel.inboxLabel.id, name: c.conversationLabel.inboxLabel.name, color: c.conversationLabel.inboxLabel.color }
-        : null,
-      conversationLabel: undefined,
-    }));
+    const data = conversations.map((c) => toListItem(c, hidePhone, now));
     return reply.send({ data });
   });
 
@@ -96,6 +105,21 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get("/conversations/unread-count", async (request) => {
     const count = await unreadChatCount(fastify.prisma, request.auth.organizationId, request.auth.userId);
     return { data: { count } };
+  });
+
+  // One conversation in the list-item shape (mobile chat opened from a push, no list cached).
+  fastify.get<{ Params: { id: ConversationId } }>("/conversations/:id", async (request, reply) => {
+    const { userId, organizationId, permissions } = request.auth;
+    const where: Record<string, unknown> = { id: request.params.id, organizationId, contact: { deletedAt: null } };
+    if (permissions["assigned_chats_only"] === "allow") {
+      where.assignedTo = userId;
+    } else {
+      const visWhere = await conversationVisibilityWhere(fastify.prisma, request.auth);
+      if (visWhere) Object.assign(where, visWhere);
+    }
+    const c = await fastify.prisma.conversation.findFirst({ where, include: listInclude });
+    if (!c) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
+    return reply.send({ data: toListItem(c, shouldHidePhone(permissions), Date.now()) });
   });
 
   // ── Full-text search across contact names and message bodies ───────────
@@ -122,28 +146,14 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
           { messages: { some: { body: { contains: q, mode: "insensitive" } } } },
         ],
       },
-      include: {
-        contact: { select: { id: true, firstName: true, lastName: true, phoneNumber: true, tags: true } },
-        messages: { orderBy: { sentAt: "desc" }, take: 1, select: { id: true, body: true, direction: true, contentType: true } },
-        conversationLabel: { include: { inboxLabel: { select: { id: true, name: true, color: true } } } },
-      },
+      include: listInclude,
       orderBy: { lastMessageAt: "desc" },
       take: 20,
     });
 
     const hidePhone = shouldHidePhone(permissions);
     const now = Date.now();
-    const data = conversations.map((c) => ({
-      ...c,
-      contact: hidePhone && c.contact ? { ...c.contact, phoneNumber: maskPhone(c.contact.phoneNumber) } : c.contact,
-      serviceWindowActive: c.lastInboundAt != null && now - c.lastInboundAt.getTime() < 86_400_000,
-      lastMessage: c.messages?.[0] ?? null,
-      messages: undefined,
-      label: c.conversationLabel
-        ? { id: c.conversationLabel.inboxLabel.id, name: c.conversationLabel.inboxLabel.name, color: c.conversationLabel.inboxLabel.color }
-        : null,
-      conversationLabel: undefined,
-    }));
+    const data = conversations.map((c) => toListItem(c, hidePhone, now));
     return reply.send({ data });
   });
 

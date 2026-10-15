@@ -50,6 +50,8 @@ async function buildApp(): Promise<FastifyInstance> {
   return app;
 }
 
+const mockAuthOverride = { permissions: { inbox_access: "allow" } as Record<string, string> };
+
 async function buildAppAsAgent(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorate("prisma", mockPrisma as unknown as PrismaClient);
@@ -58,7 +60,7 @@ async function buildAppAsAgent(): Promise<FastifyInstance> {
       userId: "agent-1",
       organizationId: "org-1",
       role: "agent" as const,
-      permissions: { inbox_access: "allow" },
+      permissions: mockAuthOverride.permissions,
       teamId: null as string | null,
       teamRole: null as "lead" | "member" | null,
     };
@@ -505,5 +507,59 @@ describe("GET /v1/conversations/unread-count", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ data: { count: 4 } });
     expect(mockUnread).toHaveBeenCalledWith(expect.anything(), "org-1", "user-1");
+  });
+});
+
+describe("GET /v1/conversations/:id", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  const row = {
+    id: "conv-1", organizationId: "org-1", status: "open", assignedTo: "user-1", unreadCount: 2,
+    lastInboundAt: new Date(Date.now() - 60 * 60 * 1000), lastMessageAt: new Date(),
+    contact: { id: "ct-1", firstName: "Priya", lastName: "Shah", phoneNumber: "447700900123", tags: [] },
+    messages: [{ id: "m-1", body: "Hi", direction: "inbound", contentType: "text" }],
+    conversationLabel: { inboxLabel: { id: "l-1", name: "Appointment", color: "#2563eb" } },
+  };
+
+  it("returns one conversation in the list-item shape with serviceWindowActive", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(row);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/conv-1" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Record<string, unknown> }>().data;
+    expect(body["id"]).toBe("conv-1");
+    expect(body["serviceWindowActive"]).toBe(true);
+    expect(body["lastMessage"]).toEqual({ id: "m-1", body: "Hi", direction: "inbound", contentType: "text" });
+    expect(body["label"]).toEqual({ id: "l-1", name: "Appointment", color: "#2563eb" });
+    expect(body["messages"]).toBeUndefined();
+    expect(body["conversationLabel"]).toBeUndefined();
+    const where = mockPrisma.conversation.findFirst.mock.calls[0][0].where;
+    expect(where).toMatchObject({ id: "conv-1", organizationId: "org-1" });
+  });
+
+  it("marks the window closed after 24 hours", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ ...row, lastInboundAt: new Date(Date.now() - 25 * 60 * 60 * 1000) });
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/conv-1" });
+    expect(res.json<{ data: { serviceWindowActive: boolean } }>().data.serviceWindowActive).toBe(false);
+  });
+
+  it("returns 404 when the conversation is not visible to the caller", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/conv-x" });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("GET /v1/conversations/:id with assigned_chats_only", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildAppAsAgent(); });
+  afterEach(async () => { await app.close(); mockAuthOverride.permissions = { inbox_access: "allow" }; });
+
+  it("only finds conversations assigned to the caller when assigned_chats_only is allowed", async () => {
+    mockAuthOverride.permissions = { inbox_access: "allow", assigned_chats_only: "allow" };
+    mockPrisma.conversation.findFirst.mockResolvedValue(null);
+    await app.inject({ method: "GET", url: "/v1/conversations/conv-1" });
+    expect(mockPrisma.conversation.findFirst.mock.calls[0][0].where).toMatchObject({ assignedTo: "agent-1" });
   });
 });
