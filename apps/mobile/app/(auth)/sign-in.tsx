@@ -6,40 +6,95 @@ import { config } from "../../lib/config";
 import { stepAfterAttempt, type SignInStep } from "../../lib/sign-in-steps";
 import { colors, font, radius, space } from "../../lib/theme";
 
+const NETWORK_ERROR = "Something went wrong. Check your connection and try again.";
+
+function messageOf(error: { longMessage?: string | null; message?: string | null } | null | undefined, fallback: string): string {
+  return error?.longMessage ?? error?.message ?? fallback;
+}
+
 export default function SignInScreen() {
-  const { signIn, errors, fetchStatus } = useSignIn();
+  const { signIn, fetchStatus } = useSignIn();
   const [step, setStep] = useState<SignInStep>("email");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
-  const busy = fetchStatus === "fetching";
+  const [notice, setNotice] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const busy = submitting || fetchStatus === "fetching";
 
-  async function finish() {
-    await signIn.finalize();
+  /** Runs one Clerk action with double-tap protection; network/unknown failures become a neutral message. */
+  async function run(action: () => Promise<void>) {
+    if (submitting) return;
+    setSubmitting(true);
+    setFormError(null);
+    setNotice(null);
+    try {
+      await action();
+    } catch {
+      setFormError(NETWORK_ERROR);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  async function submitPassword() {
-    setFormError(null);
-    const { error } = await signIn.password({ emailAddress: email.trim(), password });
+  /** Returns true when the session was activated; the (auth) layout then redirects. */
+  async function finish(): Promise<boolean> {
+    const { error } = await signIn.finalize();
     if (error) {
-      setFormError(errors.fields.identifier?.message ?? errors.fields.password?.message ?? "Couldn't sign in. Check your email and password.");
-      return;
+      setFormError(messageOf(error, "Couldn't finish signing in. Please try again."));
+      return false;
     }
-    const next = stepAfterAttempt(signIn.status, signIn.supportedSecondFactors);
-    if (next === "email_code") await signIn.mfa.sendEmailCode();
-    if (next === "done") await finish();
-    setStep(next);
+    return true;
   }
 
-  async function submitCode() {
-    setFormError(null);
-    const { error } = await signIn.mfa.verifyEmailCode({ code: code.trim() });
+  /** Sends the emailed code; returns true on success. */
+  async function sendCode(): Promise<boolean> {
+    const { error } = await signIn.mfa.sendEmailCode();
     if (error) {
-      setFormError("That code didn't work. Check it and try again.");
-      return;
+      setFormError(messageOf(error, "Couldn't send the code. Please try again."));
+      return false;
     }
-    if (signIn.status === "complete") await finish();
+    return true;
+  }
+
+  function submitPassword() {
+    return run(async () => {
+      const { error } = await signIn.password({ emailAddress: email.trim(), password });
+      if (error) {
+        setFormError(messageOf(error, "Couldn't sign in. Check your email and password."));
+        return;
+      }
+      const next = stepAfterAttempt(signIn.status, signIn.supportedSecondFactors);
+      if (next === "done") {
+        await finish();
+        return;
+      }
+      if (next === "email_code") {
+        if (!(await sendCode())) return;
+        setCode("");
+      }
+      setStep(next);
+    });
+  }
+
+  function submitCode() {
+    return run(async () => {
+      const { error } = await signIn.mfa.verifyEmailCode({ code: code.trim() });
+      if (error) {
+        setFormError(messageOf(error, "That code didn't work. Check it and try again."));
+        return;
+      }
+      const next = stepAfterAttempt(signIn.status, signIn.supportedSecondFactors);
+      if (next === "done") await finish();
+      else setStep("unsupported_2fa");
+    });
+  }
+
+  function resendCode() {
+    return run(async () => {
+      if (await sendCode()) setNotice("We sent a new code.");
+    });
   }
 
   const title = step === "password" ? "Enter your password" : step === "email_code" ? "Check your email" : "Sign in to WBMSG";
@@ -56,7 +111,7 @@ export default function SignInScreen() {
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView style={styles.body} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         {step !== "email" && (
-          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => { setFormError(null); setStep(step === "email_code" ? "password" : "email"); }} style={styles.back}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => { setFormError(null); setNotice(null); setCode(""); setStep(step === "email_code" ? "password" : "email"); }} style={styles.back}>
             <Text style={styles.backText}>‹ Back</Text>
           </Pressable>
         )}
@@ -94,7 +149,7 @@ export default function SignInScreen() {
             <Pressable accessibilityRole="button" style={[styles.primary, (code.trim().length !== 6 || busy) && styles.disabled]} disabled={code.trim().length !== 6 || busy} onPress={() => void submitCode()}>
               {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>Verify</Text>}
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => void signIn.mfa.sendEmailCode()} style={styles.ghost}>
+            <Pressable accessibilityRole="button" disabled={busy} onPress={() => void resendCode()} style={[styles.ghost, busy && styles.disabled]}>
               <Text style={styles.ghostText}>Send a new code</Text>
             </Pressable>
           </>
@@ -106,6 +161,7 @@ export default function SignInScreen() {
           </Pressable>
         )}
 
+        {notice && <Text style={styles.notice} accessibilityRole="alert">{notice}</Text>}
         {formError && <Text style={styles.error} accessibilityRole="alert">{formError}</Text>}
 
         <View style={styles.footer}>
@@ -136,6 +192,7 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.5 },
   ghost: { minHeight: 44, justifyContent: "center", alignSelf: "center" },
   ghostText: { fontFamily: font.semibold, fontSize: 15, color: colors.brand },
+  notice: { fontFamily: font.medium, fontSize: 14, color: colors.textMuted },
   error: { fontFamily: font.medium, fontSize: 14, color: colors.danger },
   footer: { marginTop: "auto", paddingBottom: space.xl, alignItems: "center", gap: space.sm },
   footerText: { fontFamily: font.regular, fontSize: 13, color: colors.textMuted, textAlign: "center" },
