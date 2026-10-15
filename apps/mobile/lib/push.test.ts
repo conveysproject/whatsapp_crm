@@ -26,11 +26,12 @@ jest.mock("expo-notifications", () => ({
 jest.mock("expo-device", () => ({ isDevice: true }));
 jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { extra: { eas: { projectId: "proj-1" } } } } }));
 
-import { getPushToken, refreshBadge, registerDevice, routeForNotification, shouldAskForPushPermission, markPushPermissionAsked, signOutAndUnregister, unregisterDevice } from "./push";
+import { __resetHandledResponsesForTests, takeUnhandledResponseRoute, getPushToken, refreshBadge, registerDevice, routeForNotification, shouldAskForPushPermission, markPushPermissionAsked, signOutAndUnregister, unregisterDevice } from "./push";
 
 beforeEach(() => {
   for (const k of Object.keys(mockStore)) delete mockStore[k];
   jest.clearAllMocks();
+  __resetHandledResponsesForTests();
 });
 
 describe("routeForNotification", () => {
@@ -115,5 +116,23 @@ describe("permission prompt bookkeeping and badge", () => {
     expect(api).toHaveBeenCalledWith("/conversations/unread-count");
     expect(mockNotif.setBadgeCountAsync).toHaveBeenCalledWith(3);
     await expect(refreshBadge(api)).resolves.toBeUndefined();
+  });
+});
+
+describe("takeUnhandledResponseRoute", () => {
+  const resp = (identifier: string, data: unknown) => ({ notification: { request: { identifier, content: { data } } } });
+  it("routes a given notification only once", () => {
+    const r = resp("n1", { type: "new_message", conversationId: "c-1" });
+    expect(takeUnhandledResponseRoute(r)).toBe("/conversation/c-1");
+    expect(takeUnhandledResponseRoute(r)).toBeNull();
+  });
+  it("routes different notifications each once", () => {
+    expect(takeUnhandledResponseRoute(resp("a", { type: "new_message", conversationId: "c-1" }))).toBe("/conversation/c-1");
+    expect(takeUnhandledResponseRoute(resp("b", { type: "closure_overdue", contactId: "ct-1" }))).toBe("/contact/ct-1");
+  });
+  it("returns null for null or garbage", () => {
+    expect(takeUnhandledResponseRoute(null)).toBeNull();
+    expect(takeUnhandledResponseRoute(undefined)).toBeNull();
+    expect(takeUnhandledResponseRoute({} as never)).toBeNull();
   });
 });

@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
   icon: { alignSelf: "center", width: 112, height: 112, borderRadius: 56, backgroundColor: colors.brandSoft, alignItems: "center", justifyContent: "center", marginTop: 64 },
   title: { fontFamily: font.bold, fontSize: 24, color: colors.text, textAlign: "center" },
   body: { fontFamily: font.regular, fontSize: 15, lineHeight: 22, color: colors.textMuted, textAlign: "center" },
-  card: { backgroundColor: "#F9FAFB", borderRadius: radius.lg, padding: space.lg, gap: space.md },
+  card: { backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, padding: space.lg, gap: space.md },
   point: { fontFamily: font.regular, fontSize: 14, lineHeight: 20, color: colors.text },
   bold: { fontFamily: font.semibold },
   actions: { marginTop: "auto", marginBottom: space.xl, gap: space.sm },

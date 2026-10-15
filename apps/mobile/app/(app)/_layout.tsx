@@ -7,7 +7,7 @@ import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from "
 import { useApi } from "../../lib/api-context";
 import { config } from "../../lib/config";
 import { MeProvider } from "../../lib/me-context";
-import { refreshBadge, registerDevice, routeForNotification, shouldAskForPushPermission } from "../../lib/push";
+import { refreshBadge, registerDevice, shouldAskForPushPermission, takeUnhandledResponseRoute } from "../../lib/push";
 import { connectRealtime, isForegroundRefreshable, queryKeysFor } from "../../lib/realtime";
 import { resolveGate } from "../../lib/session-gate";
 import { colors, font, radius, space } from "../../lib/theme";
@@ -75,29 +75,39 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: true }),
 });
 
+// The OS keeps returning the launch notification for the whole process; only the first PushBridge mount may act on it.
+let coldStartChecked = false;
+
 function PushBridge() {
-  const api = useApi();
+  const api0 = useApi();
+  const apiRef = useRef(api0);
+  apiRef.current = api0;
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
 
   useEffect(() => {
     let cancelled = false;
+    const api = apiRef.current;
     void (async () => {
       const { status } = await Notifications.getPermissionsAsync();
       if (status === "granted") await registerDevice(api).catch(() => null);
-      else if (status === "undetermined" && (await shouldAskForPushPermission()) && !cancelled) router.push("/push-permission");
+      else if (status === "undetermined" && (await shouldAskForPushPermission()) && !cancelled) routerRef.current.push("/push-permission");
       await refreshBadge(api);
-      const last = await Notifications.getLastNotificationResponseAsync();
-      const route = routeForNotification(last?.notification.request.content.data);
-      if (route && !cancelled) router.push(route as never);
+      if (cancelled || coldStartChecked) return;
+      coldStartChecked = true;
+      const route = takeUnhandledResponseRoute(await Notifications.getLastNotificationResponseAsync());
+      Notifications.clearLastNotificationResponse();
+      if (route && !cancelled) routerRef.current.push(route as never);
     })();
 
     const tap = Notifications.addNotificationResponseReceivedListener((response) => {
-      const route = routeForNotification(response.notification.request.content.data);
-      if (route) router.push(route as never);
+      const route = takeUnhandledResponseRoute(response);
+      if (route) routerRef.current.push(route as never);
     });
-    const fg = AppState.addEventListener("change", (state) => { if (state === "active") void refreshBadge(api); });
+    const fg = AppState.addEventListener("change", (state) => { if (state === "active") void refreshBadge(apiRef.current); });
     return () => { cancelled = true; tap.remove(); fg.remove(); };
-  }, [api, router]);
+  }, []);
 
   return null;
 }

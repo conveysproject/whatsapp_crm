@@ -80,3 +80,19 @@ export async function refreshBadge(api: Api): Promise<void> {
     // Badge is cosmetic; never block the app on it.
   }
 }
+
+type TapResponse = { notification: { request: { identifier: string; content: { data?: unknown } } } };
+const handledResponses = new Set<string>();
+
+/** Route for a notification tap, returned only the first time this notification is seen (cold-start reads and listener taps share the guard). */
+export function takeUnhandledResponseRoute(response: TapResponse | null | undefined): string | null {
+  const id = response?.notification?.request?.identifier;
+  if (typeof id !== "string") return null;
+  if (handledResponses.has(id)) return null;
+  handledResponses.add(id);
+  return routeForNotification(response?.notification.request.content.data);
+}
+
+export function __resetHandledResponsesForTests(): void {
+  handledResponses.clear();
+}

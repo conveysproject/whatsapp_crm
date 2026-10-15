@@ -9,6 +9,7 @@ export const colors = {
   border: "#E5E7EB",
   borderStrong: "#D1D5DB",
   surface: "#FFFFFF",
+  surfaceMuted: "#F9FAFB",
   background: "#F3F4F6",
   danger: "#B91C1C",
   dangerSoft: "#FEE2E2",
