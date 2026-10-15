@@ -1,14 +1,14 @@
-// apps/mobile/app/(app)/contact/[id].tsx
+// apps/mobile/app/(app)/contact/[id]/index.tsx
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronLeft, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { OptionSheet } from "../../../components/OptionSheet";
-import { ApiError } from "../../../lib/api";
-import { useApi } from "../../../lib/api-context";
-import { colors, font, radius, space } from "../../../lib/theme";
+import { OptionSheet } from "../../../../components/OptionSheet";
+import { ApiError } from "../../../../lib/api";
+import { useApi } from "../../../../lib/api-context";
+import { colors, font, radius, space } from "../../../../lib/theme";
 
 interface Contact {
   id: string; firstName: string | null; lastName: string | null; name: string | null; phoneNumber: string; email: string | null;
@@ -77,7 +77,7 @@ export default function ContactScreen() {
       <View style={styles.head}>
         <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={styles.icon}><ChevronLeft size={26} color={colors.text} /></Pressable>
         <Text style={styles.headTitle} accessibilityRole="header">Contact Details</Text>
-        <View style={styles.icon} />
+        <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/contact/[id]/edit", params: { id } })} style={styles.icon}><Text style={{ fontFamily: font.semibold, fontSize: 15, color: colors.brand }}>Edit</Text></Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
