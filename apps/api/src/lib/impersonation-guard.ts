@@ -107,7 +107,6 @@ export const BLOCKED_ROUTES: ReadonlySet<string> = new Set([
   "POST /v1/chatbots/:id/activate",
   "POST /v1/conversations/:id/assign",
   "POST /v1/conversations/:id/status",
-  "PATCH /v1/conversations/:id/assign",
   "POST /v1/messages/gaps/requeue",
   // Automation rules that fire customer-facing replies.
   "POST /v1/auto-replies",

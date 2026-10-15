@@ -1,5 +1,4 @@
 import type { FastifyPluginAsync } from "fastify";
-import type { ConversationId } from "@WBMSG/shared";
 
 interface RoutingRuleBody {
   name: string;
@@ -70,22 +69,4 @@ export const routingRouter: FastifyPluginAsync = async (fastify) => {
     await fastify.prisma.routingRule.delete({ where: { id: request.params.id } });
     return reply.status(204).send();
   });
-
-  fastify.patch<{ Params: { id: ConversationId }; Body: { assignedTo: string } }>(
-    "/conversations/:id/assign",
-    async (request, reply) => {
-      const { organizationId } = request.auth;
-      const conversation = await fastify.prisma.conversation.findFirst({
-        where: { id: request.params.id, organizationId },
-      });
-      if (!conversation) {
-        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
-      }
-      const updated = await fastify.prisma.conversation.update({
-        where: { id: request.params.id },
-        data: { assignedTo: request.body.assignedTo },
-      });
-      return reply.send({ data: updated });
-    }
-  );
 };
