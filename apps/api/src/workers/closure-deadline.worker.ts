@@ -3,6 +3,8 @@ import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
 import { computeClosureDeadline } from "../lib/closure-deadline.js";
 import { sendMail } from "../lib/mail.js";
+import { pushToUser } from "../lib/push.js";
+import { closureOverduePush } from "../lib/push-events.js";
 
 export const closureDeadlineQueue = new Queue("closure-deadline", { connection: redisConnection });
 closureDeadlineQueue.on("error", (err) => console.error(`[closure-deadline] queue error: ${err.message}`));
@@ -59,6 +61,7 @@ async function processClosureDeadlines(): Promise<void> {
           data: { contactId: c.id },
         },
       });
+      void pushToUser(prisma, org.id, userId, closureOverduePush({ contactLabel: label, contactId: c.id }));
       try {
         const user = await prisma.user.findFirst({ where: { id: userId, organizationId: org.id }, select: { email: true } });
         if (user?.email) {

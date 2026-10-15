@@ -6,7 +6,7 @@ import { invalidateAuthCache } from "../lib/auth-cache.js";
 export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/users", async (request) => {
     const users = await fastify.prisma.user.findMany({
-      where: { organizationId: request.auth.organizationId, isActive: true },
+      where: { organizationId: request.auth.organizationId, isActive: true, deletedAt: null },
       select: {
         id: true, email: true, fullName: true, role: true, mobileNumber: true, lastSignInAt: true, createdAt: true,
         memberships: {
@@ -109,8 +109,9 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Mobile Expo device token registration
-  fastify.post<{ Body: { token: string; platform?: string } }>(
+  // Mobile Expo push token registration. One row per device in user_devices; a token re-registered by
+  // another user (shared phone) moves to that user so the previous owner stops receiving pushes on it.
+  fastify.post<{ Body: { token: string; platform?: string; deviceId?: string } }>(
     "/users/device-token",
     {
       schema: {
@@ -120,18 +121,52 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
           properties: {
             token: { type: "string", minLength: 1, maxLength: 512 },
             platform: { type: "string", maxLength: 32 },
+            deviceId: { type: "string", maxLength: 128 },
           },
         },
       },
     },
     async (request, reply) => {
-      const { token, platform } = request.body;
-      await fastify.prisma.user.update({
-        where: { id: request.auth.userId },
-        data: { pushToken: token },
+      const { token, platform, deviceId } = request.body;
+      const existing = await fastify.prisma.userDevice.findFirst({ where: { deviceToken: token }, select: { id: true } });
+      if (existing) {
+        await fastify.prisma.userDevice.update({
+          where: { id: existing.id },
+          data: { userId: request.auth.userId, deviceType: platform ?? null, deviceId: deviceId ?? null },
+        });
+      } else {
+        await fastify.prisma.userDevice.create({
+          data: { userId: request.auth.userId, deviceToken: token, deviceType: platform ?? null, deviceId: deviceId ?? null },
+        });
+      }
+      // Phone handover: the previous owner's legacy pushToken must stop receiving pushes too.
+      await fastify.prisma.user.updateMany({
+        where: { pushToken: token, id: { not: request.auth.userId } },
+        data: { pushToken: null },
       });
-      void platform; // stored on User for now; no separate device table needed
       return reply.send({ data: { registered: true } });
+    }
+  );
+
+  // Sign-out / push turned off on this phone: remove the caller's own registration only.
+  fastify.delete<{ Body: { token: string } }>(
+    "/users/device-token",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["token"],
+          properties: { token: { type: "string", minLength: 1, maxLength: 512 } },
+        },
+      },
+    },
+    async (request, reply) => {
+      await fastify.prisma.userDevice.deleteMany({ where: { userId: request.auth.userId, deviceToken: request.body.token } });
+      await fastify.prisma.user.updateMany({
+        where: { id: request.auth.userId, pushToken: request.body.token },
+        data: { pushToken: null },
+      });
+      return reply.status(204).send();
     }
   );
 

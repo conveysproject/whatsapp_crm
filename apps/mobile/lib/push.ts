@@ -1,0 +1,124 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
+import * as Device from "expo-device";
+import * as Notifications from "expo-notifications";
+import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
+import type { Api } from "./api";
+
+const TOKEN_KEY = "wbmsg.pushToken";
+const PENDING_KEY = "wbmsg.pushTokenPending";
+// Not SecureStore: the iOS Keychain survives uninstall, and the flag must reset on reinstall.
+const askedKey = (userId: string) => `wbmsg.pushAsked.${userId}`;
+
+/** Where a tapped push should take the user. Contract with the API: data = { type, conversationId?, contactId? }. */
+export function routeForNotification(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const d = data as { type?: unknown; conversationId?: unknown; contactId?: unknown };
+  if ((d.type === "new_message" || d.type === "conversation_assigned") && typeof d.conversationId === "string") {
+    return `/conversation/${d.conversationId}`;
+  }
+  if (d.type === "closure_overdue" && typeof d.contactId === "string") return `/contact/${d.contactId}`;
+  return null;
+}
+
+/** Asks the OS only when needed. Null when not a real device, no EAS project id, or permission denied. */
+export async function getPushToken(): Promise<string | null> {
+  if (!Device.isDevice) return null;
+  const projectId: string | undefined =
+    Constants.expoConfig?.extra?.["eas"]?.projectId ?? (Constants as { easConfig?: { projectId?: string } }).easConfig?.projectId;
+  if (!projectId) return null;
+
+  // Android 13+ only shows the permission prompt once a notification channel exists.
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("default", { name: "Messages", importance: Notifications.AndroidImportance.HIGH });
+  }
+  const current = await Notifications.getPermissionsAsync();
+  const status = current.status === "granted" ? "granted" : (await Notifications.requestPermissionsAsync()).status;
+  if (status !== "granted") return null;
+  return (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+}
+
+export async function registerDevice(api: Api): Promise<string | null> {
+  const token = await getPushToken();
+  if (!token) return null;
+  await api("/users/device-token", { method: "POST", body: { token, platform: Platform.OS } });
+  await SecureStore.setItemAsync(TOKEN_KEY, token);
+  return token;
+}
+
+export async function unregisterDevice(api: Api): Promise<void> {
+  const token = await SecureStore.getItemAsync(TOKEN_KEY);
+  if (!token) return;
+  try {
+    await api("/users/device-token", { method: "DELETE", body: { token } });
+  } catch (e) {
+    // Keep it so the next signed-in user's session can claim and remove it (see flushPendingUnregister).
+    await SecureStore.setItemAsync(PENDING_KEY, token);
+    throw e;
+  } finally {
+    await SecureStore.deleteItemAsync(TOKEN_KEY);
+  }
+}
+
+/** Finishes a failed sign-out unregister: POST moves the token to the current caller (server clears it from every other user), then DELETE removes it. Never throws. */
+export async function flushPendingUnregister(api: Api): Promise<void> {
+  try {
+    const token = await SecureStore.getItemAsync(PENDING_KEY);
+    if (!token) return;
+    await api("/users/device-token", { method: "POST", body: { token, platform: Platform.OS } });
+    await api("/users/device-token", { method: "DELETE", body: { token } });
+    await SecureStore.deleteItemAsync(PENDING_KEY);
+  } catch {
+    // Keep the key; try again next launch.
+  }
+}
+
+/** Shared phones: remove this device from the user's push list first, then end the Clerk session even if offline. */
+export async function signOutAndUnregister(api: Api, signOut: () => Promise<unknown>): Promise<void> {
+  try {
+    await unregisterDevice(api);
+  } catch {
+    // Offline: the server prunes the token when Expo reports it dead, or when the next user registers this phone.
+  }
+  await signOut();
+  // Shared phone: don't leave this user's unread count on the OS icon.
+  try {
+    await Notifications.setBadgeCountAsync(0);
+  } catch {
+    // Cosmetic.
+  }
+}
+
+export async function shouldAskForPushPermission(userId: string): Promise<boolean> {
+  return (await AsyncStorage.getItem(askedKey(userId))) === null;
+}
+
+export async function markPushPermissionAsked(userId: string): Promise<void> {
+  await AsyncStorage.setItem(askedKey(userId), "1");
+}
+
+export async function refreshBadge(api: Api): Promise<void> {
+  try {
+    const { data } = await api<{ data: { count: number } }>("/conversations/unread-count");
+    await Notifications.setBadgeCountAsync(data.count);
+  } catch {
+    // Badge is cosmetic; never block the app on it.
+  }
+}
+
+type TapResponse = { notification: { request: { identifier: string; content: { data?: unknown } } } };
+const handledResponses = new Set<string>();
+
+/** Route for a notification tap, returned only the first time this notification is seen (cold-start reads and listener taps share the guard). */
+export function takeUnhandledResponseRoute(response: TapResponse | null | undefined): string | null {
+  const id = response?.notification?.request?.identifier;
+  if (typeof id !== "string") return null;
+  if (handledResponses.has(id)) return null;
+  handledResponses.add(id);
+  return routeForNotification(response?.notification.request.content.data);
+}
+
+export function __resetHandledResponsesForTests(): void {
+  handledResponses.clear();
+}

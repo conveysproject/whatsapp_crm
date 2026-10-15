@@ -1,7 +1,9 @@
 {
-  "extends": "@WBMSG/tsconfig/react-native.json",
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    "types": ["jest"],
+    "noUncheckedIndexedAccess": true
   },
-  "include": ["**/*.ts", "**/*.tsx"]
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
 }

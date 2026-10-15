@@ -1,3 +1,4 @@
+import { conversationAccessWhere } from "../lib/conversation-access.js";
 import type { FastifyPluginAsync } from "fastify";
 
 const LABEL_COLORS = [
@@ -44,7 +45,7 @@ export const inboxLabelsRouter: FastifyPluginAsync = async (fastify) => {
         });
       }
       const conversation = await fastify.prisma.conversation.findFirst({
-        where: { id: request.params.id, organizationId },
+        where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
         select: { id: true },
       });
       if (!conversation) {
@@ -69,7 +70,7 @@ export const inboxLabelsRouter: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { organizationId } = request.auth;
       const conversation = await fastify.prisma.conversation.findFirst({
-        where: { id: request.params.id, organizationId },
+        where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
         select: { id: true },
       });
       if (!conversation) {

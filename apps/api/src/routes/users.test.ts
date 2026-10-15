@@ -6,12 +6,13 @@ const { mockRedisDel } = vi.hoisted(() => ({ mockRedisDel: vi.fn().mockResolvedV
 vi.mock("../lib/redis.js", () => ({ redis: { del: mockRedisDel } }));
 
 const mockPrisma = {
-  user: { findMany: vi.fn(), update: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
+  user: { findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
   organizationMember: {
     findFirst: vi.fn(),
     update: vi.fn(),
     upsert: vi.fn(),
   },
+  userDevice: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
 };
 
 const mockAuth = { userId: "user-1", organizationId: "org-1", role: "admin" as const, permissions: {}, teamId: null as string | null, teamRole: null as "lead" | "member" | null };
@@ -190,5 +191,67 @@ describe("PATCH /v1/users/:id/team", () => {
     expect(res.statusCode).toBe(403);
     expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
     await noPermApp.close();
+  });
+});
+
+describe("device tokens", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("creates a UserDevice row for a new token", async () => {
+    mockPrisma.userDevice.findFirst.mockResolvedValue(null);
+    mockPrisma.userDevice.create.mockResolvedValue({ id: "d-1" });
+    const res = await app.inject({ method: "POST", url: "/v1/users/device-token", payload: { token: "ExponentPushToken[a]", platform: "ios", deviceId: "dev-1" } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.userDevice.create).toHaveBeenCalledWith({
+      data: { userId: "user-1", deviceToken: "ExponentPushToken[a]", deviceType: "ios", deviceId: "dev-1" },
+    });
+  });
+
+  it("moves an existing token to the signed-in user (phone handed over)", async () => {
+    mockPrisma.userDevice.findFirst.mockResolvedValue({ id: "d-1", userId: "someone-else" });
+    const res = await app.inject({ method: "POST", url: "/v1/users/device-token", payload: { token: "ExponentPushToken[a]" } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.userDevice.update).toHaveBeenCalledWith({
+      where: { id: "d-1" },
+      data: { userId: "user-1", deviceType: null, deviceId: null },
+    });
+    expect(mockPrisma.userDevice.create).not.toHaveBeenCalled();
+    expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+      where: { pushToken: "ExponentPushToken[a]", id: { not: "user-1" } },
+      data: { pushToken: null },
+    });
+  });
+
+  it("rejects a missing token", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/users/device-token", payload: {} });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("DELETE removes only the caller's own row", async () => {
+    mockPrisma.userDevice.deleteMany.mockResolvedValue({ count: 1 });
+    const res = await app.inject({ method: "DELETE", url: "/v1/users/device-token", payload: { token: "ExponentPushToken[a]" } });
+    expect(res.statusCode).toBe(204);
+    expect(mockPrisma.userDevice.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1", deviceToken: "ExponentPushToken[a]" } });
+    expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: "user-1", pushToken: "ExponentPushToken[a]" },
+      data: { pushToken: null },
+    });
+  });
+});
+
+describe("GET /v1/users", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("excludes inactive and soft-deleted users", async () => {
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    const res = await app.inject({ method: "GET", url: "/v1/users" });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { organizationId: "org-1", isActive: true, deletedAt: null } }),
+    );
   });
 });

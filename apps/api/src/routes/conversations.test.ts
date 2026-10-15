@@ -6,6 +6,9 @@ vi.mock("../lib/io-ref.js", () => ({
   getIo: vi.fn().mockReturnValue({ to: vi.fn().mockReturnValue({ emit: vi.fn() }) }),
 }));
 
+const { mockPushToUser, mockUnread } = vi.hoisted(() => ({ mockPushToUser: vi.fn().mockResolvedValue(undefined), mockUnread: vi.fn() }));
+vi.mock("../lib/push.js", () => ({ pushToUser: mockPushToUser, unreadChatCount: mockUnread }));
+
 const mockPrisma = {
   conversation: {
     findMany: vi.fn(),
@@ -14,11 +17,15 @@ const mockPrisma = {
   },
   message: {
     findMany: vi.fn(),
+    findFirst: vi.fn(),
     deleteMany: vi.fn(),
   },
   user: {
     findMany: vi.fn().mockResolvedValue([]),
+    findFirst: vi.fn(),
   },
+  notification: { create: vi.fn() },
+  flow: { findMany: vi.fn().mockResolvedValue([]) },
   team: {
     findFirst: vi.fn().mockResolvedValue(null),
   },
@@ -44,6 +51,8 @@ async function buildApp(): Promise<FastifyInstance> {
   return app;
 }
 
+const mockAuthOverride = { permissions: { inbox_access: "allow" } as Record<string, string> };
+
 async function buildAppAsAgent(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorate("prisma", mockPrisma as unknown as PrismaClient);
@@ -52,7 +61,7 @@ async function buildAppAsAgent(): Promise<FastifyInstance> {
       userId: "agent-1",
       organizationId: "org-1",
       role: "agent" as const,
-      permissions: { inbox_access: "allow" },
+      permissions: mockAuthOverride.permissions,
       teamId: null as string | null,
       teamRole: null as "lead" | "member" | null,
     };
@@ -160,6 +169,7 @@ describe("POST /v1/conversations/:id/assign", () => {
   afterEach(async () => { await app.close(); });
 
   it("assigns conversation to agent", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "user-2" });
     mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1" });
     mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", assignedTo: "user-2" });
     const res = await app.inject({
@@ -433,5 +443,191 @@ describe("impersonated (edit mode) side-effect suppression", () => {
     expect((await app.inject({ method: "GET", url: "/v1/conversations/conv-1/messages" })).statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: "/v1/conversations" })).statusCode).toBe(200);
     expect(mockPrisma.conversation.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /v1/conversations/:id/assign — assignee validation and push", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns 404 and creates nothing when the assignee is not an active user of this org", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1", whatsappContactId: null });
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "POST", url: "/v1/conversations/conv-1/assign", payload: { assignedTo: "user-from-other-org" } });
+    expect(res.statusCode).toBe(404);
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+      where: { id: "user-from-other-org", organizationId: "org-1", isActive: true, deletedAt: null },
+      select: { id: true },
+    });
+    expect(mockPrisma.conversation.update).not.toHaveBeenCalled();
+    expect(mockPrisma.notification.create).not.toHaveBeenCalled();
+    expect(mockPushToUser).not.toHaveBeenCalled();
+  });
+
+  it("pushes to the assignee with the conversation id", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1", whatsappContactId: null });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "user-2" });
+    mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", assignedTo: "user-2" });
+    const res = await app.inject({ method: "POST", url: "/v1/conversations/conv-1/assign", payload: { assignedTo: "user-2" } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPushToUser).toHaveBeenCalledWith(expect.anything(), "org-1", "user-2", {
+      title: "Conversation assigned to you",
+      body: "A conversation has been assigned to you",
+      data: { type: "conversation_assigned", conversationId: "conv-1" },
+    });
+  });
+
+  it("does not push when assigning to yourself", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1", whatsappContactId: null });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "user-1" });
+    mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", assignedTo: "user-1" });
+    const res = await app.inject({ method: "POST", url: "/v1/conversations/conv-1/assign", payload: { assignedTo: "user-1" } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPushToUser).not.toHaveBeenCalled();
+  });
+
+  it("does not push to yourself and allows unassigning (null)", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1", whatsappContactId: null });
+    mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", assignedTo: null });
+    const res = await app.inject({ method: "POST", url: "/v1/conversations/conv-1/assign", payload: { assignedTo: null } });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+    expect(mockPushToUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /v1/conversations/unread-count", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("returns the caller's unread assigned chat count", async () => {
+    mockUnread.mockResolvedValue(4);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/unread-count" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ data: { count: 4 } });
+    expect(mockUnread).toHaveBeenCalledWith(expect.anything(), "org-1", "user-1");
+  });
+});
+
+describe("GET /v1/conversations/:id", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  afterEach(async () => { await app.close(); });
+
+  const row = {
+    id: "conv-1", organizationId: "org-1", status: "open", assignedTo: "user-1", unreadCount: 2,
+    lastInboundAt: new Date(Date.now() - 60 * 60 * 1000), lastMessageAt: new Date(),
+    contact: { id: "ct-1", firstName: "Priya", lastName: "Shah", phoneNumber: "447700900123", tags: [] },
+    messages: [{ id: "m-1", body: "Hi", direction: "inbound", contentType: "text" }],
+    conversationLabel: { inboxLabel: { id: "l-1", name: "Appointment", color: "#2563eb" } },
+  };
+
+  it("returns one conversation in the list-item shape with serviceWindowActive", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(row);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/conv-1" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Record<string, unknown> }>().data;
+    expect(body["id"]).toBe("conv-1");
+    expect(body["serviceWindowActive"]).toBe(true);
+    expect(body["lastMessage"]).toEqual({ id: "m-1", body: "Hi", direction: "inbound", contentType: "text" });
+    expect(body["label"]).toEqual({ id: "l-1", name: "Appointment", color: "#2563eb" });
+    expect(body["messages"]).toBeUndefined();
+    expect(body["conversationLabel"]).toBeUndefined();
+    const where = mockPrisma.conversation.findFirst.mock.calls[0][0].where;
+    expect(where).toMatchObject({ id: "conv-1", organizationId: "org-1" });
+  });
+
+  it("marks the window closed after 24 hours", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ ...row, lastInboundAt: new Date(Date.now() - 25 * 60 * 60 * 1000) });
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/conv-1" });
+    expect(res.json<{ data: { serviceWindowActive: boolean } }>().data.serviceWindowActive).toBe(false);
+  });
+
+  it("returns 404 when the conversation is not visible to the caller", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/conv-x" });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("GET /v1/conversations/:id with assigned_chats_only", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildAppAsAgent(); });
+  afterEach(async () => { await app.close(); mockAuthOverride.permissions = { inbox_access: "allow" }; });
+
+  it("only finds conversations assigned to the caller when assigned_chats_only is allowed", async () => {
+    mockAuthOverride.permissions = { inbox_access: "allow", assigned_chats_only: "allow" };
+    mockPrisma.conversation.findFirst.mockResolvedValue(null);
+    await app.inject({ method: "GET", url: "/v1/conversations/conv-1" });
+    expect(mockPrisma.conversation.findFirst.mock.calls[0][0].where).toMatchObject({ assignedTo: "agent-1" });
+  });
+});
+
+describe("GET /v1/conversations/:id/messages keyset paging", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1" }); });
+  afterEach(async () => { await app.close(); });
+
+  it("nextCursor is the oldest message of the page", async () => {
+    mockPrisma.message.findMany.mockResolvedValue([{ id: "c" }, { id: "b" }, { id: "a" }]);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/conv-1/messages?limit=2" });
+    const body = res.json<{ data: { id: string }[]; pagination: { hasMore: boolean; nextCursor: string | null } }>();
+    expect(body.data.map((m) => m.id)).toEqual(["b", "c"]);
+    expect(body.pagination).toEqual({ hasMore: true, nextCursor: "b" });
+  });
+
+  it("filters by sentAt/id keyset from the cursor message, scoped to conversation and org", async () => {
+    const sentAt = new Date("2026-05-01T10:00:00Z");
+    mockPrisma.message.findFirst.mockResolvedValue({ id: "m-9", sentAt });
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/conv-1/messages?cursor=m-9" });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.message.findFirst.mock.calls[0][0].where).toEqual({ id: "m-9", conversationId: "conv-1", organizationId: "org-1" });
+    const args = mockPrisma.message.findMany.mock.calls[0][0];
+    expect(args.where.OR).toEqual([{ sentAt: { lt: sentAt } }, { sentAt, id: { lt: "m-9" } }]);
+    expect(args.orderBy).toEqual([{ sentAt: "desc" }, { id: "desc" }]);
+  });
+
+  it("returns 400 INVALID_CURSOR for an unknown cursor", async () => {
+    mockPrisma.message.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/conv-1/messages?cursor=nope" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_CURSOR");
+  });
+});
+
+describe("assigned_chats_only on conversation-by-id routes", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildAppAsAgent(); });
+  afterEach(async () => { await app.close(); mockAuthOverride.permissions = { inbox_access: "allow" }; });
+
+  const cases: Array<[string, string, string, unknown?]> = [
+    ["GET", "/v1/conversations/conv-1/messages", "messages"],
+    ["DELETE", "/v1/conversations/conv-1/history", "history"],
+    ["POST", "/v1/conversations/conv-1/status", "status", { status: "open" }],
+    ["POST", "/v1/conversations/conv-1/assign", "assign", { assignedTo: null }],
+    ["POST", "/v1/conversations/conv-1/read", "read"],
+    ["POST", "/v1/conversations/conv-1/typing", "typing", { isTyping: true }],
+    ["POST", "/v1/conversations/conv-1/summarize", "summarize"],
+  ];
+  for (const [method, url, name, payload] of cases) {
+    it(`${name}: 404 when not assigned to the agent`, async () => {
+      mockAuthOverride.permissions = { inbox_access: "allow", assigned_chats_only: "allow" };
+      mockPrisma.conversation.findFirst.mockResolvedValue(null);
+      const res = await app.inject({ method: method as "GET", url, payload: payload as object | undefined });
+      expect(res.statusCode).toBe(404);
+      expect(mockPrisma.conversation.findFirst.mock.calls[0][0].where).toMatchObject({ id: "conv-1", organizationId: "org-1", assignedTo: "agent-1" });
+    });
+  }
+
+  it("messages: clamps NaN/negative limit to a sane value", async () => {
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1" });
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    await app.inject({ method: "GET", url: "/v1/conversations/conv-1/messages?limit=abc" });
+    await app.inject({ method: "GET", url: "/v1/conversations/conv-1/messages?limit=-5" });
+    expect(mockPrisma.message.findMany.mock.calls[0][0].take).toBe(51);
+    expect(mockPrisma.message.findMany.mock.calls[1][0].take).toBe(2);
   });
 });

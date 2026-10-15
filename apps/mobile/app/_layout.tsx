@@ -1,64 +1,61 @@
-import * as Notifications from "expo-notifications";
 import { ClerkProvider, useAuth } from "@clerk/expo";
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, useFonts } from "@expo-google-fonts/inter";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { Slot } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import { Slot, useRouter, useSegments } from "expo-router";
-import { useEffect } from "react";
+import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
+import { useEffect, useState } from "react";
+import { Text, View } from "react-native";
+import { ApiProvider } from "../lib/api-context";
+import { config } from "../lib/config";
+import { missingConfig } from "../lib/config-check";
+import { useResetOnUserChange } from "../lib/use-reset-on-user-change";
+
+const configProblems = missingConfig();
+if (__DEV__ && configProblems.length) console.warn(`Missing config: ${configProblems.join(", ")}`);
+
+void SplashScreen.preventAutoHideAsync();
 
 const tokenCache = {
-  async getToken(key: string) {
-    return SecureStore.getItemAsync(key);
-  },
-  async saveToken(key: string, value: string) {
-    return SecureStore.setItemAsync(key, value);
-  },
+  getToken: (key: string) => SecureStore.getItemAsync(key),
+  saveToken: (key: string, value: string) => SecureStore.setItemAsync(key, value),
 };
 
-function AuthGuard() {
-  const { isLoaded, isSignedIn } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    const inAuth = segments[0] === "(auth)";
-    if (!isSignedIn && !inAuth) router.replace("/(auth)/sign-in");
-    if (isSignedIn && inAuth) router.replace("/(tabs)");
-  }, [isLoaded, isSignedIn, segments, router]);
-
-  return <Slot />;
+/** Drops all cached server data when the signed-in Clerk user changes, so one user's data never shows to the next. */
+function UserChangeReset() {
+  const { userId } = useAuth();
+  const queryClient = useQueryClient();
+  useResetOnUserChange(userId, () => queryClient.clear());
+  return null;
 }
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
-
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
+  const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, retry: 1 } } }));
+
   useEffect(() => {
-    async function registerForPush() {
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== "granted") return;
-      const token = await Notifications.getExpoPushTokenAsync();
-      await fetch(`${process.env["EXPO_PUBLIC_API_URL"] ?? "http://localhost:4000"}/v1/users/push-token`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: token.data, platform: "expo" }),
-      });
-    }
-    registerForPush();
-  }, []);
+    if (fontsLoaded || fontError) void SplashScreen.hideAsync();
+  }, [fontsLoaded, fontError]);
+  if (!fontsLoaded && !fontError) return null;
+
+  if (!__DEV__ && configProblems.length) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <Text style={{ fontSize: 16, textAlign: "center" }}>This build is missing configuration: {configProblems.join(", ")}</Text>
+      </View>
+    );
+  }
 
   return (
-    <ClerkProvider
-      publishableKey={process.env["EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY"]!}
-      tokenCache={tokenCache}
-    >
-      <AuthGuard />
+    <ClerkProvider publishableKey={config.clerkPublishableKey} tokenCache={tokenCache}>
+      <QueryClientProvider client={queryClient}>
+        <ApiProvider>
+          <UserChangeReset />
+          <StatusBar style="dark" />
+          <Slot />
+        </ApiProvider>
+      </QueryClientProvider>
     </ClerkProvider>
   );
 }
