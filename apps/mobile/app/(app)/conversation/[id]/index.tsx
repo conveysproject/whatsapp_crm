@@ -42,15 +42,16 @@ export default function ChatScreen() {
     return () => { if (getActiveConversation() === id) setActiveConversation(null); };
   }, [id]));
 
+  const hasConversation = !!conv.data;
   useEffect(() => {
-    if (!conv.data) return;
+    if (!hasConversation) return;
     void api(`/conversations/${id}/read`, { method: "POST" })
       .then(() => {
         void qc.invalidateQueries({ queryKey: ["unread-count"] });
         void qc.invalidateQueries({ queryKey: ["conversations", "list"] });
       })
       .catch(() => undefined);
-  }, [api, id, qc, conv.data, newestInboundId]);
+  }, [api, id, qc, hasConversation, newestInboundId]);
 
   const setStatus = useMutation({
     mutationFn: (status: ConversationStatus) => api(`/conversations/${id}/status`, { method: "POST", body: { status } }),
@@ -78,7 +79,7 @@ export default function ChatScreen() {
   }
 
   if (conv.isLoading) return <View style={styles.center}><ActivityIndicator color={colors.brand} /></View>;
-  if (conv.error) {
+  if (conv.error && !conv.data) {
     const noAccess = conv.error instanceof ApiError && conv.error.status === 404;
     return (
       <SafeAreaView style={styles.center}>
@@ -90,7 +91,8 @@ export default function ChatScreen() {
       </SafeAreaView>
     );
   }
-  const c = conv.data!;
+  if (!conv.data) return null;
+  const c = conv.data;
   const assigneeName = c.assignedTo === null ? "Unassigned" : c.assignedTo === me.id ? "You" : users.data?.data.find((u) => u.id === c.assignedTo)?.fullName ?? "Assigned";
   const hours = windowHoursLeft(c.lastInboundAt, Date.now());
 

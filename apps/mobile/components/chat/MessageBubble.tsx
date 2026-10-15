@@ -11,14 +11,18 @@ function Ticks({ status }: { status: ChatMessage["status"] }) {
   return <Check size={14} color={colors.textSubtle} />;
 }
 
+const STATUS_WORD: Record<ChatMessage["status"], string> = { sending: "sending", sent: "sent", delivered: "delivered", read: "read", failed: "not delivered", expired: "not delivered", aborted: "not delivered" };
+
 export function MessageBubble({ m }: { m: ChatMessage }) {
   if (m.isSystemMessage) return null;
   const out = m.direction === "outbound";
   const isMedia = !m.body && m.contentType !== "text";
   const time = new Date(m.sentAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const text = isMedia ? `[${previewText(m)}]` : m.body;
+  const label = `${out ? "You" : "Customer"}: ${text}, ${time}${out ? `, ${STATUS_WORD[m.status] ?? m.status}` : ""}`;
   return (
     <View style={[styles.wrap, out ? styles.right : styles.left]}>
-      <View style={[styles.bubble, out ? styles.out : styles.in]}>
+      <View accessible accessibilityLabel={label} style={[styles.bubble, out ? styles.out : styles.in]}>
         {out && m.senderName ? <Text style={styles.sender}>{m.senderName}</Text> : null}
         {m.contentType === "template" ? <Text style={styles.kind}>Template</Text> : null}
         <Text style={[styles.text, isMedia && styles.media]}>{isMedia ? `[${previewText(m)}]` : m.body}</Text>

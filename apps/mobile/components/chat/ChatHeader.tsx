@@ -20,20 +20,20 @@ export function ChatHeader(props: {
     <View style={styles.wrap}>
       <View style={styles.top}>
         <Pressable accessibilityRole="button" accessibilityLabel="Back to inbox" onPress={props.onBack} style={styles.icon}><ChevronLeft size={26} color={colors.text} /></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Contact details" onPress={props.onContact} style={styles.who}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Contact details" onPress={props.onContact} disabled={!c.contact} accessibilityState={{ disabled: !c.contact }} style={styles.who}>
           <Text style={styles.name} numberOfLines={1}>{contactName(c.contact)}</Text>
           <Text style={styles.sub} numberOfLines={1}>{c.contact?.phoneNumber ?? ""}</Text>
         </Pressable>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Status ${STATUS_LABEL[c.status]}, change`} onPress={props.onStatus} style={styles.pill}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Status ${STATUS_LABEL[c.status]}, change`} onPress={props.onStatus} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }} style={styles.pill}>
           <View style={[styles.dot, { backgroundColor: STATUS_DOT[c.status] }]} />
           <Text style={styles.pillText}>{STATUS_LABEL[c.status]}</Text><ChevronDown size={12} color={colors.text} />
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Assigned to ${props.assigneeName}, change`} onPress={props.onAssign} style={styles.pill}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Assigned to ${props.assigneeName}, change`} onPress={props.onAssign} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }} style={styles.pill}>
           <Text style={styles.pillText}>Assigned: {props.assigneeName}</Text><ChevronDown size={12} color={colors.text} />
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={c.label ? `Label ${c.label.name}, change` : "Add label"} onPress={props.onLabel} style={styles.pill}>
+        <Pressable accessibilityRole="button" accessibilityLabel={c.label ? `Label ${c.label.name}, change` : "Add label"} onPress={props.onLabel} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }} style={styles.pill}>
           <Text style={styles.pillText}>{c.label ? c.label.name : "Add label"}</Text><ChevronDown size={12} color={colors.text} />
         </Pressable>
       </ScrollView>
