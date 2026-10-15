@@ -5,7 +5,7 @@ import { useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useApi } from "../../../lib/api-context";
-import { contactSaveError } from "../../../lib/dashboard";
+import { contactSaveError, isValidWhatsAppNumber } from "../../../lib/dashboard";
 import { colors, font, radius, space } from "../../../lib/theme";
 
 export default function NewContactScreen() {
@@ -29,7 +29,7 @@ export default function NewContactScreen() {
     onSuccess: (r) => { void qc.invalidateQueries({ queryKey: ["contacts"] }); router.replace({ pathname: "/contact/[id]", params: { id: r.data.id } }); },
     onError: (e) => setError(contactSaveError(e)),
   });
-  const canSave = form.phoneNumber.replace(/\D/g, "").length >= 6 && !save.isPending;
+  const canSave = isValidWhatsAppNumber(form.phoneNumber) && !save.isPending;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -46,7 +46,8 @@ export default function NewContactScreen() {
           {([["firstName", "First name", "default"], ["lastName", "Last name", "default"], ["phoneNumber", "WhatsApp number (with country code)", "phone-pad"], ["email", "Email", "email-address"]] as const).map(([k, label, kb]) => (
             <View key={k} style={styles.field}>
               <Text style={styles.label}>{label}</Text>
-              <TextInput value={form[k]} onChangeText={set(k)} accessibilityLabel={label} keyboardType={kb} autoCapitalize={k === "email" ? "none" : "words"} placeholder={k === "phoneNumber" ? "+44 7700 900123" : undefined} style={styles.input} />
+              <TextInput value={form[k]} onChangeText={set(k)} accessibilityLabel={label} keyboardType={kb} autoCapitalize={k === "email" ? "none" : "words"} placeholder={k === "phoneNumber" ? "+44 7912 345678" : undefined} style={styles.input} />
+              {k === "phoneNumber" && form.phoneNumber.trim() && !isValidWhatsAppNumber(form.phoneNumber) ? <Text style={styles.error}>Include the country code, e.g. +44 7912 345678</Text> : null}
             </View>
           ))}
           <Text style={styles.hint}>Groups, tags and custom fields can be added on the contact after saving, or on the web dashboard.</Text>

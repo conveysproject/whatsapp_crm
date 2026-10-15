@@ -1,3 +1,4 @@
+import { isValidPhoneNumber } from "libphonenumber-js";
 import { ApiError } from "./api";
 
 export type Range = "today" | "7d" | "30d";
@@ -77,4 +78,15 @@ export function contactSaveError(err: unknown): string {
     if (err.status === 400 && err.message) return err.message;
   }
   return "Couldn't save. Check your connection and try again.";
+}
+
+/** True when the input (any formatting) is a valid international number including country code. */
+export function isValidWhatsAppNumber(input: string): boolean {
+  const digits = input.replace(/\D/g, "");
+  if (!digits) return false;
+  try {
+    return isValidPhoneNumber("+" + digits);
+  } catch {
+    return false;
+  }
 }

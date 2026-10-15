@@ -1,11 +1,11 @@
 // apps/mobile/app/(app)/contact/[id]/edit.tsx
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useApi } from "../../../../lib/api-context";
-import { contactSaveError } from "../../../../lib/dashboard";
+import { contactSaveError, isForbidden } from "../../../../lib/dashboard";
 import { colors, font, radius, space } from "../../../../lib/theme";
 
 export default function EditContactScreen() {
@@ -16,9 +16,10 @@ export default function EditContactScreen() {
   const contact = useQuery({ queryKey: ["contacts", "detail", id], queryFn: async () => (await api<{ data: { firstName: string | null; lastName: string | null; email: string | null } }>(`/contacts/${id}`)).data });
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "" });
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (contact.data) setForm({ firstName: contact.data.firstName ?? "", lastName: contact.data.lastName ?? "", email: contact.data.email ?? "" }); }, [contact.data]);
+  const seeded = useRef(false);
+  useEffect(() => { if (contact.data && !seeded.current) { seeded.current = true; setForm({ firstName: contact.data.firstName ?? "", lastName: contact.data.lastName ?? "", email: contact.data.email ?? "" }); } }, [contact.data]);
   const save = useMutation({
-    mutationFn: () => api(`/contacts/${id}`, { method: "PATCH", body: { firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim() || null } }),
+    mutationFn: () => api(`/contacts/${id}`, { method: "PATCH", body: { firstName: form.firstName.trim() || null, lastName: form.lastName.trim() || null, email: form.email.trim() || null } }),
     onMutate: () => setError(null),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["contacts"] }); void qc.invalidateQueries({ queryKey: ["conversations"] }); router.back(); },
     onError: (e) => setError(contactSaveError(e)),
@@ -33,7 +34,12 @@ export default function EditContactScreen() {
           {save.isPending ? <ActivityIndicator color={colors.brand} /> : <Text style={styles.save}>Save</Text>}
         </Pressable>
       </View>
-      {contact.isLoading ? <ActivityIndicator color={colors.brand} /> : (
+      {contact.isLoading ? <ActivityIndicator color={colors.brand} /> : contact.isError ? (
+        <View style={styles.body}>
+          <Text style={styles.error} accessibilityRole="alert">{isForbidden(contact.error) || (contact.error as { status?: number }).status === 404 ? "You don't have access to this contact." : "Couldn't load this contact."}</Text>
+          <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.side}><Text style={styles.save}>Back</Text></Pressable>
+        </View>
+      ) : (
         <View style={styles.body}>
           {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
           {([["firstName", "First name"], ["lastName", "Last name"], ["email", "Email"]] as const).map(([k, label]) => (

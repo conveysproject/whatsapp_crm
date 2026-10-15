@@ -85,7 +85,7 @@ export default function ContactsScreen() {
           ListFooterComponent={list.isFetchingNextPage ? <ActivityIndicator color={colors.brand} /> : <View style={{ height: 96 }} />}
         />
       )}
-      <Pressable accessibilityRole="button" accessibilityLabel="New contact" onPress={() => router.push("/contact/new")} style={styles.fab}><Plus size={24} color="#FFFFFF" /></Pressable>
+      {isForbidden(list.error) ? null : <Pressable accessibilityRole="button" accessibilityLabel="New contact" onPress={() => router.push("/contact/new")} style={styles.fab}><Plus size={24} color="#FFFFFF" /></Pressable>}
       <OptionSheet
         visible={sheet === "tag"}
         title="Filter by tag"

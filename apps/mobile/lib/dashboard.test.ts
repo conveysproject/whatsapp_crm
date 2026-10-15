@@ -1,5 +1,5 @@
 import { ApiError } from "./api";
-import { attentionRoute, contactSaveError, deltaText, formatCount, formatDuration, isForbidden, pct, standingBanner } from "./dashboard";
+import { attentionRoute, contactSaveError, isValidWhatsAppNumber, deltaText, formatCount, formatDuration, isForbidden, pct, standingBanner } from "./dashboard";
 
 describe("formatting", () => {
   it("formats counts with grouping and blanks", () => {
@@ -78,5 +78,17 @@ describe("errors", () => {
     expect(contactSaveError(new ApiError(403, "FORBIDDEN", "x"))).toBe("You don't have permission to add or edit contacts.");
     expect(contactSaveError(new ApiError(400, "INVALID_PHONE", "Phone number is invalid"))).toBe("Phone number is invalid");
     expect(contactSaveError(new TypeError("Network request failed"))).toBe("Couldn't save. Check your connection and try again.");
+  });
+});
+
+describe("isValidWhatsAppNumber", () => {
+  it("accepts numbers with a country code in any formatting", () => {
+    expect(isValidWhatsAppNumber("+44 7912 345678")).toBe(true);
+    expect(isValidWhatsAppNumber("447912345678")).toBe(true);
+    expect(isValidWhatsAppNumber("+1 202 555 0123")).toBe(true);
+  });
+  it("rejects national-format and empty input", () => {
+    expect(isValidWhatsAppNumber("7912345678")).toBe(false);
+    expect(isValidWhatsAppNumber("")).toBe(false);
   });
 });
