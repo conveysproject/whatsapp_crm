@@ -1,11 +1,13 @@
 import { useAuth } from "@clerk/expo";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Redirect, Stack } from "expo-router";
+import * as Notifications from "expo-notifications";
+import { Redirect, Stack, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from "react-native";
 import { useApi } from "../../lib/api-context";
 import { config } from "../../lib/config";
 import { MeProvider } from "../../lib/me-context";
+import { refreshBadge, registerDevice, routeForNotification, shouldAskForPushPermission } from "../../lib/push";
 import { connectRealtime, isForegroundRefreshable, queryKeysFor } from "../../lib/realtime";
 import { resolveGate } from "../../lib/session-gate";
 import { colors, font, radius, space } from "../../lib/theme";
@@ -69,6 +71,37 @@ function RealtimeBridge() {
   return null;
 }
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: true }),
+});
+
+function PushBridge() {
+  const api = useApi();
+  const router = useRouter();
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status === "granted") await registerDevice(api).catch(() => null);
+      else if (status === "undetermined" && (await shouldAskForPushPermission()) && !cancelled) router.push("/push-permission");
+      await refreshBadge(api);
+      const last = await Notifications.getLastNotificationResponseAsync();
+      const route = routeForNotification(last?.notification.request.content.data);
+      if (route && !cancelled) router.push(route as never);
+    })();
+
+    const tap = Notifications.addNotificationResponseReceivedListener((response) => {
+      const route = routeForNotification(response.notification.request.content.data);
+      if (route) router.push(route as never);
+    });
+    const fg = AppState.addEventListener("change", (state) => { if (state === "active") void refreshBadge(api); });
+    return () => { cancelled = true; tap.remove(); fg.remove(); };
+  }, [api, router]);
+
+  return null;
+}
+
 export default function AppLayout() {
   const { isLoaded, isSignedIn, userId, signOut } = useAuth();
   const api = useApi();
@@ -96,6 +129,7 @@ export default function AppLayout() {
       return (
         <MeProvider me={gate.data.me}>
           <RealtimeBridge />
+          <PushBridge />
           <Stack screenOptions={{ headerShown: false }} />
         </MeProvider>
       );
