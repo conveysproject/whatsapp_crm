@@ -11,14 +11,15 @@ describe("statusStyle", () => {
 });
 
 describe("availableActions", () => {
-  it("running → pause and abort; paused → resume and abort", () => {
+  it("running -> pause and abort; paused -> resume only", () => {
     expect(availableActions("running", stats({}))).toEqual(["pause", "abort"]);
-    expect(availableActions("paused", stats({}))).toEqual(["resume", "abort"]);
+    expect(availableActions("paused", stats({}))).toEqual(["resume"]);
   });
-  it("offers retry when messages failed and the campaign isn't aborted", () => {
+  it("offers retry whenever messages failed and the campaign isn't running", () => {
     expect(availableActions("completed", stats({ failed: 3 }))).toEqual(["retry"]);
-    expect(availableActions("running", stats({ failed: 1 }))).toEqual(["pause", "abort", "retry"]);
-    expect(availableActions("aborted", stats({ failed: 2 }))).toEqual([]);
+    expect(availableActions("running", stats({ failed: 1 }))).toEqual(["pause", "abort"]);
+    expect(availableActions("paused", stats({ failed: 1 }))).toEqual(["resume", "retry"]);
+    expect(availableActions("aborted", stats({ failed: 2 }))).toEqual(["retry"]);
     expect(availableActions("completed", null)).toEqual([]);
   });
 });

@@ -20,8 +20,8 @@ export function statusStyle(s: DisplayStatus): { label: string; bg: string; fg: 
 export function availableActions(s: DisplayStatus, stats: CampaignStats | null): ("pause" | "resume" | "abort" | "retry")[] {
   const out: ("pause" | "resume" | "abort" | "retry")[] = [];
   if (s === "running") out.push("pause", "abort");
-  if (s === "paused") out.push("resume", "abort");
-  if (stats && stats.failed > 0 && s !== "aborted" && s !== "cancelled") out.push("retry");
+  if (s === "paused") out.push("resume");
+  if (stats && stats.failed > 0 && s !== "running") out.push("retry");
   return out;
 }
 

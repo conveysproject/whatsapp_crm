@@ -19,13 +19,14 @@ export default function CampaignDetailScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const campaign = useQuery({ queryKey: ["campaigns", "detail", id], queryFn: async () => (await api<{ data: Campaign }>(`/campaigns/${id}`)).data });
   const report = useQuery({ queryKey: ["campaigns", "report", id], queryFn: async () => (await api<{ data: { stats: CampaignStats } }>(`/campaigns/${id}/report`)).data.stats });
 
   const act = useMutation({
     mutationFn: (a: keyof typeof ACTION_PATH) => api(`/campaigns/${id}/${ACTION_PATH[a]}`, { method: "POST" }),
     onMutate: () => setError(null),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["campaigns"] }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["campaigns"] }); void qc.invalidateQueries({ queryKey: ["dashboard"] }); },
     onError: (e) => setError(isForbidden(e) ? "You don't have permission to pause, resume or abort campaigns." : "Couldn't update the campaign. Try again."),
   });
 
@@ -42,6 +43,7 @@ export default function CampaignDetailScreen() {
     return (
       <SafeAreaView style={styles.center}>
         <Text style={styles.stateTitle}>{isForbidden(campaign.error) ? "Campaigns aren't available for your role" : "Couldn't load this campaign"}</Text>
+        {isForbidden(campaign.error) ? null : <Pressable accessibilityRole="button" onPress={() => void campaign.refetch()} style={styles.primary}><Text style={styles.primaryText}>Try again</Text></Pressable>}
         <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.primary}><Text style={styles.primaryText}>Back</Text></Pressable>
       </SafeAreaView>
     );
@@ -59,7 +61,7 @@ export default function CampaignDetailScreen() {
         <Text style={styles.headTitle} accessibilityRole="header">Campaign</Text>
         <View style={styles.icon} />
       </View>
-      <ScrollView contentContainerStyle={styles.body} refreshControl={<RefreshControl refreshing={report.isRefetching} onRefresh={() => { void campaign.refetch(); void report.refetch(); }} tintColor={colors.brand} />}>
+      <ScrollView contentContainerStyle={styles.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void Promise.allSettled([campaign.refetch(), report.refetch()]).then(() => setRefreshing(false)); }} tintColor={colors.brand} />}>
         <Text style={[styles.chip, { backgroundColor: st.bg, color: st.fg }]}>{st.label}</Text>
         <Text style={styles.name}>{c.name}</Text>
         {p ? (
