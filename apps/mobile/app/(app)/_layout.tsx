@@ -1,7 +1,7 @@
 import { useAuth } from "@clerk/expo";
 import { useQuery } from "@tanstack/react-query";
 import { Redirect, Stack } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useApi } from "../../lib/api-context";
 import { MeProvider } from "../../lib/me-context";
@@ -11,6 +11,14 @@ import { colors, font, radius, space } from "../../lib/theme";
 function Message({ title, body, action, onAction, failure }: { title: string; body: string; action: string; onAction: () => Promise<void>; failure?: string }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   async function run() {
     setBusy(true);
@@ -18,8 +26,10 @@ function Message({ title, body, action, onAction, failure }: { title: string; bo
     try {
       await onAction();
     } catch {
-      setFailed(true);
-      setBusy(false);
+      if (mounted.current) setFailed(true);
+    } finally {
+      // Always re-enable, including when onAction resolves without throwing (e.g. refetch returning an error state).
+      if (mounted.current) setBusy(false);
     }
   }
 
