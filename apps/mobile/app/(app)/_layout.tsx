@@ -6,7 +6,7 @@ import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from "
 import { useApi } from "../../lib/api-context";
 import { config } from "../../lib/config";
 import { MeProvider } from "../../lib/me-context";
-import { connectRealtime, queryKeysFor } from "../../lib/realtime";
+import { connectRealtime, isForegroundRefreshable, queryKeysFor } from "../../lib/realtime";
 import { resolveGate } from "../../lib/session-gate";
 import { colors, font, radius, space } from "../../lib/theme";
 
@@ -61,7 +61,7 @@ function RealtimeBridge() {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         rt.ensureConnected();
-        void queryClient.invalidateQueries();
+        void queryClient.invalidateQueries({ predicate: (q) => isForegroundRefreshable(q.queryKey) });
       }
     });
     return () => { sub.remove(); rt.disconnect(); };

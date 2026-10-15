@@ -1,5 +1,5 @@
 // apps/mobile/lib/realtime.test.ts
-import { connectRealtime, queryKeysFor } from "./realtime";
+import { connectRealtime, isForegroundRefreshable, queryKeysFor } from "./realtime";
 
 type Handler = (...args: unknown[]) => void;
 const mockHandlers: Record<string, Handler[]> = {};
@@ -81,5 +81,14 @@ describe("connectRealtime", () => {
     mockHandlers["connect_error"]?.[0]?.(new Error("unauthorized"));
     jest.advanceTimersByTime(60_000);
     expect(mockSocket.connect).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("isForegroundRefreshable", () => {
+  it("keeps the session gate out of the foreground refresh", () => {
+    expect(isForegroundRefreshable(["gate", "u-1"])).toBe(false);
+    for (const key of [["conversations"], ["messages", "c-1"], ["unread-count"], ["notifications"]]) {
+      expect(isForegroundRefreshable(key)).toBe(true);
+    }
   });
 });

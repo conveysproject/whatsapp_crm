@@ -23,6 +23,11 @@ export function queryKeysFor(event: string, payload: unknown): ReadonlyArray<rea
   }
 }
 
+/** Foreground refresh must not refetch the session gate: a network blip would replace the cached `ok` gate with an error gate. */
+export function isForegroundRefreshable(queryKey: readonly unknown[]): boolean {
+  return queryKey[0] !== "gate";
+}
+
 const RETRY_BASE_MS = 2_000;
 const RETRY_MAX_MS = 30_000;
 
