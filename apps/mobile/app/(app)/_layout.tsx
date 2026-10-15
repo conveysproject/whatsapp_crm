@@ -1,10 +1,12 @@
 import { useAuth } from "@clerk/expo";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Redirect, Stack } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from "react-native";
 import { useApi } from "../../lib/api-context";
+import { config } from "../../lib/config";
 import { MeProvider } from "../../lib/me-context";
+import { connectRealtime, queryKeysFor } from "../../lib/realtime";
 import { resolveGate } from "../../lib/session-gate";
 import { colors, font, radius, space } from "../../lib/theme";
 
@@ -45,6 +47,28 @@ function Message({ title, body, action, onAction, failure }: { title: string; bo
   );
 }
 
+function RealtimeBridge() {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const rt = connectRealtime({
+      url: config.apiUrl,
+      getToken: () => getToken(),
+      onEvent: (event, payload) => {
+        for (const queryKey of queryKeysFor(event, payload)) void queryClient.invalidateQueries({ queryKey });
+      },
+    });
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        rt.ensureConnected();
+        void queryClient.invalidateQueries();
+      }
+    });
+    return () => { sub.remove(); rt.disconnect(); };
+  }, [getToken, queryClient]);
+  return null;
+}
+
 export default function AppLayout() {
   const { isLoaded, isSignedIn, userId, signOut } = useAuth();
   const api = useApi();
@@ -71,6 +95,7 @@ export default function AppLayout() {
     case "ok":
       return (
         <MeProvider me={gate.data.me}>
+          <RealtimeBridge />
           <Stack screenOptions={{ headerShown: false }} />
         </MeProvider>
       );
