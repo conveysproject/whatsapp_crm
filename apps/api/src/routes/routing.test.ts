@@ -17,12 +17,15 @@ async function buildApp(): Promise<FastifyInstance> {
   return app;
 }
 
-describe("PATCH /v1/conversations/:id/assign", () => {
+describe("PATCH /v1/conversations/:id/assign (removed)", () => {
   let app: FastifyInstance;
   beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
   afterEach(async () => { await app.close(); });
 
-  it("assigns conversation to user and returns 200", async () => {
+  // The unguarded duplicate of POST /conversations/:id/assign was removed: it had no permission,
+  // visibility or assignee checks. Assignment goes through the conversations router only.
+  it("no longer exists on the routing router", async () => {
+    // Even with an existing conversation in the caller's org, nothing is updated.
     mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", organizationId: "org-1" });
     mockPrisma.conversation.update.mockResolvedValue({ id: "conv-1", assignedTo: "user-99" });
     const res = await app.inject({
@@ -30,10 +33,8 @@ describe("PATCH /v1/conversations/:id/assign", () => {
       url: "/v1/conversations/conv-1/assign",
       payload: { assignedTo: "user-99" },
     });
-    expect(res.statusCode).toBe(200);
-    expect(mockPrisma.conversation.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ assignedTo: "user-99" }) })
-    );
+    expect(res.statusCode).toBe(404);
+    expect(mockPrisma.conversation.update).not.toHaveBeenCalled();
   });
 });
 
