@@ -1,5 +1,7 @@
+import { useAuth } from "@clerk/expo";
 import { useRouter } from "expo-router";
 import { Bell } from "lucide-react-native";
+import { useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useApi } from "../../lib/api-context";
@@ -16,9 +18,20 @@ export default function PushPermissionScreen() {
   const api = useApi();
   const router = useRouter();
 
+  const { userId } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const running = useRef(false);
+
   async function done(enable: boolean) {
-    await markPushPermissionAsked();
-    if (enable) await registerDevice(api).catch(() => null);
+    if (running.current) return;
+    running.current = true;
+    setBusy(true);
+    try {
+      if (userId) await markPushPermissionAsked(userId);
+      if (enable) await registerDevice(api).catch(() => null);
+    } catch {
+      // A storage failure must not trap the user on this screen.
+    }
     router.replace("/inbox");
   }
 
@@ -33,10 +46,10 @@ export default function PushPermissionScreen() {
         ))}
       </View>
       <View style={styles.actions}>
-        <Pressable accessibilityRole="button" style={styles.primary} onPress={() => void done(true)}>
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy} style={[styles.primary, busy && { opacity: 0.6 }]} onPress={() => void done(true)}>
           <Text style={styles.primaryText}>Turn on notifications</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" style={styles.ghost} onPress={() => void done(false)}>
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy }} disabled={busy} style={styles.ghost} onPress={() => void done(false)}>
           <Text style={styles.ghostText}>Not now</Text>
         </Pressable>
       </View>

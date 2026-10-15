@@ -39,4 +39,10 @@ describe("useResetOnUserChange", () => {
     await rerender("B");
     expect(onChange).toHaveBeenCalledTimes(1);
   });
+
+  it("does not call onChange while the user is still loading (undefined -> A)", async () => {
+    const { onChange, rerender } = await setup(undefined);
+    await rerender("A");
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

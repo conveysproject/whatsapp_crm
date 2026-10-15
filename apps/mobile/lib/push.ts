@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
@@ -6,7 +7,9 @@ import { Platform } from "react-native";
 import type { Api } from "./api";
 
 const TOKEN_KEY = "wbmsg.pushToken";
-const ASKED_KEY = "wbmsg.pushAsked";
+const PENDING_KEY = "wbmsg.pushTokenPending";
+// Not SecureStore: the iOS Keychain survives uninstall, and the flag must reset on reinstall.
+const askedKey = (userId: string) => `wbmsg.pushAsked.${userId}`;
 
 /** Where a tapped push should take the user. Contract with the API: data = { type, conversationId?, contactId? }. */
 export function routeForNotification(data: unknown): string | null {
@@ -26,13 +29,13 @@ export async function getPushToken(): Promise<string | null> {
     Constants.expoConfig?.extra?.["eas"]?.projectId ?? (Constants as { easConfig?: { projectId?: string } }).easConfig?.projectId;
   if (!projectId) return null;
 
-  const current = await Notifications.getPermissionsAsync();
-  const status = current.status === "granted" ? "granted" : (await Notifications.requestPermissionsAsync()).status;
-  if (status !== "granted") return null;
-
+  // Android 13+ only shows the permission prompt once a notification channel exists.
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("default", { name: "Messages", importance: Notifications.AndroidImportance.HIGH });
   }
+  const current = await Notifications.getPermissionsAsync();
+  const status = current.status === "granted" ? "granted" : (await Notifications.requestPermissionsAsync()).status;
+  if (status !== "granted") return null;
   return (await Notifications.getExpoPushTokenAsync({ projectId })).data;
 }
 
@@ -49,8 +52,25 @@ export async function unregisterDevice(api: Api): Promise<void> {
   if (!token) return;
   try {
     await api("/users/device-token", { method: "DELETE", body: { token } });
+  } catch (e) {
+    // Keep it so the next signed-in user's session can claim and remove it (see flushPendingUnregister).
+    await SecureStore.setItemAsync(PENDING_KEY, token);
+    throw e;
   } finally {
     await SecureStore.deleteItemAsync(TOKEN_KEY);
+  }
+}
+
+/** Finishes a failed sign-out unregister: POST moves the token to the current caller (server clears it from every other user), then DELETE removes it. Never throws. */
+export async function flushPendingUnregister(api: Api): Promise<void> {
+  try {
+    const token = await SecureStore.getItemAsync(PENDING_KEY);
+    if (!token) return;
+    await api("/users/device-token", { method: "POST", body: { token, platform: Platform.OS } });
+    await api("/users/device-token", { method: "DELETE", body: { token } });
+    await SecureStore.deleteItemAsync(PENDING_KEY);
+  } catch {
+    // Keep the key; try again next launch.
   }
 }
 
@@ -64,12 +84,12 @@ export async function signOutAndUnregister(api: Api, signOut: () => Promise<unkn
   await signOut();
 }
 
-export async function shouldAskForPushPermission(): Promise<boolean> {
-  return (await SecureStore.getItemAsync(ASKED_KEY)) === null;
+export async function shouldAskForPushPermission(userId: string): Promise<boolean> {
+  return (await AsyncStorage.getItem(askedKey(userId))) === null;
 }
 
-export async function markPushPermissionAsked(): Promise<void> {
-  await SecureStore.setItemAsync(ASKED_KEY, "1");
+export async function markPushPermissionAsked(userId: string): Promise<void> {
+  await AsyncStorage.setItem(askedKey(userId), "1");
 }
 
 export async function refreshBadge(api: Api): Promise<void> {

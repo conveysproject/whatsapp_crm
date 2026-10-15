@@ -9,7 +9,12 @@ const config: ExpoConfig = {
   orientation: "portrait",
   userInterfaceStyle: "light",
   ios: { bundleIdentifier: "com.conveys.wbmsg", supportsTablet: true },
-  android: { package: "com.conveys.wbmsg", adaptiveIcon: { backgroundColor: "#15803D" } },
+  android: {
+    package: "com.conveys.wbmsg",
+    adaptiveIcon: { backgroundColor: "#15803D" },
+    // Firebase config for FCM push; an EAS file env var in cloud builds. Left out locally when unset.
+    ...(process.env["GOOGLE_SERVICES_JSON"] ? { googleServicesFile: process.env["GOOGLE_SERVICES_JSON"] } : {}),
+  },
   plugins: [
     "expo-router",
     "expo-secure-store",

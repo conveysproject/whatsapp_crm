@@ -6,11 +6,14 @@ import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
+import { Text, View } from "react-native";
 import { ApiProvider } from "../lib/api-context";
 import { config } from "../lib/config";
+import { missingConfig } from "../lib/config-check";
 import { useResetOnUserChange } from "../lib/use-reset-on-user-change";
 
-if (__DEV__ && !config.clerkPublishableKey) console.warn("EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is not set");
+const configProblems = missingConfig();
+if (__DEV__ && configProblems.length) console.warn(`Missing config: ${configProblems.join(", ")}`);
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -28,13 +31,21 @@ function UserChangeReset() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
+  const [fontsLoaded, fontError] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, retry: 1 } } }));
 
   useEffect(() => {
-    if (fontsLoaded) void SplashScreen.hideAsync();
-  }, [fontsLoaded]);
-  if (!fontsLoaded) return null;
+    if (fontsLoaded || fontError) void SplashScreen.hideAsync();
+  }, [fontsLoaded, fontError]);
+  if (!fontsLoaded && !fontError) return null;
+
+  if (!__DEV__ && configProblems.length) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <Text style={{ fontSize: 16, textAlign: "center" }}>This build is missing configuration: {configProblems.join(", ")}</Text>
+      </View>
+    );
+  }
 
   return (
     <ClerkProvider publishableKey={config.clerkPublishableKey} tokenCache={tokenCache}>

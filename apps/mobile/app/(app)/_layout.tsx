@@ -7,7 +7,7 @@ import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from "
 import { useApi } from "../../lib/api-context";
 import { config } from "../../lib/config";
 import { MeProvider } from "../../lib/me-context";
-import { refreshBadge, registerDevice, shouldAskForPushPermission, takeUnhandledResponseRoute } from "../../lib/push";
+import { refreshBadge, flushPendingUnregister, registerDevice, shouldAskForPushPermission, takeUnhandledResponseRoute } from "../../lib/push";
 import { connectRealtime, isForegroundRefreshable, queryKeysFor } from "../../lib/realtime";
 import { resolveGate } from "../../lib/session-gate";
 import { colors, font, radius, space } from "../../lib/theme";
@@ -82,6 +82,9 @@ function PushBridge() {
   const api0 = useApi();
   const apiRef = useRef(api0);
   apiRef.current = api0;
+  const { userId } = useAuth();
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
   const router = useRouter();
   const routerRef = useRef(router);
   routerRef.current = router;
@@ -90,9 +93,11 @@ function PushBridge() {
     let cancelled = false;
     const api = apiRef.current;
     void (async () => {
+      await flushPendingUnregister(api);
       const { status } = await Notifications.getPermissionsAsync();
+      const uid = userIdRef.current;
       if (status === "granted") await registerDevice(api).catch(() => null);
-      else if (status === "undetermined" && (await shouldAskForPushPermission()) && !cancelled) routerRef.current.push("/push-permission");
+      else if (status === "undetermined" && uid && (await shouldAskForPushPermission(uid)) && !cancelled) routerRef.current.push("/push-permission");
       await refreshBadge(api);
       if (cancelled || coldStartChecked) return;
       coldStartChecked = true;

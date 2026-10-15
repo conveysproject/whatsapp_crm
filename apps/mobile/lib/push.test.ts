@@ -23,14 +23,18 @@ jest.mock("expo-notifications", () => ({
   setBadgeCountAsync: (...a: unknown[]) => mockNotif.setBadgeCountAsync(...a),
   AndroidImportance: { HIGH: 4 },
 }));
+jest.mock("@react-native-async-storage/async-storage", () => require("@react-native-async-storage/async-storage/jest/async-storage-mock"));
 jest.mock("expo-device", () => ({ isDevice: true }));
 jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { extra: { eas: { projectId: "proj-1" } } } } }));
 
-import { __resetHandledResponsesForTests, takeUnhandledResponseRoute, getPushToken, refreshBadge, registerDevice, routeForNotification, shouldAskForPushPermission, markPushPermissionAsked, signOutAndUnregister, unregisterDevice } from "./push";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
+import { __resetHandledResponsesForTests, takeUnhandledResponseRoute, getPushToken, refreshBadge, registerDevice, routeForNotification, shouldAskForPushPermission, markPushPermissionAsked, signOutAndUnregister, unregisterDevice, flushPendingUnregister } from "./push";
 
 beforeEach(() => {
   for (const k of Object.keys(mockStore)) delete mockStore[k];
   jest.clearAllMocks();
+  void AsyncStorage.clear();
   __resetHandledResponsesForTests();
 });
 
@@ -69,6 +73,22 @@ describe("getPushToken / registerDevice", () => {
     expect(mockStore["wbmsg.pushToken"]).toBe("ExponentPushToken[a]");
   });
 
+  it("on Android creates the channel before asking for permission", async () => {
+    const original = Platform.OS;
+    Object.defineProperty(Platform, "OS", { value: "android", configurable: true });
+    try {
+      const order: string[] = [];
+      mockNotif.setNotificationChannelAsync.mockImplementation(async () => { order.push("channel"); });
+      mockNotif.getPermissionsAsync.mockResolvedValue({ status: "undetermined" });
+      mockNotif.requestPermissionsAsync.mockImplementation(async () => { order.push("request"); return { status: "granted" }; });
+      mockNotif.getExpoPushTokenAsync.mockResolvedValue({ data: "ExponentPushToken[c]" });
+      await getPushToken();
+      expect(order).toEqual(["channel", "request"]);
+    } finally {
+      Object.defineProperty(Platform, "OS", { value: original, configurable: true });
+    }
+  });
+
   it("getPushToken never asks the OS twice when already granted", async () => {
     mockNotif.getPermissionsAsync.mockResolvedValue({ status: "granted" });
     mockNotif.getExpoPushTokenAsync.mockResolvedValue({ data: "ExponentPushToken[b]" });
@@ -100,14 +120,52 @@ describe("unregister and sign-out", () => {
     await signOutAndUnregister(api, signOut);
     expect(order).toEqual(["delete", "signOut"]);
     expect(mockStore["wbmsg.pushToken"]).toBeUndefined();
+    expect(mockStore["wbmsg.pushTokenPending"]).toBe("ExponentPushToken[a]");
+  });
+
+  it("keeps the token as pending when the DELETE fails", async () => {
+    mockStore["wbmsg.pushToken"] = "ExponentPushToken[a]";
+    const api = jest.fn().mockRejectedValue(new Error("offline")) as unknown as Api;
+    await expect(unregisterDevice(api)).rejects.toThrow("offline");
+    expect(mockStore["wbmsg.pushToken"]).toBeUndefined();
+    expect(mockStore["wbmsg.pushTokenPending"]).toBe("ExponentPushToken[a]");
+  });
+});
+
+describe("flushPendingUnregister", () => {
+  it("POSTs then DELETEs the pending token, then clears it", async () => {
+    mockStore["wbmsg.pushTokenPending"] = "ExponentPushToken[a]";
+    const api = jest.fn().mockResolvedValue(undefined) as unknown as Api;
+    await flushPendingUnregister(api);
+    expect((api as unknown as jest.Mock).mock.calls).toEqual([
+      ["/users/device-token", { method: "POST", body: { token: "ExponentPushToken[a]", platform: Platform.OS } }],
+      ["/users/device-token", { method: "DELETE", body: { token: "ExponentPushToken[a]" } }],
+    ]);
+    expect(mockStore["wbmsg.pushTokenPending"]).toBeUndefined();
+  });
+
+  it("keeps the pending token on failure and never throws", async () => {
+    mockStore["wbmsg.pushTokenPending"] = "ExponentPushToken[a]";
+    const api = jest.fn().mockRejectedValue(new Error("offline")) as unknown as Api;
+    await expect(flushPendingUnregister(api)).resolves.toBeUndefined();
+    expect(mockStore["wbmsg.pushTokenPending"]).toBe("ExponentPushToken[a]");
+  });
+
+  it("does nothing when nothing is pending", async () => {
+    const api = jest.fn() as unknown as Api;
+    await flushPendingUnregister(api);
+    expect(api).not.toHaveBeenCalled();
   });
 });
 
 describe("permission prompt bookkeeping and badge", () => {
-  it("asks once", async () => {
-    expect(await shouldAskForPushPermission()).toBe(true);
-    await markPushPermissionAsked();
-    expect(await shouldAskForPushPermission()).toBe(false);
+  it("asks once per user, stored outside SecureStore", async () => {
+    expect(await shouldAskForPushPermission("u1")).toBe(true);
+    await markPushPermissionAsked("u1");
+    expect(await shouldAskForPushPermission("u1")).toBe(false);
+    expect(await shouldAskForPushPermission("u2")).toBe(true);
+    expect(await AsyncStorage.getItem("wbmsg.pushAsked.u1")).toBe("1");
+    expect(Object.keys(mockStore)).toEqual([]);
   });
 
   it("sets the app badge from the unread-count endpoint and ignores failures", async () => {
