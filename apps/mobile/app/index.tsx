@@ -1,9 +1,8 @@
-import { Text, View } from "react-native";
+import { useAuth } from "@clerk/expo";
+import { Redirect } from "expo-router";
 
 export default function Index() {
-  return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-      <Text>WBMSG</Text>
-    </View>
-  );
+  const { isLoaded, isSignedIn } = useAuth();
+  if (!isLoaded) return null;
+  return <Redirect href={isSignedIn ? "/inbox" : "/sign-in"} />;
 }
