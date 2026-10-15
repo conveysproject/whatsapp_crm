@@ -17,6 +17,7 @@ const mockPrisma = {
   },
   message: {
     findMany: vi.fn(),
+    findFirst: vi.fn(),
     deleteMany: vi.fn(),
   },
   user: {
@@ -561,5 +562,38 @@ describe("GET /v1/conversations/:id with assigned_chats_only", () => {
     mockPrisma.conversation.findFirst.mockResolvedValue(null);
     await app.inject({ method: "GET", url: "/v1/conversations/conv-1" });
     expect(mockPrisma.conversation.findFirst.mock.calls[0][0].where).toMatchObject({ assignedTo: "agent-1" });
+  });
+});
+
+describe("GET /v1/conversations/:id/messages keyset paging", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1" }); });
+  afterEach(async () => { await app.close(); });
+
+  it("nextCursor is the oldest message of the page", async () => {
+    mockPrisma.message.findMany.mockResolvedValue([{ id: "c" }, { id: "b" }, { id: "a" }]);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/conv-1/messages?limit=2" });
+    const body = res.json<{ data: { id: string }[]; pagination: { hasMore: boolean; nextCursor: string | null } }>();
+    expect(body.data.map((m) => m.id)).toEqual(["b", "c"]);
+    expect(body.pagination).toEqual({ hasMore: true, nextCursor: "b" });
+  });
+
+  it("filters by sentAt/id keyset from the cursor message, scoped to conversation and org", async () => {
+    const sentAt = new Date("2026-05-01T10:00:00Z");
+    mockPrisma.message.findFirst.mockResolvedValue({ id: "m-9", sentAt });
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/conv-1/messages?cursor=m-9" });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.message.findFirst.mock.calls[0][0].where).toEqual({ id: "m-9", conversationId: "conv-1", organizationId: "org-1" });
+    const args = mockPrisma.message.findMany.mock.calls[0][0];
+    expect(args.where.OR).toEqual([{ sentAt: { lt: sentAt } }, { sentAt, id: { lt: "m-9" } }]);
+    expect(args.orderBy).toEqual([{ sentAt: "desc" }, { id: "desc" }]);
+  });
+
+  it("returns 400 INVALID_CURSOR for an unknown cursor", async () => {
+    mockPrisma.message.findFirst.mockResolvedValue(null);
+    const res = await app.inject({ method: "GET", url: "/v1/conversations/conv-1/messages?cursor=nope" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_CURSOR");
   });
 });

@@ -170,20 +170,29 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
       }
       const limit = Math.min(parseInt(request.query.limit ?? "50", 10), 100);
       const cursor = request.query.cursor;
+      let keyset: Record<string, unknown> = {};
+      if (cursor) {
+        const c = await fastify.prisma.message.findFirst({
+          where: { id: cursor, conversationId: request.params.id, organizationId },
+          select: { id: true, sentAt: true },
+        });
+        if (!c) return reply.status(400).send({ error: { code: "INVALID_CURSOR", message: "Unknown cursor" } });
+        keyset = { OR: [{ sentAt: { lt: c.sentAt } }, { sentAt: c.sentAt, id: { lt: c.id } }] };
+      }
       const messages = await fastify.prisma.message.findMany({
         where: {
           conversationId: request.params.id,
           organizationId,
-          ...(cursor ? { id: { lt: cursor } } : {}),
+          ...keyset,
         },
-        orderBy: { sentAt: "desc" },
+        orderBy: [{ sentAt: "desc" }, { id: "desc" }],
         take: limit + 1,
       });
       const hasMore = messages.length > limit;
       const page = hasMore ? messages.slice(0, limit) : messages;
       return reply.send({
         data: page.toReversed(),
-        pagination: { hasMore, nextCursor: hasMore ? page[0]?.id ?? null : null },
+        pagination: { hasMore, nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null },
       });
     }
   );
