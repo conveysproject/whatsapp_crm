@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { Bell, Search } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { ConversationRow } from "../../../components/inbox/ConversationRow";
 import { FilterBar } from "../../../components/inbox/FilterBar";
@@ -36,7 +36,7 @@ export default function InboxScreen() {
     queryFn: () => api<{ data: ConversationItem[] }>(`/conversations/search?q=${encodeURIComponent(q.trim())}`),
     enabled: searching,
   });
-  const users = useQuery({ queryKey: ["users"], queryFn: () => api<{ data: UserRow[] }>("/users"), staleTime: 5 * 60_000 });
+  const users = useQuery({ queryKey: ["users"], queryFn: () => api<{ data: UserRow[] }>("/users"), staleTime: 5 * 60_000, retry: false });
   const labels = useQuery({ queryKey: ["inbox-labels"], queryFn: () => api<{ data: ConversationLabel[] }>("/inbox-labels"), enabled: labelPicker });
 
   const items = useMemo(() => {
@@ -44,10 +44,16 @@ export default function InboxScreen() {
     return searching ? raw : applyQuickFilter(raw, quick, me.id);
   }, [searching, search.data, list.data, quick, me.id]);
 
+  const autoPaging = quick !== null && !searching && !!list.hasNextPage && items.length < 15;
+  useEffect(() => {
+    if (autoPaging && !list.isFetchingNextPage && !list.isFetchNextPageError) void list.fetchNextPage();
+  }, [autoPaging, list.isFetchingNextPage, list.isFetchNextPageError, list.data?.pages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const nameOf = (id: string | null) => (id === null ? "Unassigned" : id === me.id ? "You" : users.data?.data.find((u) => u.id === id)?.fullName ?? "Assigned");
   const now = Date.now();
-  const loading = searching ? search.isLoading : list.isLoading;
-  const error = searching ? search.error : list.error;
+  const loading = (searching ? search.isLoading : list.isLoading) || (autoPaging && items.length === 0 && !list.isFetchNextPageError);
+  const error = searching ? search.isError && !search.data : list.isError && !list.data;
+  const loadMoreFailed = !searching && list.isFetchNextPageError;
 
   return (
     <Screen>
@@ -67,6 +73,7 @@ export default function InboxScreen() {
       {labelPicker && !searching && (
         <View style={styles.labelList}>
           <Pressable accessibilityRole="button" onPress={() => { setLabel(null); setLabelPicker(false); }} style={styles.labelItem}><Text style={styles.labelText}>All labels</Text></Pressable>
+          {labels.isError ? <Text style={[styles.emptyText, { padding: space.md }]}>Couldn't load labels</Text> : null}
           {(labels.data?.data ?? []).map((l) => (
             <Pressable key={l.id} accessibilityRole="button" onPress={() => { setLabel(l); setLabelPicker(false); }} style={styles.labelItem}>
               <View style={[styles.dot, { backgroundColor: l.color }]} /><Text style={styles.labelText}>{l.name}</Text>
@@ -88,9 +95,14 @@ export default function InboxScreen() {
           renderItem={({ item }) => <ConversationRow item={item} assigneeName={nameOf(item.assignedTo)} now={now} onPress={() => router.push({ pathname: "/conversation/[id]", params: { id: item.id } })} />}
           onEndReached={() => { if (!searching && list.hasNextPage && !list.isFetchingNextPage) void list.fetchNextPage(); }}
           onEndReachedThreshold={0.5}
-          refreshControl={<RefreshControl refreshing={!searching && list.isRefetching} onRefresh={() => void list.refetch()} tintColor={colors.brand} />}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={searching ? undefined : <RefreshControl refreshing={list.isRefetching && !list.isFetchingNextPage} onRefresh={() => void list.refetch()} tintColor={colors.brand} />}
           ListEmptyComponent={<View style={styles.empty}><Text style={styles.emptyText}>{searching ? "No matches." : "No conversations here."}</Text></View>}
-          ListFooterComponent={list.isFetchingNextPage ? <ActivityIndicator color={colors.brand} /> : null}
+          ListFooterComponent={
+            list.isFetchingNextPage ? <ActivityIndicator color={colors.brand} /> : loadMoreFailed ? (
+              <Pressable accessibilityRole="button" onPress={() => void list.fetchNextPage()} style={styles.empty}><Text style={styles.emptyText}>Couldn't load more. <Text style={styles.link}>Retry</Text></Text></Pressable>
+            ) : null
+          }
         />
       )}
     </Screen>

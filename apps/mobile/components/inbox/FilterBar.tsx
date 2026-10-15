@@ -39,7 +39,7 @@ export function FilterBar(props: {
             </Pressable>
           );
         })}
-        <Pressable accessibilityRole="button" onPress={props.onLabelPress} style={[styles.chip, props.labelName ? styles.chipOn : null]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={props.labelName ? `Label: ${props.labelName}, change` : "Filter by label"} accessibilityState={{ selected: !!props.labelName }} onPress={props.onLabelPress} style={[styles.chip, props.labelName ? styles.chipOn : null]}>
           <Text style={[styles.chipText, props.labelName ? styles.chipTextOn : null]}>{props.labelName ?? "Filter by label"}</Text>
           <ChevronDown size={14} color={props.labelName ? "#FFFFFF" : colors.text} />
         </Pressable>
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   tabText: { fontFamily: font.semibold, fontSize: 14, color: colors.textMuted },
   tabTextOn: { color: colors.brand },
   chips: { gap: space.sm, paddingHorizontal: space.lg, paddingVertical: 10 },
-  chip: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 34, paddingHorizontal: space.md, borderRadius: 17, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surface },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, paddingHorizontal: space.lg, borderRadius: 22, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surface },
   chipOn: { backgroundColor: colors.brand, borderColor: colors.brand },
   chipText: { fontFamily: font.semibold, fontSize: 13, color: colors.text },
   chipTextOn: { color: "#FFFFFF" },
