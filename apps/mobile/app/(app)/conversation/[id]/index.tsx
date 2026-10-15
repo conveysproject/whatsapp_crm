@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { ActionSheetIOS, ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChatHeader } from "../../../../components/chat/ChatHeader";
+import { Composer } from "../../../../components/chat/Composer";
 import { MessageBubble } from "../../../../components/chat/MessageBubble";
 import { getActiveConversation, setActiveConversation } from "../../../../lib/active-conversation";
 import { ApiError } from "../../../../lib/api";
@@ -125,8 +126,7 @@ export default function ChatScreen() {
           style={styles.thread}
           contentContainerStyle={{ paddingVertical: space.sm }}
         />
-        {/* Task 6 replaces this placeholder with <Composer conversation={c} /> */}
-        <View style={{ height: 56, backgroundColor: colors.surface }} />
+        <Composer conversation={c} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
