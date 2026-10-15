@@ -6,6 +6,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, Vi
 import { SafeAreaView } from "react-native-safe-area-context";
 import { setComposerDraft } from "../../../../components/chat/Composer";
 import { useApi } from "../../../../lib/api-context";
+import { isForbidden } from "../../../../lib/dashboard";
 import { colors, font, radius, space } from "../../../../lib/theme";
 
 interface Canned { id: string; name: string; shortcut: string | null; content: string; category: string }
@@ -15,7 +16,7 @@ export default function CannedScreen() {
   const api = useApi();
   const router = useRouter();
   const [q, setQ] = useState("");
-  const list = useQuery({ queryKey: ["canned-responses"], queryFn: () => api<{ data: Canned[] }>("/canned-responses") });
+  const list = useQuery({ queryKey: ["canned-responses"], queryFn: () => api<{ data: Canned[] }>("/canned-responses"), retry: (n, e) => !isForbidden(e) && n < 1 });
   const needle = q.trim().toLowerCase();
   const items = (list.data?.data ?? [])
     .filter((c) => c.category === "general")
@@ -38,7 +39,12 @@ export default function CannedScreen() {
               <Text style={styles.content} numberOfLines={2}>{item.content}</Text>
             </Pressable>
           )}
-          ListEmptyComponent={<Text style={styles.empty}>{list.error ? "Couldn't load canned responses." : "No canned responses yet. Add them on the web dashboard."}</Text>}
+          ListEmptyComponent={isForbidden(list.error) ? <Text style={styles.empty}>Canned responses aren't available for your role.</Text> : list.error ? (
+            <View style={{ alignItems: "center" }}>
+              <Text style={styles.empty}>Couldn't load canned responses.</Text>
+              <Pressable accessibilityRole="button" onPress={() => void list.refetch()} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: space.lg }}><Text style={{ fontFamily: font.semibold, fontSize: 15, color: colors.brand }}>Try again</Text></Pressable>
+            </View>
+          ) : <Text style={styles.empty}>No canned responses yet. Add them on the web dashboard.</Text>}
         />
       )}
     </SafeAreaView>

@@ -41,7 +41,7 @@ export default function ContactScreen() {
   const [statusOpen, setStatusOpen] = useState(false);
   useEffect(() => { if (contact.data) setNotes(contact.data.notes ?? ""); }, [contact.data?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const refresh = () => void qc.invalidateQueries({ queryKey: key });
+  const refresh = () => { void qc.invalidateQueries({ queryKey: key }); void qc.invalidateQueries({ queryKey: ["contacts"] }); };
   const patch = useMutation({ mutationFn: (body: { tags?: string[]; leadStatusId?: string }) => api(`/contacts/${id}`, { method: "PATCH", body }), onMutate: () => setError(null), onSuccess: () => { refresh(); void qc.invalidateQueries({ queryKey: ["conversations"] }); }, onError: (e) => setError(editError(e)) });
   const saveNotes = useMutation({ mutationFn: (n: string) => api(`/contacts/${id}/notes`, { method: "PUT", body: { notes: n } }), onMutate: () => { setError(null); setSaved(false); }, onSuccess: () => { setSaved(true); refresh(); }, onError: (e) => setError(editError(e)) });
   const toggleBot = useMutation({ mutationFn: (disabled: boolean) => api(`/contacts/${id}/toggle-bot`, { method: "POST", body: { disabled } }), onMutate: () => setError(null), onSuccess: refresh, onError: (e) => setError(editError(e)) });

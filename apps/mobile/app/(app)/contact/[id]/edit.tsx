@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useApi } from "../../../../lib/api-context";
-import { contactSaveError, isForbidden } from "../../../../lib/dashboard";
+import { changedContactFields, contactSaveError, isForbidden } from "../../../../lib/dashboard";
 import { colors, font, radius, space } from "../../../../lib/theme";
 
 export default function EditContactScreen() {
@@ -19,18 +19,27 @@ export default function EditContactScreen() {
   const seeded = useRef(false);
   useEffect(() => { if (contact.data && !seeded.current) { seeded.current = true; setForm({ firstName: contact.data.firstName ?? "", lastName: contact.data.lastName ?? "", email: contact.data.email ?? "" }); } }, [contact.data]);
   const save = useMutation({
-    mutationFn: () => api(`/contacts/${id}`, { method: "PATCH", body: { firstName: form.firstName.trim() || null, lastName: form.lastName.trim() || null, email: form.email.trim() || null } }),
+    mutationFn: (body: Record<string, string | null>) => api(`/contacts/${id}`, { method: "PATCH", body }),
     onMutate: () => setError(null),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["contacts"] }); void qc.invalidateQueries({ queryKey: ["conversations"] }); router.back(); },
     onError: (e) => setError(contactSaveError(e)),
   });
+
+  const emailHidden = (contact.data?.email ?? "").includes("***");
+  function onSave() {
+    if (!contact.data) return;
+    const body = changedContactFields(contact.data, form);
+    if (emailHidden) delete body.email;
+    if (Object.keys(body).length === 0) return router.back();
+    save.mutate(body);
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.head}>
         <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.side}><Text style={styles.cancel}>Cancel</Text></Pressable>
         <Text style={styles.title} accessibilityRole="header">Edit contact</Text>
-        <Pressable accessibilityRole="button" disabled={save.isPending || !contact.data} onPress={() => save.mutate()} style={styles.side}>
+        <Pressable accessibilityRole="button" disabled={save.isPending || !contact.data} onPress={onSave} style={styles.side}>
           {save.isPending ? <ActivityIndicator color={colors.brand} /> : <Text style={styles.save}>Save</Text>}
         </Pressable>
       </View>
@@ -45,7 +54,8 @@ export default function EditContactScreen() {
           {([["firstName", "First name"], ["lastName", "Last name"], ["email", "Email"]] as const).map(([k, label]) => (
             <View key={k} style={styles.field}>
               <Text style={styles.label}>{label}</Text>
-              <TextInput value={form[k]} onChangeText={(v) => setForm((f) => ({ ...f, [k]: v }))} accessibilityLabel={label} keyboardType={k === "email" ? "email-address" : "default"} autoCapitalize={k === "email" ? "none" : "words"} style={styles.input} />
+              <TextInput value={form[k]} editable={!(k === "email" && emailHidden)} onChangeText={(v) => setForm((f) => ({ ...f, [k]: v }))} accessibilityLabel={label} keyboardType={k === "email" ? "email-address" : "default"} autoCapitalize={k === "email" ? "none" : "words"} style={[styles.input, k === "email" && emailHidden && { opacity: 0.6 }]} />
+              {k === "email" && emailHidden ? <Text style={styles.hint}>Email is hidden for your role.</Text> : null}
             </View>
           ))}
           <Text style={styles.hint}>The phone number can't be changed here.</Text>

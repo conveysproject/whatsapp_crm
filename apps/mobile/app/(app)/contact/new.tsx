@@ -2,7 +2,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useApi } from "../../../lib/api-context";
 import { contactSaveError, isValidWhatsAppNumber } from "../../../lib/dashboard";
@@ -40,7 +40,7 @@ export default function NewContactScreen() {
           {save.isPending ? <ActivityIndicator color={colors.brand} /> : <Text style={[styles.save, !canSave && { opacity: 0.4 }]}>Save</Text>}
         </Pressable>
       </View>
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
           {([["firstName", "First name", "default"], ["lastName", "Last name", "default"], ["phoneNumber", "WhatsApp number (with country code)", "phone-pad"], ["email", "Email", "email-address"]] as const).map(([k, label, kb]) => (

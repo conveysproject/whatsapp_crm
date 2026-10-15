@@ -1,5 +1,5 @@
 import { ApiError } from "./api";
-import { attentionRoute, contactSaveError, isValidWhatsAppNumber, deltaText, formatCount, formatDuration, isForbidden, pct, standingBanner } from "./dashboard";
+import { attentionRoute, contactSaveError, isValidWhatsAppNumber, deltaText, formatCount, formatDuration, changedContactFields, isForbidden, pct, standingBanner } from "./dashboard";
 
 describe("formatting", () => {
   it("formats counts with grouping and blanks", () => {
@@ -90,5 +90,18 @@ describe("isValidWhatsAppNumber", () => {
   it("rejects national-format and empty input", () => {
     expect(isValidWhatsAppNumber("7912345678")).toBe(false);
     expect(isValidWhatsAppNumber("")).toBe(false);
+  });
+});
+
+describe("changedContactFields", () => {
+  const orig = { firstName: "Ann", lastName: null, email: "a@x.com" };
+  it("returns {} when unchanged", () => {
+    expect(changedContactFields(orig, { firstName: "Ann", lastName: "", email: "a@x.com" })).toEqual({});
+  });
+  it("returns only the changed name", () => {
+    expect(changedContactFields(orig, { firstName: " Bea ", lastName: "", email: "a@x.com" })).toEqual({ firstName: "Bea" });
+  });
+  it("sends null when email is cleared", () => {
+    expect(changedContactFields(orig, { firstName: "Ann", lastName: "", email: "  " })).toEqual({ email: null });
   });
 });

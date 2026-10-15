@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react-native";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useApi } from "../../lib/api-context";
+import { isForbidden } from "../../lib/dashboard";
 import { colors, font, space } from "../../lib/theme";
 
 interface Canned { id: string; name: string; shortcut: string | null; content: string; category: string }
@@ -11,7 +12,7 @@ interface Canned { id: string; name: string; shortcut: string | null; content: s
 export default function CannedResponsesScreen() {
   const api = useApi();
   const router = useRouter();
-  const list = useQuery({ queryKey: ["canned-responses"], queryFn: () => api<{ data: Canned[] }>("/canned-responses") });
+  const list = useQuery({ queryKey: ["canned-responses"], queryFn: () => api<{ data: Canned[] }>("/canned-responses"), retry: (n, e) => !isForbidden(e) && n < 1 });
   const items = (list.data?.data ?? []).filter((c) => c.category === "general");
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -30,7 +31,12 @@ export default function CannedResponsesScreen() {
               <Text style={styles.content}>{item.content}</Text>
             </View>
           )}
-          ListEmptyComponent={<Text style={styles.empty}>{list.error ? "Couldn't load canned responses." : "No canned responses yet."}</Text>}
+          ListEmptyComponent={isForbidden(list.error) ? <Text style={styles.empty}>Canned responses aren't available for your role.</Text> : list.error ? (
+            <View style={{ alignItems: "center" }}>
+              <Text style={styles.empty}>Couldn't load canned responses.</Text>
+              <Pressable accessibilityRole="button" onPress={() => void list.refetch()} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: space.lg }}><Text style={{ fontFamily: font.semibold, fontSize: 15, color: colors.brand }}>Try again</Text></Pressable>
+            </View>
+          ) : <Text style={styles.empty}>No canned responses yet.</Text>}
           ListFooterComponent={<Text style={styles.note}>Add or edit canned responses on the web dashboard. Use them in a chat from the + menu.</Text>}
         />
       )}

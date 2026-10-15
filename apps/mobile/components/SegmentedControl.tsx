@@ -19,7 +19,7 @@ export function SegmentedControl<T extends string>(props: { value: T; options: {
 
 const styles = StyleSheet.create({
   wrap: { flexDirection: "row", gap: 4, padding: 4, borderRadius: radius.md, backgroundColor: colors.border },
-  item: { flex: 1, minHeight: 40, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  item: { flex: 1, minHeight: 44, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   itemOn: { backgroundColor: colors.surface },
   text: { fontFamily: font.semibold, fontSize: 13, color: colors.textMuted },
   textOn: { color: colors.text },

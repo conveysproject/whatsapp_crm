@@ -20,7 +20,7 @@ export default function DashboardScreen() {
   const me = useMe();
   const router = useRouter();
   const [range, setRange] = useState<Range>("today");
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
   const dash = useQuery({ queryKey: ["dashboard", range], queryFn: async () => (await api<{ data: DashboardData }>(`/analytics/dashboard?range=${range}&tz=${encodeURIComponent(tz)}`)).data, retry: (n, e) => !isForbidden(e) && n < 1 });
   const standing = useQuery({ queryKey: ["billing-standing"], queryFn: async () => (await api<{ data: Standing }>("/billing/standing")).data, staleTime: 5 * 60_000 });

@@ -90,3 +90,17 @@ export function isValidWhatsAppNumber(input: string): boolean {
     return false;
   }
 }
+
+export interface ContactFormFields { firstName: string; lastName: string; email: string }
+export function changedContactFields(
+  original: { firstName: string | null; lastName: string | null; email: string | null },
+  form: ContactFormFields,
+): Partial<Record<keyof ContactFormFields, string | null>> {
+  const out: Partial<Record<keyof ContactFormFields, string | null>> = {};
+  for (const k of ["firstName", "lastName", "email"] as const) {
+    const next = form[k].trim() || null;
+    const prev = (original[k] ?? "").trim() || null;
+    if (next !== prev) out[k] = next;
+  }
+  return out;
+}

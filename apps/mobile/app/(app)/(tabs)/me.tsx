@@ -43,7 +43,7 @@ export default function MeScreen() {
     },
     onError: () => { setAvailability(confirmedAvailability.current); setAvailError("Couldn't update your status. Try again."); },
   });
-  const [pushStatus, setPushStatus] = useState<string>("undetermined");
+  const [pushStatus, setPushStatus] = useState<string>("loading");
   useEffect(() => {
     const read = () => void Notifications.getPermissionsAsync().then((p) => setPushStatus(p.status));
     read();
@@ -51,7 +51,7 @@ export default function MeScreen() {
     return () => sub.remove();
   }, []);
   async function onPushRow() {
-    if (pushStatus === "granted") return;
+    if (pushStatus === "granted" || pushStatus === "loading") return;
     if (pushStatus === "denied") return void Linking.openSettings();
     await registerDevice(api).catch(() => null);
     if (userId) await markPushPermissionAsked(userId).catch(() => null);
@@ -59,7 +59,7 @@ export default function MeScreen() {
     if (mounted.current) setPushStatus(p.status);
   }
 
-  const pushValue = pushStatus === "granted" ? "On" : pushStatus === "denied" ? "Off · Open settings" : "Turn on";
+  const pushValue = pushStatus === "granted" ? "On" : pushStatus === "denied" ? "Off · Open settings" : pushStatus === "loading" ? "…" : "Turn on";
 
   async function onSignOut() {
     if (busy) return;
@@ -82,13 +82,13 @@ export default function MeScreen() {
       <Text style={styles.sec}>AVAILABILITY</Text>
       <View style={{ paddingHorizontal: space.xl }}>
         <SegmentedControl accessibilityLabel="Availability" value={availability} onChange={(a) => saveAvailability.mutate(a)} options={[{ value: "online", label: "Online" }, { value: "away", label: "Away" }]} />
-        <Text style={styles.hint}>{availability === "online" ? "Teammates see you as Online." : "Teammates see you as Away."}</Text>
+        <Text style={styles.hint}>{availability === "online" ? "Teammates see you as Online." : "Teammates see you as Away. New chats will continue to be auto-assigned to you while you're away."}</Text>
         {availError ? <Text style={styles.availError} accessibilityRole="alert">{availError}</Text> : null}
       </View>
 
       <Text style={styles.sec}>APP</Text>
       <View style={styles.card}>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Notifications on this phone, ${pushValue}`} onPress={() => void onPushRow()} style={styles.row}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Notifications on this phone, ${pushValue}`} disabled={pushStatus === "loading"} accessibilityState={{ disabled: pushStatus === "loading" }} onPress={() => void onPushRow()} style={styles.row}>
           <Text style={styles.rowText}>Notifications on this phone</Text>
           <Text style={styles.rowValue}>{pushValue}</Text>
         </Pressable>

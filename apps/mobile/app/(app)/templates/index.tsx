@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useApi } from "../../../lib/api-context";
 import { formatCount, isForbidden } from "../../../lib/dashboard";
@@ -46,6 +46,7 @@ export default function TemplatesScreen() {
       {list.isLoading ? <ActivityIndicator color={colors.brand} /> : (
         <FlatList
           data={items}
+          refreshControl={<RefreshControl refreshing={list.isRefetching || stats.isRefetching} onRefresh={() => { void list.refetch(); void stats.refetch(); }} />}
           keyExtractor={(t) => t.id}
           contentContainerStyle={{ padding: space.lg, gap: space.md }}
           renderItem={({ item }) => {
@@ -71,7 +72,12 @@ export default function TemplatesScreen() {
               </View>
             );
           }}
-          ListEmptyComponent={<Text style={styles.empty}>{isForbidden(list.error) ? "Templates aren't available for your role." : list.error ? "Couldn't load templates." : "No templates here."}</Text>}
+          ListEmptyComponent={isForbidden(list.error) ? <Text style={styles.empty}>Templates aren't available for your role.</Text> : list.error ? (
+            <View style={{ alignItems: "center" }}>
+              <Text style={styles.empty}>Couldn't load templates.</Text>
+              <Pressable accessibilityRole="button" onPress={() => void list.refetch()} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: space.lg }}><Text style={{ fontFamily: font.semibold, fontSize: 15, color: colors.brand }}>Try again</Text></Pressable>
+            </View>
+          ) : <Text style={styles.empty}>No templates here.</Text>}
         />
       )}
     </SafeAreaView>
