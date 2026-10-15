@@ -49,7 +49,7 @@ Access is driven by the existing DB role and permissions (Clerk is identity only
 
 The system roles are `admin`, `manager`, `agent` and `viewer`. There is no separate "owner" role: the business owner is an `admin`.
 
-**Rule (owner, 2026-10-15): super admins do not log in to the mobile app.** A `superAdmin` sign-in is refused after Clerk sign-in with the message "Super admin accounts use the web dashboard" and the session is signed out. Admin console, billing admin and "Login As" (impersonation) stay web-only and are out of scope for mobile.
+**Rule (owner, 2026-10-15): super admins do not log in to the mobile app.** A `superAdmin` sign-in is refused after Clerk sign-in with the message "Super admin accounts use the web dashboard" and a Sign out button (no app access). Admin console, billing admin and "Login As" (impersonation) stay web-only and are out of scope for mobile.
 
 ## 4. Navigation structure
 
@@ -244,7 +244,7 @@ Sizes are estimates for planning only and will be firmed up in the implementatio
 3. **Biometric lock:** optional per user, or enforceable by org admins?
 4. **Push preview text:** show message text by default, or hide by default for privacy?
 5. **Phase 3:** confirm we want mobile signup and broadcast creation, or keep the app agent/manager focused.
-6. **Minimum OS:** proposed iOS 16+ and Android 10+ (same as respond.io).
+6. **Minimum OS:** iOS 16.4+ (the Expo SDK 57 floor) and Android 10+ (same as respond.io).
 
 ## 12. Next steps
 

@@ -1716,9 +1716,10 @@ Co-Authored-By: <model that wrote this> <noreply@anthropic.com>"
 
 ## Owner checklist (needs accounts and a phone — not doable by agents)
 
-1. Create an Expo account/organisation and run `cd apps/mobile && npx eas init` → copy the project id into the environment as `EAS_PROJECT_ID` (EAS env or `.env.local`).
-2. Set `EXPO_PUBLIC_API_URL` (Railway API URL), `EXPO_PUBLIC_WEB_URL` (Vercel web URL), `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` (same Clerk instance as web, publishable key).
+1. Create an Expo account/organisation and run `cd apps/mobile && npx eas init` → copy the project id into the environment as `EAS_PROJECT_ID`.
+2. Set these as EAS environment variables with `eas env:create` (`EXPO_PUBLIC_API_URL` = Railway API URL, `EXPO_PUBLIC_WEB_URL` = Vercel web URL, `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` = same Clerk instance as web, `EAS_PROJECT_ID`). `.env*.local` is NOT uploaded to EAS cloud builds; `.env.local` is only for local `expo start`. Builds without these show a "missing configuration" screen.
 3. In the Clerk dashboard, confirm the Native API is enabled for the instance (required by `@clerk/expo`).
 4. Build a development client: `npx eas build --profile development --platform android` (and/or ios), install it on a phone.
-5. Device check: sign in as an agent (email → password → code on first device); see the 4 tabs; Me shows your name; sign in as a super admin → "Super admin accounts use the web dashboard" and signed out; accept notifications; from another phone send a WhatsApp message to a chat assigned to you → push arrives; tap it with the app closed → the Chat placeholder opens; sign out → no more pushes on that phone.
-6. Decide PRD §11 Q1 (store publisher): the bundle id `com.conveys.wbmsg` is a placeholder until then.
+5. Device check: sign in as an agent (email → password → code on first device); see the 4 tabs; Me shows your name; sign in as a super admin → "Super admin accounts use the web dashboard" with a Sign out button; accept notifications; from another phone send a WhatsApp message to a chat assigned to you → push arrives; tap it with the app closed → the Chat placeholder opens; sign out → no more pushes on that phone.
+6. Android push: create a Firebase project, download `google-services.json`, upload it as an EAS file env var (`eas env:create --name GOOGLE_SERVICES_JSON --type file ...`), and upload the FCM V1 service-account key to EAS credentials. iOS push needs a paid Apple Developer account (EAS manages the APNs key).
+7. Decide PRD §11 Q1 (store publisher): the bundle id `com.conveys.wbmsg` is a placeholder until then.
