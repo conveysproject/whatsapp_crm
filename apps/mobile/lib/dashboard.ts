@@ -30,7 +30,7 @@ export function formatDuration(secs: number | null | undefined): string {
 
 export function deltaText(k: Pick<Kpi, "deltaPct">, lowerIsBetter = false): { text: string; tone: "good" | "bad" | "flat" } | null {
   if (k.deltaPct === null) return null;
-  if (k.deltaPct === 0) return { text: "No change", tone: "flat" };
+  if (Math.round(Math.abs(k.deltaPct)) === 0) return { text: "No change", tone: "flat" };
   const up = k.deltaPct > 0;
   const good = lowerIsBetter ? !up : up;
   return { text: `${up ? "▲" : "▼"} ${Math.abs(Math.round(k.deltaPct))}%`, tone: good ? "good" : "bad" };
@@ -44,13 +44,18 @@ function day(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "soon";
 }
 
-export function standingBanner(s: Standing | undefined): { title: string; body: string; tone: "warning" | "danger" } | null {
+/** `paused` mirrors the API's enforced block; `blocked` without `paused` is watch mode (sending still works). */
+export function standingBanner(s: Standing | undefined, now: number = Date.now()): { title: string; body: string; tone: "warning" | "danger" } | null {
   if (!s || s.state === "ok") return null;
   if (s.state === "cancelled") return { title: "This workspace is cancelled", body: "Messages and campaigns can't be sent.", tone: "danger" };
-  if (s.state === "blocked" || s.paused) {
+  if (s.paused) {
     return { title: "Sending is paused", body: "A WBMSG statement is overdue, so messages and campaigns can't be sent. Customers can still message you. An admin can pay on the web dashboard.", tone: "danger" };
   }
-  return { title: "Statement overdue", body: `Your WBMSG statement is overdue. Sending will pause on ${day(s.blockAt)} if it isn't paid.`, tone: "warning" };
+  const upcoming = s.blockAt !== null && Date.parse(s.blockAt) > now;
+  const body = upcoming
+    ? `Your WBMSG statement is overdue. Sending will pause on ${day(s.blockAt)} if it isn't paid.`
+    : "Your WBMSG statement is overdue. An admin can pay it on the web dashboard.";
+  return { title: "Statement overdue", body, tone: "warning" };
 }
 
 /** Web dashboard links → mobile screens; null when the target only exists on the web. */

@@ -18,6 +18,7 @@ describe("formatting", () => {
     expect(deltaText({ deltaPct: -8 })).toEqual({ text: "▼ 8%", tone: "bad" });
     expect(deltaText({ deltaPct: 20 }, true)).toEqual({ text: "▲ 20%", tone: "bad" });
     expect(deltaText({ deltaPct: 0 })).toEqual({ text: "No change", tone: "flat" });
+    expect(deltaText({ deltaPct: 0.3 })).toEqual({ text: "No change", tone: "flat" });
     expect(deltaText({ deltaPct: null })).toBeNull();
   });
   it("computes whole percentages safely", () => {
@@ -32,11 +33,22 @@ describe("standingBanner", () => {
     expect(standingBanner(undefined)).toBeNull();
     expect(standingBanner({ state: "ok", paused: false, dueAt: null, blockAt: null })).toBeNull();
   });
+  const now = Date.parse("2026-10-15T00:00:00Z");
   it("warns before sending pauses", () => {
-    const b = standingBanner({ state: "overdue", paused: false, dueAt: "2026-10-14T00:00:00Z", blockAt: "2026-10-21T00:00:00Z" });
+    const b = standingBanner({ state: "overdue", paused: false, dueAt: "2026-10-14T00:00:00Z", blockAt: "2026-10-21T00:00:00Z" }, now);
     expect(b?.tone).toBe("warning");
     expect(b?.title).toBe("Statement overdue");
     expect(b?.body).toMatch(/Sending will pause on/);
+  });
+  it("does not say paused in watch mode (blocked but not enforced)", () => {
+    const b = standingBanner({ state: "blocked", paused: false, dueAt: "2026-10-01T00:00:00Z", blockAt: "2026-10-08T00:00:00Z" }, now);
+    expect(b?.title).toBe("Statement overdue");
+    expect(b?.tone).toBe("warning");
+  });
+  it("omits the pause date once blockAt has passed", () => {
+    const b = standingBanner({ state: "overdue", paused: false, dueAt: "2026-10-01T00:00:00Z", blockAt: "2026-10-08T00:00:00Z" }, now);
+    expect(b?.body).not.toMatch(/will pause/);
+    expect(b?.body).toMatch(/An admin can pay it on the web dashboard/);
   });
   it("says sending is paused when blocked or cancelled", () => {
     expect(standingBanner({ state: "blocked", paused: true, dueAt: null, blockAt: null })?.title).toBe("Sending is paused");
@@ -50,6 +62,7 @@ describe("attentionRoute", () => {
     expect(attentionRoute("/templates")).toBe("/templates");
     expect(attentionRoute("/messages")).toBeNull();
     expect(attentionRoute("/settings/whatsapp-account")).toBeNull();
+    expect(attentionRoute("/settings/billing")).toBeNull();
   });
 });
 
