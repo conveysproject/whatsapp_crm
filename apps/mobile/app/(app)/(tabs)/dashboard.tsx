@@ -40,8 +40,8 @@ export default function DashboardScreen() {
         <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={() => router.push("/notifications")} style={styles.icon}><Bell size={22} color={colors.text} /></Pressable>
       </View>
       <View style={styles.subnav}>
-        <Pressable accessibilityRole="button" onPress={() => router.push("/campaigns" as never)} style={styles.sub}><Text style={styles.subText}>Campaigns</Text></Pressable>
-        <Pressable accessibilityRole="button" onPress={() => router.push("/templates" as never)} style={styles.sub}><Text style={styles.subText}>Templates</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => router.push("/campaigns")} style={styles.sub}><Text style={styles.subText}>Campaigns</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => router.push("/templates")} style={styles.sub}><Text style={styles.subText}>Templates</Text></Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.body} refreshControl={<RefreshControl refreshing={dash.isRefetching} onRefresh={() => { void dash.refetch(); void standing.refetch(); void usage.refetch(); }} tintColor={colors.brand} />}>
         {banner ? (
@@ -94,7 +94,7 @@ export default function DashboardScreen() {
             ) : null}
 
             {funnel ? (
-              <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/campaigns/[id]", params: { id: funnel.id } } as never)} style={styles.card}>
+              <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: "/campaigns/[id]", params: { id: funnel.id } })} style={styles.card}>
                 <Text style={styles.cardTitle}>Last campaign</Text>
                 <Text style={styles.campName}>{funnel.name}</Text>
                 {([["Delivered", funnel.delivered, colors.brand], ["Read", funnel.read, "#2563EB"], ["Failed", funnel.failed, colors.danger]] as const).map(([label, n, c]) => (
