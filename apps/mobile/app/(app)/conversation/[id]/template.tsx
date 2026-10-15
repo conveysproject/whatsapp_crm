@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useApi } from "../../../../lib/api-context";
 import { keys, sendErrorMessage } from "../../../../lib/conversations";
@@ -50,7 +50,12 @@ export default function TemplateScreen() {
               </Pressable>
             );
           }}
-          ListEmptyComponent={<Text style={styles.empty}>{list.error ? "Couldn't load templates." : "No approved templates yet."}</Text>}
+          ListEmptyComponent={list.error ? (
+            <View style={styles.emptyBox}>
+              <Text style={styles.empty}>Couldn't load templates.</Text>
+              <Pressable accessibilityRole="button" onPress={() => void list.refetch()} style={styles.retry}><Text style={styles.closeText}>Try again</Text></Pressable>
+            </View>
+          ) : <Text style={styles.empty}>No approved templates yet.</Text>}
         />
       )}
       {picked ? (
@@ -80,9 +85,11 @@ const styles = StyleSheet.create({
   closeText: { fontFamily: font.semibold, fontSize: 15, color: colors.brand },
   item: { paddingHorizontal: space.lg, paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: "#F3F4F6", minHeight: 56 },
   itemOn: { backgroundColor: "#F0FDF4" },
-  name: { fontFamily: "monospace", fontSize: 15, color: colors.text },
+  name: { fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }), fontSize: 15, color: colors.text },
   meta: { fontFamily: font.regular, fontSize: 13, color: colors.textMuted, marginTop: 2 },
   empty: { fontFamily: font.regular, fontSize: 15, color: colors.textMuted, textAlign: "center", padding: space.xl },
+  emptyBox: { alignItems: "center" },
+  retry: { minHeight: 44, justifyContent: "center", paddingHorizontal: space.lg },
   preview: { borderTopWidth: 1, borderTopColor: colors.border, padding: space.lg, gap: space.sm },
   previewLabel: { fontFamily: font.semibold, fontSize: 13, color: colors.textMuted },
   bubble: { alignSelf: "flex-end", maxWidth: "90%", backgroundColor: colors.bubbleOut, borderRadius: 14, borderTopRightRadius: 4, padding: space.md, gap: 4 },

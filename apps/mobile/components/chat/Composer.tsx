@@ -6,6 +6,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import { FileText, Image as ImageIcon, MessageSquareText, Plus, Send, Sparkles, Zap } from "lucide-react-native";
 import { useCallback, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useApi } from "../../lib/api-context";
 import { canSendFreeForm, keys, sendErrorMessage, type ConversationItem } from "../../lib/conversations";
@@ -25,6 +26,7 @@ export function Composer({ conversation }: { conversation: ConversationItem }) {
   const { getToken } = useAuth();
   const router = useRouter();
   const qc = useQueryClient();
+  const insets = useSafeAreaInsets();
   const id = conversation.id;
   const [text, setText] = useState("");
   const [menu, setMenu] = useState(false);
@@ -72,7 +74,10 @@ export function Composer({ conversation }: { conversation: ConversationItem }) {
   async function pickPhoto() {
     const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images", "videos"], quality: 0.8 });
     const a = r.canceled ? null : r.assets[0];
-    if (a) sendFile.mutate({ uri: a.uri, name: a.fileName ?? "photo.jpg", mimeType: a.mimeType ?? "image/jpeg" });
+    if (a) {
+      const isVideo = a.type === "video";
+      sendFile.mutate({ uri: a.uri, name: a.fileName ?? (isVideo ? "video.mp4" : "photo.jpg"), mimeType: a.mimeType ?? (isVideo ? "video/mp4" : "image/jpeg") });
+    }
   }
   async function pickDocument() {
     const r = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
@@ -131,7 +136,7 @@ export function Composer({ conversation }: { conversation: ConversationItem }) {
       </View>
       <Modal visible={menu} transparent animationType="slide" onRequestClose={() => setMenu(false)}>
         <Pressable style={styles.backdrop} onPress={() => setMenu(false)} accessibilityLabel="Close menu" />
-        <View style={styles.sheet} accessibilityRole="menu">
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + space.lg }]} accessibilityRole="menu">
           {[
             { label: "Attach photo or video", Icon: ImageIcon, onPress: () => void pickPhoto() },
             { label: "Attach document", Icon: FileText, onPress: () => void pickDocument() },
@@ -164,7 +169,7 @@ const styles = StyleSheet.create({
   templateBtn: { flexDirection: "row", gap: space.sm, height: 48, borderRadius: radius.md, backgroundColor: colors.brand, alignItems: "center", justifyContent: "center" },
   templateText: { fontFamily: font.semibold, fontSize: 16, color: "#FFFFFF" },
   backdrop: { flex: 1, backgroundColor: "rgba(17,24,39,0.35)" },
-  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: space.sm, paddingBottom: space.xxl },
+  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: space.sm },
   menuItem: { flexDirection: "row", alignItems: "center", gap: space.md, minHeight: 52, paddingHorizontal: space.lg },
   menuText: { fontFamily: font.regular, fontSize: 16, color: colors.text },
 });

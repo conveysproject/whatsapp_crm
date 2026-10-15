@@ -22,6 +22,7 @@ const config: ExpoConfig = {
     "expo-status-bar",
     "expo-splash-screen",
     ["expo-build-properties", { ios: { deploymentTarget: "16.4" }, android: { minSdkVersion: 29 } }],
+    ["expo-image-picker", { photosPermission: "Allow WBMSG to attach photos and videos to customer chats.", cameraPermission: false, microphonePermission: false }],
     ["expo-notifications", { color: "#15803D" }],
   ],
   experiments: { typedRoutes: true },
