@@ -1462,6 +1462,7 @@ model LoginLog {
   ipAddress  String?  @map("ip_address")
   userAgent  String?  @map("user_agent") @db.Text
   success    Boolean  @default(true)
+  method     String?
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([userId])
@@ -1791,4 +1792,103 @@ model ApiPayloadAccessAudit {
   createdAt      DateTime @default(now()) @map("created_at")
 
   @@map("api_payload_access_audit")
+}
+
+// ─── Own auth (replaces Clerk; Phase 1, shipped dark) ─────────────────────────
+// No FK from users yet. auth_accounts.id = users.id for migrated users.
+
+model AuthAccount {
+  id                String    @id
+  email             String    @unique
+  emailVerifiedAt   DateTime? @map("email_verified_at")
+  passwordHash      String?   @map("password_hash")
+  phoneE164         String?   @unique @map("phone_e164")
+  phoneVerifiedAt   DateTime? @map("phone_verified_at")
+  firstName         String?   @map("first_name")
+  lastName          String?   @map("last_name")
+  status            String    @default("active") // active | locked | disabled
+  failedAttempts    Int       @default(0) @map("failed_attempts")
+  lockedUntil       DateTime? @map("locked_until")
+  passwordChangedAt DateTime? @map("password_changed_at")
+  mustSetPassword   Boolean   @default(false) @map("must_set_password")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  oauthLinks     AuthOAuthLink[]
+  sessions       AuthSession[]
+  codes          AuthCode[]
+  trustedDevices AuthTrustedDevice[]
+
+  @@map("auth_accounts")
+}
+
+model AuthOAuthLink {
+  id          String    @id @default(uuid())
+  accountId   String    @map("account_id")
+  provider    String // google | facebook
+  providerSub String    @map("provider_sub")
+  emailAtLink String?   @map("email_at_link")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+
+  account AuthAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSub])
+  @@unique([accountId, provider])
+  @@map("auth_oauth_links")
+}
+
+model AuthSession {
+  id                String    @id @default(uuid())
+  accountId         String    @map("account_id")
+  refreshTokenHash  String    @unique @map("refresh_token_hash")
+  previousTokenHash String?   @map("previous_token_hash")
+  rotatedAt         DateTime? @map("rotated_at")
+  familyId          String    @map("family_id")
+  client            String // web | mobile | admin
+  deviceLabel       String?   @map("device_label")
+  ip                String?
+  userAgent         String?   @map("user_agent")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  lastUsedAt        DateTime  @default(now()) @map("last_used_at")
+  expiresAt         DateTime  @map("expires_at")
+  revokedAt         DateTime? @map("revoked_at")
+  revokedReason     String?   @map("revoked_reason")
+
+  account AuthAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([familyId])
+  @@map("auth_sessions")
+}
+
+model AuthCode {
+  id         String    @id @default(uuid())
+  accountId  String?   @map("account_id")
+  purpose    String // email_verify | signin_email | signin_whatsapp | new_device | password_reset | phone_verify
+  target     String
+  codeHash   String    @map("code_hash")
+  attempts   Int       @default(0)
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  account AuthAccount? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([purpose, target, createdAt])
+  @@map("auth_codes")
+}
+
+model AuthTrustedDevice {
+  id           String   @id @default(uuid())
+  accountId    String   @map("account_id")
+  deviceIdHash String   @map("device_id_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  lastSeenAt   DateTime @default(now()) @map("last_seen_at")
+  expiresAt    DateTime @map("expires_at")
+
+  account AuthAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("auth_trusted_devices")
 }
