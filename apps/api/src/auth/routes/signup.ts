@@ -1,9 +1,10 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { issueCode, verifyCode } from "../codes.js";
 import { trustDevice } from "../devices.js";
 import { sendCodeEmail } from "../emails.js";
 import { newAccountId, normalizeEmail } from "../ids.js";
 import { checkPasswordPolicy, hashPassword } from "../password.js";
+import { authClientIp } from "../limits.js";
 import { createSession } from "../sessions.js";
 
 interface SignupBody {
@@ -16,6 +17,43 @@ interface VerifyBody {
   email: string;
   code: string;
   client: "web" | "mobile";
+}
+
+/** Background signup work in flight; tests await it via settleSignupWork(). */
+const pendingSignupWork = new Set<Promise<void>>();
+export async function settleSignupWork(): Promise<void> {
+  while (pendingSignupWork.size > 0) await Promise.all([...pendingSignupWork]);
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "P2002";
+}
+
+async function processSignup(
+  fastify: FastifyInstance,
+  input: { email: string; password: string; firstName: string; lastName: string },
+): Promise<void> {
+  const { email, password, firstName, lastName } = input;
+  const db = fastify.prisma;
+  let account = await db.authAccount.findUnique({ where: { email } });
+  if (!account) {
+    const passwordHash = await hashPassword(password);
+    const id = newAccountId();
+    try {
+      account = await db.authAccount.create({ data: { id, email, passwordHash, firstName, lastName } });
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      // Lost a race with a concurrent signup: treat as the existing-account path.
+      account = await db.authAccount.findUnique({ where: { email } });
+      if (!account) return;
+    }
+  }
+  // Existing accounts never have password/names overwritten (pre-account hijack); verified ones get nothing.
+  if (account.emailVerifiedAt) return;
+
+  const issued = await issueCode(db, { purpose: "email_verify", target: email, accountId: account.id });
+  if ("error" in issued) return;
+  await sendCodeEmail(email, "email_verify", issued.code);
 }
 
 const INVALID_CODE = {
@@ -51,31 +89,15 @@ export const signupRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Hash on every branch so a verified (no-op) email costs the same as a new one.
-      const passwordHash = await hashPassword(password);
-      const existing = await fastify.prisma.authAccount.findUnique({ where: { email } });
-
-      let accountId: string;
-      if (!existing) {
-        accountId = newAccountId();
-        await fastify.prisma.authAccount.create({
-          data: { id: accountId, email, passwordHash, firstName, lastName },
-        });
-      } else if (existing.emailVerifiedAt) {
-        return reply.status(202).send({ ok: true });
-      } else {
-        accountId = existing.id;
-        await fastify.prisma.authAccount.update({
-          where: { id: accountId },
-          data: { passwordHash, firstName, lastName },
-        });
-      }
-
-      const issued = await issueCode(fastify.prisma, { purpose: "email_verify", target: email, accountId });
-      if (!("error" in issued)) {
-        await sendCodeEmail(email, "email_verify", issued.code);
-      }
-      return reply.status(202).send({ ok: true });
+      // Every branch answers identically and immediately; the real work runs after the reply so
+      // neither status nor timing reveals whether the email already exists.
+      reply.status(202).send({ ok: true });
+      const work = processSignup(fastify, { email, password, firstName, lastName }).catch((err: unknown) => {
+        fastify.log.warn({ err: err instanceof Error ? err.name : "unknown" }, "signup background work failed");
+      });
+      pendingSignupWork.add(work);
+      void work.finally(() => pendingSignupWork.delete(work));
+      return reply;
     },
   );
 
@@ -114,7 +136,7 @@ export const signupRoutes: FastifyPluginAsync = async (fastify) => {
         accountId: account.id,
         client,
         typ: "user",
-        ip: request.ip,
+        ip: authClientIp(request),
         userAgent: request.headers["user-agent"],
       });
       const deviceId = await trustDevice(fastify.prisma, account.id);
