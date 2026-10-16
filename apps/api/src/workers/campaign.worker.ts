@@ -47,7 +47,8 @@ function resolvePositionalVars(
   return template.replace(/\{\{(\d+)\}\}/g, (_match, n: string) => values[parseInt(n, 10) - 1] ?? "");
 }
 
-async function resolveTargetPhones(
+/** Recipients for a campaign. Contacts who opted out of WhatsApp (whatsappOptOut) are never included, in any mode. */
+export async function resolveTargetPhones(
   campaignId: string,
   organizationId: string,
   segmentId?: string,
@@ -57,7 +58,7 @@ async function resolveTargetPhones(
   if (segmentId) {
     const segment = await prisma.segment.findFirst({ where: { id: segmentId, organizationId } });
     if (!segment) throw new Error(`Segment ${segmentId} not found`);
-    const result = await evaluateSegment(prisma, organizationId, segment.filters as unknown as FilterRule[]);
+    const result = await evaluateSegment(prisma, organizationId, segment.filters as unknown as FilterRule[], undefined, true);
     return result.contacts.map((c) => c.phoneNumber);
   }
 
@@ -73,7 +74,7 @@ async function resolveTargetPhones(
 
   if (resolvedGroupIds.length > 0) {
     const groupContacts = await prisma.groupContact.findMany({
-      where: { contactGroupId: { in: resolvedGroupIds } },
+      where: { contactGroupId: { in: resolvedGroupIds }, contact: { organizationId, whatsappOptOut: false, deletedAt: null } },
       include: { contact: { select: { phoneNumber: true } } },
     });
     return [...new Set(groupContacts.map((gc) => gc.contact.phoneNumber))];

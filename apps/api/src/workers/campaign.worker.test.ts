@@ -108,3 +108,33 @@ describe("campaign worker when sending is paused for non-payment", () => {
     expect(recordOutbound).not.toHaveBeenCalled();
   });
 });
+
+describe("campaign recipients never include opted-out contacts", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("segment campaigns ask the segment evaluator for WhatsApp-opted-in contacts only", async () => {
+    const { resolveTargetPhones } = await import("./campaign.worker.js");
+    const { evaluateSegment } = await import("../lib/segment-evaluator.js");
+    prisma.segment.findFirst.mockResolvedValue({ id: "seg-1", filters: [{ field: "tags", operator: "contains", value: "x" }] });
+    vi.mocked(evaluateSegment).mockResolvedValue({ contacts: [{ phoneNumber: "911" }] } as never);
+    expect(await resolveTargetPhones("camp-1", "org-1", "seg-1")).toEqual(["911"]);
+    expect(evaluateSegment).toHaveBeenCalledWith(prisma, "org-1", [{ field: "tags", operator: "contains", value: "x" }], undefined, true);
+  });
+
+  it("group campaigns only take group members who have not opted out and are not deleted", async () => {
+    const { resolveTargetPhones } = await import("./campaign.worker.js");
+    prisma.groupContact.findMany.mockResolvedValue([{ contact: { phoneNumber: "912" } }]);
+    expect(await resolveTargetPhones("camp-1", "org-1", undefined, ["grp-1"])).toEqual(["912"]);
+    expect(prisma.groupContact.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { contactGroupId: { in: ["grp-1"] }, contact: { organizationId: "org-1", whatsappOptOut: false, deletedAt: null } },
+    }));
+  });
+
+  it("all-contacts campaigns keep excluding opted-out contacts", async () => {
+    const { resolveTargetPhones } = await import("./campaign.worker.js");
+    prisma.campaignGroup.findMany.mockResolvedValue([]);
+    prisma.contact.findMany.mockResolvedValue([{ phoneNumber: "913" }]);
+    expect(await resolveTargetPhones("camp-1", "org-1")).toEqual(["913"]);
+    expect(prisma.contact.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ organizationId: "org-1", whatsappOptOut: false }) }));
+  });
+});
