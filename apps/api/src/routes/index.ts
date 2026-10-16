@@ -69,6 +69,7 @@ import { notificationsRouter } from "./notifications.js";
 import { automationSettingsRouter } from "./automation-settings.js";
 import { contactEventsRouter } from "./contact-events.js";
 import { publicApiRouter } from "./public-api/index.js";
+import { authRouter } from "../auth/routes/index.js";
 
 export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(healthRoute);
@@ -108,6 +109,7 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(billingWebhookRouter, { prefix: "/v1" });
   await fastify.register(billingGatewayWebhooksRouter, { prefix: "/v1" });
   await fastify.register(clerkWebhookRouter);
+  await fastify.register(authRouter, { prefix: "/v1/auth" });
   await fastify.register(registerRouter, { prefix: "/v1" });
   await fastify.register(vendorSettingsRouter, { prefix: "/v1" });
   await fastify.register(cannedResponsesRouter, { prefix: "/v1" });
