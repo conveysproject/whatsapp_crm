@@ -14,7 +14,7 @@ WBMSG depends on Clerk for its front door: sign-up, sign-in, sessions, invitatio
 - **Own the data and the cost.** Identity data lives in our own Postgres, with no per-user vendor bill and no vendor outage taking our login down.
 - **Own the rules.** Sign-up, invitation and super-admin flows run in our code instead of being split between Clerk widgets, Clerk webhooks and our API.
 
-**End state: zero Clerk.** No `@clerk/*` package, no `CLERK_*` env var, no Clerk webhook, no Clerk account. Clerk is touched exactly once, for a one-time export of existing users (including password hashes) at cutover.
+**End state: zero Clerk.** No `@clerk/*` package, no `CLERK_*` env var, no Clerk webhook, no Clerk account. **Clerk is not touched at all** for the migration (owner decision 2026-10-17, see §6.1).
 
 ## 2. What exists today (scan evidence)
 
@@ -71,7 +71,7 @@ Total: about 190 source files reference Clerk. About 150 of them change only one
 A new **auth module inside the API** (`apps/api/src/auth/`), exposed under `/v1/auth/*`. The API becomes the single identity authority for web, mobile, sockets and the email bridge. No new service.
 
 Built on small, well-audited standard libraries, not a framework:
-- Password hashing: **argon2id** (`@node-rs/argon2`). Legacy bcrypt hashes from Clerk are verified with `bcryptjs`, then rehashed to argon2id on first successful login.
+- Password hashing: **argon2id** (`@node-rs/argon2`). No legacy hash import (§6.1).
 - Tokens: **`jose`**. EdDSA (Ed25519) signed JWTs, `kid` header, public **JWKS** at `/v1/auth/.well-known/jwks.json`.
 - Google and Facebook: **OAuth 2.0 authorization code + PKCE + `state`** (`arctic`). Google ID tokens are verified with `jose`; Facebook identity is read from the Graph `/me` endpoint with the exchanged token. Both run through one `OAuthProvider` interface, so adding Apple or Microsoft later is one adapter.
 - Codes: CSPRNG 6-digit codes, stored **hashed** (HMAC-SHA256 with server pepper), single use.
@@ -82,7 +82,7 @@ Built on small, well-audited standard libraries, not a framework:
 
 | Table | Purpose | Key columns |
 |---|---|---|
-| `auth_accounts` | One login identity per person | `id` (text PK; **= existing `users.id`** for migrated users, new IDs `usr_<random>`), `email` (citext unique), `email_verified_at`, `password_hash` (nullable), `password_algo` (`argon2id`\|`bcrypt`), `phone_e164` (unique, nullable), `phone_verified_at`, `first_name`, `last_name`, `status` (`active`\|`locked`\|`disabled`), `failed_attempts`, `locked_until`, `password_changed_at`, `created_at`, `updated_at` |
+| `auth_accounts` | One login identity per person | `id` (text PK; **= existing `users.id`** for migrated users, new IDs `usr_<random>`), `email` (citext unique), `email_verified_at`, `password_hash` (nullable), `phone_e164` (unique, nullable), `phone_verified_at`, `first_name`, `last_name`, `status` (`active`\|`locked`\|`disabled`), `failed_attempts`, `locked_until`, `password_changed_at`, `must_set_password` (bool, default false), `created_at`, `updated_at` |
 | `auth_oauth_links` | Linked social logins (Google, Facebook, future providers) | `id`, `account_id`, `provider` (`google`\|`facebook`), `provider_sub`, `email_at_link`, `created_at`, `last_used_at`; unique (`provider`, `provider_sub`); unique (`account_id`, `provider`) |
 | `auth_sessions` | One row per signed-in device | `id`, `account_id`, `refresh_token_hash` (unique), `family_id`, `client` (`web`\|`mobile`\|`admin`), `device_label`, `ip`, `user_agent`, `created_at`, `last_used_at`, `expires_at`, `revoked_at`, `revoked_reason` |
 | `auth_codes` | One-time codes and links | `id`, `account_id` (nullable for pre-account email checks), `purpose` (`email_verify`\|`signin_email`\|`signin_whatsapp`\|`new_device`\|`password_reset`\|`phone_verify`), `target` (email or phone), `code_hash`, `attempts`, `expires_at`, `consumed_at`, `created_at` |
@@ -120,7 +120,7 @@ Built on small, well-audited standard libraries, not a framework:
 | WhatsApp code | Accounts with a **verified** WhatsApp number (verified in Settings → Security) | Enter number → code via **Conveys org WABA**, Meta **Authentication**-category template → session. Not a sign-up method (sign-up needs an email: invitations, billing and notifications are email-based). |
 | Google | Everyone | OIDC + PKCE. Links to an existing account **only if Google's email is verified and matches**; otherwise creates a new account (still goes through business details). |
 | Facebook | Everyone | Facebook Login (OAuth + PKCE, scopes `email,public_profile`). Facebook doesn't guarantee an email or its verification, so auto-linking to an existing account happens **only after an email code to that address** (my call). If Facebook returns no email, the user must enter and verify one before the account is created. |
-| ~~SMS code~~ | Not in this project (owner decision 2026-10-17) | Phone sign-in is the WhatsApp code; when WhatsApp delivery fails, the email code is offered. Clerk accounts that sign in with **phone only and no email** are counted in the Task 0 import report and handled case by case (expected: none, since sign-up and invitations require email). SMS can come back later behind an `SmsProvider` interface if a market needs it. |
+| ~~SMS code~~ | Not in this project (owner decision 2026-10-17) | Phone sign-in is the WhatsApp code; when WhatsApp delivery fails, the email code is offered. SMS can come back later behind an `SmsProvider` interface if a market needs it. |
 
 **Sign-up:** email + password (or Google) → email verification code → `/business-details` → `POST /v1/register` (unchanged logic, now using our session). The webhook-stub race code in `register.ts` goes away because there is no webhook any more.
 
@@ -160,21 +160,22 @@ Changed:
 ## 6. Migration and cutover
 
 ### 6.1 User import
-1. Export users from Clerk (dashboard export / Backend API) **including password hashes**. *Not yet verified: Clerk's export must include `password_digest` + `password_hasher` (expected bcrypt). Task 0 checks this on a test account before anything is built on it.* **Owner decision:** if hashes can't be exported, the project continues with a one-time forced reset: every user gets a "set your new password" email at cutover.
-2. The import script (dry-run by default, `--apply` after owner confirmation) creates `auth_accounts` with `id = Clerk user ID = users.id`, email (verified), names, `password_hash` + `password_algo=<exported hasher>`, verified phone (if Clerk had one verified), and Google/Facebook links in `auth_oauth_links` (if the export includes the provider subject IDs; otherwise the first Google sign-in links by matching verified email, and the first Facebook sign-in links after an email code).
+1. **Owner decision 2026-10-17 ("simplify"):** production has **6 accounts** (1 customer admin in 1 org, 1 super admin, 4 in our own orgs; `scripts/audit-auth-readiness.mjs`, 2026-10-17). So there is **no Clerk export** and no password-hash import.
+2. The import script (dry-run by default, `--apply` after owner confirmation) creates one `auth_accounts` row per non-deleted `users` row: `id = users.id`, normalized email marked verified, names split from `fullName`, **no password**, `must_set_password = true`. **No email is sent at import** (owner decision 2026-10-17).
+3. **Forced password setup at first login.** When a `must_set_password` account enters its email on the sign-in screen (any method that asks for a password), the API answers `{ next: "set_password", challengeId }` and emails **one 6-digit code** to that address. The user enters the code and chooses a new password on the normal **reset-password** screen, then is signed in. **Forgot password** works the same way for these accounts (owner, 2026-10-17); both use one flow. The code is required so nobody who merely knows the email can take over the account. Email-code, Google and Facebook sign-in also work, but the user is sent to the set-password screen right after, until a password is set. *Accepted trade-off:* for these 6 migrated accounts, the "set your password" response shows that the email exists; the flag clears after setup, so this ends as each user finishes.
 3. Users with no password (Google/Facebook-only in Clerk) sign in with that provider or an email code.
 4. Report: counts imported, skipped, mismatched (DB `users` without a Clerk user, and the reverse).
 
 ### 6.2 Cutover: planned maintenance window (owner decision 2026-10-17)
 0. **Owner decision:** customers do not sign in or sign up during the switch; the support team handles them. So the cutover is a planned maintenance window, not a gradual migration.
 1. Mobile build with the new auth live in the stores (switches on the `AUTH_PROVIDER` remote flag) at least 1 week earlier.
-2. Final export and import (delta since the dry run).
+2. Run the import (§6.1). No emails; support tells the one customer that the next login asks them to set a new password.
 3. Flip `AUTH_PROVIDER=wbmsg` on API, web and mobile config. All Clerk sessions end; users sign in once with the **same password**.
 4. Customer communication is done by the support team (no in-app banner or system email in scope). The window opens with a short "maintenance" page on web; it closes after the smoke tests in step 5 pass.
 5. Watch: login success rate, 401 rate, lockouts, code delivery failures (Sentry + logs) for 48 hours.
 
 ### 6.3 Rollback
-- For 14 days after cutover, flipping `AUTH_PROVIDER=clerk` restores Clerk login. Because nobody signs up or changes passwords during the window, a rollback **inside the window loses nothing**. After the window, accounts created or passwords changed since cutover don't exist in Clerk; those users get a Clerk reset email if a late rollback is ever needed. The Clerk account is deleted only after the 14 days.
+- Until Phase 6, flipping `AUTH_PROVIDER=clerk` restores Clerk login (Clerk accounts are untouched). With 6 users, any post-cutover issue is handled directly by support. The Clerk account is deleted in Phase 6, 7 days after a clean cutover.
 - No destructive DB change: new tables only, plus one FK added after import.
 
 ### 6.4 Clerk removal (cleanup phase)
@@ -211,31 +212,31 @@ Codemod imports → delete `lib/clerk*.ts`, `routes/clerk-webhook.ts`, `svix` an
 
 | Phase | Content | Estimate |
 |---|---|---|
-| 0 | ~~Fix webhook bypass~~ (done) + invitation hardening; Clerk config audit; verify hash export on a test user | 1–2 days |
+| 0 | ~~Fix webhook bypass~~ (done, deployed 2026-10-17). Hash-export check and invitation hardening **dropped** (simplification). | 0 days |
 | 1 | API auth core: schema, hashing, tokens, sessions, email+password, email codes, reset, new-device, rate limits, JWKS; `AUTH_PROVIDER`-switched auth plugin + sockets (dark) | 1.5–2 weeks |
 | 2 | Web: BFF, `useAuth` shim + codemod, middleware, all pages, Security settings, invitations, admin sign-in, email bridge | 1.5 weeks |
 | 3 | Mobile: auth provider, screens, Google, version gate; store release | 1 week (+ store review) |
 | 4 | WhatsApp code (template approval), Google + Facebook OAuth (web + mobile) | 1–1.5 weeks |
 | 5 | Import script, staging rehearsal, pen test, cutover | 1 week |
-| 6 | Clerk removal (after the 14-day rollback window) | 2–3 days |
+| 6 | Clerk removal (7 days after a clean cutover) | 2–3 days |
 | Later | TOTP 2FA, passkeys | separate PRD |
 
-**Total: about 6.5–8.5 weeks** of focused work, plus store review and pen-test lead time.
+**Total: about 5.5–7.5 weeks** of focused work, plus store review and pen-test lead time.
 
 ## 10a. Builder-check decisions (my calls, marked for review)
-1. **Task 0 is a hard go/no-go gate.** No Phase 1 work starts until the Clerk hash export is verified on a real test account (format + hasher). If hashes are not exportable, or use a hasher we cannot verify, we stop and the owner decides (owner: forced reset is acceptable).
+1. ~~Task 0 go/no-go~~: dropped; no Clerk export (§6.1).
 2. **IDs.** No code assumes a `user_` prefix (grep of `apps/` and `packages/`: no matches). New accounts get `usr_<26-char random>`; migrated accounts keep their Clerk ID.
 3. **Orphan `users` rows** (DB user with no Clerk user): an `auth_accounts` row is created with no password and a verified email, so the person signs in with an email code or reset. Nothing is deleted. The FK is added only after the import report shows zero orphans.
 4. **Super admins** live in `users` with `organizationId: "platform"` (`routes/bootstrap.ts:92`). They are imported like everyone else; `typ=admin` is issued when `users.role = superAdmin`.
 5. **Impersonation binding.** The impersonation Redis payload stores the issuing admin's `sid` as well as `issuedBy`. Every impersonated request requires a valid admin access token whose `sid` matches and is not revoked. When the admin session ends or is revoked, impersonation ends.
-6. **Clerk users with MFA.** Clerk TOTP/backup codes cannot be migrated. Until our TOTP ships, those users get the **new-device email code on every new session** (no factor silently dropped to zero). Super admins: always.
+6. **Clerk users with MFA:** irrelevant now (all 6 users set a new password); super admins get the new-device code on every new session until TOTP ships.
 7. **Mobile version gate.** Current builds send no version header (grep: none). New builds send `X-App-Version`. After cutover the API answers any **Clerk-issued** token with `426 UPGRADE_REQUIRED`, so old builds show "update the app". The new build ships at least 1 week early, and we check adoption in the store consoles before setting the cutover date.
 8. **Unfinished sign-ups** (verified email, no org): the account stays; on sign-in the user is sent to `/business-details`. A daily job deletes such accounts after 30 days if no org was ever created.
-9. **Rollback fallback:** see §6.3. With the maintenance-window cutover, rollback inside the window is lossless.
+9. **Rollback:** see §6.3.
 10. **Other Clerk references:** `scripts/setup.sh` (env setup) is updated in Phase 6. No other script or job uses the Clerk SDK.
 
 ## 11. Open questions (owner)
-Answered 2026-10-17: Clerk has **Google**, **Facebook** and **phone/SMS** enabled (SMS **dropped**, WhatsApp code replaces it) · hash export failure → **forced reset is OK** · WhatsApp codes from the **Conveys number** · **internal review only** (no external pen test).
+Answered 2026-10-17: Clerk has **Google**, **Facebook** and **phone/SMS** enabled (SMS **dropped**, WhatsApp code replaces it) · **simplify: no Clerk export; the 6 users are forced to set a password at first login (no bulk email)** · WhatsApp codes from the **Conveys number** · **internal review only** (no external pen test).
 
 Still open (none of these blocks Phases 0–3):
 0. **Meta app for Facebook Login:** add Facebook Login to the existing WBMSG Meta app (used for WhatsApp embedded signup) or create a separate one? *(My default: a separate "WBMSG Login" app, so a login-related review or restriction can't touch the WhatsApp business app.)*
@@ -247,9 +248,9 @@ Still open (none of these blocks Phases 0–3):
 ## 12. Risks
 | Risk | Mitigation |
 |---|---|
-| Clerk export lacks password hashes | Verified in Task 0 before any build; fallback is a one-time forced reset by email |
+| User can't receive the setup code | Support checks the email address in the DB; the code can be re-requested (3 / 10 min) |
 | Old mobile builds break at cutover | New build shipped at least 1 week earlier + `426` version gate |
-| Security bug in our own auth | Standard primitives only, TDD, ASVS L2 checklist, internal security review + ZAP scan + abuse-test suite (no external pen test, by owner decision; residual risk accepted), provider flag with lossless rollback inside the maintenance window |
-| Email deliverability (codes via GoDaddy SMTP) | Monitor bounce/failure; WhatsApp code as alternative; SPF/DKIM check in Task 0 |
+| Security bug in our own auth | Standard primitives only, TDD, ASVS L2 checklist, internal security review + ZAP scan + abuse-test suite (no external pen test, by owner decision; residual risk accepted), `AUTH_PROVIDER` flag for rollback |
+| Email deliverability (codes via GoDaddy SMTP) | Monitor bounce/failure; WhatsApp code as alternative; SPF/DKIM check before Phase 5 |
 | Meta rejects the Authentication template | Submit in Phase 1 so approval is ready by Phase 4; email code is the fallback |
-| Lossy rollback after cutover | 14-day window, monitored; Clerk account kept until then |
+| Late rollback needed | Clerk accounts untouched until Phase 6; 6 users handled by support |
