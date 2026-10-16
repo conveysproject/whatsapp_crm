@@ -40,6 +40,7 @@
     "fastify": "^4.27.0",
     "fastify-plugin": "^5.1.0",
     "ioredis": "^5.10.1",
+    "jose": "^6.2.12",
     "libphonenumber-js": "^1.13.2",
     "nodemailer": "^8.0.7",
     "openai": "^6.34.0",
