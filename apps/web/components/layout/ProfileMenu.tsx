@@ -111,14 +111,6 @@ export function ProfileMenu(): JSX.Element {
     }
   }
 
-  const planLabel: Record<string, string> = {
-    starter: "Starter",
-    growth: "Growth",
-    professional: "Professional",
-    scale: "Scale",
-    enterprise: "Enterprise",
-  };
-
   // Platform role drives all access control (DB User.role). Clerk role is identity-only.
   const platformRoleLabel: Record<string, string> = {
     superAdmin: "Super Admin",
@@ -253,14 +245,11 @@ export function ProfileMenu(): JSX.Element {
                   </button>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-gray-400">
-                    {planLabel[org?.planTier ?? ""] ?? org?.planTier ?? "—"} Plan
-                  </p>
                   <a
                     href="/settings/billing"
                     className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
                   >
-                    Manage →
+                    Billing →
                   </a>
                 </div>
               </div>

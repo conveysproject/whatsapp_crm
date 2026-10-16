@@ -33,14 +33,16 @@ export const gettingStarted: DocCategory = {
           ],
         },
         {
-          heading: "Plans & Pricing",
+          heading: "Pricing",
           paragraphs: [
-            "All plans include a 14-day free trial with no credit card required.",
+            "There are no plans, seats or feature tiers: every account gets every feature, unlimited team members and unlimited contacts. You pay only for the messages you send.",
           ],
           steps: [
-            "Starter — $12/month · 3 agents · 1,000 contacts",
-            "Growth — $36/month · 10 agents · 10,000 contacts",
-            "Scale — $96/month · Unlimited agents · 100,000 contacts",
+            "500 messages free every month — no credit card required",
+            "After that, one monthly bill based on your message volume band, with a price cap",
+            "Only messages Meta charges for are counted — support replies inside the 24-hour window are free",
+            "Meta bills its own message charges to you directly; WBMSG adds no markup",
+            "Current prices: the pricing page and Settings → Billing",
           ],
         },
       ],
@@ -71,7 +73,7 @@ export const gettingStarted: DocCategory = {
           paragraphs: [
             "Your data is stored securely and is compliant with India's Digital Personal Data Protection (DPDP) Act.",
           ],
-          tip: "The 14-day free trial starts the moment you complete this form — no credit card is required.",
+          tip: "You can start straight away: 500 messages are free every month and no credit card is required.",
         },
       ],
     },

@@ -24,6 +24,7 @@ import { onboardingRouter } from "./onboarding.js";
 import { searchRouter } from "./search.js";
 import { billingRouter } from "./billing.js";
 import { billingMessageUsageRouter } from "./billing-message-usage.js";
+import { publicPricingRouter } from "./public-pricing.js";
 import { billingDetailsRouter } from "./billing-details.js";
 import { billingStandingRouter } from "./billing-standing.js";
 import { adminBillingBlockRouter } from "./admin-billing-block.js";
@@ -97,6 +98,7 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(searchRouter, { prefix: "/v1" });
   await fastify.register(billingRouter, { prefix: "/v1" });
   await fastify.register(billingMessageUsageRouter, { prefix: "/v1" });
+  await fastify.register(publicPricingRouter, { prefix: "/v1" });
   await fastify.register(billingDetailsRouter, { prefix: "/v1" });
   await fastify.register(billingStandingRouter, { prefix: "/v1" });
   await fastify.register(adminBillingBlockRouter, { prefix: "/v1" });

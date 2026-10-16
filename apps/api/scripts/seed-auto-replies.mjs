@@ -14,9 +14,9 @@ console.log('Org:', ORG_ID);
 const AUTO_REPLIES = [
   {
     name: 'Price Enquiry',
-    triggerType: 'contains',
-    triggerKeyword: 'price',
-    replyText: '💰 Here are our current prices:\n\n• Basic Plan — ₹999/month\n• Pro Plan — ₹2,499/month\n• Enterprise — Custom pricing\n\nReply *DEMO* to schedule a free demo, or *TALK* to speak with our sales team!',
+    triggerType: 'regex',
+    triggerKeyword: '\\b(price|prices|pricing|cost|charges|plans?|quote)\\b',
+    replyText: '💰 WBMSG pricing is simple: you pay only for the messages you send.\n\n• 500 messages free every month\n• Then one monthly bill by volume, with a price cap\n• Unlimited team members and contacts\n• No markup on Meta\'s charges\n\nSee current prices at wbmsg.com/#pricing\n\nReply *DEMO* to schedule a free demo, or *TALK* to speak with our sales team!',
     priorityIndex: 1,
   },
   {

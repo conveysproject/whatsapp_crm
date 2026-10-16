@@ -5,6 +5,7 @@ import type { JSX } from "react";
 import type { Metadata } from "next";
 import PricingSection from "./pricing-section";
 import TawkChat from "./tawk-chat";
+import { fetchPublicPricing, freeAllowanceLabel } from "@/lib/public-pricing";
 
 const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-br", weight: ["500", "600", "700", "800"] });
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm", weight: ["400", "500"] });
@@ -23,7 +24,9 @@ const FEATURES = [
   { icon: "📊", tag: "Analytics", tc: "#059669", tb: "#D1FAE5", title: "Team Analytics", desc: "Conversation trends, campaign delivery rates, agent leaderboard, first response time, and campaign performance in one dashboard." },
 ];
 
-export default function LandingPage(): JSX.Element {
+export default async function LandingPage(): Promise<JSX.Element> {
+  const pricing = await fetchPublicPricing();
+  const freeLabel = freeAllowanceLabel(pricing?.freeAllowance ?? 500);
   return (
     <div className={`${bricolage.variable} ${dmSans.variable} tr`}>
       <TawkChat />
@@ -282,11 +285,11 @@ export default function LandingPage(): JSX.Element {
               </div>
               <div className="chat">
                 <div className="m1 b-in">
-                  Hi! Is your Growth plan available for my team? 🙏
+                  Hi! Do you charge per agent for my team? 🙏
                   <div className="msg-t">10:42</div>
                 </div>
                 <div className="m2 b-out" style={{alignSelf:"flex-end"}}>
-                  Yes! Growth is ₹599/mo — 10 agents, 10K contacts & AI replies ✨
+                  No! Add your whole team free. You only pay for the messages you send ✨
                   <div className="msg-t">10:42 ✓✓</div>
                 </div>
                 <div className="m3 b-in">
@@ -296,7 +299,7 @@ export default function LandingPage(): JSX.Element {
                 <div className="m4" style={{display:"flex",flexDirection:"column",alignItems:"flex-end"}}>
                   <div className="ai-tag">🤖 AI Draft</div>
                   <div className="b-ai">
-                    Great! Start your 14-day free trial at wbmsg.com/sign-up — no credit card needed 🎉
+                    Great! Start free at wbmsg.com/sign-up — {freeLabel}, no credit card needed 🎉
                     <div className="ai-acts">
                       <button className="ai-send">Send ✓</button>
                       <button className="ai-edit">Edit</button>
@@ -427,11 +430,11 @@ export default function LandingPage(): JSX.Element {
               </div>
               <div className="ins" style={{background:"#EDE9FE",border:"1px solid #DDD6FE"}}>
                 <div className="ins-lbl" style={{color:"#5B21B6"}}>Intent Detected</div>
-                <div className="ins-txt">🟢 High purchase intent — asked about pricing twice. Recommend Growth plan.</div>
+                <div className="ins-txt">🟢 High purchase intent — asked about pricing twice. Share the pricing and offer a demo.</div>
               </div>
               <div className="ins" style={{background:"var(--g50)",border:"1px solid var(--g200)"}}>
                 <div className="ins-lbl" style={{color:"var(--g7)"}}>Suggested Reply</div>
-                <div className="ins-txt">&ldquo;Hi Priya! Growth plan is perfect for your 8-person team — ₹599/mo, 14-day free trial. Want to get started? 🚀&rdquo;</div>
+                <div className="ins-txt">&ldquo;Hi Priya! All 8 of your team can join at no extra cost — you only pay for messages, and {freeLabel}. Want to get started? 🚀&rdquo;</div>
                 <div className="ins-acts">
                   <Link href="/sign-up" className="ins-btn-p">Send Now</Link>
                   <Link href="/sign-up" className="ins-btn-o">Edit Reply</Link>
@@ -447,7 +450,7 @@ export default function LandingPage(): JSX.Element {
       </section>
 
       {/* PRICING */}
-      <PricingSection />
+      <PricingSection pricing={pricing} />
 
       {/* FINAL CTA */}
       <section className="sec sec-dk" style={{textAlign:"center"}}>
@@ -461,7 +464,7 @@ export default function LandingPage(): JSX.Element {
             WhatsApp CRM. Zero message markup. Your team, your conversations, your growth.
           </p>
           <div style={{display:"flex",flexWrap:"wrap",justifyContent:"center",gap:"12px"}}>
-            <Link href="/sign-up" className="btn-wh">Start Free — 14 Days</Link>
+            <Link href="/sign-up" className="btn-wh">Start Free — {pricing?.freeAllowance ?? 500} messages/month</Link>
             <Link href="/sign-in" className="btn-gw">I Already Have an Account</Link>
           </div>
           <p style={{fontSize:".76rem",color:"rgba(255,255,255,.28)",marginTop:"1.5rem"}}>No credit card · Setup in 5 min · Cancel anytime · Data hosted in India (ap-south-1)</p>
