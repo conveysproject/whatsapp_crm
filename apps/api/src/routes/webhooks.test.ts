@@ -119,6 +119,72 @@ describe("POST /v1/webhooks/whatsapp", () => {
     );
   });
 
+  async function postMessage(message: Record<string, unknown>): Promise<void> {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/whatsapp",
+      headers: { "x-hub-signature-256": "sha256=mocked" },
+      payload: {
+        object: "whatsapp_business_account",
+        entry: [{ id: "entry-1", changes: [{ field: "messages", value: {
+          messaging_product: "whatsapp",
+          metadata: { phone_number_id: "12345" },
+          messages: [{ id: "wamid.btn", from: "+919876543210", timestamp: "1714180800", ...message }],
+        } }] }],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+  }
+
+  it("a template quick-reply tap (type 'button') is queued as an interactive button reply", async () => {
+    const { inboundMessageQueue } = await import("../lib/queue.js");
+    await postMessage({ type: "button", button: { text: "Send pricing", payload: "PRICING" } });
+    expect(inboundMessageQueue.add).toHaveBeenCalledWith(
+      "inbound",
+      expect.objectContaining({
+        contentType: "interactive",
+        body: "Send pricing",
+        richContent: { button_reply: { id: "PRICING", title: "Send pricing" } },
+      }),
+      expect.objectContaining({ jobId: "wamsg-wamid.btn" })
+    );
+  });
+
+  it("a template button tap without a payload uses the label as the reply id", async () => {
+    const { inboundMessageQueue } = await import("../lib/queue.js");
+    await postMessage({ type: "button", button: { text: "Not now" } });
+    expect(inboundMessageQueue.add).toHaveBeenCalledWith(
+      "inbound",
+      expect.objectContaining({
+        contentType: "interactive",
+        body: "Not now",
+        richContent: { button_reply: { id: "Not now", title: "Not now" } },
+      }),
+      expect.anything()
+    );
+  });
+
+  it("the raw template button tap is still dumped with Meta's original type", async () => {
+    await postMessage({ type: "button", button: { text: "Send pricing", payload: "PRICING" } });
+    expect(mockPrisma.inboundMessageDump.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ contentType: "button", body: "Send pricing" }) })
+    );
+  });
+
+  it("an interactive button reply keeps its existing shape", async () => {
+    const { inboundMessageQueue } = await import("../lib/queue.js");
+    await postMessage({ type: "interactive", interactive: { type: "button_reply", button_reply: { id: "b1", title: "Yes" } } });
+    expect(inboundMessageQueue.add).toHaveBeenCalledWith(
+      "inbound",
+      expect.objectContaining({
+        contentType: "interactive",
+        body: "Yes",
+        richContent: { button_reply: { id: "b1", title: "Yes" } },
+      }),
+      expect.anything()
+    );
+  });
+
   it("returns 400 for unknown object type", async () => {
     const res = await app.inject({
       method: "POST",

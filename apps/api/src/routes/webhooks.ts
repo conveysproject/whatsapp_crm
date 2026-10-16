@@ -33,6 +33,8 @@ interface WaMessage {
   voice?: WaMediaObject;
   location?: { latitude: number; longitude: number; name?: string; address?: string };
   reaction?: { message_id: string; emoji: string };
+  /** A tap on a template's quick-reply button (type "button"). */
+  button?: { text?: string; payload?: string };
   interactive?: {
     type: string;
     button_reply?: { id: string; title: string };
@@ -306,6 +308,7 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
               ?? msg.document?.id ?? msg.sticker?.id ?? msg.voice?.id ?? null;
             let body: string | null = null;
             let richContent: object | null = null;
+            let contentType = msg.type;
             if (msg.text?.body) {
               body = msg.text.body;
             } else if (msg.location) {
@@ -323,6 +326,12 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
               // richContent keeps the structured reply for the inbox bubble renderer.
               body = msg.interactive.button_reply.title ?? null;
               richContent = { button_reply: msg.interactive.button_reply };
+            } else if (msg.button?.text) {
+              // Template quick-reply tap: queue it as an interactive button reply so the inbox,
+              // auto-replies and button_reply flows treat it the same way. The dump keeps Meta's type.
+              body = msg.button.text;
+              richContent = { button_reply: { id: msg.button.payload || msg.button.text, title: msg.button.text } };
+              contentType = "interactive";
             } else if (msg.interactive?.list_reply) {
               body = msg.interactive.list_reply.title ?? null;
               richContent = { list_reply: msg.interactive.list_reply };
@@ -355,7 +364,7 @@ export const webhooksRouter: FastifyPluginAsync = async (fastify) => {
               organizationId: org.id,
               whatsappContactPhone: msg.from,
               whatsappMessageId: msg.id,
-              contentType: msg.type,
+              contentType,
               body,
               richContent,
               mediaId,
