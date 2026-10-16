@@ -64,6 +64,11 @@ describe("createSession", () => {
     expect(r.accessToken).toBe(`access-${r.sessionId}`);
     expect(r.expiresAt.getTime()).toBeGreaterThan(Date.now() + 29 * DAY);
   });
+  it("rejects mismatched typ/client", async () => {
+    const { prisma } = makePrisma();
+    await expect(createSession(prisma, { accountId: "a", client: "web", typ: "admin" })).rejects.toThrow();
+    await expect(createSession(prisma, { accountId: "a", client: "admin", typ: "user" })).rejects.toThrow();
+  });
   it("admin sessions expire in 12 h", async () => {
     const { prisma } = makePrisma();
     const r = await createSession(prisma, { accountId: "a1", client: "admin", typ: "admin" });
@@ -134,6 +139,28 @@ describe("rotateRefreshToken", () => {
     expect(arg.where).toMatchObject({ familyId: "f1" });
     expect(arg.data.revokedReason).toBe("reuse_detected");
     expect(store.get("auth:revoked:s1")).toBeTruthy();
+  });
+
+  it("previous token within 10 s with no grace key is invalid and does not revoke", async () => {
+    const { prisma, session } = makePrisma(
+      base({ refreshTokenHash: sha("new"), previousTokenHash: sha("old"), rotatedAt: new Date() }),
+    );
+    expect(await rotateRefreshToken(prisma, "old")).toEqual({ error: "invalid" });
+    expect(session.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("lost race with no grace key is invalid and does not revoke", async () => {
+    const { prisma, session } = makePrisma(base());
+    session.updateMany.mockResolvedValueOnce({ count: 0 });
+    expect(await rotateRefreshToken(prisma, "old")).toEqual({ error: "invalid" });
+    expect(session.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("redis failure writing the grace key still returns the new pair", async () => {
+    const { prisma } = makePrisma(base());
+    vi.mocked(redis.set).mockRejectedValueOnce(new Error("down"));
+    const r: any = await rotateRefreshToken(prisma, "old");
+    expect(r.refreshToken).toBeTruthy();
   });
 
   it("unknown token is invalid", async () => {

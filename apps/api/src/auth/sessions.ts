@@ -32,6 +32,9 @@ export async function createSession(
     deviceLabel?: string;
   },
 ): Promise<{ sessionId: string; refreshToken: string; accessToken: string; expiresAt: Date }> {
+  if ((input.typ === "admin") !== (input.client === "admin")) {
+    throw new Error("createSession: typ admin requires client admin and vice versa");
+  }
   const sessionId = randomUUID();
   const refreshToken = newRefreshToken();
   const now = Date.now();
@@ -54,6 +57,19 @@ export async function createSession(
 }
 
 type Pair = { refreshToken: string; accessToken: string; sessionId: string };
+
+async function pollGrace(prevToken: string) {
+  for (let i = 0; i < 5; i++) {
+    try {
+      const g = await readGrace(prevToken);
+      if (g) return g;
+    } catch {
+      // Redis hiccup: keep polling, never escalate to reuse
+    }
+    await new Promise((r) => setTimeout(r, 40));
+  }
+  return null;
+}
 
 async function readGrace(prevToken: string): Promise<{ refreshToken: string; sessionId: string } | null> {
   const raw = await redis.get(graceKey(prevToken));
@@ -113,12 +129,16 @@ export async function rotateRefreshToken(
     });
 
     if (won) {
-      await redis.set(
-        graceKey(refreshToken),
-        JSON.stringify({ refreshToken: next, sessionId: current.id }),
-        "EX",
-        GRACE_TTL_S,
-      );
+      try {
+        await redis.set(
+          graceKey(refreshToken),
+          JSON.stringify({ refreshToken: next, sessionId: current.id }),
+          "EX",
+          GRACE_TTL_S,
+        );
+      } catch {
+        console.warn("auth: could not write refresh grace entry; rotation kept");
+      }
       const accessToken = await signAccessToken({
         sub: current.accountId,
         sid: current.id,
@@ -128,12 +148,8 @@ export async function rotateRefreshToken(
     }
 
     // Lost a race with a concurrent rotation: pick up the winner's pair.
-    for (let i = 0; i < 5; i++) {
-      const g = await readGrace(refreshToken);
-      if (g) return pairFromGrace(current.accountId, current.client, g);
-      await new Promise((r) => setTimeout(r, 40));
-    }
-    return { error: "invalid" };
+    const g = await pollGrace(refreshToken);
+    return g ? pairFromGrace(current.accountId, current.client, g) : { error: "invalid" };
   }
 
   const prev = await prisma.authSession.findFirst({ where: { previousTokenHash: hash } });
@@ -141,8 +157,9 @@ export async function rotateRefreshToken(
   if (prev.revokedAt) return { error: "invalid" };
 
   if (prev.rotatedAt && now.getTime() - prev.rotatedAt.getTime() <= GRACE_MS) {
-    const g = await readGrace(refreshToken);
-    if (g) return pairFromGrace(prev.accountId, prev.client, g);
+    const g = await pollGrace(refreshToken);
+    // Inside the window a missing grace entry is not proof of reuse.
+    return g ? pairFromGrace(prev.accountId, prev.client, g) : { error: "invalid" };
   }
   await revokeFamily(prisma, prev.familyId);
   return { error: "reused" };

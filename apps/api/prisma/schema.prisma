@@ -1842,7 +1842,7 @@ model AuthSession {
   id                String    @id @default(uuid())
   accountId         String    @map("account_id")
   refreshTokenHash  String    @unique @map("refresh_token_hash")
-  previousTokenHash String?   @map("previous_token_hash")
+  previousTokenHash String?   @unique @map("previous_token_hash")
   rotatedAt         DateTime? @map("rotated_at")
   familyId          String    @map("family_id")
   client            String // web | mobile | admin

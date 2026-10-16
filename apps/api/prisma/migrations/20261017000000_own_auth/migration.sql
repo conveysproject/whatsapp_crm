@@ -54,6 +54,7 @@ CREATE TABLE "auth_sessions" (
     CONSTRAINT "auth_sessions_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX "auth_sessions_refresh_token_hash_key" ON "auth_sessions"("refresh_token_hash");
+CREATE UNIQUE INDEX "auth_sessions_previous_token_hash_key" ON "auth_sessions"("previous_token_hash");
 CREATE INDEX "auth_sessions_account_id_idx" ON "auth_sessions"("account_id");
 CREATE INDEX "auth_sessions_family_id_idx" ON "auth_sessions"("family_id");
 
