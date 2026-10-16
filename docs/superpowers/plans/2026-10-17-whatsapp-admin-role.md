@@ -57,3 +57,7 @@ Spec: `docs/prd-whatsapp-admin-role.md`. Branch: `feat/whatsapp-admin-role`. TDD
 - `/check`, `/test-api`, `/test-web`, mobile tests. Known flaky: segments/conversations and Redis noise.
 - Security audit of every touched route (org scoping + RBAC) written into the final report.
 - Manual QA per spec §9. Merge locally (option 1). Update memory.
+
+## Follow-up (owner, 2026-10-17)
+- Managers may **never** deactivate an Admin: `DELETE /users/:id` now loads the target (org-scoped) and returns 403 unless the target's role is in `grantableRoles(actor)`. Admins can still deactivate Admins and WhatsApp Admins; nobody in an org can deactivate a superAdmin.
+- Pending manager-issued admin invitations: owner confirmed there are none, so no action.

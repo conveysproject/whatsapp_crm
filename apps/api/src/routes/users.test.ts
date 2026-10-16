@@ -202,6 +202,50 @@ describe("PATCH /v1/users/:id/role grant rules (no higher than own)", () => {
   });
 });
 
+describe("DELETE /v1/users/:id (deactivate) — never above your own role", () => {
+  const MANAGER = { settings_access: "allow", "settings_access@settings_agents": "allow" };
+  async function buildAppAs(role: string, permissions: Record<string, string> = MANAGER): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions, teamId: null, teamRole: null };
+    });
+    const { userRoutes } = await import("./users.js");
+    await app.register(userRoutes, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it.each([
+    ["manager", "admin", 403],
+    ["manager", "superAdmin", 403],
+    ["manager", "whatsappAdmin", 403],
+    ["manager", "agent", 204],
+    ["admin", "admin", 204],
+    ["admin", "whatsappAdmin", 204],
+    ["admin", "superAdmin", 403],
+  ])("%s deactivating %s: %i", async (actor, targetRole, expected) => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u-2", role: targetRole });
+    mockPrisma.user.update.mockResolvedValue({});
+    const app = await buildAppAs(actor);
+    const res = await app.inject({ method: "DELETE", url: "/v1/users/u-2" });
+    expect(res.statusCode).toBe(expected);
+    if (expected === 403) expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("returns 404 when the target is not in the caller's org", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    const app = await buildAppAs("admin", {});
+    const res = await app.inject({ method: "DELETE", url: "/v1/users/u-x" });
+    expect(res.statusCode).toBe(404);
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: "u-x", organizationId: "org-1" }) }));
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 describe("PATCH /v1/users/:id/team", () => {
   let app: FastifyInstance;
   beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
