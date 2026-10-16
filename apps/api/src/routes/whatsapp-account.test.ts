@@ -360,6 +360,34 @@ describe("settings_whatsapp sub gate", () => {
     await app.close();
   });
 
+  it.each([
+    ["GET", "/v1/whatsapp-account/health-status"],
+    ["POST", "/v1/whatsapp-account/connect"],
+    ["PUT", "/v1/whatsapp-account/business-profile"],
+    ["PUT", "/v1/whatsapp-account/display-name"],
+    ["POST", "/v1/whatsapp-account/sync-all"],
+    ["POST", "/v1/whatsapp-account/verification-upload"],
+  ])("manager defaults (no settings_whatsapp) get 403 on %s %s", async (method, url) => {
+    const { defaultsForRole } = await import("../lib/default-role-permissions.js");
+    const app = await buildAppAs(defaultsForRole("manager"), "manager");
+    const res = await app.inject({ method: method as "GET", url, payload: {} });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it.each([
+    ["GET", "/v1/whatsapp-account/health-status"],
+    ["POST", "/v1/whatsapp-account/connect-webhook"],
+    ["POST", "/v1/whatsapp-account/disconnect-account"],
+  ])("whatsappAdmin passes the gate on %s %s", async (method, url) => {
+    subMockPrisma.organization.findUnique.mockResolvedValue(null);
+    const { defaultsForRole } = await import("../lib/default-role-permissions.js");
+    const app = await buildAppAs(defaultsForRole("whatsappAdmin"), "whatsappAdmin");
+    const res = await app.inject({ method: method as "GET", url });
+    expect(res.statusCode).not.toBe(403);
+    await app.close();
+  });
+
   it("admin bypasses settings_whatsapp sub gate", async () => {
     subMockPrisma.organization.findUnique.mockResolvedValue(null);
     const app = await buildAppAs({}, "admin");

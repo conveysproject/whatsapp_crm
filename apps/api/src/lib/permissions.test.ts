@@ -98,4 +98,13 @@ describe("DEFAULT_ROLE_PERMISSIONS", () => {
     expect(DEFAULT_ROLE_PERMISSIONS.manager["settings_access@settings_teams"]).toBe("allow");
     expect(DEFAULT_ROLE_PERMISSIONS.agent["settings_access@settings_teams"]).toBeUndefined();
   });
+
+  it("whatsappAdmin gets WhatsApp Account settings and nothing else", () => {
+    const perms = DEFAULT_ROLE_PERMISSIONS.whatsappAdmin;
+    expect(perms).toEqual({ settings_access: "allow", "settings_access@settings_whatsapp": "allow" });
+    expect(canAccessSub("whatsappAdmin", perms, "settings_access", "settings_whatsapp")).toBe(true);
+    expect(canAccess("whatsappAdmin", perms, "templates_access")).toBe(false);
+    expect(canAccess("whatsappAdmin", perms, "inbox_access")).toBe(false);
+    expect(canAccessSub("whatsappAdmin", perms, "settings_access", "settings_billing")).toBe(false);
+  });
 });

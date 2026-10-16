@@ -46,9 +46,10 @@ const ROLE_LABELS: Record<string, string> = {
   manager: "Manager",
   agent: "Agent",
   viewer: "Viewer",
+  whatsappAdmin: "WhatsApp Admin",
 };
 
-const ROLES = ["admin", "manager", "agent", "viewer"] as const;
+const ROLES = ["admin", "manager", "agent", "viewer", "whatsappAdmin"] as const;
 
 export default function MembersPage(): JSX.Element {
   const { getToken } = useAuth();
@@ -58,7 +59,7 @@ export default function MembersPage(): JSX.Element {
   const [search, setSearch] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"admin" | "manager" | "agent" | "viewer">("agent");
+  const [inviteRole, setInviteRole] = useState<typeof ROLES[number]>("agent");
   const [inviteTeamId, setInviteTeamId] = useState("");
   const [inviteTeamRole, setInviteTeamRole] = useState<"lead" | "member">("member");
   const [inviting, setInviting] = useState(false);

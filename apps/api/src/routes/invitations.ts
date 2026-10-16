@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import type { Role, TeamRole } from "@prisma/client";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 import { canAccessSub } from "../lib/permissions.js";
+import { canGrantRole } from "../lib/role-grants.js";
 
 export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { email: string; role: Role; teamId?: string; teamRole?: TeamRole } }>(
@@ -14,7 +15,7 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
           required: ["email", "role"],
           properties: {
             email: { type: "string", format: "email" },
-            role: { type: "string", enum: ["admin", "manager", "agent", "viewer"] },
+            role: { type: "string", enum: ["admin", "manager", "agent", "viewer", "whatsappAdmin"] },
             teamId: { type: "string" },
             teamRole: { type: "string", enum: ["lead", "member"] },
           },
@@ -25,6 +26,9 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
       const { role, permissions } = request.auth;
       if (!canAccessSub(role, permissions, "settings_access", "settings_agents")) {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_agents permission required" } });
+      }
+      if (!canGrantRole(role, request.body.role)) {
+        return reply.status(403).send({ error: { code: "ROLE_NOT_GRANTABLE", message: "You cannot invite someone with a higher role than your own" } });
       }
       // GAP-S50: reject disposable/temporary email addresses
       try {
