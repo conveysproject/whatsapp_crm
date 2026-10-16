@@ -366,9 +366,23 @@ describe("auth signin email code", () => {
     expect(res.json().mustSetPassword).toBe(true);
   });
 
-  it("verify: bad/replayed code -> 400 INVALID_CODE, failure logged unknown", async () => {
+  it("verify: bad/replayed code on a real account -> padded 400, failure logged against that account", async () => {
     m.verifyCode.mockResolvedValue({ ok: false, reason: "invalid" });
+    const t0 = Date.now();
     const res = await verify();
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(295);
+    expect(res.statusCode).toBe(400);
+    expect(prisma.loginLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: "usr_a", orgId: "org1", method: "email_code", success: false }),
+    });
+  });
+
+  it("verify: unknown email -> padded 400, logged unknown", async () => {
+    m.verifyCode.mockResolvedValue({ ok: false, reason: "invalid" });
+    prisma.authAccount.findUnique.mockResolvedValue(null);
+    const t0 = Date.now();
+    const res = await verify();
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(295);
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: { code: "INVALID_CODE", message: "That code is not valid. Request a new one." } });
     expect(m.createSession).not.toHaveBeenCalled();

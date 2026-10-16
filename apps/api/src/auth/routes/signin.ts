@@ -318,19 +318,24 @@ export const signinRoutes: FastifyPluginAsync = async (fastify) => {
       const db = fastify.prisma;
       const log = (userId: string, orgId: string | null, success: boolean) =>
         logAttempt(fastify, request, { userId, orgId, success, method: "email_code" });
-      const invalid = async () => {
-        await log("unknown", null, false);
+      const invalid = async (userId: string, orgId: string | null) => {
+        await log(userId, orgId, false);
+        await padTo(startedAt);
         return reply.status(400).send(INVALID_CODE);
       };
 
       const result = await verifyCode(db, { purpose: "signin_email", target: email, code });
-      if (!result.ok) return invalid();
+      // Always look the account up (even for a bad code) so timing and log attribution do not depend on the code result.
       const account = await db.authAccount.findUnique({ where: { email } });
-      if (!account || account.status !== "active" || !account.emailVerifiedAt) return invalid();
-
-      const rowOrErr = await userRow(fastify, account.id);
-      if (rowOrErr === "error") return reply.status(503).send(UNAVAILABLE);
+      const rowOrErr = account ? await userRow(fastify, account.id) : null;
+      if (rowOrErr === "error") {
+        await padTo(startedAt);
+        return reply.status(503).send(UNAVAILABLE);
+      }
       const orgId = rowOrErr?.organizationId ?? null;
+      if (!result.ok || !account || account.status !== "active" || !account.emailVerifiedAt) {
+        return invalid(account?.id ?? "unknown", orgId);
+      }
 
       // A code alone must not bypass a password lock.
       if (await isLocked(account.id)) {
