@@ -35,6 +35,25 @@ const WABA_SETTING_KEYS: ReadonlySet<string> = new Set([
   "new_display_name", "new_display_name_status", "marketing_messages_enabled",
 ]);
 
+/** Never sent to any client: the Meta access token stays server-side. */
+const SECRET_KEYS: ReadonlySet<string> = new Set(["whatsapp_access_token"]);
+
+/**
+ * WABA-owned keys (written by the WhatsApp account flows). Reading or writing them here needs
+ * settings_whatsapp, the same gate as /whatsapp-account/* (docs/prd-whatsapp-admin-role.md G2).
+ */
+const WABA_OWNED_KEYS: ReadonlySet<string> = new Set([
+  ...WABA_SETTING_KEYS, ...SECRET_KEYS,
+  "whatsapp_access_token_expired", "whatsapp_phone_numbers_data", "facebook_page_ids", "instagram_account_ids",
+  "marketing_messages_onboarding_status", "template_analytics_status", "verification_document_url",
+]);
+const WABA_OWNED_PREFIXES = ["wa_register_"] as const;
+
+function isWabaOwnedKey(key: string): boolean {
+  const k = key.trim().toLowerCase();
+  return WABA_OWNED_KEYS.has(k) || WABA_OWNED_PREFIXES.some((p) => k.startsWith(p));
+}
+
 const WHATSAPP_ADMIN_READ_ONLY = { error: { code: "FORBIDDEN", message: "This role cannot change organization settings" } };
 
 function castSetting(value: string | null, dataType: string): unknown {
@@ -95,7 +114,8 @@ export const vendorSettingsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get("/vendor-settings", async (request, reply) => {
-    const { organizationId, role } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    const canSeeWaba = canAccessSub(role, permissions, "settings_access", "settings_whatsapp");
     const rows = await fastify.prisma.vendorSetting.findMany({
       where: { organizationId },
     });
@@ -103,6 +123,8 @@ export const vendorSettingsRouter: FastifyPluginAsync = async (fastify) => {
     for (const row of rows) {
       // Plan gates are platform-controlled: tenants neither write (PUT refuses) nor read them.
       if (PLATFORM_CONTROLLED_PREFIXES.some((p) => row.key.trim().toLowerCase().startsWith(p))) continue;
+      if (SECRET_KEYS.has(row.key.trim().toLowerCase())) continue;
+      if (!canSeeWaba && isWabaOwnedKey(row.key)) continue;
       if (role === "whatsappAdmin" && !WABA_SETTING_KEYS.has(row.key)) continue;
       data[row.key] = castSetting(row.value, row.dataType);
     }
@@ -127,6 +149,12 @@ export const vendorSettingsRouter: FastifyPluginAsync = async (fastify) => {
       }
       // Plan switches and limits are platform-controlled. Never let a tenant (even an admin) write them here,
       // or they could grant themselves plan features (e.g. api_access) or lift plan limits.
+      if (
+        !canAccessSub(role, permissions, "settings_access", "settings_whatsapp") &&
+        settings.some((s) => isWabaOwnedKey(s.key))
+      ) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_whatsapp permission required to change WhatsApp account settings" } });
+      }
       const blocked = settings.filter((s) => PLATFORM_CONTROLLED_PREFIXES.some((p) => s.key.trim().toLowerCase().startsWith(p)));
       if (blocked.length > 0) {
         return reply.status(400).send({
