@@ -9,6 +9,7 @@ const m = vi.hoisted(() => ({
   clearPasswordFailures: vi.fn(),
   issueCode: vi.fn(),
   verifyCodeById: vi.fn(),
+  verifyCode: vi.fn(),
   sendCodeEmail: vi.fn(),
   createSession: vi.fn(),
   isTrustedDevice: vi.fn(),
@@ -21,7 +22,7 @@ vi.mock("../limits.js", () => ({
   recordPasswordFailure: m.recordPasswordFailure,
   clearPasswordFailures: m.clearPasswordFailures,
 }));
-vi.mock("../codes.js", () => ({ issueCode: m.issueCode, verifyCodeById: m.verifyCodeById, verifyCode: vi.fn() }));
+vi.mock("../codes.js", () => ({ issueCode: m.issueCode, verifyCodeById: m.verifyCodeById, verifyCode: m.verifyCode }));
 vi.mock("../emails.js", () => ({ sendCodeEmail: m.sendCodeEmail }));
 vi.mock("../sessions.js", () => ({ createSession: m.createSession }));
 vi.mock("../devices.js", () => ({ isTrustedDevice: m.isTrustedDevice, trustDevice: m.trustDevice }));
@@ -290,5 +291,120 @@ describe("auth signin new-device", () => {
     prisma.user.findUnique.mockResolvedValue({ role: "superAdmin", organizationId: "org1" });
     await post({ client: "mobile" });
     expect(m.createSession).toHaveBeenCalledWith(prisma, expect.objectContaining({ client: "admin", typ: "admin" }));
+  });
+});
+
+describe("auth signin email code", () => {
+  let app: FastifyInstance;
+  const request = (email = " Foo@X.com ") =>
+    app.inject({ method: "POST", url: "/v1/auth/signin/code/request", payload: { email } });
+  const verify = (payload: Record<string, unknown> = {}) =>
+    app.inject({
+      method: "POST",
+      url: "/v1/auth/signin/code/verify",
+      payload: { email: " Foo@X.com ", code: "123456", client: "web", ...payload },
+    });
+  beforeEach(async () => {
+    resetMocks();
+    m.verifyCode.mockResolvedValue({ ok: true, accountId: "usr_a", target: "foo@x.com" });
+    app = await build();
+  });
+
+  it("request: known account -> 202 and signin_email code emailed", async () => {
+    const res = await request();
+    await settleSigninWork();
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ ok: true });
+    expect(m.issueCode).toHaveBeenCalledWith(prisma, { purpose: "signin_email", target: "foo@x.com", accountId: "usr_a" });
+    expect(m.sendCodeEmail).toHaveBeenCalledWith("foo@x.com", "signin_email", "123456");
+  });
+
+  it.each([
+    ["unknown", () => prisma.authAccount.findUnique.mockResolvedValue(null)],
+    ["unverified", () => prisma.authAccount.findUnique.mockResolvedValue(acct({ emailVerifiedAt: null }))],
+    ["disabled", () => prisma.authAccount.findUnique.mockResolvedValue(acct({ status: "disabled" }))],
+    ["locked", () => m.isLocked.mockResolvedValue(true)],
+  ])("request: %s -> 202, nothing issued or sent", async (_n, setup) => {
+    setup();
+    const res = await request();
+    await settleSigninWork();
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ ok: true });
+    expect(m.issueCode).not.toHaveBeenCalled();
+    expect(m.sendCodeEmail).not.toHaveBeenCalled();
+  });
+
+  it("request: throttled -> 202, no email; lookup errors still 202", async () => {
+    m.issueCode.mockResolvedValue({ error: "throttled" });
+    expect((await request()).statusCode).toBe(202);
+    await settleSigninWork();
+    expect(m.sendCodeEmail).not.toHaveBeenCalled();
+    prisma.authAccount.findUnique.mockRejectedValue(new Error("db down"));
+    expect((await request()).statusCode).toBe(202);
+    await settleSigninWork();
+  });
+
+  it("verify ok: tokens + deviceId, session typ user, no password-failure clearing, logged email_code", async () => {
+    const res = await verify();
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ accessToken: "AT", refreshToken: "RT", expiresIn: 600, deviceId: "dev_new" });
+    expect(m.verifyCode).toHaveBeenCalledWith(prisma, { purpose: "signin_email", target: "foo@x.com", code: "123456" });
+    expect(m.createSession).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({ accountId: "usr_a", client: "web", typ: "user", ip: "9.9.9.9" }),
+    );
+    expect(m.trustDevice).toHaveBeenCalledWith(prisma, "usr_a");
+    expect(m.clearPasswordFailures).not.toHaveBeenCalled();
+    expect(prisma.loginLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: "usr_a", method: "email_code", success: true }),
+    });
+  });
+
+  it("verify ok with mustSetPassword adds mustSetPassword:true", async () => {
+    prisma.authAccount.findUnique.mockResolvedValue(acct({ mustSetPassword: true }));
+    const res = await verify();
+    expect(res.json().mustSetPassword).toBe(true);
+  });
+
+  it("verify: bad/replayed code -> 400 INVALID_CODE, failure logged unknown", async () => {
+    m.verifyCode.mockResolvedValue({ ok: false, reason: "invalid" });
+    const res = await verify();
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: { code: "INVALID_CODE", message: "That code is not valid. Request a new one." } });
+    expect(m.createSession).not.toHaveBeenCalled();
+    expect(prisma.loginLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: "unknown", method: "email_code", success: false }),
+    });
+  });
+
+  it("verify: account missing or inactive -> 400 INVALID_CODE", async () => {
+    prisma.authAccount.findUnique.mockResolvedValue(null);
+    expect((await verify()).statusCode).toBe(400);
+    prisma.authAccount.findUnique.mockResolvedValue(acct({ status: "disabled" }));
+    expect((await verify()).statusCode).toBe(400);
+    expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("verify: locked account -> padded 401 INVALID_CREDENTIALS, no session", async () => {
+    m.isLocked.mockResolvedValue(true);
+    const t0 = Date.now();
+    const res = await verify();
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(295);
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual(BAD);
+    expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("verify: superAdmin gets admin session", async () => {
+    prisma.user.findUnique.mockResolvedValue({ role: "superAdmin", organizationId: "org1" });
+    await verify({ client: "mobile" });
+    expect(m.createSession).toHaveBeenCalledWith(prisma, expect.objectContaining({ client: "admin", typ: "admin" }));
+  });
+
+  it("verify: users lookup error -> 503", async () => {
+    prisma.user.findUnique.mockRejectedValue(new Error("db down"));
+    const res = await verify();
+    expect(res.statusCode).toBe(503);
+    expect(m.createSession).not.toHaveBeenCalled();
   });
 });

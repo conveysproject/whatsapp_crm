@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from "fastify";
-import { issueCode, verifyCodeById, type CodePurpose } from "../codes.js";
+import { issueCode, verifyCode, verifyCodeById, type CodePurpose } from "../codes.js";
 import { isTrustedDevice, trustDevice } from "../devices.js";
 import { sendCodeEmail } from "../emails.js";
 import { normalizeEmail } from "../ids.js";
@@ -17,6 +17,14 @@ interface SigninBody {
   password: string;
   client: "web" | "mobile";
   deviceId?: string;
+}
+interface CodeRequestBody {
+  email: string;
+}
+interface CodeVerifyBody {
+  email: string;
+  code: string;
+  client: "web" | "mobile";
 }
 interface NewDeviceBody {
   challengeId: string;
@@ -84,14 +92,14 @@ const UNAVAILABLE = { error: { code: "UNAVAILABLE", message: "Please try again."
 async function logAttempt(
   fastify: FastifyInstance,
   request: FastifyRequest,
-  input: { userId: string; orgId: string | null; success: boolean },
+  input: { userId: string; orgId: string | null; success: boolean; method?: string },
 ): Promise<void> {
   try {
     await fastify.prisma.loginLog.create({
       data: {
         userId: input.userId,
         orgId: input.orgId,
-        method: "password",
+        method: input.method ?? "password",
         success: input.success,
         ipAddress: authClientIp(request),
         userAgent: request.headers["user-agent"] ?? null,
@@ -244,6 +252,109 @@ export const signinRoutes: FastifyPluginAsync = async (fastify) => {
         refreshToken: session.refreshToken,
         expiresIn: 600,
         deviceId: newDeviceId,
+      });
+    },
+  );
+
+  fastify.post<{ Body: CodeRequestBody }>(
+    "/signin/code/request",
+    {
+      config: { public: true },
+      schema: {
+        body: {
+          type: "object",
+          required: ["email"],
+          properties: { email: { type: "string", minLength: 3, maxLength: 254 } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const email = normalizeEmail(request.body.email);
+      // Always the same answer, sent before any lookup; the real work happens afterwards.
+      await reply.status(202).send({ ok: true });
+      const work = (async () => {
+        try {
+          const account = await fastify.prisma.authAccount.findUnique({ where: { email } });
+          if (!account || !account.emailVerifiedAt || account.status !== "active") return;
+          if (await isLocked(account.id)) return;
+          const issued = await issueCode(fastify.prisma, {
+            purpose: "signin_email",
+            target: account.email,
+            accountId: account.id,
+          });
+          if ("error" in issued) return;
+          await sendCodeEmail(account.email, "signin_email", issued.code);
+        } catch (err) {
+          fastify.log.warn({ err: err instanceof Error ? err.name : "unknown" }, "signin code request failed");
+        }
+      })();
+      pendingSigninWork.add(work);
+      void work.finally(() => pendingSigninWork.delete(work));
+    },
+  );
+
+  fastify.post<{ Body: CodeVerifyBody }>(
+    "/signin/code/verify",
+    {
+      config: { public: true },
+      schema: {
+        body: {
+          type: "object",
+          required: ["email", "code", "client"],
+          properties: {
+            email: { type: "string", minLength: 3, maxLength: 254 },
+            code: { type: "string", minLength: 1, maxLength: 16 },
+            client: { type: "string", enum: ["web", "mobile"] },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const startedAt = Date.now();
+      const { code, client } = request.body;
+      const email = normalizeEmail(request.body.email);
+      const db = fastify.prisma;
+      const log = (userId: string, orgId: string | null, success: boolean) =>
+        logAttempt(fastify, request, { userId, orgId, success, method: "email_code" });
+      const invalid = async () => {
+        await log("unknown", null, false);
+        return reply.status(400).send(INVALID_CODE);
+      };
+
+      const result = await verifyCode(db, { purpose: "signin_email", target: email, code });
+      if (!result.ok) return invalid();
+      const account = await db.authAccount.findUnique({ where: { email } });
+      if (!account || account.status !== "active" || !account.emailVerifiedAt) return invalid();
+
+      const rowOrErr = await userRow(fastify, account.id);
+      if (rowOrErr === "error") return reply.status(503).send(UNAVAILABLE);
+      const orgId = rowOrErr?.organizationId ?? null;
+
+      // A code alone must not bypass a password lock.
+      if (await isLocked(account.id)) {
+        await log(account.id, orgId, false);
+        await padTo(startedAt);
+        return reply.status(401).send(INVALID_CREDENTIALS);
+      }
+
+      const isSuperAdmin = rowOrErr?.role === "superAdmin";
+      const session = await createSession(db, {
+        accountId: account.id,
+        client: isSuperAdmin ? "admin" : client,
+        typ: isSuperAdmin ? "admin" : "user",
+        ip: authClientIp(request),
+        userAgent: request.headers["user-agent"],
+      });
+      const deviceId = await trustDevice(db, account.id);
+      await log(account.id, orgId, true);
+      return reply.send({
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        expiresIn: 600,
+        deviceId,
+        ...(account.mustSetPassword ? { mustSetPassword: true } : {}),
       });
     },
   );
