@@ -66,17 +66,19 @@ export const clerkWebhookRouter: FastifyPluginAsync = async (fastify) => {
       const rawBody = request.body as Buffer;
       const webhookSecret = process.env["CLERK_WEBHOOK_SECRET"] ?? "";
 
-      if (webhookSecret && svixId && svixTs && svixSig) {
-        try {
-          const wh = new Webhook(webhookSecret);
-          wh.verify(rawBody, {
-            "svix-id": svixId,
-            "svix-timestamp": svixTs,
-            "svix-signature": svixSig,
-          });
-        } catch {
-          return reply.status(400).send({ error: "Invalid webhook signature" });
-        }
+      // Fail closed: an unsigned request, or a missing secret, is never processed.
+      if (!webhookSecret || !svixId || !svixTs || !svixSig) {
+        return reply.status(400).send({ error: "Invalid webhook signature" });
+      }
+      try {
+        const wh = new Webhook(webhookSecret);
+        wh.verify(rawBody, {
+          "svix-id": svixId,
+          "svix-timestamp": svixTs,
+          "svix-signature": svixSig,
+        });
+      } catch {
+        return reply.status(400).send({ error: "Invalid webhook signature" });
       }
 
       let event: ClerkEvent;
