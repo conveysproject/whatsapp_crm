@@ -1,6 +1,7 @@
 import { JSX, ReactNode } from "react";
 import { serverApiHeaders, getImpersonationCookie } from "@/lib/server-api";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { RoleRouteGuard } from "@/components/layout/RoleRouteGuard";
 import { TopBar } from "@/components/layout/TopBar";
 import { SetupBanner } from "@/components/SetupBanner";
 import { BillingStandingBanner } from "@/components/billing/BillingStandingBanner";
@@ -93,6 +94,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   return (
     <OnboardingProvider status={status}>
       <ImpersonationProvider impersonating={impersonating} />
+      <RoleRouteGuard />
       <Toaster richColors position="top-right" />
       {/* relative: hidden (sr-only) and other absolutely positioned elements are contained and clipped by this frame instead of stretching the window's own scroll height */}
       <div className="relative flex h-screen overflow-hidden bg-gray-50">

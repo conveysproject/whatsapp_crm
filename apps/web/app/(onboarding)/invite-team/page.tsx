@@ -66,6 +66,7 @@ export default function InviteTeamPage(): JSX.Element {
           <option value="manager">Manager</option>
           <option value="agent">Agent</option>
           <option value="viewer">Viewer</option>
+          <option value="whatsappAdmin">WhatsApp Admin</option>
         </select>
         <button
           type="submit"

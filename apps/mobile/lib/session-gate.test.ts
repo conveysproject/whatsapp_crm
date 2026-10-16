@@ -14,6 +14,9 @@ describe("resolveGate", () => {
   it("blocks super admins", async () => {
     expect(await resolveGate(apiReturning(async () => ({ data: { ...me, role: "superAdmin" } })))).toEqual({ kind: "super_admin" });
   });
+  it("sends WhatsApp Admins to the web (their role has nothing to do in the app)", async () => {
+    expect(await resolveGate(apiReturning(async () => ({ data: { ...me, role: "whatsappAdmin" } })))).toEqual({ kind: "web_only" });
+  });
   it("treats 403/404 as no WBMSG account", async () => {
     for (const status of [403, 404]) {
       const gate = await resolveGate(apiReturning(async () => { throw new ApiError(status, "X", "x"); }));

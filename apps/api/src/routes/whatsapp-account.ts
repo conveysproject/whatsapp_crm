@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { canAccess, canAccessSub } from "../lib/permissions.js";
+import { canAccessSub } from "../lib/permissions.js";
 import { uploadToR2 } from "../lib/r2.js";
 import { onWhatsappConnected } from "../lib/register-phone-enqueue.js";
 import {
@@ -45,11 +45,12 @@ function getApiPublicUrl(): string {
 }
 
 export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
-  // Section gate (Phase 2 / D15): all WhatsApp account routes require settings_access.
+  // Section gate: every WhatsApp account route (read and write, incl. /connect) requires the
+  // settings_whatsapp sub-permission, not just settings_access (docs/prd-whatsapp-admin-role.md G2).
   fastify.addHook("preHandler", async (request, reply) => {
     const { role, permissions } = request.auth;
-    if (!canAccess(role, permissions, "settings_access")) {
-      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_access permission required" } });
+    if (!canAccessSub(role, permissions, "settings_access", "settings_whatsapp")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_whatsapp permission required" } });
     }
   });
 

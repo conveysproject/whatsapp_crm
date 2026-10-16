@@ -1,6 +1,8 @@
 import { JSX, Suspense } from "react";
 import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import { WHATSAPP_ADMIN_HOME } from "@/lib/role-home";
 import { DashboardView } from "@/components/dashboard/DashboardView";
 import { DashboardSkeleton } from "@/components/dashboard/DashboardStates";
 import { Greeting } from "@/components/dashboard/Greeting";
@@ -9,7 +11,7 @@ interface CurrentUser {
   id: string;
   fullName: string;
   email: string;
-  role: "superAdmin" | "admin" | "manager" | "agent" | "viewer";
+  role: "superAdmin" | "admin" | "manager" | "agent" | "viewer" | "whatsappAdmin";
 }
 
 const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -27,6 +29,8 @@ async function getCurrentUser(token: string): Promise<CurrentUser | null> {
 export default async function DashboardPage(): Promise<JSX.Element> {
   const { getToken } = await auth.protect();
   const currentUser = await getCurrentUser(await getToken() ?? "");
+  // WhatsApp Admins can only use WhatsApp Account settings (docs/prd-whatsapp-admin-role.md).
+  if (currentUser?.role === "whatsappAdmin") redirect(WHATSAPP_ADMIN_HOME);
   return (
     <div className="space-y-6">
       <Greeting fullName={currentUser?.fullName ?? "there"} />

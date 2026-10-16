@@ -148,6 +148,8 @@ export default function AppLayout() {
   switch (gate.data.kind) {
     case "super_admin":
       return <Message title="Use the web dashboard" body="Super admin accounts use the web dashboard." action="Sign out" onAction={() => signOut()} failure="Couldn't sign out. Check your connection and try again." />;
+    case "web_only":
+      return <Message title="Use the WBMSG website" body="Your role manages the WhatsApp account, which is done on the WBMSG website." action="Sign out" onAction={() => signOut()} failure="Couldn't sign out. Check your connection and try again." />;
     case "no_account":
       return <Message title="No WBMSG account" body="This login isn't part of a WBMSG workspace yet. Ask your admin to invite you, then sign in again." action="Sign out" onAction={() => signOut()} failure="Couldn't sign out. Check your connection and try again." />;
     case "error":

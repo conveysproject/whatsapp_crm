@@ -1,4 +1,4 @@
-export type RoleKey = "admin" | "manager" | "agent" | "viewer";
+export type RoleKey = "admin" | "manager" | "agent" | "viewer" | "whatsappAdmin";
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, Record<string, string>> = {
   admin: {
@@ -104,7 +104,17 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, Record<string, string>> =
     deals_access: "allow",
     trust_score_access: "allow",
   },
+
+  // Fixed role (docs/prd-whatsapp-admin-role.md): WhatsApp Account settings only.
+  // auth.ts always resolves it to exactly this, ignoring stored or per-user overrides.
+  whatsappAdmin: {
+    settings_access: "allow",
+    "settings_access@settings_whatsapp": "allow",
+  },
 };
+
+/** Roles whose permissions are fixed: not editable, no stored or per-user overrides. */
+export const FIXED_PERMISSION_ROLES: readonly string[] = ["whatsappAdmin"];
 
 /**
  * Built-in baseline permissions for a role. Used only when an org has NO

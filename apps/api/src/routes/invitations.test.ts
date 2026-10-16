@@ -140,6 +140,28 @@ describe("invitations", () => {
     );
   });
 
+  it.each([
+    ["manager", "admin", 403],
+    ["manager", "whatsappAdmin", 403],
+    ["manager", "agent", 201],
+    ["admin", "admin", 201],
+    ["admin", "whatsappAdmin", 201],
+  ])("%s inviting %s → %i", async (actorRole, inviteRole, expected) => {
+    mockCheckPlanLimit.mockResolvedValue({ allowed: true, limit: -1, current: 0 });
+    mockPrisma.invitation.create.mockResolvedValue({ id: "i1", email: "a@b.com", role: inviteRole, token: "t", expiresAt: new Date() });
+    const saved = mockAuth.role;
+    (mockAuth as { role: string }).role = actorRole;
+    try {
+      const app = await buildApp();
+      const res = await app.inject({ method: "POST", url: "/v1/invitations", payload: { email: "a@b.com", role: inviteRole } });
+      expect(res.statusCode).toBe(expected);
+      if (expected === 403) expect(mockPrisma.invitation.create).not.toHaveBeenCalled();
+      await app.close();
+    } finally {
+      (mockAuth as { role: string }).role = saved;
+    }
+  });
+
   it("rejects invite when plan limit is reached", async () => {
     mockCheckPlanLimit.mockResolvedValue({ allowed: false, limit: 3, current: 3 });
     const app = await buildApp();

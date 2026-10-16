@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { JSX, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { canAccess } from "@/lib/can";
+import { WHATSAPP_ADMIN_HOME } from "@/lib/role-home";
 
 interface NavChild {
   href: string;
@@ -76,15 +77,17 @@ export function Sidebar(): JSX.Element {
   // known, hide items the role can't access. canAccess() bypasses for admin/superAdmin.
   const allowed = (perm?: string): boolean => !perm || isLoading || canAccess(user, perm);
 
-  // Build the nav the current user may see.
-  const visibleNav: NavItem[] = NAV.flatMap((item) => {
-    if (item.children) {
-      const kids = item.children.filter((c) => allowed(c.perm));
-      if (!allowed(item.perm) || kids.length === 0) return [];
-      return [{ ...item, children: kids }];
-    }
-    return allowed(item.perm) ? [item] : [];
-  });
+  // Build the nav the current user may see. A WhatsApp Admin gets a single entry.
+  const visibleNav: NavItem[] = user?.role === "whatsappAdmin"
+    ? [{ href: WHATSAPP_ADMIN_HOME, label: "WhatsApp Account", icon: "⚙" }]
+    : NAV.flatMap((item) => {
+        if (item.children) {
+          const kids = item.children.filter((c) => allowed(c.perm));
+          if (!allowed(item.perm) || kids.length === 0) return [];
+          return [{ ...item, children: kids }];
+        }
+        return allowed(item.perm) ? [item] : [];
+      });
 
   function isOpen(item: NavItem): boolean {
     if (!item.children) return false;
