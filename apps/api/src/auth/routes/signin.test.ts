@@ -27,7 +27,8 @@ vi.mock("../sessions.js", () => ({ createSession: m.createSession }));
 vi.mock("../devices.js", () => ({ isTrustedDevice: m.isTrustedDevice, trustDevice: m.trustDevice }));
 
 import { authRouter } from "./index.js";
-import { settleSigninWork } from "./signin.js";
+import { DUMMY_HASH, settleSigninWork } from "./signin.js";
+import { verifyPassword } from "../password.js";
 
 const prisma = {
   authAccount: { findUnique: vi.fn(), update: vi.fn() },
@@ -199,6 +200,58 @@ describe("auth signin", () => {
       where: { id: "usr_a" },
       data: { passwordHash: expect.stringMatching(/^\$argon2id\$v=19\$m=65536,t=3,p=1\$/) },
     });
+  });
+});
+
+describe("auth signin hardening", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    goodHash ??= await hashPassword("correct horse");
+    resetMocks();
+    app = await build();
+  });
+
+  it("account locked during the verify: correct password still gets the padded 401", async () => {
+    m.isLocked.mockResolvedValueOnce(false).mockResolvedValue(true);
+    const res = await signin(app, { deviceId: "dev1" });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual(BAD);
+    expect(m.createSession).not.toHaveBeenCalled();
+    expect(m.issueCode).not.toHaveBeenCalled();
+    expect(m.recordPasswordFailure).not.toHaveBeenCalled();
+  });
+
+  it("reads isLocked once before the verify and once after", async () => {
+    await signin(app, { deviceId: "dev1" });
+    expect(m.isLocked).toHaveBeenCalledTimes(2);
+  });
+
+  it("users lookup error fails closed with 503 and no tokens", async () => {
+    prisma.user.findUnique.mockRejectedValue(new Error("db down"));
+    const res = await signin(app, { deviceId: "dev1" });
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({ error: { code: "UNAVAILABLE", message: "Please try again." } });
+    expect(m.createSession).not.toHaveBeenCalled();
+    expect(m.issueCode).not.toHaveBeenCalled();
+  });
+
+  it("new-device: users lookup error fails closed with 503", async () => {
+    m.verifyCodeById.mockResolvedValue({ ok: true, accountId: "usr_a", target: "foo@x.com" });
+    prisma.user.findUnique.mockRejectedValue(new Error("db down"));
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/auth/signin/new-device",
+      payload: { challengeId: "c1", code: "123456", client: "web" },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("DUMMY_HASH is a valid argon2id hash with current params", async () => {
+    expect(DUMMY_HASH.startsWith("$argon2id$v=19$m=65536,t=3,p=1$")).toBe(true);
+    // the throwaway password verifies, proving the hash parses (a malformed hash would return ok:false)
+    expect((await verifyPassword("wbmsg-dummy-password-not-real", DUMMY_HASH)).ok).toBe(true);
+    expect((await verifyPassword("x", DUMMY_HASH)).ok).toBe(false);
   });
 });
 

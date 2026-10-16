@@ -26,7 +26,7 @@ interface NewDeviceBody {
 
 const MIN_DURATION_MS = 300;
 // Fixed argon2id hash (current params) of a throwaway string; verified for unknown accounts so timing matches.
-const DUMMY_HASH =
+export const DUMMY_HASH =
   "$argon2id$v=19$m=65536,t=3,p=1$UDOj3rd08ph1+wg/v49Qlg$D4n1j11jYPfZWc9vwh6D0i7Emf8mCSNwkunCitx9n3Y";
 
 const INVALID_CREDENTIALS = {
@@ -67,6 +67,7 @@ async function padTo(startedAt: number): Promise<void> {
   if (left > 0) await new Promise((r) => setTimeout(r, left));
 }
 
+/** users row for the account, null when none; "error" when the lookup failed (callers must fail closed). */
 async function userRow(fastify: FastifyInstance, accountId: string) {
   try {
     return await fastify.prisma.user.findUnique({
@@ -74,9 +75,11 @@ async function userRow(fastify: FastifyInstance, accountId: string) {
       select: { role: true, organizationId: true },
     });
   } catch {
-    return null;
+    return "error" as const;
   }
 }
+
+const UNAVAILABLE = { error: { code: "UNAVAILABLE", message: "Please try again." } };
 
 async function logAttempt(
   fastify: FastifyInstance,
@@ -135,11 +138,17 @@ export const signinRoutes: FastifyPluginAsync = async (fastify) => {
         await verifyPassword(password, DUMMY_HASH);
         return fail("unknown", null);
       }
-      const row = await userRow(fastify, account.id);
+      const locked = await isLocked(account.id);
+      const rowOrErr = await userRow(fastify, account.id);
+      if (rowOrErr === "error") {
+        await padTo(startedAt);
+        return reply.status(503).send(UNAVAILABLE);
+      }
+      const row = rowOrErr;
       const orgId = row?.organizationId ?? null;
 
       // Account flagged to set a password: the typed password is ignored and never verified.
-      if (account.mustSetPassword && account.emailVerifiedAt && account.status === "active" && !(await isLocked(account.id))) {
+      if (account.mustSetPassword && account.emailVerifiedAt && account.status === "active" && !locked) {
         const issued = await issueCode(db, { purpose: "password_reset", target: account.email, accountId: account.id });
         await padTo(startedAt);
         if ("error" in issued) return reply.status(429).send(RATE_LIMITED);
@@ -147,7 +156,6 @@ export const signinRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.send({ next: "set_password", challengeId: issued.codeId });
       }
 
-      const locked = await isLocked(account.id);
       const result = await verifyPassword(password, account.passwordHash ?? DUMMY_HASH);
       if (locked || !result.ok || !account.passwordHash || !account.emailVerifiedAt || account.status !== "active") {
         // Locked attempts are not counted again, so an attacker cannot extend a victim's lock indefinitely.
@@ -156,6 +164,9 @@ export const signinRoutes: FastifyPluginAsync = async (fastify) => {
         }
         return fail(account.id, orgId);
       }
+
+      // Re-check after the slow verify: a concurrent burst may have locked the account meanwhile.
+      if (await isLocked(account.id)) return fail(account.id, orgId);
 
       await bestEffort(() => clearPasswordFailures(account.id));
       if (result.needsRehash) {
@@ -218,6 +229,7 @@ export const signinRoutes: FastifyPluginAsync = async (fastify) => {
       if (!account || account.status !== "active") return reply.status(400).send(INVALID_CODE);
 
       const row = await userRow(fastify, account.id);
+      if (row === "error") return reply.status(503).send(UNAVAILABLE);
       const isSuperAdmin = row?.role === "superAdmin";
       const session = await createSession(db, {
         accountId: account.id,

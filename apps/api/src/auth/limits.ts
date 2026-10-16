@@ -32,22 +32,38 @@ export function authClientIp(request: FastifyRequest): string {
 
 const PWFAIL_WINDOW_S = 900;
 const PWFAIL_LOCK_AT = 5;
+const LOCK_BASE_S = 900;
 const LOCK_MAX_S = 86400;
 const failKey = (accountId: string) => `auth:pwfail:${accountId}`;
+const strikeKey = (accountId: string) => `auth:pwstrikes:${accountId}`;
 const lockKey = (accountId: string) => `auth:lock:${accountId}`;
 
-/** Count a wrong password. From the 5th failure in 15 min the account is locked; each further failure doubles the lock (max 24 h). */
+// Atomic INCR + EXPIRE so a counter can never exist without a TTL.
+// ARGV[1] = ttl seconds, ARGV[2] = "1" to refresh the TTL on every increment, else only when created.
+const INCR_WITH_TTL = `
+local n = redis.call('INCR', KEYS[1])
+if n == 1 or ARGV[2] == '1' then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+return n`;
+
+async function incrWithTtl(key: string, ttlSec: number, refresh: boolean): Promise<number> {
+  return Number(await redis.eval(INCR_WITH_TTL, 1, key, String(ttlSec), refresh ? "1" : "0"));
+}
+
+/**
+ * Count a wrong password. The 5th failure in 15 min applies a lock and one "strike"; strikes persist 24 h
+ * so each repeat lock doubles (900 s, 1800 s, ... capped at 24 h). Callers must not record failures while locked.
+ */
 export async function recordPasswordFailure(accountId: string): Promise<void> {
-  await redis.set(failKey(accountId), 0, "EX", PWFAIL_WINDOW_S, "NX");
-  const n = await redis.incr(failKey(accountId));
-  if (n >= PWFAIL_LOCK_AT) {
-    const ttl = Math.min(PWFAIL_WINDOW_S * 2 ** (n - PWFAIL_LOCK_AT), LOCK_MAX_S);
-    await redis.set(lockKey(accountId), "1", "EX", ttl);
-  }
+  const n = await incrWithTtl(failKey(accountId), PWFAIL_WINDOW_S, false);
+  if (n < PWFAIL_LOCK_AT) return;
+  const strikes = await incrWithTtl(strikeKey(accountId), LOCK_MAX_S, true);
+  const ttl = Math.min(LOCK_BASE_S * 2 ** Math.min(strikes - 1, 20), LOCK_MAX_S);
+  await redis.set(lockKey(accountId), "1", "EX", ttl);
+  await redis.del(failKey(accountId));
 }
 
 export async function clearPasswordFailures(accountId: string): Promise<void> {
-  await redis.del(failKey(accountId), lockKey(accountId));
+  await redis.del(failKey(accountId), strikeKey(accountId), lockKey(accountId));
 }
 
 export async function isLocked(accountId: string): Promise<boolean> {
