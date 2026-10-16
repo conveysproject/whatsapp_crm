@@ -140,6 +140,38 @@ describe("one-time codes", () => {
     await expect(issueCode(prisma, { purpose: "signin_email", target: T })).rejects.toThrow(/AUTH_CODE_PEPPER/);
   });
 
+  it("normalizes email targets across case and whitespace", async () => {
+    const { prisma } = fakePrisma();
+    const r: any = await issueCode(prisma, { purpose: "signin_email", target: "A@B.com " });
+    expect(await verifyCode(prisma, { purpose: "signin_email", target: "a@b.com", code: r.code })).toMatchObject({
+      ok: true,
+      target: "a@b.com",
+    });
+  });
+
+  it("throttles across case variants of one email", async () => {
+    const { prisma } = fakePrisma();
+    for (const t of ["a@b.com", "A@b.com", " a@B.COM"]) {
+      expect("error" in (await issueCode(prisma, { purpose: "signin_email", target: t }))).toBe(false);
+    }
+    expect(await issueCode(prisma, { purpose: "signin_email", target: "A@B.com" })).toEqual({ error: "throttled" });
+  });
+
+  it("a new issue under another casing invalidates the earlier code", async () => {
+    const { prisma } = fakePrisma();
+    const a: any = await issueCode(prisma, { purpose: "signin_email", target: "a@b.com" });
+    await issueCode(prisma, { purpose: "signin_email", target: "A@B.com" });
+    expect(await verifyCode(prisma, { purpose: "signin_email", target: "a@b.com", code: a.code })).toMatchObject({
+      ok: a.code === undefined,
+    });
+  });
+
+  it("phone purposes are trimmed only", async () => {
+    const { prisma, rows } = fakePrisma();
+    await issueCode(prisma, { purpose: "phone_verify", target: " +911234567890 " });
+    expect(rows[0]!.target).toBe("+911234567890");
+  });
+
   describe("verifyCodeById", () => {
     it("correct id+purpose+code is ok, returns target, single use", async () => {
       const { prisma } = fakePrisma();

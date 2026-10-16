@@ -1,5 +1,6 @@
 import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
+import { normalizeEmail } from "./ids.js";
 
 export type CodePurpose =
   | "email_verify"
@@ -28,6 +29,12 @@ function pepper(): string {
   return p;
 }
 
+const PHONE_PURPOSES: ReadonlySet<CodePurpose> = new Set(["signin_whatsapp", "phone_verify"]);
+
+function canonicalTarget(purpose: CodePurpose, target: string): string {
+  return PHONE_PURPOSES.has(purpose) ? target.trim() : normalizeEmail(target);
+}
+
 function hashCode(purpose: string, target: string, code: string): string {
   return createHmac("sha256", pepper()).update(`${purpose}:${target}:${code}`).digest("hex");
 }
@@ -37,7 +44,8 @@ export async function issueCode(
   input: { purpose: CodePurpose; target: string; accountId?: string },
 ): Promise<{ code: string; codeId: string } | { error: "throttled" }> {
   pepper(); // fail fast on bad config
-  const { purpose, target } = input;
+  const { purpose } = input;
+  const target = canonicalTarget(purpose, input.target);
   const now = Date.now();
 
   const recent = await prisma.authCode.count({
@@ -105,7 +113,7 @@ export async function verifyCode(
   input: { purpose: CodePurpose; target: string; code: string },
 ): Promise<VerifyResult> {
   const row = await prisma.authCode.findFirst({
-    where: { purpose: input.purpose, target: input.target, consumedAt: null },
+    where: { purpose: input.purpose, target: canonicalTarget(input.purpose, input.target), consumedAt: null },
     orderBy: { createdAt: "desc" },
   });
   return check(prisma, row, input.code);
