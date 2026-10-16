@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { authClientIp, hitLimit } from "../limits.js";
 import { signupRoutes } from "./signup.js";
+import { signinRoutes } from "./signin.js";
 
 export const authRouter: FastifyPluginAsync = async (fastify) => {
   // Per-IP limit for every auth route. onRequest so it also covers malformed bodies.
@@ -13,4 +14,5 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   await fastify.register(signupRoutes);
+  await fastify.register(signinRoutes);
 };
