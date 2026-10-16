@@ -286,7 +286,7 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       // 15 minutes — enough for a support session, short enough to limit blast radius
       await redis.set(
         `impersonate:${token}`,
-        JSON.stringify({ organizationId: org.id, targetUserId: target.id, issuedBy: request.auth.userId, mode: "readonly" }),
+        JSON.stringify({ organizationId: org.id, targetUserId: target.id, issuedBy: request.auth.userId, issuedSid: request.auth.sid ?? null, mode: "readonly" }),
         "EX", 900
       );
 
@@ -333,7 +333,7 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       const notFound = () => reply.status(404).send({ error: { code: "NOT_FOUND", message: "Impersonation session not found or expired" } });
 
       const raw = await redis.get(key);
-      let payload: { organizationId?: string; targetUserId?: string; issuedBy?: string; mode?: string } | null = null;
+      let payload: { organizationId?: string; targetUserId?: string; issuedBy?: string; issuedSid?: string | null; mode?: string } | null = null;
       try { payload = raw ? JSON.parse(raw) : null; } catch { payload = null; }
       if (!payload || !payload.targetUserId || !payload.organizationId) return notFound();
       if (payload.issuedBy !== adminId) {

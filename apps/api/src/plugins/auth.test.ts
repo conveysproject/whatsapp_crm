@@ -8,6 +8,14 @@ vi.mock("../lib/clerk.js", () => ({
   }),
 }));
 
+vi.mock("../auth/tokens.js", () => ({
+  verifyAccessToken: vi.fn(),
+}));
+
+vi.mock("../auth/sessions.js", () => ({
+  isSessionRevoked: vi.fn().mockResolvedValue(false),
+}));
+
 vi.mock("../lib/prisma.js", () => ({
   prisma: {
     user: {
@@ -323,6 +331,7 @@ describe("auth plugin — user impersonation", () => {
         permissions: { contacts_access: "allow", inbox_access: "allow" },
         teamId: "t-1",
         teamRole: "member",
+        sid: null,
         impersonation: { adminId: "sa-1", mode: "readonly" },
       },
     });
@@ -448,5 +457,131 @@ describe("auth plugin — user impersonation", () => {
     expect(res.statusCode).toBe(401);
     expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_IMPERSONATION_TOKEN");
     await app.close();
+  });
+});
+
+describe("auth plugin — AUTH_PROVIDER=wbmsg", () => {
+  const OLD = { p: process.env.AUTH_PROVIDER, m: process.env.AUTH_MIN_MOBILE_VERSION };
+  beforeEach(async () => {
+    process.env.AUTH_PROVIDER = "wbmsg";
+    delete process.env.AUTH_MIN_MOBILE_VERSION;
+    const { verifyAccessToken } = await import("../auth/tokens.js");
+    const { isSessionRevoked } = await import("../auth/sessions.js");
+    vi.mocked(verifyAccessToken).mockReset().mockResolvedValue({ sub: "user_123", sid: "sid-1", typ: "user" });
+    vi.mocked(isSessionRevoked).mockReset().mockResolvedValue(false);
+    const { verifyClerkToken } = await import("../lib/clerk.js");
+    vi.mocked(verifyClerkToken).mockClear();
+    const { redis } = await import("../lib/redis.js");
+    vi.mocked(redis.get).mockReset().mockResolvedValue(null);
+  });
+  afterAll(() => {
+    if (OLD.p === undefined) delete process.env.AUTH_PROVIDER; else process.env.AUTH_PROVIDER = OLD.p;
+    if (OLD.m === undefined) delete process.env.AUTH_MIN_MOBILE_VERSION; else process.env.AUTH_MIN_MOBILE_VERSION = OLD.m;
+  });
+
+  async function buildApp() {
+    const prismaPlugin = (await import("./prisma.js")).default;
+    const authPlugin = (await import("./auth.js")).default;
+    const app = Fastify({ logger: false });
+    await app.register(prismaPlugin);
+    await app.register(authPlugin);
+    app.get("/probe", async (req) => ({ auth: req.auth }));
+    app.get("/public", { config: { public: true } }, async () => ({ ok: true }));
+    await app.ready();
+    return app;
+  }
+  const bearer = { authorization: "Bearer tok" };
+
+  it("resolves request.auth as before and carries the token sid", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    vi.mocked(prisma.user.findFirst).mockResolvedValueOnce({ role: "agent", organizationId: "org-1", teamId: null, teamRole: null } as never);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/probe", headers: bearer });
+    expect(res.statusCode).toBe(200);
+    const auth = res.json<{ auth: { userId: string; organizationId: string; role: string; sid: string } }>().auth;
+    expect(auth).toMatchObject({ userId: "user_123", organizationId: "org-1", role: "agent", sid: "sid-1" });
+    const { verifyClerkToken } = await import("../lib/clerk.js");
+    expect(verifyClerkToken).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("rejects an invalid token and a revoked session with 401", async () => {
+    const { verifyAccessToken } = await import("../auth/tokens.js");
+    const { isSessionRevoked } = await import("../auth/sessions.js");
+    const app = await buildApp();
+    vi.mocked(verifyAccessToken).mockRejectedValueOnce(new Error("bad"));
+    expect((await app.inject({ method: "GET", url: "/probe", headers: bearer })).statusCode).toBe(401);
+    vi.mocked(isSessionRevoked).mockResolvedValueOnce(true);
+    expect((await app.inject({ method: "GET", url: "/probe", headers: bearer })).statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("returns 403 for a deactivated user", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    vi.mocked(prisma.user.findFirst).mockResolvedValueOnce(null);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/probe", headers: bearer });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  describe("impersonation", () => {
+    const payload = { organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", issuedSid: "sid-A", mode: "readonly" };
+    async function run(claims: { sub: string; sid: string; typ: "user" | "admin" }) {
+      const { prisma } = await import("../lib/prisma.js");
+      const { redis } = await import("../lib/redis.js");
+      const { verifyAccessToken } = await import("../auth/tokens.js");
+      vi.mocked(verifyAccessToken).mockResolvedValue(claims);
+      vi.mocked(redis.get).mockImplementation((async (k: string) => (k === "impersonate:tok" ? JSON.stringify(payload) : null)) as never);
+      vi.mocked(prisma.user.findFirst).mockResolvedValueOnce({ role: "agent", organizationId: "org-1", teamId: null, teamRole: null } as never);
+      const app = await buildApp();
+      const res = await app.inject({ method: "GET", url: "/probe", headers: { ...bearer, "x-impersonate-token": "tok" } });
+      await app.close();
+      return res;
+    }
+
+    it("accepts the issuing admin session", async () => {
+      const res = await run({ sub: "sa-1", sid: "sid-A", typ: "admin" });
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ auth: { sid: null } }>().auth.sid).toBeNull();
+    });
+    it("rejects another session of the same admin", async () => {
+      expect((await run({ sub: "sa-1", sid: "sid-B", typ: "admin" })).statusCode).toBe(401);
+    });
+    it("rejects a non-admin token", async () => {
+      expect((await run({ sub: "sa-1", sid: "sid-A", typ: "user" })).statusCode).toBe(401);
+    });
+  });
+
+  describe("mobile version gate", () => {
+    it("426 when mobile sends no version and a minimum is set", async () => {
+      process.env.AUTH_MIN_MOBILE_VERSION = "1.2.0";
+      const app = await buildApp();
+      const res = await app.inject({ method: "GET", url: "/probe", headers: { ...bearer, "x-app-client": "mobile" } });
+      expect(res.statusCode).toBe(426);
+      expect(res.json()).toEqual({ error: { code: "UPGRADE_REQUIRED", message: "Please update the WBMSG app to continue." } });
+      await app.close();
+    });
+    it("426 for a lower version, ok for equal/higher, skipped for public routes and web", async () => {
+      process.env.AUTH_MIN_MOBILE_VERSION = "1.2.0";
+      const { prisma } = await import("../lib/prisma.js");
+      vi.mocked(prisma.user.findFirst).mockResolvedValue({ role: "agent", organizationId: "org-1", teamId: null, teamRole: null } as never);
+      const app = await buildApp();
+      const h = (v: string) => ({ ...bearer, "x-app-client": "mobile", "x-app-version": v });
+      expect((await app.inject({ method: "GET", url: "/probe", headers: h("1.1.9") })).statusCode).toBe(426);
+      expect((await app.inject({ method: "GET", url: "/probe", headers: h("1.10.0") })).statusCode).toBe(200);
+      expect((await app.inject({ method: "GET", url: "/probe", headers: h("1.2.0") })).statusCode).toBe(200);
+      expect((await app.inject({ method: "GET", url: "/public", headers: { "x-app-client": "mobile" } })).statusCode).toBe(200);
+      expect((await app.inject({ method: "GET", url: "/probe", headers: bearer })).statusCode).toBe(200);
+      await app.close();
+    });
+    it("never gates in clerk mode", async () => {
+      process.env.AUTH_MIN_MOBILE_VERSION = "1.2.0";
+      process.env.AUTH_PROVIDER = "clerk";
+      const app = await buildApp();
+      const res = await app.inject({ method: "GET", url: "/probe", headers: { ...bearer, "x-app-client": "mobile" } });
+      expect(res.statusCode).not.toBe(426);
+      await app.close();
+    });
   });
 });

@@ -1,6 +1,6 @@
 import fp from "fastify-plugin";
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { verifyClerkToken } from "../lib/clerk.js";
+import { isWbmsgAuth, mobileUpgradeRequired, verifyBearer } from "../auth/identity.js";
 import { defaultsForRole } from "../lib/default-role-permissions.js";
 import { isPlatformOnlyPath } from "../lib/demo-guard.js";
 import { redis } from "../lib/redis.js";
@@ -30,7 +30,7 @@ async function resolveAuthContext(
     const cached = await redis.get(cacheKey);
     if (cached) {
       const { role, organizationId, permissions, teamId, teamRole } = JSON.parse(cached) as Pick<AuthContext, "role" | "organizationId" | "permissions" | "teamId" | "teamRole">;
-      return { userId, organizationId, role, permissions, teamId: teamId ?? null, teamRole: teamRole ?? null };
+      return { userId, organizationId, role, permissions, teamId: teamId ?? null, teamRole: teamRole ?? null, sid: null };
     }
   }
 
@@ -79,13 +79,17 @@ async function resolveAuthContext(
     );
   }
 
-  return { userId, organizationId: user.organizationId, role: user.role, permissions, teamId: user.teamId, teamRole: user.teamRole };
+  return { userId, organizationId: user.organizationId, role: user.role, permissions, teamId: user.teamId, teamRole: user.teamRole, sid: null };
 }
 
 const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.addHook("preHandler", async (request, reply) => {
     const routeConfig = request.routeOptions?.config as unknown as Record<string, unknown> | undefined;
     if (routeConfig?.["public"]) return;
+
+    if (mobileUpgradeRequired(request.headers)) {
+      return reply.status(426).send({ error: { code: "UPGRADE_REQUIRED", message: "Please update the WBMSG app to continue." } });
+    }
 
     // GAP-S71: super-admin impersonation via Redis token
     const impersonateToken = request.headers["x-impersonate-token"] as string | undefined;
@@ -94,7 +98,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       if (!raw) {
         return reply.status(401).send({ error: { code: "INVALID_IMPERSONATION_TOKEN", message: "Invalid or expired impersonation token" } });
       }
-      const payload = JSON.parse(raw) as { organizationId?: string; targetUserId?: string; issuedBy?: string; mode?: string; isDemo?: boolean };
+      const payload = JSON.parse(raw) as { organizationId?: string; targetUserId?: string; issuedBy?: string; issuedSid?: string | null; mode?: string; isDemo?: boolean };
       // Demo login (POST /demo/login) issues org-scoped tokens with isDemo:true. Preserve that
       // behavior only for such payloads: superAdmin scoped to the demo org, no impersonation
       // context. Every other payload without targetUserId is rejected below.
@@ -106,7 +110,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         if ([rawPath, decodedPath, request.routeOptions?.url ?? ""].some(isPlatformOnlyPath)) {
           return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Not available in demo mode" } });
         }
-        request.auth = { userId: "demo", organizationId: payload.organizationId, role: "superAdmin", permissions: {}, teamId: null, teamRole: null };
+        request.auth = { userId: "demo", organizationId: payload.organizationId, role: "superAdmin", permissions: {}, teamId: null, teamRole: null, sid: null };
         return;
       }
       // Old org-level tokens (no targetUserId) are no longer valid.
@@ -116,8 +120,11 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       // The bearer must belong to the super admin who issued the token: a leaked token is useless
       // without that admin's live Clerk session.
       try {
-        const { userId: bearerUserId } = await verifyClerkToken(request.headers.authorization);
-        if (bearerUserId !== payload.issuedBy) throw new Error("bearer/issuer mismatch");
+        const bearer = await verifyBearer(request.headers.authorization);
+        if (bearer.userId !== payload.issuedBy) throw new Error("bearer/issuer mismatch");
+        if (isWbmsgAuth() && (bearer.typ !== "admin" || !payload.issuedSid || bearer.sid !== payload.issuedSid)) {
+          throw new Error("bearer session mismatch");
+        }
       } catch {
         return reply.status(401).send({ error: { code: "INVALID_IMPERSONATION_TOKEN", message: "Invalid or expired impersonation token" } });
       }
@@ -134,8 +141,9 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     }
 
     let userId: string;
+    let sid: string | null;
     try {
-      ({ userId } = await verifyClerkToken(request.headers.authorization));
+      ({ userId, sid } = await verifyBearer(request.headers.authorization));
     } catch {
       return reply.status(401).send({
         error: { code: "UNAUTHORIZED", message: "Invalid or missing token" },
@@ -160,7 +168,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         error: { code: "FORBIDDEN", message: "User not found in organization" },
       });
     }
-    request.auth = auth;
+    request.auth = { ...auth, sid };
   });
 };
 

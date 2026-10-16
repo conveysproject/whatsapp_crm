@@ -248,7 +248,7 @@ describe("POST /v1/admin/organizations/:orgId/users/:userId/impersonate", () => 
     expect(mode).toBe("readonly");
     expect(mockRedis.set).toHaveBeenCalledWith(
       `impersonate:${token}`,
-      JSON.stringify({ organizationId: "org-1", targetUserId: "user-1", issuedBy: "sa-1", mode: "readonly" }),
+      JSON.stringify({ organizationId: "org-1", targetUserId: "user-1", issuedBy: "sa-1", issuedSid: null, mode: "readonly" }),
       "EX",
       900
     );
@@ -348,6 +348,18 @@ describe("POST /v1/admin/impersonation/elevate", () => {
     mockPrisma.impersonationLog.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.user.findMany.mockResolvedValue([{ email: "other@wbmsg.test" }]);
   }
+
+  it("preserves issuedSid when rewriting the payload", async () => {
+    happy();
+    mockRedis.get.mockResolvedValue(payloadOf({ issuedSid: "sid-1" }));
+    const res = await post({ token: "tok", reason });
+    expect(res.statusCode).toBe(200);
+    expect(mockRedis.set).toHaveBeenCalledWith("impersonate:tok", expect.any(String), "PX", 600000);
+    expect(JSON.parse(mockRedis.set.mock.calls[0]![1] as string)).toEqual({
+      organizationId: "org-1", targetUserId: "user-1", issuedBy: "sa-1", issuedSid: "sid-1", mode: "edit",
+    });
+    await new Promise((r) => setImmediate(r));
+  });
 
   it("elevates to edit mode keeping the remaining TTL, logs reason, audits, notifies other super admins", async () => {
     happy();

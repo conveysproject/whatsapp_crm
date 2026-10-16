@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { verifyClerkToken } from "../lib/clerk.js";
+import { verifyBearer } from "../auth/identity.js";
 import { DEFAULT_ROLE_PERMISSIONS } from "../lib/default-role-permissions.js";
 import { seedLeadStatuses } from "../lib/seed-lead-statuses.js";
 
@@ -53,7 +53,7 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       let userId: string;
       try {
-        ({ userId } = await verifyClerkToken(request.headers.authorization));
+        ({ userId } = await verifyBearer(request.headers.authorization));
       } catch {
         return reply.status(401).send({ error: "Unauthorized" });
       }

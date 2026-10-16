@@ -1,16 +1,16 @@
 import type { PrismaClient } from "@prisma/client";
-import { verifyClerkToken } from "./clerk.js";
+import { verifyBearer } from "../auth/identity.js";
 
 export interface SocketIdentity {
   userId: string;
   organizationId: string;
 }
 
-/** Verifies the Clerk session token sent in the Socket.IO handshake (`auth.token`). Throws "unauthorized" on any failure. */
+/** Verifies the session token (per AUTH_PROVIDER) sent in the Socket.IO handshake (`auth.token`). Throws "unauthorized" on any failure. */
 export async function authenticateSocket(
   prisma: PrismaClient,
   token: unknown,
-  verify: typeof verifyClerkToken = verifyClerkToken,
+  verify: (authHeader: string) => Promise<{ userId: string }> = verifyBearer,
 ): Promise<SocketIdentity> {
   if (typeof token !== "string" || token.length === 0) throw new Error("unauthorized");
   let userId: string;
