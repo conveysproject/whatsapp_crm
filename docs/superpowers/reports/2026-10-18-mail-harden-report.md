@@ -19,3 +19,9 @@ type-check and lint 0 errors; web 444/444; api 2762/2762 (195 files).
 - Deploy API before web (reverse order = no invite email in the gap; API-first = invitee may get two emails briefly).
 - Railway needs WEB_URL + INTERNAL_EMAIL_SECRET (already required by mail.ts).
 - Mobile app has no invite-email caller.
+
+## Review follow-up
+- Invitation rate limit now uses `hook: "preHandler"` so the per-org key sees `request.auth`; a real in-memory limiter test shows two IPs in one org share the 30/hour bucket (31st gets 429).
+- `emailSent` is false (and `sendMail` skipped) when `isEmailConfigured()` is false.
+- `teamId` must belong to the caller's org (`team.findFirst` scoped by organizationId) else 400 `INVALID_TEAM`; nothing is created or emailed.
+- Not fixed (pre-existing): the global limiter in `apps/api/src/plugins/rate-limit.ts` runs onRequest before auth sets `request.auth`, so its `auth?.userId ?? req.ip` key always falls back to IP.

@@ -7,7 +7,8 @@ import type { PrismaClient } from "@prisma/client";
 vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
 
 const mockSendMail = vi.hoisted(() => vi.fn());
-vi.mock("../lib/mail.js", () => ({ sendMail: (...a: unknown[]) => mockSendMail(...a) }));
+const mockIsEmailConfigured = vi.hoisted(() => vi.fn());
+vi.mock("../lib/mail.js", () => ({ sendMail: (...a: unknown[]) => mockSendMail(...a), isEmailConfigured: () => mockIsEmailConfigured() }));
 const mockCheckPlanLimit = vi.fn();
 vi.mock("../lib/plan-limits.js", () => ({
   checkPlanLimit: (...args: unknown[]) => mockCheckPlanLimit(...args),
@@ -28,6 +29,7 @@ const mockPrisma: Record<string, any> = vi.hoisted(() => ({
     findUnique: vi.fn(),
   },
   authAccount: { findUnique: vi.fn() },
+  team: { findFirst: vi.fn() },
   $transaction: vi.fn((arg: unknown): unknown =>
     typeof arg === "function" ? (arg as (t: unknown) => unknown)(mockPrisma) : Promise.all(arg as unknown[]),
   ),
@@ -65,6 +67,8 @@ async function buildApp(): Promise<FastifyInstance> {
 describe("invitations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockIsEmailConfigured.mockReturnValue(true);
+    mockPrisma.team.findFirst.mockResolvedValue({ id: "team-1" });
     // Re-stub fetch after clearAllMocks
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
   });
@@ -134,6 +138,48 @@ describe("invitations", () => {
     (mockAuth as { permissions: Record<string, string> }).permissions = { settings_access: "allow", "settings_access@settings_agents": "allow" };
     expect(res.statusCode).toBe(403);
     expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
+  it("rejects a teamId from another org and sends nothing", async () => {
+    mockCheckPlanLimit.mockResolvedValue({ allowed: true, limit: -1, current: 0 });
+    mockPrisma.team.findFirst.mockResolvedValue(null);
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/v1/invitations", payload: { email: "a@b.com", role: "agent", teamId: "other-org-team" } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("INVALID_TEAM");
+    expect(mockPrisma.team.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "other-org-team", organizationId: "org-1" } }));
+    expect(mockPrisma.invitation.create).not.toHaveBeenCalled();
+    expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
+  it("reports emailSent:false and skips sendMail when mail is not configured", async () => {
+    mockCheckPlanLimit.mockResolvedValue({ allowed: true, limit: -1, current: 0 });
+    mockIsEmailConfigured.mockReturnValue(false);
+    mockPrisma.invitation.create.mockResolvedValue({ id: "i5", email: "n@c.com", role: "agent", token: "t5", expiresAt: new Date() });
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/v1/invitations", payload: { email: "n@c.com", role: "agent" } });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().emailSent).toBe(false);
+    expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
+  it("rate limit is keyed per org (auth set in preHandler), shared across IPs", async () => {
+    mockCheckPlanLimit.mockResolvedValue({ allowed: true, limit: -1, current: 0 });
+    mockSendMail.mockResolvedValue(undefined);
+    mockPrisma.invitation.create.mockResolvedValue({ id: "i6", email: "n@c.com", role: "agent", token: "t6", expiresAt: new Date() });
+    const { default: rateLimit } = await import("@fastify/rate-limit");
+    const app = Fastify({ logger: false });
+    await app.register(rateLimit, { global: false });
+    // Like the real auth plugin: auth is attached after onRequest.
+    app.addHook("preHandler", async (request) => { request.auth = mockAuth; });
+    const { invitationRoutes } = await import("./invitations.js");
+    await app.register(invitationRoutes, { prefix: "/v1" });
+    const send = (i: number) => app.inject({
+      method: "POST", url: "/v1/invitations", remoteAddress: `10.0.0.${i % 250 + 1}`,
+      payload: { email: "n@c.com", role: "agent" },
+    });
+    for (let i = 0; i < 30; i++) expect((await send(i)).statusCode).toBe(201);
+    expect((await send(99)).statusCode).toBe(429);
   });
 
   it("creates invitation without teamId when not provided", async () => {

@@ -6,7 +6,7 @@ import { canAccessSub } from "../lib/permissions.js";
 import { canGrantRole } from "../lib/role-grants.js";
 import { isWbmsgAuth, verifyBearer } from "../auth/identity.js";
 import { normalizeEmail } from "../auth/ids.js";
-import { sendMail } from "../lib/mail.js";
+import { sendMail, isEmailConfigured } from "../lib/mail.js";
 import { buildInvitationEmail, invitationAcceptUrl, INVITATION_SUBJECT } from "../lib/invitation-email.js";
 
 class InvitationGone extends Error {}
@@ -82,7 +82,8 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
     "/invitations",
     {
       // Each invitation sends an email, so cap per workspace.
-      config: { rateLimit: { max: 30, timeWindow: "1 hour", keyGenerator: (req) => `invite:${req.auth?.organizationId ?? req.ip}` } },
+      // hook: preHandler so the key sees request.auth (set by the auth plugin after onRequest).
+      config: { rateLimit: { hook: "preHandler", max: 30, timeWindow: "1 hour", keyGenerator: (req) => `invite:${req.auth?.organizationId ?? req.ip}` } },
       schema: {
         body: {
           type: "object",
@@ -114,6 +115,15 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
       } catch { /* treat external failure as pass — don't block invite on API outage */ }
+      if (request.body.teamId) {
+        const team = await prisma.team.findFirst({
+          where: { id: request.body.teamId, organizationId: request.auth.organizationId },
+          select: { id: true },
+        });
+        if (!team) {
+          return reply.status(400).send({ error: { code: "INVALID_TEAM", message: "Team not found" } });
+        }
+      }
       const limitCheck = await checkPlanLimit(prisma, request.auth.organizationId, "team_members");
       if (!limitCheck.allowed) {
         return reply.status(402).send({ error: { code: "PLAN_LIMIT_REACHED", message: `Team member limit of ${limitCheck.limit} reached` } });
@@ -132,15 +142,19 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Fixed template, recipient is the invitation's own address. sendMail relays
       // through the web app (Railway cannot reach SMTP) with the internal secret.
-      let emailSent = true;
+      let emailSent = false;
       try {
-        await sendMail({
+        if (isEmailConfigured()) {
+          await sendMail({
           to: invitation.email,
           subject: INVITATION_SUBJECT,
           html: buildInvitationEmail({ role: invitation.role, acceptUrl: invitationAcceptUrl(invitation.token) }),
-        });
+          });
+          emailSent = true;
+        } else {
+          request.log.warn("invitation email skipped: mail not configured");
+        }
       } catch (err) {
-        emailSent = false;
         request.log.error({ err }, "invitation email failed");
       }
       return reply.status(201).send({ data: invitation, emailSent });
