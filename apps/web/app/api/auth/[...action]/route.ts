@@ -10,6 +10,13 @@ import {
 import { COOKIE, authProvider } from "../../../../lib/auth/config";
 import { accessTokenExpiry, verifyAccessToken } from "../../../../lib/auth/jwt";
 import { safeRedirect } from "../../../../lib/auth/redirect";
+import {
+  handleMethods,
+  handleOAuthCallback,
+  handleOAuthPending,
+  handleOAuthStart,
+  matchOAuthKey,
+} from "../../../../lib/auth/oauth-bff";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +36,8 @@ const ACTIONS: Record<string, Spec> = {
   "sign-in/new-device": { api: "/v1/auth/signin/new-device", client: true, cookies: true },
   "sign-in/code/request": { api: "/v1/auth/signin/code/request" },
   "sign-in/code/verify": { api: "/v1/auth/signin/code/verify", client: true, cookies: true },
+  "sign-in/whatsapp/request": { api: "/v1/auth/signin/whatsapp/request" },
+  "sign-in/whatsapp/verify": { api: "/v1/auth/signin/whatsapp/verify", client: true, cookies: true },
   "password/forgot": { api: "/v1/auth/password/forgot" },
   "password/reset": { api: "/v1/auth/password/reset", client: true, cookies: true },
 };
@@ -186,6 +195,9 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
   if (key === "token") return handleToken(req);
   if (key === "session-expired") return handleSessionExpired(req);
   if (key === "session-check") return handleSessionCheck(req);
+  if (key === "methods") return handleMethods(req);
+  const oauth = matchOAuthKey(key);
+  if (oauth?.step === "callback") return handleOAuthCallback(req, oauth.provider);
   return notFound();
 }
 
@@ -195,12 +207,17 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
   const key = action.join("/");
   const spec = ACTIONS[key];
   const invite = INVITE.exec(key);
-  const known = key === "sign-out" || spec || invite || key.startsWith("invitations/accept/");
+  const oauth = matchOAuthKey(key);
+  const oauthStart = oauth?.step === "start" ? oauth.provider : null;
+  const pending = key === "oauth/pending/send" ? "send" : key === "oauth/pending/verify" ? "verify" : null;
+  const known = key === "sign-out" || spec || invite || key.startsWith("invitations/accept/") || oauthStart || pending;
   if (!known) return notFound();
   if (!requireSameOrigin(req)) {
     return NextResponse.json({ error: { code: "FORBIDDEN", message: "Bad origin" } }, { status: 403 });
   }
   if (key === "sign-out") return handleSignOut(req);
+  if (oauthStart) return handleOAuthStart(req, oauthStart);
+  if (pending) return handleOAuthPending(req, pending);
   if (spec) return forward(req, spec);
   if (!invite) {
     return NextResponse.json({ error: { code: "BAD_REQUEST", message: "Invalid invitation" } }, { status: 400 });

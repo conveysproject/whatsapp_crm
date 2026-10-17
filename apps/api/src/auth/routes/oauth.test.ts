@@ -51,7 +51,7 @@ function fakeProvider(id: "google" | "facebook", label: string) {
     id,
     label,
     enabled: vi.fn(() => true),
-    authorizeUrl: vi.fn(() => `https://${id}.example/auth`),
+    authorizeUrl: vi.fn((_input: Record<string, string>) => `https://${id}.example/auth`),
     exchange: vi.fn(),
   };
 }
@@ -149,7 +149,7 @@ describe("POST /oauth/:provider/start", () => {
     expect(state).toMatch(/^[A-Za-z0-9_-]{43}$/);
     const saved = JSON.parse(m.store.get(`auth:oauth:state:${state}`)!);
     expect(saved).toMatchObject({ provider: "google", intent: "signin", accountId: null, redirectUrl: "/inbox" });
-    const arg = google.authorizeUrl.mock.calls[0]![0] as Record<string, string>;
+    const arg = google.authorizeUrl.mock.calls[0]![0];
     expect(arg.state).toBe(state);
     expect(arg.nonce).toBe(saved.nonce);
     expect(arg.codeChallenge).toBe(createHash("sha256").update(saved.codeVerifier).digest("base64url"));
