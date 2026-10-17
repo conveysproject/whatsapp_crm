@@ -197,3 +197,20 @@ Phase 2-5 routes (not yet present, to be added to this table with their class wh
 - `@node-rs/argon2` Linux prebuilt on the Railway build must be confirmed at the first deploy (Task 3).
 - Remaining test gaps (Task 12): reset for a disabled account; change with a null hash and no flag; client reset with no users row.
 - Task 2 deferred check: SQL migration versus `schema.prisma` drift is not machine-verified (no shadow DB). Verify with `prisma migrate status` at the Phase 1 exit deploy.
+
+## Phase 2 security audit (web + API integration, 2026-10-17)
+
+| Route / surface | Class | Scoping / protection |
+|---|---|---|
+| `POST /v1/register` (wbmsg) | authenticated (bearer verified in handler) | identity (email, names) from `auth_accounts`, never the body; unverified email → 403 |
+| `POST /v1/auth/invitations/:token/accept` | public, credential-limited (20/10 per IP) | org, role and team come only from the invitation row; conditional claim in a transaction; existing account → 409 |
+| `POST /v1/invitations/:token/accept` (wbmsg) | bearer checked in handler | account email must equal invitation email; no existing user row; seat limit |
+| `POST /v1/admin/super-admins`, `POST /v1/bootstrap` (wbmsg) | super admin / bootstrap secret | promoting an existing account clears its password and revokes its sessions; users-row clash checked before any write |
+| Sockets | handshake bearer | joined to `sid:<id>`; revoke disconnects on this API instance (single replica today) |
+| Turnstile | optional (env) | checked before any work on sign-up, code request, forgot password; fails closed |
+| Web `/api/auth/*` (BFF) | same-origin POST only | tokens only in httpOnly cookies; client-supplied token/device/client fields stripped; 404 in Clerk mode |
+| Web `/api/v1/*` proxy, middleware | cookie session | refreshes via the BFF helper; API enforces org scoping and RBAC as before |
+| Web `/api/internal/send-email` | verified access token or internal secret | **open item (pre-existing in Clerk mode):** any signed-in user can send arbitrary email — restrict recipients or require the secret for non-self sends |
+
+Closed in Phase 2: socket disconnect on revoke, BFF trusted client IP (`AUTH_BFF_SECRET`, 32+ chars on Vercel and Railway), Turnstile (needs keys), web token verification pinned (EdDSA, iss, aud, exp, sub).
+Still open before cutover: run `docs/runbooks/own-auth-local-wbmsg.md` end to end (needs Docker), `next build`/`start` in wbmsg mode without Clerk keys, breached-password check, audit-log rows for password/session events.
