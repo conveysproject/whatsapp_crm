@@ -30,6 +30,9 @@ describe("visibleSettingsTiles", () => {
     expect(visible).not.toContain("/settings/teams");
     expect(visible).not.toContain("/settings/labels");
     expect(visible).toContain("/settings/notifications");
+    expect(visible).not.toContain("/settings/inbox-labels");
+    expect(visible).not.toContain("/settings/routing");
+    expect(visible).not.toContain("/settings/webhook-actions");
   });
 
   it("shows nothing while the user is unknown", () => {

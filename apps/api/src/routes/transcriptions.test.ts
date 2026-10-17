@@ -19,7 +19,8 @@ vi.mock("../lib/whisper.js", () => ({
 const mockPrisma = {
   message: { findFirst: vi.fn(), update: vi.fn() },
 };
-const mockAuth = { userId: "u-1", organizationId: "org-1", role: "agent" as const, permissions: {}, teamId: null as string | null, teamRole: null as "lead" | "member" | null };
+// Agent with inbox access and no team: sees conversations assigned to them.
+const mockAuth = { userId: "u-1", organizationId: "org-1", role: "agent" as const, permissions: { inbox_access: "allow" } as Record<string, string>, teamId: null as string | null, teamRole: null as "lead" | "member" | null };
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });

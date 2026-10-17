@@ -63,3 +63,12 @@ Spec: `docs/prd-whatsapp-admin-role.md`. Branch: `feat/whatsapp-admin-role`. TDD
 - Pending manager-issued admin invitations: owner confirmed there are none, so no action.
 - Team moves (owner "fix", 2026-10-17): `PATCH /users/:id/team`, `POST/PATCH/DELETE /teams` refuse (403) when they would add, evict, re-rank or un-team a member whose role the caller can't grant. A manager may still edit a team that contains an admin if the admin is unchanged.
 - Settings index tiles are filtered by the permission each page's API enforces (`apps/web/lib/settings-tiles.ts`). Pages whose APIs have no permission check (conversation labels, webhook actions, media library, routing) stay visible to anyone with Settings access. That is pre-existing API behavior and is not changed here.
+
+## Fix all gaps (owner, 2026-10-17)
+Every API router that had no permission check now has one (owner-approved table):
+- Global search: contacts need contacts_access + contact visibility; conversations/messages need inbox_access + conversation visibility (incl. assigned_chats_only); phone/email masking applied. Contact visibility moved to `lib/contact-access.ts` (shared, unchanged logic).
+- Outgoing webhooks `/webhook-endpoints`: settings_api_key.
+- AI: suggestions/analyze/smart-replies/intent/RAG need inbox_access (+ conversation visibility); predictive needs analytics_access; template creator needs templates_create; flow creator needs automation_bot_flows.
+- Transcriptions: inbox_access + conversation visibility. `/media`: inbox, campaigns or automation access. Pipelines: deals_access. `/onboarding/sync-phone`: settings_whatsapp (`/onboarding/status` stays open).
+- No-screen APIs (info-materials, saved-filters, nt-campaign-presets): admin-only.
+- Intentionally open: health, public pricing, countries, Meta/Clerk/billing webhooks (signature-verified), own notifications, onboarding status, billing standing.

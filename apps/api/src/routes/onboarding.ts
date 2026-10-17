@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { canAccessSub } from "../lib/permissions.js";
 import { syncPhoneNumbers } from "../lib/whatsapp.js";
 
 export const onboardingRouter: FastifyPluginAsync = async (fastify) => {
@@ -18,7 +19,10 @@ export const onboardingRouter: FastifyPluginAsync = async (fastify) => {
   // Called when user clicks "Number is ready" on the provision-number page.
   // Re-runs syncPhoneNumbers (in case fire-and-forget missed it) and marks onboarding done.
   fastify.post("/sync-phone", async (request, reply) => {
-    const { organizationId } = request.auth;
+    const { organizationId, role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "settings_access", "settings_whatsapp")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_whatsapp permission required" } });
+    }
     const phones = await syncPhoneNumbers(organizationId);
     if (phones.length > 0) {
       await fastify.prisma.organization.update({

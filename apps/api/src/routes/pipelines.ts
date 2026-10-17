@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { canAccess } from "../lib/permissions.js";
 import type { PipelineId } from "@WBMSG/shared";
 
 interface PipelineBody {
@@ -7,6 +8,14 @@ interface PipelineBody {
 }
 
 export const pipelinesRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate: pipelines belong to Deals.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!(canAccess(role, permissions, "deals_access"))) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "deals_access permission required" } });
+    }
+  });
+
   fastify.get("/pipelines", async (request, reply) => {
     const { organizationId } = request.auth;
     const pipelines = await fastify.prisma.pipeline.findMany({ where: { organizationId } });

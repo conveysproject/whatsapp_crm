@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { canAccessSub } from "../lib/permissions.js";
 
 interface RoutingRuleBody {
   name: string;
@@ -9,6 +10,14 @@ interface RoutingRuleBody {
 }
 
 export const routingRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate: routing assigns chats to teams/agents, so it follows settings_teams.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccessSub(role, permissions, "settings_access", "settings_teams")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_teams permission required" } });
+    }
+  });
+
   fastify.get("/routing-rules", async (request, reply) => {
     const { organizationId } = request.auth;
     const rules = await fastify.prisma.routingRule.findMany({

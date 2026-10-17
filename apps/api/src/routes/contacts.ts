@@ -5,13 +5,13 @@ import { paginate, parsePaginationParams } from "../lib/pagination.js";
 
 import type { ContactId } from "@WBMSG/shared";
 import { maskPhone, maskEmail, canAccess, canAccessSub, shouldHidePhone, shouldHideContactFields } from "../lib/permissions.js";
+import { contactVisibilityWhere } from "../lib/contact-access.js";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 import { normalizeFullPhone } from "../lib/phone-normalize.js";
 import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
 import { blockContact, unblockContact } from "../lib/whatsapp.js";
 import { computeClosureDeadline } from "../lib/closure-deadline.js";
 import { applyAssignmentRules } from "../lib/assignment-engine.js";
-import { buildVisibilityWhere, type VisibilityAuth } from "../lib/visibility.js";
 import type { AuthContext } from "../types/fastify.js";
 
 function csvEscape(value: string): string {
@@ -82,27 +82,6 @@ async function buildExportWhere(
   };
 }
 
-async function contactVisibilityWhere(
-  prisma: PrismaClient,
-  auth: AuthContext,
-): Promise<Record<string, unknown> | undefined> {
-  // Org-wide roles short-circuit before any team lookup.
-  if (auth.role === "superAdmin" || auth.role === "admin" || auth.role === "viewer") return undefined;
-  let teamViewAll = false;
-  let teamMemberIds: string[] = [];
-  if (auth.teamId) {
-    const [team, members] = await Promise.all([
-      prisma.team.findFirst({ where: { id: auth.teamId, organizationId: auth.organizationId }, select: { viewAllContacts: true } }),
-      prisma.user.findMany({ where: { organizationId: auth.organizationId, teamId: auth.teamId }, select: { id: true } }),
-    ]);
-    teamViewAll = team?.viewAllContacts ?? false;
-    teamMemberIds = members.map((m) => m.id);
-  }
-  const va: VisibilityAuth = {
-    userId: auth.userId, role: auth.role, teamId: auth.teamId, teamRole: auth.teamRole, teamViewAll,
-  };
-  return buildVisibilityWhere(va, teamMemberIds, "assignedUserId");
-}
 
 interface ContactBody {
   phoneNumber: string;

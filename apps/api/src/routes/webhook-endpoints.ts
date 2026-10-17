@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { canAccessSub } from "../lib/permissions.js";
 import { randomBytes } from "node:crypto";
 
 interface WebhookBody {
@@ -18,6 +19,14 @@ const ALLOWED_EVENTS = [
 ];
 
 export const webhookEndpointsRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate: outgoing webhooks stream org data to an external URL, an integration setting.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!(canAccessSub(role, permissions, "settings_access", "settings_api_key"))) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_api_key permission required" } });
+    }
+  });
+
   fastify.get("/webhook-endpoints", async (request, reply) => {
     const { organizationId } = request.auth;
     const data = await fastify.prisma.webhook.findMany({
