@@ -231,9 +231,14 @@ describe("auth abuse suite", () => {
       const verified = await post(app, "/signup", { email: "known@example.com", ...body });
       const unverified = await post(app, "/signup", { email: "unverified@example.com", ...body });
       await settleSignupWork();
-      expect(shape(unknown)).toEqual({ status: 202, body: '{"ok":true}' });
-      expect(shape(verified)).toEqual(shape(unknown));
-      expect(shape(unverified)).toEqual(shape(unknown));
+      // Same status and same body shape; only the random signupId differs per request.
+      const norm = (res: { statusCode: number; body: string }) => ({
+        status: res.statusCode,
+        body: res.body.replace(/"signupId":"[A-Za-z0-9_-]{22}"/, '"signupId":"X"'),
+      });
+      expect(norm(unknown)).toEqual({ status: 202, body: '{"ok":true,"signupId":"X"}' });
+      expect(norm(verified)).toEqual(norm(unknown));
+      expect(norm(unverified)).toEqual(norm(unknown));
     });
 
     it("signin/password: unknown email and wrong password answer identically and both take >= 295 ms", async () => {
@@ -378,7 +383,7 @@ describe("auth abuse suite", () => {
 
   describe("one-time codes", () => {
     it("a signup code cannot be replayed", async () => {
-      await post(app, "/signup", {
+      const started = await post(app, "/signup", {
         email: "new@example.com",
         password: "longenough1",
         firstName: "A",
@@ -388,11 +393,44 @@ describe("auth abuse suite", () => {
       await settleSignupWork();
       const code = lastCode("email_verify")!;
       expect(code).toMatch(/^\d{6}$/);
-      const verify = () => post(app, "/signup/verify", { email: "new@example.com", code, client: "web" });
+      const signupId = started.json().signupId;
+      const verify = () => post(app, "/signup/verify", { signupId, email: "new@example.com", code, client: "web" });
       expect((await verify()).statusCode).toBe(200);
       const replay = await verify();
       expect(replay.statusCode).toBe(400);
       expect(replay.json().error.code).toBe("INVALID_CODE");
+    });
+
+    it("attacker signs up first with the victim's email: the victim's own sign-up wins with the victim's password", async () => {
+      const biz = { companyName: "Co", industry: "Retail", revenue: "1M" };
+      const email = "victim@example.com";
+      const attacker = await post(app, "/signup", { email, password: "attacker-pass-1", firstName: "Eve", lastName: "X", business: biz });
+      await settleSignupWork();
+      const victim = await post(app, "/signup", { email, password: "victim-pass-22", firstName: "Vic", lastName: "Tim", business: biz });
+      await settleSignupWork();
+      expect(attacker.json().signupId).not.toBe(victim.json().signupId);
+      const code = lastCode("email_verify")!; // the latest code, mailed to the victim's inbox
+
+      // The attacker's signupId can use the victim's code only if it is bound to the same email, and it
+      // is not the entry the victim's browser holds; the victim verifies with their own signupId.
+      const res = await post(app, "/signup/verify", { signupId: victim.json().signupId, email, code, client: "web" });
+      expect(res.statusCode).toBe(200);
+      const account = db.authAccount.rows.find((a: Row) => a.email === email)!;
+      expect(account.firstName).toBe("Vic");
+      const { verifyPassword } = await import("./password.js");
+      expect((await verifyPassword("victim-pass-22", account.passwordHash)).ok).toBe(true);
+      expect((await verifyPassword("attacker-pass-1", account.passwordHash)).ok).toBe(false);
+    });
+
+    it("a signupId from another email cannot be used to verify", async () => {
+      const biz = { companyName: "Co", industry: "Retail", revenue: "1M" };
+      const other = await post(app, "/signup", { email: "other@example.com", password: "other-pass-123", firstName: "O", lastName: "T", business: biz });
+      await post(app, "/signup", { email: "victim@example.com", password: "victim-pass-22", firstName: "V", lastName: "T", business: biz });
+      await settleSignupWork();
+      const code = lastCode("email_verify")!;
+      const res = await post(app, "/signup/verify", { signupId: other.json().signupId, email: "victim@example.com", code, client: "web" });
+      expect(res.statusCode).toBe(400);
+      expect(db.authAccount.rows.find((a: Row) => a.email === "victim@example.com")).toBeUndefined();
     });
 
     it("a password-reset code is rejected by signup/verify, signin/code/verify and new-device (cross-purpose)", async () => {
@@ -402,7 +440,7 @@ describe("auth abuse suite", () => {
       const code = lastCode("password_reset")!;
       const codeId = db.authCode.rows.find((c: Row) => c.purpose === "password_reset")!.id;
 
-      const asSignup = await post(app, "/signup/verify", { email: "known@example.com", code, client: "web" });
+      const asSignup = await post(app, "/signup/verify", { signupId: "nope", email: "known@example.com", code, client: "web" });
       const asSignin = await post(app, "/signin/code/verify", { email: "known@example.com", code, client: "web" });
       const asDevice = await post(app, "/signin/new-device", { challengeId: codeId, code, client: "web" });
       for (const res of [asSignup, asSignin, asDevice]) {

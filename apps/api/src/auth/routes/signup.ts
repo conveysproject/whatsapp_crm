@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { issueCode, verifyCode } from "../codes.js";
 import { trustDevice } from "../devices.js";
@@ -19,6 +20,7 @@ interface SignupBody {
   turnstileToken?: string;
 }
 interface VerifyBody {
+  signupId: string;
   email: string;
   code: string;
   client: "web" | "mobile";
@@ -36,26 +38,29 @@ export async function settleSignupWork(): Promise<void> {
   while (pendingSignupWork.size > 0) await Promise.all([...pendingSignupWork]);
 }
 
-function isUniqueViolation(err: unknown): boolean {
-  return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "P2002";
+/** A unique violation on the auth account email (not some other unique index). */
+function isEmailUniqueViolation(err: unknown): boolean {
+  if (typeof err !== "object" || err === null || (err as { code?: unknown }).code !== "P2002") return false;
+  const target = (err as { meta?: { target?: unknown } }).meta?.target;
+  return Array.isArray(target) ? target.includes("email") : typeof target === "string" && target.includes("email");
 }
 
 /**
- * Nothing is written to the database here: the sign-up is parked in Redis until the email code is
- * verified. A verified account for the email gets nothing; a second sign-up never overwrites the
- * first pending entry (pre-account hijack), it only re-sends a code.
+ * Nothing is written to the database here: the sign-up is parked in Redis under a random signupId that
+ * only the originating browser receives, until the email code is verified. Several pending entries per
+ * email may coexist; verify requires the signupId, so another party's entry can never become the account.
  */
 async function processSignup(
   fastify: FastifyInstance,
-  input: { email: string; password: string; firstName: string; lastName: string; business: BusinessInput },
+  input: { signupId: string; email: string; password: string; firstName: string; lastName: string; business: BusinessInput },
 ): Promise<void> {
-  const { email, password, firstName, lastName, business } = input;
+  const { signupId, email, password, firstName, lastName, business } = input;
   const db = fastify.prisma;
   const account = await db.authAccount.findUnique({ where: { email } });
   if (account?.emailVerifiedAt) return;
 
   const passwordHash = await hashPassword(password);
-  await savePendingSignup(email, { passwordHash, firstName, lastName, business });
+  await savePendingSignup(signupId, { email, passwordHash, firstName, lastName, business });
 
   const issued = await issueCode(db, { purpose: "email_verify", target: email });
   if ("error" in issued) return;
@@ -111,8 +116,10 @@ export const signupRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Every branch answers identically and immediately; the real work runs after the reply so
       // neither status nor timing reveals whether the email already exists.
-      reply.status(202).send({ ok: true });
-      const work = processSignup(fastify, { email, password, firstName, lastName, business }).catch((err: unknown) => {
+      // The signupId is generated for every request (stored only when real) so replies look identical.
+      const signupId = randomBytes(16).toString("base64url");
+      reply.status(202).send({ ok: true, signupId });
+      const work = processSignup(fastify, { signupId, email, password, firstName, lastName, business }).catch((err: unknown) => {
         fastify.log.warn({ err: err instanceof Error ? err.name : "unknown" }, "signup background work failed");
       });
       pendingSignupWork.add(work);
@@ -128,8 +135,9 @@ export const signupRoutes: FastifyPluginAsync = async (fastify) => {
       schema: {
         body: {
           type: "object",
-          required: ["email", "code", "client"],
+          required: ["signupId", "email", "code", "client"],
           properties: {
+            signupId: { type: "string", minLength: 1, maxLength: 64 },
             email: { type: "string", minLength: 3, maxLength: 254 },
             code: { type: "string", minLength: 1, maxLength: 16 },
             client: { type: "string", enum: ["web", "mobile"] },
@@ -140,7 +148,7 @@ export const signupRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const startedAt = Date.now();
-      const { code, client } = request.body;
+      const { signupId, code, client } = request.body;
       const email = normalizeEmail(request.body.email);
       const fail = async (body: typeof INVALID_CODE) => {
         await padTo(startedAt);
@@ -151,12 +159,14 @@ export const signupRoutes: FastifyPluginAsync = async (fastify) => {
       const result = await verifyCode(fastify.prisma, { purpose: "email_verify", target: email, code });
       if (!result.ok) return fail(INVALID_CODE);
 
-      const pending = await loadPendingSignup(email);
+      const pending = await loadPendingSignup(signupId);
       if (!pending) return fail(SIGNUP_EXPIRED);
+      // The entry must belong to this email: a signupId from another sign-up never creates this account.
+      if (pending.email !== email) return fail(INVALID_CODE);
 
       // Someone registered this email since sign-up started: never touch the existing account.
       if (await fastify.prisma.authAccount.findUnique({ where: { email } })) {
-        await deletePendingSignup(email);
+        await deletePendingSignup(signupId);
         return fail(INVALID_CODE);
       }
 
@@ -178,11 +188,11 @@ export const signupRoutes: FastifyPluginAsync = async (fastify) => {
           return createWorkspace(tx, { userId: accountId, email, fullName, business: pending.business });
         }));
       } catch (err) {
-        if (!isUniqueViolation(err)) throw err;
-        await deletePendingSignup(email);
+        if (!isEmailUniqueViolation(err)) throw err;
+        await deletePendingSignup(signupId);
         return fail(INVALID_CODE);
       }
-      await deletePendingSignup(email);
+      await deletePendingSignup(signupId);
 
       const session = await createSession(fastify.prisma, {
         accountId,

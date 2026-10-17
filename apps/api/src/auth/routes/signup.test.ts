@@ -77,10 +77,12 @@ describe("auth signup", () => {
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
     await settleSignupWork();
     expect(res.statusCode).toBe(202);
-    expect(res.json()).toEqual({ ok: true });
+    expect(res.json()).toEqual({ ok: true, signupId: expect.any(String) });
     noDbWrites();
-    const [email, data] = m.savePending.mock.calls[0];
-    expect(email).toBe("foo@x.com");
+    const [signupId, data] = m.savePending.mock.calls[0];
+    expect(res.json().signupId).toBe(signupId);
+    expect(signupId).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(data.email).toBe("foo@x.com");
     expect(data.passwordHash).toMatch(/^\$argon2id\$/);
     expect(JSON.stringify(data)).not.toContain("correct horse");
     expect(data).toMatchObject({ firstName: "Foo", lastName: "Bar", business });
@@ -89,14 +91,16 @@ describe("auth signup", () => {
     expect(m.sendCodeEmail).toHaveBeenCalledWith("foo@x.com", "email_verify", "123456");
   });
 
-  it("second sign-up for the same email keeps the first pending entry and still sends a code", async () => {
-    m.savePending.mockResolvedValue("exists");
-    const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
+  it("two sign-ups for the same email get distinct signupIds and separate pending entries (no overwrite)", async () => {
+    const a = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
+    const b = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: { ...body, password: "another horse" } });
     await settleSignupWork();
-    expect(res.statusCode).toBe(202);
-    expect(m.savePending).toHaveBeenCalledTimes(1);
+    expect(a.json().signupId).not.toBe(b.json().signupId);
+    expect(m.savePending).toHaveBeenCalledTimes(2);
+    expect(m.savePending.mock.calls[0][0]).not.toBe(m.savePending.mock.calls[1][0]);
+    expect(m.savePending.mock.calls[0][1].passwordHash).not.toBe(m.savePending.mock.calls[1][1].passwordHash);
     expect(m.deletePending).not.toHaveBeenCalled();
-    expect(m.sendCodeEmail).toHaveBeenCalledTimes(1);
+    expect(m.sendCodeEmail).toHaveBeenCalledTimes(2);
   });
 
   it("existing verified email: identical 202, nothing stored, no code, no mail", async () => {
@@ -104,11 +108,15 @@ describe("auth signup", () => {
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
     await settleSignupWork();
     expect(res.statusCode).toBe(202);
-    expect(res.json()).toEqual({ ok: true });
+    expect(res.json()).toEqual({ ok: true, signupId: expect.any(String) });
     noDbWrites();
     expect(m.savePending).not.toHaveBeenCalled();
     expect(m.issueCode).not.toHaveBeenCalled();
     expect(m.sendCodeEmail).not.toHaveBeenCalled();
+    // Still carries a signupId (never stored) so the reply is indistinguishable.
+    expect(res.json().signupId).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    const again = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
+    expect(again.json().signupId).not.toBe(res.json().signupId);
   });
 
   it("replies 202 before any mail is sent (reply does not wait on the mailer)", async () => {
@@ -116,7 +124,7 @@ describe("auth signup", () => {
     m.sendCodeEmail.mockImplementation(() => new Promise<void>((r) => (release = r)));
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
     expect(res.statusCode).toBe(202);
-    expect(res.json()).toEqual({ ok: true });
+    expect(res.json()).toEqual({ ok: true, signupId: expect.any(String) });
     await vi.waitFor(() => expect(m.sendCodeEmail).toHaveBeenCalledTimes(1));
     release();
     await settleSignupWork();
@@ -127,7 +135,7 @@ describe("auth signup", () => {
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
     await settleSignupWork();
     expect(res.statusCode).toBe(202);
-    expect(res.json()).toEqual({ ok: true });
+    expect(res.json()).toEqual({ ok: true, signupId: expect.any(String) });
   });
 
   it("database failure still returns 202", async () => {
@@ -142,7 +150,7 @@ describe("auth signup", () => {
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
     await settleSignupWork();
     expect(res.statusCode).toBe(202);
-    expect(res.json()).toEqual({ ok: true });
+    expect(res.json()).toEqual({ ok: true, signupId: expect.any(String) });
     expect(m.sendCodeEmail).not.toHaveBeenCalled();
   });
 
@@ -151,7 +159,7 @@ describe("auth signup", () => {
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
     await settleSignupWork();
     expect(res.statusCode).toBe(202);
-    expect(res.json()).toEqual({ ok: true });
+    expect(res.json()).toEqual({ ok: true, signupId: expect.any(String) });
     expect(m.sendCodeEmail).not.toHaveBeenCalled();
   });
 
@@ -218,8 +226,8 @@ describe("auth signup", () => {
 
 describe("auth signup/verify", () => {
   let app: FastifyInstance;
-  const vbody = { email: "Foo@X.com", code: "123456", client: "mobile" };
-  const pending = { passwordHash: "$argon2id$h", firstName: "Foo", lastName: "Bar", business };
+  const vbody = { signupId: "sid1", email: "Foo@X.com", code: "123456", client: "mobile" };
+  const pending = { email: "foo@x.com", passwordHash: "$argon2id$h", firstName: "Foo", lastName: "Bar", business };
   const expired = { error: { code: "INVALID_CODE", message: "Your sign-up expired. Please start again." } };
   const generic = { error: { code: "INVALID_CODE", message: "That code is not valid. Request a new one." } };
   beforeEach(async () => {
@@ -242,14 +250,14 @@ describe("auth signup/verify", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ accessToken: "at", refreshToken: "rt", expiresIn: 600, deviceId: "dev123", organizationId: "org_1" });
     expect(m.verifyCode).toHaveBeenCalledWith(prisma, { purpose: "email_verify", target: "foo@x.com", code: "123456" });
-    expect(m.loadPending).toHaveBeenCalledWith("foo@x.com");
+    expect(m.loadPending).toHaveBeenCalledWith("sid1");
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     const data = tx.authAccount.create.mock.calls[0][0].data;
     expect(data).toMatchObject({ email: "foo@x.com", passwordHash: "$argon2id$h", firstName: "Foo", lastName: "Bar" });
     expect(data.id).toMatch(/^usr_[a-z2-7]{26}$/);
     expect(data.emailVerifiedAt).toBeInstanceOf(Date);
     expect(m.createWorkspace).toHaveBeenCalledWith(tx, { userId: data.id, email: "foo@x.com", fullName: "Foo Bar", business });
-    expect(m.deletePending).toHaveBeenCalledWith("foo@x.com");
+    expect(m.deletePending).toHaveBeenCalledWith("sid1");
     expect(m.createSession).toHaveBeenCalledWith(prisma, expect.objectContaining({ accountId: data.id, client: "mobile", typ: "user", ip: "9.9.9.9" }));
     expect(m.trustDevice).toHaveBeenCalledWith(prisma, data.id);
   });
@@ -284,18 +292,41 @@ describe("auth signup/verify", () => {
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual(generic);
-    expect(m.deletePending).toHaveBeenCalledWith("foo@x.com");
+    expect(m.deletePending).toHaveBeenCalledWith("sid1");
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(m.createWorkspace).not.toHaveBeenCalled();
     expect(m.createSession).not.toHaveBeenCalled();
   });
 
-  it("unique violation inside the transaction -> 400 INVALID_CODE, no session", async () => {
-    prisma.$transaction.mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002" }));
+  it("unique violation on the account email -> 400 INVALID_CODE, pending deleted, no session", async () => {
+    prisma.$transaction.mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002", meta: { target: ["email"] } }));
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe("INVALID_CODE");
+    expect(m.deletePending).toHaveBeenCalledWith("sid1");
     expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("unique violation on another target -> 500, pending kept, no session", async () => {
+    prisma.$transaction.mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002", meta: { target: ["name"] } }));
+    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(res.statusCode).toBe(500);
+    expect(m.deletePending).not.toHaveBeenCalled();
+    expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("a signupId belonging to a different email -> 400 INVALID_CODE, nothing created", async () => {
+    m.loadPending.mockResolvedValue({ ...pending, email: "victim@x.com" });
+    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual(generic);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("signupId is required", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: { ...vbody, signupId: undefined } });
+    expect(res.statusCode).toBe(400);
   });
 
   it("a workspace failure rolls back: error propagates, pending kept, no session", async () => {

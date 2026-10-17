@@ -84,7 +84,7 @@ describe("turnstile on request routes", () => {
         const res = await app.inject({ method: "POST", url: c.url, payload: { ...c.body, turnstileToken: "good" } });
         await settleSignupWork();
         expect(res.statusCode).toBe(202);
-        expect(res.json()).toEqual({ ok: true });
+        expect(res.json()).toMatchObject({ ok: true });
         expect(new URLSearchParams(fetchMock.mock.calls[0][1].body).get("remoteip")).toBe("9.9.9.9");
       });
     });
