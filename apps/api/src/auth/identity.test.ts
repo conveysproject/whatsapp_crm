@@ -69,4 +69,22 @@ describe("version gate helpers", () => {
     delete process.env.AUTH_MIN_MOBILE_VERSION;
     expect(mobileUpgradeRequired({ "x-app-client": "mobile" })).toBe(false);
   });
+  it("warns once when AUTH_MIN_MOBILE_VERSION is set but unparseable, without echoing secrets", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    process.env.AUTH_PROVIDER = "wbmsg";
+    process.env.AUTH_MIN_MOBILE_VERSION = "not-a-version";
+    mobileUpgradeRequired({ "x-app-client": "mobile", "x-app-version": "1.0.0" });
+    mobileUpgradeRequired({ "x-app-client": "mobile", "x-app-version": "1.0.0" });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toMatch(/AUTH_MIN_MOBILE_VERSION/);
+    warn.mockRestore();
+  });
+  it("does not warn for a valid version", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    process.env.AUTH_PROVIDER = "wbmsg";
+    process.env.AUTH_MIN_MOBILE_VERSION = "2.1.0";
+    mobileUpgradeRequired({ "x-app-client": "mobile", "x-app-version": "1.0.0" });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });

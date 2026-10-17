@@ -42,11 +42,19 @@ export function isVersionLower(version: string, min: string): boolean {
   return false;
 }
 
+let warnedUnparseable = false;
+function warnIfUnparseable(min: string): void {
+  if (warnedUnparseable || /^v?\d+(\.\d+)*([-+].*)?$/i.test(min.trim())) return;
+  warnedUnparseable = true;
+  console.warn("auth: AUTH_MIN_MOBILE_VERSION is set but is not a dotted version number; the mobile version gate will not work as intended");
+}
+
 /** wbmsg mode only: mobile clients below AUTH_MIN_MOBILE_VERSION (or sending no version) must upgrade. */
 export function mobileUpgradeRequired(headers: Record<string, string | string[] | undefined>): boolean {
   if (!isWbmsgAuth()) return false;
   const min = process.env.AUTH_MIN_MOBILE_VERSION;
   if (!min) return false;
+  warnIfUnparseable(min);
   const client = headers["x-app-client"];
   if (typeof client !== "string" || client.toLowerCase() !== "mobile") return false;
   const version = headers["x-app-version"];
