@@ -42,3 +42,14 @@ export async function ensureSuperAdminAccount(
 export function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "P2002";
 }
+
+/** Thrown inside the transaction when a users row already exists for the account, so nothing is committed. */
+export class SuperAdminConflictError extends Error {}
+
+/** Call before ensureSuperAdminAccount: throws if the email's existing account already has a users row. */
+export async function assertNoUserForEmail(tx: Prisma.TransactionClient, rawEmail: string): Promise<void> {
+  const account = await tx.authAccount.findUnique({ where: { email: normalizeEmail(rawEmail) }, select: { id: true } });
+  if (!account) return;
+  const clash = await tx.user.findUnique({ where: { id: account.id }, select: { id: true } });
+  if (clash) throw new SuperAdminConflictError();
+}

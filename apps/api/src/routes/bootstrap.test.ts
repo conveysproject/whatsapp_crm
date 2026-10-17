@@ -84,5 +84,8 @@ describe("POST /admin/bootstrap (wbmsg)", () => {
     expect(res.statusCode).toBe(409);
     expect(res.json().error.code).toBe("CONFLICT");
     expect(tx.user.create).not.toHaveBeenCalled();
+    expect(tx.authAccount.update).not.toHaveBeenCalled();
+    expect(tx.authAccount.create).not.toHaveBeenCalled();
+    expect(revoke.revokeAllSessions).not.toHaveBeenCalled();
   });
 });

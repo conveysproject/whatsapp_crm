@@ -10,7 +10,7 @@ import { writeAdminAudit } from "../lib/audit.js";
 import { isWbmsgAuth } from "../auth/identity.js";
 import { revokeAllSessions } from "../auth/sessions.js";
 import { normalizeEmail } from "../auth/ids.js";
-import { ensureSuperAdminAccount, isUniqueViolation } from "../auth/admin-accounts.js";
+import { assertNoUserForEmail, ensureSuperAdminAccount, isUniqueViolation, SuperAdminConflictError } from "../auth/admin-accounts.js";
 
 // Redis key tracking total bootstrap attempts — max 5 ever, no expiry
 const BOOTSTRAP_ATTEMPTS_KEY = "bootstrap:attempts";
@@ -83,9 +83,8 @@ export const bootstrapRouter: FastifyPluginAsync = async (fastify) => {
         let reused = false;
         try {
           const result = await fastify.prisma.$transaction(async (tx) => {
+            await assertNoUserForEmail(tx, email);
             const account = await ensureSuperAdminAccount(tx, { email, firstName, lastName });
-            const clash = await tx.user.findUnique({ where: { id: account.id }, select: { id: true } });
-            if (clash) return null;
             await tx.user.create({
               data: {
                 id: account.id,
@@ -98,13 +97,10 @@ export const bootstrapRouter: FastifyPluginAsync = async (fastify) => {
             });
             return { id: account.id, reused: !account.created };
           });
-          if (!result) {
-            return reply.status(409).send({ error: { code: "CONFLICT", message: "A super admin with this email already exists" } });
-          }
           userId = result.id;
           reused = result.reused;
         } catch (err) {
-          if (isUniqueViolation(err)) {
+          if (isUniqueViolation(err) || err instanceof SuperAdminConflictError) {
             return reply.status(409).send({ error: { code: "CONFLICT", message: "A super admin with this email already exists" } });
           }
           fastify.log.error({ err }, "Super admin creation failed during bootstrap");

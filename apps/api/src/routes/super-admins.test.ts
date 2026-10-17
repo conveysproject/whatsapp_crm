@@ -95,6 +95,9 @@ describe("POST /admin/super-admins (wbmsg)", () => {
     const res = await app.inject({ method: "POST", url: "/v1/admin/super-admins", payload });
     expect(res.statusCode).toBe(409);
     expect(tx.user.create).not.toHaveBeenCalled();
+    expect(tx.authAccount.update).not.toHaveBeenCalled();
+    expect(tx.authAccount.create).not.toHaveBeenCalled();
+    expect(revoke.revokeAllSessions).not.toHaveBeenCalled();
   });
 });
 
