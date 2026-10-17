@@ -176,7 +176,6 @@ export const signinRoutes: FastifyPluginAsync = async (fastify) => {
       // Re-check after the slow verify: a concurrent burst may have locked the account meanwhile.
       if (await isLocked(account.id)) return fail(account.id, orgId);
 
-      await bestEffort(() => clearPasswordFailures(account.id));
       if (result.needsRehash) {
         try {
           await db.authAccount.update({
@@ -190,15 +189,18 @@ export const signinRoutes: FastifyPluginAsync = async (fastify) => {
 
       const isSuperAdmin = row?.role === "superAdmin";
       const trusted = !isSuperAdmin && (await isTrustedDevice(db, account.id, deviceId));
-      await logAttempt(fastify, request, { userId: account.id, orgId, success: true });
 
       if (!trusted) {
+        // Second factor still pending: log it as such and keep the failure counter until it completes.
+        await logAttempt(fastify, request, { userId: account.id, orgId, success: true, method: "password_pending" });
         const issued = await issueCode(db, { purpose: "new_device", target: account.email, accountId: account.id });
         if ("error" in issued) return reply.status(429).send(RATE_LIMITED);
         mailInBackground(fastify, account.email, "new_device", issued.code);
         return reply.send({ next: "new_device", challengeId: issued.codeId });
       }
 
+      await bestEffort(() => clearPasswordFailures(account.id));
+      await logAttempt(fastify, request, { userId: account.id, orgId, success: true });
       const session = await createSession(db, {
         accountId: account.id,
         client,
@@ -234,7 +236,16 @@ export const signinRoutes: FastifyPluginAsync = async (fastify) => {
       const result = await verifyCodeById(db, { codeId: challengeId, purpose: "new_device", code });
       if (!result.ok || !result.accountId) return reply.status(400).send(INVALID_CODE);
       const account = await db.authAccount.findUnique({ where: { id: result.accountId } });
-      if (!account || account.status !== "active") return reply.status(400).send(INVALID_CODE);
+      // Re-check everything the password step required: the account may have changed since the code was sent.
+      if (
+        !account ||
+        account.status !== "active" ||
+        !account.emailVerifiedAt ||
+        account.mustSetPassword ||
+        (await isLocked(account.id))
+      ) {
+        return reply.status(400).send(INVALID_CODE);
+      }
 
       const row = await userRow(fastify, account.id);
       if (row === "error") return reply.status(503).send(UNAVAILABLE);
@@ -245,6 +256,13 @@ export const signinRoutes: FastifyPluginAsync = async (fastify) => {
         typ: isSuperAdmin ? "admin" : "user",
         ip: authClientIp(request),
         userAgent: request.headers["user-agent"],
+      });
+      await bestEffort(() => clearPasswordFailures(account.id));
+      await logAttempt(fastify, request, {
+        userId: account.id,
+        orgId: row?.organizationId ?? null,
+        success: true,
+        method: "new_device",
       });
       const newDeviceId = await trustDevice(db, account.id);
       return reply.send({

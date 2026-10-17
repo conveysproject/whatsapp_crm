@@ -110,6 +110,11 @@ describe("auth signin", () => {
     expect(m.issueCode).toHaveBeenCalledWith(prisma, { purpose: "new_device", target: "foo@x.com", accountId: "usr_a" });
     expect(m.sendCodeEmail).toHaveBeenCalledWith("foo@x.com", "new_device", "123456");
     expect(m.createSession).not.toHaveBeenCalled();
+    // The second factor is still pending: no failure reset, and the log row says so.
+    expect(m.clearPasswordFailures).not.toHaveBeenCalled();
+    expect(prisma.loginLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: "usr_a", method: "password_pending", success: true }),
+    });
   });
 
   it("new_device code throttled: 429", async () => {
@@ -278,6 +283,25 @@ describe("auth signin new-device", () => {
     expect(res.json()).toEqual({ accessToken: "AT", refreshToken: "RT", expiresIn: 600, deviceId: "dev_new" });
     expect(m.verifyCodeById).toHaveBeenCalledWith(prisma, { codeId: "c1", purpose: "new_device", code: "123456" });
     expect(m.trustDevice).toHaveBeenCalledWith(prisma, "usr_a");
+    expect(m.clearPasswordFailures).toHaveBeenCalledWith("usr_a");
+    expect(prisma.loginLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: "usr_a", orgId: "org1", method: "new_device", success: true }),
+    });
+  });
+
+  it.each([
+    ["disabled", () => prisma.authAccount.findUnique.mockResolvedValue(acct({ status: "disabled" }))],
+    ["locked", () => m.isLocked.mockResolvedValue(true)],
+    ["unverified email", () => prisma.authAccount.findUnique.mockResolvedValue(acct({ emailVerifiedAt: null }))],
+    ["must set password", () => prisma.authAccount.findUnique.mockResolvedValue(acct({ mustSetPassword: true }))],
+  ])("account state changed (%s): 400 INVALID_CODE, no session, no success log", async (_n, arrange) => {
+    arrange();
+    const res = await post();
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("INVALID_CODE");
+    expect(m.createSession).not.toHaveBeenCalled();
+    expect(m.trustDevice).not.toHaveBeenCalled();
+    expect(m.clearPasswordFailures).not.toHaveBeenCalled();
   });
 
   it("wrong code: 400 INVALID_CODE, no session", async () => {
