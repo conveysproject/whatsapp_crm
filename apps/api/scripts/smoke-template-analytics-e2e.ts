@@ -10,7 +10,7 @@
  *   docker run -d --name redis-smoke-tple2e -p 16379:6379 redis:7-alpine
  *   docker exec pg-smoke-tple2e psql -U postgres -c "create database smoke_tple2e"
  *   cd apps/api
- *   export DATABASE_URL=postgresql://postgres:smoke@127.0.0.1:15432/smoke_tple2e
+ *   export DATABASE_URL=postgresql://postgres:<password>@127.0.0.1:15432/smoke_tple2e
  *   pnpm prisma db push
  *   pnpm tsx scripts/smoke-template-analytics-e2e.ts
  *   docker rm -f pg-smoke-tple2e redis-smoke-tple2e
@@ -25,9 +25,9 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-const pgPort = process.env["SMOKE_PG_PORT"] ?? "15432";
 const redisPort = process.env["SMOKE_REDIS_PORT"] ?? "16379";
-const DATABASE_URL = process.env["DATABASE_URL"] ?? `postgresql://postgres:smoke@127.0.0.1:${pgPort}/smoke_tple2e`;
+const DATABASE_URL = process.env["DATABASE_URL"];
+if (!DATABASE_URL) throw new Error("Set DATABASE_URL to the throwaway smoke database (see the header of this file)");
 const REDIS_URL = process.env["REDIS_URL"] ?? `redis://127.0.0.1:${redisPort}`;
 
 const isLocal = (host: string) => host === "127.0.0.1" || host === "localhost";

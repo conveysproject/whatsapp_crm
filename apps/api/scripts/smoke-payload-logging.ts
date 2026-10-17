@@ -10,16 +10,16 @@
  *   docker exec pg-smoke-paylog psql -U postgres -c "create database smoke_paylog" -c "create database smoke_paylog_mig"
  *   cd apps/api
  *   export SMOKE_PG_PORT=15432 SMOKE_REDIS_PORT=16379
- *   export DATABASE_URL=postgresql://postgres:smoke@127.0.0.1:$SMOKE_PG_PORT/smoke_paylog
+ *   export DATABASE_URL=postgresql://postgres:<password>@127.0.0.1:$SMOKE_PG_PORT/smoke_paylog
  *   pnpm prisma db push                       # (prisma 7 has no --skip-generate)
  *   # optional: prove the hand-written migration SQL equals db push
  *   docker exec -i pg-smoke-paylog psql -U postgres -d smoke_paylog_mig -v ON_ERROR_STOP=1 < prisma/migrations/20261009000000_api_payload_logging/migration.sql
- *   export SMOKE_MIGRATION_DATABASE_URL=postgresql://postgres:smoke@127.0.0.1:$SMOKE_PG_PORT/smoke_paylog_mig
+ *   export SMOKE_MIGRATION_DATABASE_URL=postgresql://postgres:<password>@127.0.0.1:$SMOKE_PG_PORT/smoke_paylog_mig
  *   pnpm tsx scripts/smoke-payload-logging.ts
  *   # cleanup when done
  *   docker rm -f pg-smoke-paylog redis-smoke-paylog
  *
- * SMOKE_PG_PORT (default 15432) is only used when DATABASE_URL is not set. On Windows the range 55423-56022 can be excluded
+ * DATABASE_URL is required (no built-in default). On Windows the port range 55423-56022 can be excluded
  * by Hyper-V/WSL, so avoid ports in it.
  *
  * HARD GUARDS: DATABASE_URL (and SMOKE_MIGRATION_DATABASE_URL, REDIS_URL) must point at 127.0.0.1/localhost, and the
@@ -31,9 +31,9 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 // ---- environment + hard guard (must run before the app modules are imported: they read env at import time) ----
-const pgPort = process.env["SMOKE_PG_PORT"] ?? "15432";
 const redisPort = process.env["SMOKE_REDIS_PORT"] ?? "16379";
-const DATABASE_URL = process.env["DATABASE_URL"] ?? `postgresql://postgres:smoke@127.0.0.1:${pgPort}/smoke_paylog`;
+const DATABASE_URL = process.env["DATABASE_URL"];
+if (!DATABASE_URL) throw new Error("Set DATABASE_URL to the throwaway smoke database (see the header of this file)");
 const MIGRATION_DATABASE_URL = process.env["SMOKE_MIGRATION_DATABASE_URL"] ?? "";
 const REDIS_URL = process.env["REDIS_URL"] ?? `redis://127.0.0.1:${redisPort}`;
 

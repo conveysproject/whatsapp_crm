@@ -4,7 +4,7 @@
  *   docker run -d --name pg-smoke-tplan -e POSTGRES_PASSWORD=smoke -p 15432:5432 postgres:16
  *   docker exec pg-smoke-tplan psql -U postgres -c "create database smoke_tplan"
  *   cd apps/api
- *   export DATABASE_URL=postgresql://postgres:smoke@127.0.0.1:15432/smoke_tplan
+ *   export DATABASE_URL=postgresql://postgres:<password>@127.0.0.1:15432/smoke_tplan
  *   pnpm prisma db push
  *   pnpm tsx scripts/smoke-template-analytics-query.ts
  *   docker rm -f pg-smoke-tplan
@@ -18,8 +18,8 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { getTemplateAnalytics } from "../src/lib/template-analytics.js";
 
-const pgPort = process.env["SMOKE_PG_PORT"] ?? "15432";
-const DATABASE_URL = process.env["DATABASE_URL"] ?? `postgresql://postgres:smoke@127.0.0.1:${pgPort}/smoke_tplan`;
+const DATABASE_URL = process.env["DATABASE_URL"];
+if (!DATABASE_URL) throw new Error("Set DATABASE_URL to the throwaway smoke database (see the header of this file)");
 
 const isLocal = (host: string) => host === "127.0.0.1" || host === "localhost";
 function guardDb(raw: string): boolean {

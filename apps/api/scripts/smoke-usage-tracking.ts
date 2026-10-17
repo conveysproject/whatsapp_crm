@@ -5,8 +5,8 @@
  *
  *   docker run -d --name wbmsg-smoke-pg -e POSTGRES_PASSWORD=smoke -e POSTGRES_DB=smoke_full -p 55432:5432 postgres:16
  *   cd apps/api
- *   DATABASE_URL=postgresql://postgres:smoke@127.0.0.1:55432/smoke_full npx prisma db push --skip-generate
- *   DATABASE_URL=postgresql://postgres:smoke@127.0.0.1:55432/smoke_full npx tsx scripts/smoke-usage-tracking.ts
+ *   DATABASE_URL=postgresql://postgres:<password>@127.0.0.1:55432/smoke_full npx prisma db push --skip-generate
+ *   DATABASE_URL=postgresql://postgres:<password>@127.0.0.1:55432/smoke_full npx tsx scripts/smoke-usage-tracking.ts
  *
  * HARD GUARD: refuses to run unless the DATABASE_URL host is 127.0.0.1/localhost AND the database name starts with
  * "smoke". It TRUNCATES api_request_logs and api_usage_daily at the start. It prints PASS/FAIL per check and

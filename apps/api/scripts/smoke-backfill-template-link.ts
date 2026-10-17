@@ -5,7 +5,7 @@
  *   docker run -d --name pg-tpl-backfill -e POSTGRES_PASSWORD=smoke -p 15432:5432 postgres:16
  *   docker exec pg-tpl-backfill psql -U postgres -c "create database smoke_backfill"
  *   cd apps/api
- *   export DATABASE_URL=postgresql://postgres:smoke@127.0.0.1:15432/smoke_backfill
+ *   export DATABASE_URL=postgresql://postgres:<password>@127.0.0.1:15432/smoke_backfill
  *   pnpm prisma db push                       # (prisma 7 has no --skip-generate)
  *   pnpm tsx scripts/smoke-backfill-template-link.ts
  *   docker rm -f pg-tpl-backfill
@@ -21,8 +21,8 @@ import { spawnSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-const pgPort = process.env["SMOKE_PG_PORT"] ?? "15432";
-const DATABASE_URL = process.env["DATABASE_URL"] ?? `postgresql://postgres:smoke@127.0.0.1:${pgPort}/smoke_backfill`;
+const DATABASE_URL = process.env["DATABASE_URL"];
+if (!DATABASE_URL) throw new Error("Set DATABASE_URL to the throwaway smoke database (see the header of this file)");
 const isLocal = (host: string) => host === "127.0.0.1" || host === "localhost";
 function guardDb(raw: string): boolean {
   try {

@@ -1,7 +1,7 @@
 /**
  * Captures UI screenshots for the /docs help center.
  * PII is masked (gray box) before capture.
- * Run: npx tsx apps/web/scripts/capture-docs-screenshots.ts
+ * Run: SCREENSHOT_EMAIL=... SCREENSHOT_PASSWORD=... npx tsx apps/web/scripts/capture-docs-screenshots.ts
  */
 
 import { chromium, type Page, type Browser, type Locator } from "@playwright/test";
@@ -9,8 +9,15 @@ import * as fs from "fs";
 import * as path from "path";
 
 const BASE = "https://wbmsg.com";
-const EMAIL = "pooyanp9@gmail.com";
-const PASSWORD = "FBTEST1234@";
+// Login comes from the environment, never from source (see CLAUDE.md "Secrets").
+//   SCREENSHOT_EMAIL=... SCREENSHOT_PASSWORD=... npx tsx apps/web/scripts/capture-docs-screenshots.ts
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Set ${name} before running this script`);
+  return value;
+}
+const EMAIL = requiredEnv("SCREENSHOT_EMAIL");
+const PASSWORD = requiredEnv("SCREENSHOT_PASSWORD");
 const OUT = path.resolve(__dirname, "../public/docs/screenshots");
 const SESSION_FILE = path.resolve(__dirname, "../e2e/.auth/wbmsg-screenshots.json");
 const VIEWPORT = { width: 1440, height: 900 };
