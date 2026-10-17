@@ -7,8 +7,10 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth/client";
 import { authProvider } from "@/lib/auth/config";
 import { clientLabel, deviceTitle, passwordMode, relativeTime, type DeviceSession } from "@/lib/security-settings";
+import { useAuthMethods } from "@/components/auth/SocialButtons";
+import { ConnectedAccountsSection, WhatsAppNumberSection, type SignInMethodsInfo } from "@/components/settings/SecuritySignInMethods";
 
-interface SecurityInfo { email: string; hasPassword: boolean; mustSetPassword: boolean }
+interface SecurityInfo extends SignInMethodsInfo { email: string; hasPassword: boolean; mustSetPassword: boolean }
 
 const IMPERSONATING = "Not available while viewing as another user.";
 const inputCls = "w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500";
@@ -170,6 +172,7 @@ function WbmsgSecurity(): JSX.Element {
   const [info, setInfo] = useState<SecurityInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const methods = useAuthMethods();
 
   const loadInfo = useCallback(async () => {
     try {
@@ -189,6 +192,8 @@ function WbmsgSecurity(): JSX.Element {
   return (
     <>
       <PasswordSection info={info} onChanged={() => { setRefreshKey((k) => k + 1); void loadInfo(); }} />
+      <ConnectedAccountsSection info={info} methods={methods} onChanged={() => void loadInfo()} />
+      <WhatsAppNumberSection info={info} enabled={methods.whatsapp} onChanged={() => void loadInfo()} />
       <DevicesSection refreshKey={refreshKey} />
     </>
   );
