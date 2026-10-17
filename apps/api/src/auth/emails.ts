@@ -31,6 +31,10 @@ export async function sendCodeEmail(to: string, purpose: CodePurpose, code: stri
       `<p>This code expires in 10 minutes.</p>` +
       `<p style="color:#666">If you didn't ask for this, you can ignore this email.</p>`,
   );
+  // Local testing only: lets the e2e suite read codes from the API log. Never active in production.
+  if (process.env["NODE_ENV"] !== "production" && process.env["AUTH_DEV_LOG_CODES"] === "1") {
+    console.info(`[dev-code] ${purpose} ${to} ${code}`);
+  }
   await sendMail({ to, subject: SUBJECTS[purpose], html });
 }
 
