@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FlowListActions } from "./flow-list-actions";
 import { PermissionGate } from "@/components/PermissionGate";
+import { canAccessSub } from "@/lib/can";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -63,10 +64,8 @@ export default async function FlowsPage(): Promise<JSX.Element> {
   const { getToken } = await auth.protect();
   const token = await getToken() ?? "";
   const [flows, { role, permissions }] = await Promise.all([getFlows(token), getUserData(token)]);
-  const canManage =
-    role === "admin" || role === "superAdmin" || role === "manager" ||
-    (permissions?.["automation_access"] === "allow" &&
-     permissions?.["automation_access@automation_bot_flows"] === "allow");
+  // Same rule as the API: every flow change needs automation_bot_flows (admins bypass).
+  const canManage = canAccessSub({ id: "", fullName: "", email: "", role, permissions: permissions ?? {} }, "automation_access", "automation_bot_flows");
 
   return (
     <PermissionGate permission="automation_access">
