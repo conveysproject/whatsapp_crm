@@ -368,6 +368,9 @@ importers:
       dagre:
         specifier: ^0.8.5
         version: 0.8.5
+      jose:
+        specifier: ^6.2.12
+        version: 6.2.12
       lucide-react:
         specifier: ^0.451.0
         version: 0.451.0(react@18.3.1)
