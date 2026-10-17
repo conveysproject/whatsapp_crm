@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { redis } from "../lib/redis.js";
 import { signAccessToken } from "./tokens.js";
+import { emitSessionsRevoked } from "./session-events.js";
 
 const USER_TTL_MS = 30 * 24 * 3600_000;
 const ADMIN_TTL_MS = 12 * 3600_000;
@@ -101,7 +102,9 @@ async function revokeFamily(prisma: PrismaClient, familyId: string): Promise<voi
     where: { familyId, revokedAt: null },
     data: { revokedAt: new Date(), revokedReason: "reuse_detected" },
   });
-  await markRevoked(rows.map((r) => r.id));
+  const ids = rows.map((r) => r.id);
+  await markRevoked(ids);
+  emitSessionsRevoked(ids);
 }
 
 export async function rotateRefreshToken(
@@ -176,6 +179,7 @@ export async function revokeSession(prisma: PrismaClient, sessionId: string, rea
     data: { revokedAt: new Date(), revokedReason: reason },
   });
   await markRevoked([sessionId]);
+  emitSessionsRevoked([sessionId]);
 }
 
 export async function revokeAllSessions(
@@ -194,7 +198,9 @@ export async function revokeAllSessions(
     where,
     data: { revokedAt: new Date(), revokedReason: reason },
   });
-  await markRevoked(rows.map((r) => r.id));
+  const ids = rows.map((r) => r.id);
+  await markRevoked(ids);
+  emitSessionsRevoked(ids);
   return res.count;
 }
 

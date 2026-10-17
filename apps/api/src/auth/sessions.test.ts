@@ -23,6 +23,7 @@ import {
   rotateRefreshToken,
 } from "./sessions.js";
 import { redis } from "../lib/redis.js";
+import { onSessionsRevoked, resetSessionListenersForTests } from "./session-events.js";
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 const DAY = 86_400_000;
@@ -47,6 +48,7 @@ function makePrisma(row?: Row) {
 
 beforeEach(() => {
   store.clear();
+  resetSessionListenersForTests();
   vi.clearAllMocks();
   vi.useRealTimers();
 });
@@ -245,5 +247,53 @@ describe("revocation", () => {
       return "OK";
     });
     warn.mockRestore();
+  });
+});
+
+describe("revocation events", () => {
+  it("revokeSession emits the revoked id after the DB update", async () => {
+    const { prisma, session } = makePrisma();
+    const seen: string[][] = [];
+    onSessionsRevoked((ids) => {
+      expect(session.updateMany).toHaveBeenCalled();
+      seen.push(ids);
+    });
+    await revokeSession(prisma, "s1", "logout");
+    expect(seen).toEqual([["s1"]]);
+  });
+
+  it("revokeAllSessions emits exactly the ids it revoked", async () => {
+    const { prisma, session } = makePrisma();
+    session.findMany.mockResolvedValueOnce([{ id: "s1" }, { id: "s2" }]);
+    const fn = vi.fn();
+    onSessionsRevoked(fn);
+    await revokeAllSessions(prisma, "a1", "password_change", "s3");
+    expect(fn).toHaveBeenCalledWith(["s1", "s2"]);
+  });
+
+  it("revokeAllSessions emits nothing when no session matched", async () => {
+    const { prisma, session } = makePrisma();
+    session.findMany.mockResolvedValueOnce([]);
+    const fn = vi.fn();
+    onSessionsRevoked(fn);
+    await revokeAllSessions(prisma, "a1", "x");
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it("family revoke on token reuse emits the family's ids", async () => {
+    vi.useFakeTimers();
+    const row = {
+      id: "s1", accountId: "a1", client: "web", familyId: "f1",
+      refreshTokenHash: sha("cur"), previousTokenHash: sha("old"),
+      rotatedAt: new Date(Date.now() - 60_000), revokedAt: null,
+      expiresAt: new Date(Date.now() + DAY),
+    };
+    const { prisma, session } = makePrisma(row);
+    session.findMany.mockResolvedValueOnce([{ id: "s1" }, { id: "s9" }]);
+    const fn = vi.fn();
+    onSessionsRevoked(fn);
+    expect(await rotateRefreshToken(prisma, "old")).toEqual({ error: "reused" });
+    expect(fn).toHaveBeenCalledWith(["s1", "s9"]);
+    vi.useRealTimers();
   });
 });

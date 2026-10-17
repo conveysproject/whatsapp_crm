@@ -4,18 +4,23 @@ import { verifyBearer } from "../auth/identity.js";
 export interface SocketIdentity {
   userId: string;
   organizationId: string;
+  /** Session id (own-auth only); null in Clerk mode. */
+  sid: string | null;
 }
 
 /** Verifies the session token (per AUTH_PROVIDER) sent in the Socket.IO handshake (`auth.token`). Throws "unauthorized" on any failure. */
 export async function authenticateSocket(
   prisma: PrismaClient,
   token: unknown,
-  verify: (authHeader: string) => Promise<{ userId: string }> = verifyBearer,
+  verify: (authHeader: string) => Promise<{ userId: string; sid?: string | null }> = verifyBearer,
 ): Promise<SocketIdentity> {
   if (typeof token !== "string" || token.length === 0) throw new Error("unauthorized");
   let userId: string;
+  let sid: string | null;
   try {
-    ({ userId } = await verify(`Bearer ${token}`));
+    const v = await verify(`Bearer ${token}`);
+    userId = v.userId;
+    sid = v.sid ?? null;
   } catch {
     throw new Error("unauthorized");
   }
@@ -24,7 +29,7 @@ export async function authenticateSocket(
     select: { organizationId: true },
   });
   if (!user) throw new Error("unauthorized");
-  return { userId, organizationId: user.organizationId };
+  return { userId, organizationId: user.organizationId, sid };
 }
 
 /** A socket may only join its own org room and its own user room. */

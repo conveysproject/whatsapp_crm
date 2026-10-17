@@ -2,6 +2,7 @@ import fp from "fastify-plugin";
 import { Server as SocketIOServer } from "socket.io";
 import type { FastifyInstance } from "fastify";
 import { setIo } from "../lib/io-ref.js";
+import { onSessionsRevoked } from "../auth/session-events.js";
 import { authenticateSocket, canJoinRoom, type SocketIdentity } from "../lib/socket-auth.js";
 
 declare module "fastify" {
@@ -34,8 +35,14 @@ export default fp(async (fastify: FastifyInstance) => {
       .catch(() => next(new Error("unauthorized")));
   });
 
+  // Own-auth: closing a session drops its live sockets (within the revoke event, well under 60 s).
+  const unsubscribeRevoke = onSessionsRevoked((ids) => {
+    for (const id of ids) io.in(`sid:${id}`).disconnectSockets(true);
+  });
+
   io.on("connection", (socket) => {
     const identity = socket.data.identity as SocketIdentity;
+    if (identity.sid) void socket.join(`sid:${identity.sid}`);
     void socket.join(`org:${identity.organizationId}`);
     void socket.join(`user:${identity.userId}`);
     socket.on("join-org", (organizationId: unknown) => {
@@ -55,6 +62,7 @@ export default fp(async (fastify: FastifyInstance) => {
   fastify.decorate("io", io);
 
   fastify.addHook("onClose", async () => {
+    unsubscribeRevoke();
     await io.close();
   });
 });
