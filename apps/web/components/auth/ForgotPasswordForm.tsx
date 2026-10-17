@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent, JSX } from "react";
 import Link from "next/link";
 import { nextStep, postAuth } from "@/lib/auth/flows";
@@ -16,6 +16,11 @@ export function ForgotPasswordForm(): JSX.Element {
   const [token, setToken] = useState<string | null>(null);
   const [tsKey, setTsKey] = useState(0);
   const s = styles("light");
+
+  useEffect(() => {
+    const prefill = new URLSearchParams(window.location.search).get("email");
+    if (prefill) setEmail((cur) => cur || prefill);
+  }, []);
 
   async function submit(e: FormEvent): Promise<void> {
     e.preventDefault();

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { FormEvent, JSX } from "react";
 import Link from "next/link";
-import { nextStep, postAuth } from "@/lib/auth/flows";
+import { nextStep, postAuth, postSignInDestination } from "@/lib/auth/flows";
 import { safeRedirect } from "@/lib/auth/redirect";
 import { CodeStep } from "./CodeStep";
 import { ResetPasswordForm } from "./ResetPasswordForm";
@@ -30,16 +30,10 @@ export function SignInForm({ variant = "vendor" }: { variant?: "vendor" | "admin
   const [tsKey, setTsKey] = useState(0);
 
   function finish(mustSetPassword = false): void {
-    if (variant === "admin") {
-      window.location.assign("/admin/sign-in");
-      return;
-    }
-    if (mustSetPassword) {
-      window.location.assign("/settings/security?set=1");
-      return;
-    }
     const raw = new URLSearchParams(window.location.search).get("redirect_url");
-    window.location.assign(safeRedirect(raw));
+    window.location.assign(
+      postSignInDestination({ variant, mustSetPassword, email: email.trim(), redirectTarget: safeRedirect(raw) }),
+    );
   }
 
   async function submitPassword(e: FormEvent): Promise<void> {
@@ -182,11 +176,9 @@ export function SignInForm({ variant = "vendor" }: { variant?: "vendor" | "admin
         >
           Email me a code instead
         </button>
-        {variant === "vendor" && (
-          <Link href="/forgot-password" className={s.link}>
-            Forgot password?
-          </Link>
-        )}
+        <Link href="/forgot-password" className={s.link}>
+          Forgot password?
+        </Link>
       </div>
     </form>
   );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextStep } from "./flows";
+import { nextStep, postSignInDestination } from "./flows";
 
 describe("nextStep", () => {
   it("maps a plain 200 to done", () => {
@@ -45,5 +45,19 @@ describe("nextStep", () => {
   });
   it("handles non-object bodies", () => {
     expect(nextStep({ status: 503, body: "oops" }).kind).toBe("error");
+  });
+});
+
+describe("postSignInDestination", () => {
+  const base = { email: "a+b@x.com", redirectTarget: "/inbox" };
+  it("vendor goes to the redirect target or the security page", () => {
+    expect(postSignInDestination({ ...base, variant: "vendor", mustSetPassword: false })).toBe("/inbox");
+    expect(postSignInDestination({ ...base, variant: "vendor", mustSetPassword: true })).toBe("/settings/security?set=1");
+  });
+  it("admin reloads the sign-in page, or sets a password first", () => {
+    expect(postSignInDestination({ ...base, variant: "admin", mustSetPassword: false })).toBe("/admin/sign-in");
+    expect(postSignInDestination({ ...base, variant: "admin", mustSetPassword: true })).toBe(
+      "/forgot-password?email=a%2Bb%40x.com",
+    );
   });
 });

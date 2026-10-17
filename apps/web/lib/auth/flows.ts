@@ -58,3 +58,18 @@ export async function postAuth(action: string, payload: Record<string, unknown>)
     return { status: 503, body: null };
   }
 }
+
+/** Where to send the browser after a successful sign-in. `redirectTarget` is already safe (see safeRedirect). */
+export function postSignInDestination(o: {
+  variant: "vendor" | "admin";
+  mustSetPassword: boolean;
+  email: string;
+  redirectTarget: string;
+}): string {
+  if (o.mustSetPassword) {
+    return o.variant === "admin"
+      ? `/forgot-password?email=${encodeURIComponent(o.email)}`
+      : "/settings/security?set=1";
+  }
+  return o.variant === "admin" ? "/admin/sign-in" : o.redirectTarget;
+}
