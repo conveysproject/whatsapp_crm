@@ -236,6 +236,14 @@ describe("invitations", () => {
       });
     });
 
+    it("stores the normalized email for a mixed-case invitation", async () => {
+      mockPrisma.invitation.findUnique.mockResolvedValue({ ...invRow(), email: "  Alice@B.com " });
+      mockPrisma.authAccount.findUnique.mockResolvedValue({ email: "alice@b.com" });
+      const res = await call();
+      expect(res.statusCode).toBe(201);
+      expect(mockPrisma.user.create.mock.calls[0][0].data.email).toBe("alice@b.com");
+    });
+
     it("403 EMAIL_MISMATCH", async () => {
       mockPrisma.authAccount.findUnique.mockResolvedValue({ email: "other@b.com" });
       const res = await call();

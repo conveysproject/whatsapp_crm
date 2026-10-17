@@ -48,7 +48,7 @@ async function acceptSignedIn(
         data: {
           id: userId,
           organizationId: invitation.organizationId,
-          email: invitation.email,
+          email: normalizeEmail(invitation.email),
           fullName,
           role: invitation.role,
           ...(mobileNumber ? { mobileNumber } : {}),
