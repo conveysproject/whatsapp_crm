@@ -1,11 +1,11 @@
-import { verifyToken } from "@clerk/nextjs/server";
 import { type NextRequest, NextResponse } from "next/server";
+import { isAuthorized } from "../../../../lib/internal-email-auth";
 import { sendMail, type MailOptions } from "../../../../lib/mail";
 
 // Generic transactional email bridge — Vercel can reach GoDaddy SMTP, Railway cannot.
 //
 // Two callers, one header (Authorization: Bearer <token>):
-//   1. Browser (signed-in user)   — Clerk JWT from getToken()  → verified via verifyToken()
+//   1. Browser (signed-in user)   — access token from getToken()  → own JWKS verify (wbmsg) or Clerk verifyToken()
 //   2. Railway background workers — INTERNAL_EMAIL_SECRET hex  → verified via timingSafeEqual()
 
 const MAX_HTML_BYTES = 64 * 1024;
@@ -45,36 +45,4 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     console.error("[send-email] SMTP error:", message);
     return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
   }
-}
-
-async function isAuthorized(token: string): Promise<boolean> {
-  if (!token) return false;
-
-  // Method 1: Clerk JWT — verify directly, no middleware context needed
-  if (token.startsWith("eyJ")) {
-    const secretKey = process.env["CLERK_SECRET_KEY"];
-    if (secretKey) {
-      try {
-        const payload = await verifyToken(token, { secretKey });
-        if (payload?.sub) return true;
-      } catch { /* invalid JWT — fall through */ }
-    }
-  }
-
-  // Method 2: internal secret for Railway background workers
-  const secret = process.env["INTERNAL_EMAIL_SECRET"];
-  if (secret && secret.length >= 32) return timingSafeEqual(token, secret);
-
-  return false;
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    let diff = 0;
-    for (let i = 0; i < b.length; i++) diff |= (a.charCodeAt(i % a.length) ^ b.charCodeAt(i));
-    return false;
-  }
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= (a.charCodeAt(i) ^ b.charCodeAt(i));
-  return diff === 0;
 }

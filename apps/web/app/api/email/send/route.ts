@@ -11,7 +11,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   console.log("[email/send] auth userId:", userId ?? "null");
 
   if (!userId) {
-    console.log("[email/send] 401 — no Clerk session");
+    console.log("[email/send] 401 — no session");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
