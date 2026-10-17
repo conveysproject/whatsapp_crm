@@ -39,6 +39,7 @@ export const READ_LIKE_POST: ReadonlySet<string> = new Set([
 
 /** Whole route families that are off-limits while impersonating (any method). */
 export const BLOCKED_PREFIXES: readonly string[] = [
+  "/v1/auth", // own auth: impersonators never change the target's password or sessions
   "/v1/campaigns", // campaigns and bulk sends
   "/v1/billing", // billing and plans
   "/v1/users", // users, roles, permissions, push tokens, availability (presence)
