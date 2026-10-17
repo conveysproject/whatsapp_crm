@@ -4,7 +4,8 @@ import { trustDevice } from "../devices.js";
 import { sendCodeEmail } from "../emails.js";
 import { newAccountId, normalizeEmail } from "../ids.js";
 import { checkPasswordPolicy, hashPassword } from "../password.js";
-import { authClientIp } from "../limits.js";
+import { authClientIp, isLocked } from "../limits.js";
+import { UNAVAILABLE, userRow } from "./signin.js";
 import { createSession } from "../sessions.js";
 
 interface SignupBody {
@@ -128,23 +129,30 @@ export const signupRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send(INVALID_CODE);
       }
 
+      if (account.status !== "active" || (await isLocked(account.id))) {
+        return reply.status(400).send(INVALID_CODE);
+      }
+      const row = await userRow(fastify, account.id);
+      if (row === "error") return reply.status(503).send(UNAVAILABLE);
+      const isSuperAdmin = row?.role === "superAdmin";
+
       await fastify.prisma.authAccount.update({
         where: { id: account.id },
         data: { emailVerifiedAt: new Date() },
       });
       const session = await createSession(fastify.prisma, {
         accountId: account.id,
-        client,
-        typ: "user",
+        client: isSuperAdmin ? "admin" : client,
+        typ: isSuperAdmin ? "admin" : "user",
         ip: authClientIp(request),
         userAgent: request.headers["user-agent"],
       });
-      const deviceId = await trustDevice(fastify.prisma, account.id);
+      const deviceId = isSuperAdmin ? undefined : await trustDevice(fastify.prisma, account.id);
       return reply.send({
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
         expiresIn: 600,
-        deviceId,
+        ...(deviceId ? { deviceId } : {}),
       });
     },
   );

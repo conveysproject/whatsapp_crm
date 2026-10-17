@@ -76,7 +76,7 @@ async function padTo(startedAt: number): Promise<void> {
 }
 
 /** users row for the account, null when none; "error" when the lookup failed (callers must fail closed). */
-async function userRow(fastify: FastifyInstance, accountId: string) {
+export async function userRow(fastify: FastifyInstance, accountId: string) {
   try {
     return await fastify.prisma.user.findUnique({
       where: { id: accountId },
@@ -87,7 +87,7 @@ async function userRow(fastify: FastifyInstance, accountId: string) {
   }
 }
 
-const UNAVAILABLE = { error: { code: "UNAVAILABLE", message: "Please try again." } };
+export const UNAVAILABLE = { error: { code: "UNAVAILABLE", message: "Please try again." } };
 
 async function logAttempt(
   fastify: FastifyInstance,

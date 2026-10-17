@@ -3,13 +3,14 @@ import Fastify, { type FastifyInstance } from "fastify";
 
 const m = vi.hoisted(() => ({
   hitLimit: vi.fn(),
+  isLocked: vi.fn(),
   issueCode: vi.fn(),
   verifyCode: vi.fn(),
   sendCodeEmail: vi.fn(),
   createSession: vi.fn(),
   trustDevice: vi.fn(),
 }));
-vi.mock("../limits.js", () => ({ hitLimit: m.hitLimit, authClientIp: () => "9.9.9.9" }));
+vi.mock("../limits.js", () => ({ hitLimit: m.hitLimit, isLocked: m.isLocked, authClientIp: () => "9.9.9.9" }));
 vi.mock("../codes.js", () => ({ issueCode: m.issueCode, verifyCode: m.verifyCode }));
 vi.mock("../emails.js", () => ({ sendCodeEmail: m.sendCodeEmail }));
 vi.mock("../sessions.js", () => ({ createSession: m.createSession }));
@@ -22,6 +23,7 @@ process.env.AUTH_PROVIDER = "wbmsg"; // the module is dark in clerk mode
 
 const prisma = {
   authAccount: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+  user: { findUnique: vi.fn() },
 };
 
 async function build(): Promise<FastifyInstance> {
@@ -180,7 +182,9 @@ describe("auth signup/verify", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     m.hitLimit.mockResolvedValue(false);
-    prisma.authAccount.findUnique.mockResolvedValue({ id: "usr_x", email: "foo@x.com" });
+    m.isLocked.mockResolvedValue(false);
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.authAccount.findUnique.mockResolvedValue({ id: "usr_x", email: "foo@x.com", status: "active" });
     prisma.authAccount.update.mockResolvedValue({});
     m.verifyCode.mockResolvedValue({ ok: true, accountId: "usr_x", target: "foo@x.com" });
     m.createSession.mockResolvedValue({ sessionId: "s", refreshToken: "rt", accessToken: "at", expiresAt: new Date() });
@@ -219,6 +223,41 @@ describe("auth signup/verify", () => {
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
     expect(res.statusCode).toBe(400);
     expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("disabled account -> same 400, nothing marked verified", async () => {
+    prisma.authAccount.findUnique.mockResolvedValue({ id: "usr_x", email: "foo@x.com", status: "disabled" });
+    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("INVALID_CODE");
+    expect(prisma.authAccount.update).not.toHaveBeenCalled();
+    expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("locked account -> same 400", async () => {
+    m.isLocked.mockResolvedValue(true);
+    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("INVALID_CODE");
+    expect(prisma.authAccount.update).not.toHaveBeenCalled();
+    expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("users lookup failure -> 503 UNAVAILABLE, no session", async () => {
+    prisma.user.findUnique.mockRejectedValue(new Error("db down"));
+    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error.code).toBe("UNAVAILABLE");
+    expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("superAdmin -> admin session and no trusted device", async () => {
+    prisma.user.findUnique.mockResolvedValue({ role: "superAdmin", organizationId: "o1" });
+    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(res.statusCode).toBe(200);
+    expect(m.createSession).toHaveBeenCalledWith(prisma, expect.objectContaining({ client: "admin", typ: "admin" }));
+    expect(m.trustDevice).not.toHaveBeenCalled();
+    expect(res.json()).toEqual({ accessToken: "at", refreshToken: "rt", expiresIn: 600 });
   });
 
   it("client must be web or mobile", async () => {
