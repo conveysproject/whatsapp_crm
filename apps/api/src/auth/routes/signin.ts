@@ -11,6 +11,7 @@ import {
 } from "../limits.js";
 import { hashPassword, verifyPassword } from "../password.js";
 import { createSession } from "../sessions.js";
+import { BOT_CHECK_FAILED, verifyTurnstile } from "../turnstile.js";
 
 interface SigninBody {
   email: string;
@@ -20,6 +21,7 @@ interface SigninBody {
 }
 interface CodeRequestBody {
   email: string;
+  turnstileToken?: string;
 }
 interface CodeVerifyBody {
   email: string;
@@ -282,12 +284,18 @@ export const signinRoutes: FastifyPluginAsync = async (fastify) => {
         body: {
           type: "object",
           required: ["email"],
-          properties: { email: { type: "string", minLength: 3, maxLength: 254 } },
+          properties: {
+            email: { type: "string", minLength: 3, maxLength: 254 },
+            turnstileToken: { type: "string", maxLength: 2048 },
+          },
           additionalProperties: false,
         },
       },
     },
     async (request, reply) => {
+      if (!(await verifyTurnstile(request.body.turnstileToken, authClientIp(request)))) {
+        return reply.status(400).send(BOT_CHECK_FAILED);
+      }
       const email = normalizeEmail(request.body.email);
       // Always the same answer, sent before any lookup; the real work happens afterwards.
       await reply.status(202).send({ ok: true });

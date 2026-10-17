@@ -7,12 +7,14 @@ import { checkPasswordPolicy, hashPassword } from "../password.js";
 import { authClientIp, isLocked } from "../limits.js";
 import { UNAVAILABLE, userRow } from "./signin.js";
 import { createSession } from "../sessions.js";
+import { BOT_CHECK_FAILED, verifyTurnstile } from "../turnstile.js";
 
 interface SignupBody {
   email: string;
   password: string;
   firstName: string;
   lastName: string;
+  turnstileToken?: string;
 }
 interface VerifyBody {
   email: string;
@@ -75,6 +77,7 @@ export const signupRoutes: FastifyPluginAsync = async (fastify) => {
             password: { type: "string" },
             firstName: { type: "string", minLength: 1, maxLength: 100 },
             lastName: { type: "string", minLength: 1, maxLength: 100 },
+            turnstileToken: { type: "string", maxLength: 2048 },
           },
           additionalProperties: false,
         },
@@ -83,6 +86,10 @@ export const signupRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { password, firstName, lastName } = request.body;
       const email = normalizeEmail(request.body.email);
+
+      if (!(await verifyTurnstile(request.body.turnstileToken, authClientIp(request)))) {
+        return reply.status(400).send(BOT_CHECK_FAILED);
+      }
 
       if (!checkPasswordPolicy(password).ok) {
         return reply.status(400).send({

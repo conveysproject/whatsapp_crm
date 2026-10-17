@@ -7,6 +7,7 @@ import { authClientIp, clearPasswordFailures, isLocked, recordPasswordFailure } 
 import { checkPasswordPolicy, hashPassword, verifyPassword } from "../password.js";
 import { createSession, revokeAllSessions } from "../sessions.js";
 import { requireSid } from "./session.js";
+import { BOT_CHECK_FAILED, verifyTurnstile } from "../turnstile.js";
 
 const MIN_DURATION_MS = 300;
 
@@ -61,7 +62,7 @@ async function userRow(fastify: FastifyInstance, accountId: string) {
 
 /** Public, credential-limited routes (registered inside the per-IP limited plugin). */
 export const passwordRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.post<{ Body: { email: string } }>(
+  fastify.post<{ Body: { email: string; turnstileToken?: string } }>(
     "/password/forgot",
     {
       config: { public: true },
@@ -69,12 +70,18 @@ export const passwordRoutes: FastifyPluginAsync = async (fastify) => {
         body: {
           type: "object",
           required: ["email"],
-          properties: { email: { type: "string", minLength: 3, maxLength: 254 } },
+          properties: {
+            email: { type: "string", minLength: 3, maxLength: 254 },
+            turnstileToken: { type: "string", maxLength: 2048 },
+          },
           additionalProperties: false,
         },
       },
     },
     async (request, reply) => {
+      if (!(await verifyTurnstile(request.body.turnstileToken, authClientIp(request)))) {
+        return reply.status(400).send(BOT_CHECK_FAILED);
+      }
       const email = normalizeEmail(request.body.email);
       // Same answer for every case, sent before any lookup; the real work happens afterwards.
       await reply.status(202).send({ ok: true });
