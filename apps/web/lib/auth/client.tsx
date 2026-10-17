@@ -112,5 +112,7 @@ function useWbmsgAuth(): AuthState {
 }
 
 // Chosen once at module load from the build-time flag, so hook order is stable.
-// In Clerk mode this is Clerk's own hook, unchanged (extra fields such as orgRole still work).
-export const useAuth = authProvider() === "clerk" ? useClerkAuth : useWbmsgAuth;
+// In Clerk mode this is Clerk's own hook, unchanged at runtime; it is typed as the shared
+// facade contract so callers can only use fields that also exist in wbmsg mode.
+export const useAuth: () => AuthState =
+  authProvider() === "clerk" ? (useClerkAuth as unknown as () => AuthState) : useWbmsgAuth;
