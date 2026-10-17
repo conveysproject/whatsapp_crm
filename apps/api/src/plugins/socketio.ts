@@ -35,7 +35,8 @@ export default fp(async (fastify: FastifyInstance) => {
       .catch(() => next(new Error("unauthorized")));
   });
 
-  // Own-auth: closing a session drops its live sockets (within the revoke event, well under 60 s).
+  // Own-auth: closing a session drops its live sockets, but only the sockets on THIS API instance.
+  // With more than one replica, add @socket.io/redis-adapter so the disconnect reaches every instance.
   const unsubscribeRevoke = onSessionsRevoked((ids) => {
     for (const id of ids) io.in(`sid:${id}`).disconnectSockets(true);
   });

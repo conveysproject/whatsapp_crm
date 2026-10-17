@@ -67,6 +67,22 @@ describe("auth emails", () => {
       expect(info).not.toHaveBeenCalled();
     });
 
+    it("never logs when NODE_ENV is unset or staging, even with the flag set", async () => {
+      process.env["AUTH_DEV_LOG_CODES"] = "1";
+      delete process.env["NODE_ENV"];
+      await sendCodeEmail("a@b.com", "new_device", "123456");
+      process.env["NODE_ENV"] = "staging";
+      await sendCodeEmail("a@b.com", "new_device", "123456");
+      expect(info).not.toHaveBeenCalled();
+    });
+
+    it("logs in the test environment with the flag", async () => {
+      process.env["NODE_ENV"] = "test";
+      process.env["AUTH_DEV_LOG_CODES"] = "1";
+      await sendCodeEmail("a@b.com", "new_device", "123456");
+      expect(info).toHaveBeenCalledTimes(1);
+    });
+
     it("never logs when the flag is unset", async () => {
       process.env["NODE_ENV"] = "development";
       delete process.env["AUTH_DEV_LOG_CODES"];

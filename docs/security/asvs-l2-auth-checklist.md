@@ -102,6 +102,7 @@ Evidence is a file plus function or test name (line numbers drift). `abuse.test.
 | CSRF on the BFF cookie routes | Phase 2-5 | Phase 2: same-origin `Origin` check plus SameSite cookies (PRD §4.4). The API itself is Bearer-only and not cookie-based |
 | Trusted IP for rate limits behind the Vercel BFF | met (API) / Phase 2-5 (BFF) | `limits.ts` `authClientIp` honours `x-wbmsg-client-ip` only with a matching `x-wbmsg-bff` secret (`limits.test.ts`; `abuse.test.ts` "ignores spoofed client-IP headers"). The BFF must send both headers and `AUTH_BFF_SECRET` must be set on Railway and Vercel (Task 8 follow-up, Phase 2); test `limits.test.ts` "uses x-wbmsg-client-ip when the BFF secret matches" |
 | Rate limiter outage behaviour | open (deferred) | A Redis failure in the per-IP `onRequest` hook answers 500 on `/v1/auth/*` (fail closed). Decide fail-open versus closed before cutover (Task 8) |
+| Session revoke reaching live sockets on other replicas | open (deferred) | `plugins/socketio.ts` disconnects revoked sessions' sockets on THIS API instance only. Multi-replica needs `@socket.io/redis-adapter` before running more than one API instance |
 
 ## V3 Session management
 
