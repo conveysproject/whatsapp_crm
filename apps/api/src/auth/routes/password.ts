@@ -140,17 +140,19 @@ export const passwordRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const now = new Date();
+      const passwordHash = await hashPassword(newPassword);
+      // Revoke first: if this fails the password is unchanged; if the write below fails, old sessions are already dead.
+      await revokeAllSessions(db, account.id, "password_reset");
       await db.authAccount.update({
         where: { id: account.id },
         data: {
-          passwordHash: await hashPassword(newPassword),
+          passwordHash,
           passwordChangedAt: now,
           mustSetPassword: false,
           // A reset code proves ownership of the mailbox.
           emailVerifiedAt: account.emailVerifiedAt ?? now,
         },
       });
-      await revokeAllSessions(db, account.id, "password_reset");
       await bestEffort(() => clearPasswordFailures(account.id));
       mailChanged(fastify, account.email);
 
@@ -214,15 +216,12 @@ export const passwordChangeRoutes: FastifyPluginAsync = async (fastify) => {
         await bestEffort(() => clearPasswordFailures(account.id));
       }
 
+      const passwordHash = await hashPassword(newPassword);
+      await revokeAllSessions(db, account.id, "password_change", sid);
       await db.authAccount.update({
         where: { id: account.id },
-        data: {
-          passwordHash: await hashPassword(newPassword),
-          passwordChangedAt: new Date(),
-          mustSetPassword: false,
-        },
+        data: { passwordHash, passwordChangedAt: new Date(), mustSetPassword: false },
       });
-      await revokeAllSessions(db, account.id, "password_change", sid);
       mailChanged(fastify, account.email);
       return reply.send({ ok: true });
     },

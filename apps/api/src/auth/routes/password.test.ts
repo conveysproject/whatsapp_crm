@@ -222,6 +222,37 @@ describe("auth password routes", () => {
       expect(m.trustDevice).toHaveBeenCalledWith(prisma, "usr_a");
     });
 
+    it("revokes sessions BEFORE writing the new hash, and a revoke failure leaves the password unchanged", async () => {
+      await post(app, "reset", body);
+      expect(m.revokeAllSessions.mock.invocationCallOrder[0]).toBeLessThan(
+        prisma.authAccount.update.mock.invocationCallOrder[0],
+      );
+      vi.clearAllMocks();
+      prisma.authAccount.findUnique.mockResolvedValue(acct());
+      prisma.user.findUnique.mockResolvedValue(null);
+      m.verifyCode.mockResolvedValue({ ok: true, accountId: "usr_a", target: "foo@x.com" });
+      m.revokeAllSessions.mockRejectedValue(new Error("db"));
+      const res = await post(app, "reset", body);
+      expect(res.statusCode).toBe(500);
+      expect(prisma.authAccount.update).not.toHaveBeenCalled();
+    });
+
+    it("disabled account -> 400 INVALID_CODE, nothing changed", async () => {
+      prisma.authAccount.findUnique.mockResolvedValue(acct({ status: "disabled" }));
+      const res = await post(app, "reset", body);
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual(INVALID_CODE);
+      expect(prisma.authAccount.update).not.toHaveBeenCalled();
+      expect(m.revokeAllSessions).not.toHaveBeenCalled();
+    });
+
+    it("client reset for an account with no users row -> normal user session", async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      const res = await post(app, "reset", { ...body, client: "mobile" });
+      expect(res.statusCode).toBe(200);
+      expect(m.createSession).toHaveBeenCalledWith(prisma, expect.objectContaining({ client: "mobile", typ: "user" }));
+    });
+
     it("superAdmin with client gets an admin session", async () => {
       prisma.user.findUnique.mockResolvedValue({ role: "superAdmin", organizationId: null });
       await post(app, "reset", { ...body, client: "web" });
@@ -281,6 +312,21 @@ describe("auth password routes", () => {
       const b = await post(app, "change", { currentPassword: "", newPassword: "brand new pass" });
       expect(b.statusCode).toBe(200);
       expect(prisma.authAccount.update.mock.calls[0][0].data.mustSetPassword).toBe(false);
+    });
+
+    it("null hash and not flagged -> 401, nothing changed", async () => {
+      prisma.authAccount.findUnique.mockResolvedValue(acct({ passwordHash: null, mustSetPassword: false }));
+      const res = await post(app, "change", body);
+      expect(res.statusCode).toBe(401);
+      expect(prisma.authAccount.update).not.toHaveBeenCalled();
+      expect(m.revokeAllSessions).not.toHaveBeenCalled();
+    });
+
+    it("revokes other sessions before writing the new hash", async () => {
+      await post(app, "change", body);
+      expect(m.revokeAllSessions.mock.invocationCallOrder[0]).toBeLessThan(
+        prisma.authAccount.update.mock.invocationCallOrder[0],
+      );
     });
 
     it("empty current password is rejected when not flagged", async () => {
