@@ -1,4 +1,4 @@
-import { useAuth } from "@clerk/expo";
+import { useAuth } from "./auth";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { createApi, type Api } from "./api";
 

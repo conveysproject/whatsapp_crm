@@ -1,7 +1,7 @@
 import { decodeJwtClaims } from "./jwt";
 
 function b64url(s: string): string {
-  return Buffer.from(s, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 function token(claims: object): string {
   return `${b64url(JSON.stringify({ alg: "EdDSA" }))}.${b64url(JSON.stringify(claims))}.sig`;

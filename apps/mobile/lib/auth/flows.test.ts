@@ -24,7 +24,7 @@ describe("stepFromResponse", () => {
   it("explains the bot check in app terms", () => {
     const step = stepFromResponse({ status: 400, body: { error: { code: "BOT_CHECK_FAILED", message: "Please complete the check and try again." } } });
     expect(step).toMatchObject({ kind: "error", code: "BOT_CHECK_FAILED" });
-    expect(step.kind === "error" && step.message).toMatch(/password/i);
+    expect(step.kind === "error" && step.message).toMatch(/web dashboard/i);
   });
   it("falls back to friendly messages without a body", () => {
     expect(stepFromResponse({ status: 0, body: null })).toEqual({ kind: "error", code: "NETWORK", message: NETWORK_ERROR });

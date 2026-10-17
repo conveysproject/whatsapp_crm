@@ -4,4 +4,7 @@ export const config = {
   clerkPublishableKey: process.env["EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY"] ?? "",
   // clerk (default) | wbmsg | auto — see lib/auth/provider.ts
   authProvider: process.env["EXPO_PUBLIC_AUTH_PROVIDER"] ?? "clerk",
+  // Store pages for the "Update the app" screen (optional until the store listings exist).
+  appStoreUrl: process.env["EXPO_PUBLIC_APP_STORE_URL"] ?? "",
+  playStoreUrl: process.env["EXPO_PUBLIC_PLAY_STORE_URL"] ?? "",
 };

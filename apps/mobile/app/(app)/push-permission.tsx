@@ -1,4 +1,4 @@
-import { useAuth } from "@clerk/expo";
+import { useAuth } from "../../lib/auth";
 import { useRouter } from "expo-router";
 import { Bell } from "lucide-react-native";
 import { useRef, useState } from "react";

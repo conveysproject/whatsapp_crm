@@ -18,7 +18,7 @@ const GENERIC = "Something went wrong. Please try again.";
 
 // Messages the app shows instead of the API's (the API wording assumes the web page).
 const OVERRIDES: Record<string, string> = {
-  BOT_CHECK_FAILED: "Email codes aren't available in the app right now. Sign in with your password, or use the web dashboard.",
+  BOT_CHECK_FAILED: "This step isn't available in the app right now. Sign in with your password, or use the web dashboard.",
   NOT_FOUND: "Sign-in is not available right now. Please try again later.",
   UPGRADE_REQUIRED: "Please update the WBMSG app to continue.",
 };

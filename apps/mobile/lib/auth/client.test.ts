@@ -67,6 +67,17 @@ describe("auth client", () => {
     await expect(c.refresh("r1")).rejects.toThrow();
   });
 
+  it("requests sign-in and reset codes with only the email", async () => {
+    const fetchFn = mockFetch(202, { ok: true });
+    const c = createAuthClient("https://api.test");
+    await c.requestEmailCode(" a@b.co");
+    await c.forgotPassword("a@b.co ");
+    expect(fetchFn.mock.calls.map((call) => [call[0], JSON.parse(call[1].body)])).toEqual([
+      ["https://api.test/v1/auth/signin/code/request", { email: "a@b.co" }],
+      ["https://api.test/v1/auth/password/forgot", { email: "a@b.co" }],
+    ]);
+  });
+
   it("turns a network failure into status 0", async () => {
     globalThis.fetch = jest.fn().mockRejectedValue(new TypeError("offline")) as unknown as typeof fetch;
     await expect(createAuthClient("https://api.test").requestEmailCode("a@b.co")).resolves.toEqual({ status: 0, body: null });

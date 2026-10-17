@@ -26,6 +26,7 @@ export function createAuthClient(baseUrl: string = config.apiUrl) {
     verifyNewDevice: (challengeId: string, code: string) =>
       call("POST", "/auth/signin/new-device", { challengeId, code: code.trim(), client: "mobile" }),
     requestEmailCode: (email: string) => call("POST", "/auth/signin/code/request", { email: email.trim() }),
+    forgotPassword: (email: string) => call("POST", "/auth/password/forgot", { email: email.trim() }),
     verifyEmailCode: (email: string, code: string) =>
       call("POST", "/auth/signin/code/verify", { email: email.trim(), code: code.trim(), client: "mobile" }),
     resetPassword: (email: string, code: string, newPassword: string) =>
