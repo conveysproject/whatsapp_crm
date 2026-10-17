@@ -478,6 +478,7 @@ describe("auth abuse suite", () => {
         email: "known@example.com",
         emailVerified: true,
         hasPassword: true,
+        mustSetPassword: false,
         phone: { e164: "+15550001111", verified: true },
         oauth: [{ provider: "google" }],
         sessions: 2,
@@ -486,11 +487,11 @@ describe("auth abuse suite", () => {
       expect(res.body).not.toContain("argon2");
     });
 
-    it("phone is null and hasPassword false when absent", async () => {
-      seed({ passwordHash: null, emailVerifiedAt: null });
+    it("phone is null and hasPassword false when absent; mustSetPassword mirrors the account", async () => {
+      seed({ passwordHash: null, emailVerifiedAt: null, mustSetPassword: true });
       const s = await newSession();
       const res = await getSecurity({ authorization: `Bearer ${s.accessToken}` });
-      expect(res.json()).toMatchObject({ emailVerified: false, hasPassword: false, phone: null, oauth: [] });
+      expect(res.json()).toMatchObject({ emailVerified: false, hasPassword: false, mustSetPassword: true, phone: null, oauth: [] });
     });
 
     it("answers 400 NO_SESSION when the request has no own session (demo / clerk)", async () => {
