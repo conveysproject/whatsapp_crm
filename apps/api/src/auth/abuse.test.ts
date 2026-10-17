@@ -55,6 +55,12 @@ vi.mock("./emails.js", () => ({
   sendPasswordChangedEmail: vi.fn(async () => undefined),
 }));
 
+// Workspace rows are covered by create-workspace tests; here it only needs to succeed inside the transaction.
+vi.mock("../lib/create-workspace.js", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  createWorkspace: vi.fn(async () => ({ organizationId: "org_new" })),
+}));
+
 import authPlugin from "../plugins/auth.js";
 import impersonationGuardPlugin from "../lib/impersonation-guard.js";
 import { authRouter } from "./routes/index.js";
@@ -220,7 +226,7 @@ describe("auth abuse suite", () => {
     it("signup: known (verified and unverified) and unknown emails answer byte-identically", async () => {
       seed();
       seed({ id: "usr_unv", email: "unverified@example.com", emailVerifiedAt: null });
-      const body = { password: "longenough1", firstName: "A", lastName: "B" };
+      const body = { password: "longenough1", firstName: "A", lastName: "B", business: { companyName: "Co", industry: "Retail", revenue: "1M" } };
       const unknown = await post(app, "/signup", { email: "nobody@example.com", ...body });
       const verified = await post(app, "/signup", { email: "known@example.com", ...body });
       const unverified = await post(app, "/signup", { email: "unverified@example.com", ...body });
@@ -372,7 +378,13 @@ describe("auth abuse suite", () => {
 
   describe("one-time codes", () => {
     it("a signup code cannot be replayed", async () => {
-      await post(app, "/signup", { email: "new@example.com", password: "longenough1", firstName: "A", lastName: "B" });
+      await post(app, "/signup", {
+        email: "new@example.com",
+        password: "longenough1",
+        firstName: "A",
+        lastName: "B",
+        business: { companyName: "Co", industry: "Retail", revenue: "1M" },
+      });
       await settleSignupWork();
       const code = lastCode("email_verify")!;
       expect(code).toMatch(/^\d{6}$/);

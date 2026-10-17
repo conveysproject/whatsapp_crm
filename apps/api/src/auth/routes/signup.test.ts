@@ -9,21 +9,37 @@ const m = vi.hoisted(() => ({
   sendCodeEmail: vi.fn(),
   createSession: vi.fn(),
   trustDevice: vi.fn(),
+  savePending: vi.fn(),
+  loadPending: vi.fn(),
+  deletePending: vi.fn(),
+  createWorkspace: vi.fn(),
 }));
 vi.mock("../limits.js", () => ({ hitLimit: m.hitLimit, isLocked: m.isLocked, authClientIp: () => "9.9.9.9" }));
 vi.mock("../codes.js", () => ({ issueCode: m.issueCode, verifyCode: m.verifyCode }));
 vi.mock("../emails.js", () => ({ sendCodeEmail: m.sendCodeEmail }));
 vi.mock("../sessions.js", () => ({ createSession: m.createSession }));
 vi.mock("../devices.js", () => ({ trustDevice: m.trustDevice }));
+vi.mock("../pending-signup.js", () => ({
+  savePendingSignup: m.savePending,
+  loadPendingSignup: m.loadPending,
+  deletePendingSignup: m.deletePending,
+}));
+vi.mock("../../lib/create-workspace.js", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  createWorkspace: m.createWorkspace,
+}));
 
 import { authRouter } from "./index.js";
 import { settleSignupWork } from "./signup.js";
 
 process.env.AUTH_PROVIDER = "wbmsg"; // the module is dark in clerk mode
 
+const tx = { authAccount: { create: vi.fn() } };
 const prisma = {
   authAccount: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
-  user: { findUnique: vi.fn() },
+  user: { findUnique: vi.fn(), create: vi.fn() },
+  organization: { create: vi.fn() },
+  $transaction: vi.fn(),
 };
 
 async function build(): Promise<FastifyInstance> {
@@ -33,7 +49,8 @@ async function build(): Promise<FastifyInstance> {
   return app;
 }
 
-const body = { email: " Foo@X.com ", password: "correct horse", firstName: "Foo", lastName: "Bar" };
+const business = { companyName: "Acme", companyWebsite: "https://a.co", companyLocation: "UAE", industry: "Retail", subCategory: "Shops", revenue: "1M" };
+const body = { email: " Foo@X.com ", password: "correct horse", firstName: "Foo", lastName: "Bar", business };
 
 describe("auth signup", () => {
   let app: FastifyInstance;
@@ -42,47 +59,56 @@ describe("auth signup", () => {
     m.hitLimit.mockResolvedValue(false);
     m.issueCode.mockResolvedValue({ code: "123456", codeId: "c1" });
     m.sendCodeEmail.mockResolvedValue(undefined);
+    m.savePending.mockResolvedValue("created");
     prisma.authAccount.findUnique.mockResolvedValue(null);
-    prisma.authAccount.create.mockImplementation(async ({ data }: any) => data);
     app = await build();
   });
 
-  it("creates an unverified account with normalized email and argon2 hash, sends code", async () => {
+  const noDbWrites = () => {
+    expect(prisma.authAccount.create).not.toHaveBeenCalled();
+    expect(prisma.authAccount.update).not.toHaveBeenCalled();
+    expect(prisma.user.create).not.toHaveBeenCalled();
+    expect(prisma.organization.create).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(m.createWorkspace).not.toHaveBeenCalled();
+  };
+
+  it("stores a pending registration (argon2 hash, no plaintext), writes nothing to the DB, sends code", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
     await settleSignupWork();
     expect(res.statusCode).toBe(202);
     expect(res.json()).toEqual({ ok: true });
-    const data = prisma.authAccount.create.mock.calls[0][0].data;
-    expect(data.email).toBe("foo@x.com");
-    expect(data.id).toMatch(/^usr_[a-z2-7]{26}$/);
+    noDbWrites();
+    const [email, data] = m.savePending.mock.calls[0];
+    expect(email).toBe("foo@x.com");
     expect(data.passwordHash).toMatch(/^\$argon2id\$/);
-    expect(data.firstName).toBe("Foo");
+    expect(JSON.stringify(data)).not.toContain("correct horse");
+    expect(data).toMatchObject({ firstName: "Foo", lastName: "Bar", business });
     expect(prisma.authAccount.findUnique).toHaveBeenCalledWith({ where: { email: "foo@x.com" } });
-    expect(m.issueCode).toHaveBeenCalledWith(prisma, { purpose: "email_verify", target: "foo@x.com", accountId: data.id });
+    expect(m.issueCode).toHaveBeenCalledWith(prisma, { purpose: "email_verify", target: "foo@x.com" });
     expect(m.sendCodeEmail).toHaveBeenCalledWith("foo@x.com", "email_verify", "123456");
   });
 
-  it("existing verified email: identical 202, nothing created or sent", async () => {
+  it("second sign-up for the same email keeps the first pending entry and still sends a code", async () => {
+    m.savePending.mockResolvedValue("exists");
+    const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
+    await settleSignupWork();
+    expect(res.statusCode).toBe(202);
+    expect(m.savePending).toHaveBeenCalledTimes(1);
+    expect(m.deletePending).not.toHaveBeenCalled();
+    expect(m.sendCodeEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("existing verified email: identical 202, nothing stored, no code, no mail", async () => {
     prisma.authAccount.findUnique.mockResolvedValue({ id: "usr_x", emailVerifiedAt: new Date() });
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
     await settleSignupWork();
     expect(res.statusCode).toBe(202);
     expect(res.json()).toEqual({ ok: true });
-    expect(prisma.authAccount.create).not.toHaveBeenCalled();
-    expect(prisma.authAccount.update).not.toHaveBeenCalled();
+    noDbWrites();
+    expect(m.savePending).not.toHaveBeenCalled();
     expect(m.issueCode).not.toHaveBeenCalled();
     expect(m.sendCodeEmail).not.toHaveBeenCalled();
-    expect(m.createSession).not.toHaveBeenCalled();
-  });
-
-  it("existing unverified: re-sends a code but never overwrites password or names", async () => {
-    prisma.authAccount.findUnique.mockResolvedValue({ id: "usr_x", emailVerifiedAt: null });
-    const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
-    await settleSignupWork();
-    expect(res.statusCode).toBe(202);
-    expect(prisma.authAccount.create).not.toHaveBeenCalled();
-    expect(prisma.authAccount.update).not.toHaveBeenCalled();
-    expect(m.sendCodeEmail).toHaveBeenCalledTimes(1);
   });
 
   it("replies 202 before any mail is sent (reply does not wait on the mailer)", async () => {
@@ -94,7 +120,6 @@ describe("auth signup", () => {
     await vi.waitFor(() => expect(m.sendCodeEmail).toHaveBeenCalledTimes(1));
     release();
     await settleSignupWork();
-    expect(m.sendCodeEmail).toHaveBeenCalledTimes(1);
   });
 
   it("mailer failure still returns 202", async () => {
@@ -112,22 +137,13 @@ describe("auth signup", () => {
     expect(res.statusCode).toBe(202);
   });
 
-  it("concurrent signups of the same new email: both 202, one account, P2002 treated as existing", async () => {
-    let created: any = null;
-    prisma.authAccount.findUnique.mockImplementation(async () => created);
-    prisma.authAccount.create.mockImplementation(async ({ data }: any) => {
-      if (created) throw Object.assign(new Error("unique"), { code: "P2002" });
-      created = { ...data, emailVerifiedAt: null };
-      return created;
-    });
-    const [a, b] = await Promise.all([
-      app.inject({ method: "POST", url: "/v1/auth/signup", payload: body }),
-      app.inject({ method: "POST", url: "/v1/auth/signup", payload: body }),
-    ]);
+  it("redis failure in the background work still returns 202 and sends nothing", async () => {
+    m.savePending.mockRejectedValue(new Error("redis down"));
+    const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
     await settleSignupWork();
-    expect([a.statusCode, b.statusCode]).toEqual([202, 202]);
-    expect(a.json()).toEqual(b.json());
-    expect(created).not.toBeNull();
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ ok: true });
+    expect(m.sendCodeEmail).not.toHaveBeenCalled();
   });
 
   it("throttled code issue still returns 202 and sends nothing", async () => {
@@ -139,20 +155,44 @@ describe("auth signup", () => {
     expect(m.sendCodeEmail).not.toHaveBeenCalled();
   });
 
-  it("weak password -> 400 WEAK_PASSWORD", async () => {
+  it("weak password -> 400 WEAK_PASSWORD before any work", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: { ...body, password: "short" } });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: { code: "WEAK_PASSWORD", message: "Use 8 to 128 characters." } });
-    expect(prisma.authAccount.create).not.toHaveBeenCalled();
+    expect(m.savePending).not.toHaveBeenCalled();
   });
 
-  it("strips extra properties (Fastify default ajv) and rejects empty names", async () => {
-    const r1 = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: { ...body, role: "admin" } });
-    expect(r1.statusCode).toBe(202);
+  it("requires business with companyName, industry and revenue; rejects extra properties", async () => {
+    const cases = [
+      { ...body, business: undefined },
+      { ...body, business: { ...business, companyName: undefined } },
+      { ...body, business: { ...business, industry: undefined } },
+      { ...body, business: { ...business, revenue: undefined } },
+      { ...body, firstName: "" },
+    ];
+    for (const payload of cases) {
+      const res = await app.inject({ method: "POST", url: "/v1/auth/signup", payload });
+      expect(res.statusCode).toBe(400);
+    }
+    // Extra properties (top level and inside business) are stripped by Fastify's ajv, never stored.
+    const extra = await app.inject({
+      method: "POST",
+      url: "/v1/auth/signup",
+      payload: { ...body, role: "admin", business: { ...business, extra: "x" } },
+    });
+    expect(extra.statusCode).toBe(202);
     await settleSignupWork();
-    expect(prisma.authAccount.create.mock.calls[0][0].data).not.toHaveProperty("role");
-    const r2 = await app.inject({ method: "POST", url: "/v1/auth/signup", payload: { ...body, firstName: "" } });
-    expect(r2.statusCode).toBe(400);
+    const stored = m.savePending.mock.calls[0][1];
+    expect(stored).not.toHaveProperty("role");
+    expect(stored.business).not.toHaveProperty("extra");
+    // Optional business fields may be omitted.
+    const ok = await app.inject({
+      method: "POST",
+      url: "/v1/auth/signup",
+      payload: { ...body, business: { companyName: "Acme", industry: "Retail", revenue: "1M" } },
+    });
+    expect(ok.statusCode).toBe(202);
+    await settleSignupWork();
   });
 
   it("over the per-IP limit -> 429 RATE_LIMITED", async () => {
@@ -162,7 +202,7 @@ describe("auth signup", () => {
     expect(res.statusCode).toBe(429);
     expect(res.json()).toEqual({ error: { code: "RATE_LIMITED", message: "Too many requests, please slow down." } });
     expect(m.hitLimit).toHaveBeenCalledWith(expect.stringMatching(/^auth:ip:/), 20, 600);
-    expect(prisma.authAccount.create).not.toHaveBeenCalled();
+    expect(m.savePending).not.toHaveBeenCalled();
   });
 
   it("21st request from one IP is limited", async () => {
@@ -179,85 +219,116 @@ describe("auth signup", () => {
 describe("auth signup/verify", () => {
   let app: FastifyInstance;
   const vbody = { email: "Foo@X.com", code: "123456", client: "mobile" };
+  const pending = { passwordHash: "$argon2id$h", firstName: "Foo", lastName: "Bar", business };
+  const expired = { error: { code: "INVALID_CODE", message: "Your sign-up expired. Please start again." } };
+  const generic = { error: { code: "INVALID_CODE", message: "That code is not valid. Request a new one." } };
   beforeEach(async () => {
     vi.clearAllMocks();
     m.hitLimit.mockResolvedValue(false);
-    m.isLocked.mockResolvedValue(false);
-    prisma.user.findUnique.mockResolvedValue(null);
-    prisma.authAccount.findUnique.mockResolvedValue({ id: "usr_x", email: "foo@x.com", status: "active" });
-    prisma.authAccount.update.mockResolvedValue({});
-    m.verifyCode.mockResolvedValue({ ok: true, accountId: "usr_x", target: "foo@x.com" });
+    prisma.authAccount.findUnique.mockResolvedValue(null);
+    m.verifyCode.mockResolvedValue({ ok: true, accountId: null, target: "foo@x.com" });
+    m.loadPending.mockResolvedValue(pending);
+    m.deletePending.mockResolvedValue(undefined);
+    tx.authAccount.create.mockImplementation(async ({ data }: any) => data);
+    prisma.$transaction.mockImplementation(async (fn: any) => fn(tx));
+    m.createWorkspace.mockResolvedValue({ organizationId: "org_1" });
     m.createSession.mockResolvedValue({ sessionId: "s", refreshToken: "rt", accessToken: "at", expiresAt: new Date() });
     m.trustDevice.mockResolvedValue("dev123");
     app = await build();
   });
 
-  it("right code -> 200 with tokens, marks verified, creates user session, trusts device", async () => {
+  it("right code -> account + workspace in one transaction, tokens + organizationId", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ accessToken: "at", refreshToken: "rt", expiresIn: 600, deviceId: "dev123" });
+    expect(res.json()).toEqual({ accessToken: "at", refreshToken: "rt", expiresIn: 600, deviceId: "dev123", organizationId: "org_1" });
     expect(m.verifyCode).toHaveBeenCalledWith(prisma, { purpose: "email_verify", target: "foo@x.com", code: "123456" });
-    expect(prisma.authAccount.update.mock.calls[0][0].data.emailVerifiedAt).toBeInstanceOf(Date);
-    expect(m.createSession).toHaveBeenCalledWith(prisma, expect.objectContaining({ accountId: "usr_x", client: "mobile", typ: "user", ip: "9.9.9.9" }));
-    expect(m.trustDevice).toHaveBeenCalledWith(prisma, "usr_x");
+    expect(m.loadPending).toHaveBeenCalledWith("foo@x.com");
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    const data = tx.authAccount.create.mock.calls[0][0].data;
+    expect(data).toMatchObject({ email: "foo@x.com", passwordHash: "$argon2id$h", firstName: "Foo", lastName: "Bar" });
+    expect(data.id).toMatch(/^usr_[a-z2-7]{26}$/);
+    expect(data.emailVerifiedAt).toBeInstanceOf(Date);
+    expect(m.createWorkspace).toHaveBeenCalledWith(tx, { userId: data.id, email: "foo@x.com", fullName: "Foo Bar", business });
+    expect(m.deletePending).toHaveBeenCalledWith("foo@x.com");
+    expect(m.createSession).toHaveBeenCalledWith(prisma, expect.objectContaining({ accountId: data.id, client: "mobile", typ: "user", ip: "9.9.9.9" }));
+    expect(m.trustDevice).toHaveBeenCalledWith(prisma, data.id);
   });
 
-  it.each(["invalid", "expired", "too_many_attempts"])("code failure (%s) -> one generic 400", async (reason) => {
+  it("falls back to the email as full name when names are blank", async () => {
+    m.loadPending.mockResolvedValue({ ...pending, firstName: "", lastName: "" });
+    await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(m.createWorkspace.mock.calls[0][1].fullName).toBe("foo@x.com");
+  });
+
+  it.each(["invalid", "expired", "too_many_attempts"])("code failure (%s) -> one generic 400, nothing created", async (reason) => {
     m.verifyCode.mockResolvedValue({ ok: false, reason });
     const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({ error: { code: "INVALID_CODE", message: "That code is not valid. Request a new one." } });
+    expect(res.json()).toEqual(generic);
+    expect(m.loadPending).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(m.createSession).not.toHaveBeenCalled();
   });
 
-  it("unknown account -> same 400", async () => {
-    prisma.authAccount.findUnique.mockResolvedValue(null);
+  it("valid code but pending entry expired -> 400 'sign-up expired', nothing created", async () => {
+    m.loadPending.mockResolvedValue(null);
+    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual(expired);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("an account for the email appeared meanwhile -> pending deleted, 400, no workspace", async () => {
+    prisma.authAccount.findUnique.mockResolvedValue({ id: "usr_other", email: "foo@x.com" });
+    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual(generic);
+    expect(m.deletePending).toHaveBeenCalledWith("foo@x.com");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(m.createWorkspace).not.toHaveBeenCalled();
+    expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("unique violation inside the transaction -> 400 INVALID_CODE, no session", async () => {
+    prisma.$transaction.mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002" }));
+    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("INVALID_CODE");
+    expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("a workspace failure rolls back: error propagates, pending kept, no session", async () => {
+    m.createWorkspace.mockRejectedValue(new Error("boom"));
+    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(res.statusCode).toBe(500);
+    expect(m.deletePending).not.toHaveBeenCalled();
+    expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("two concurrent verifies with the same code: one succeeds, the other gets 400, workspace created once", async () => {
+    m.verifyCode
+      .mockResolvedValueOnce({ ok: true, accountId: null, target: "foo@x.com" })
+      .mockResolvedValue({ ok: false, reason: "invalid" });
+    const [a, b] = await Promise.all([
+      app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody }),
+      app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody }),
+    ]);
+    expect([a.statusCode, b.statusCode].sort()).toEqual([200, 400]);
+    expect(m.createWorkspace).toHaveBeenCalledTimes(1);
+    expect(tx.authAccount.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("every 400 path takes at least ~300 ms", async () => {
     m.verifyCode.mockResolvedValue({ ok: false, reason: "invalid" });
-    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.code).toBe("INVALID_CODE");
-  });
-
-  it("code for a different account -> 400", async () => {
-    m.verifyCode.mockResolvedValue({ ok: true, accountId: "usr_other", target: "foo@x.com" });
-    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
-    expect(res.statusCode).toBe(400);
-    expect(m.createSession).not.toHaveBeenCalled();
-  });
-
-  it("disabled account -> same 400, nothing marked verified", async () => {
-    prisma.authAccount.findUnique.mockResolvedValue({ id: "usr_x", email: "foo@x.com", status: "disabled" });
-    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.code).toBe("INVALID_CODE");
-    expect(prisma.authAccount.update).not.toHaveBeenCalled();
-    expect(m.createSession).not.toHaveBeenCalled();
-  });
-
-  it("locked account -> same 400", async () => {
-    m.isLocked.mockResolvedValue(true);
-    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.code).toBe("INVALID_CODE");
-    expect(prisma.authAccount.update).not.toHaveBeenCalled();
-    expect(m.createSession).not.toHaveBeenCalled();
-  });
-
-  it("users lookup failure -> 503 UNAVAILABLE, no session", async () => {
-    prisma.user.findUnique.mockRejectedValue(new Error("db down"));
-    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
-    expect(res.statusCode).toBe(503);
-    expect(res.json().error.code).toBe("UNAVAILABLE");
-    expect(m.createSession).not.toHaveBeenCalled();
-  });
-
-  it("superAdmin -> admin session and no trusted device", async () => {
-    prisma.user.findUnique.mockResolvedValue({ role: "superAdmin", organizationId: "o1" });
-    const res = await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
-    expect(res.statusCode).toBe(200);
-    expect(m.createSession).toHaveBeenCalledWith(prisma, expect.objectContaining({ client: "admin", typ: "admin" }));
-    expect(m.trustDevice).not.toHaveBeenCalled();
-    expect(res.json()).toEqual({ accessToken: "at", refreshToken: "rt", expiresIn: 600 });
+    const t0 = Date.now();
+    await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(295);
+    m.verifyCode.mockResolvedValue({ ok: true, accountId: null, target: "foo@x.com" });
+    m.loadPending.mockResolvedValue(null);
+    const t1 = Date.now();
+    await app.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(Date.now() - t1).toBeGreaterThanOrEqual(295);
   });
 
   it("client must be web or mobile", async () => {

@@ -11,6 +11,11 @@ vi.mock("../limits.js", () => ({ hitLimit: m.hitLimit, isLocked: m.isLocked, aut
 vi.mock("../codes.js", () => ({ issueCode: m.issueCode, verifyCode: vi.fn() }));
 vi.mock("../emails.js", () => ({ sendCodeEmail: m.sendCodeEmail, sendPasswordChangedEmail: vi.fn() }));
 vi.mock("../sessions.js", () => ({ createSession: vi.fn(), revokeAllSessions: vi.fn() }));
+vi.mock("../pending-signup.js", () => ({
+  savePendingSignup: vi.fn().mockResolvedValue("created"),
+  loadPendingSignup: vi.fn(),
+  deletePendingSignup: vi.fn(),
+}));
 vi.mock("../devices.js", () => ({ trustDevice: vi.fn(), isTrustedDevice: vi.fn() }));
 
 import { authRouter } from "./index.js";
@@ -25,7 +30,7 @@ const prisma = {
 const fetchMock = vi.fn();
 
 const cases = [
-  { url: "/v1/auth/signup", body: { email: "a@x.com", password: "correct horse", firstName: "A", lastName: "B" } },
+  { url: "/v1/auth/signup", body: { email: "a@x.com", password: "correct horse", firstName: "A", lastName: "B", business: { companyName: "Co", industry: "Retail", revenue: "1M" } } },
   { url: "/v1/auth/signin/code/request", body: { email: "a@x.com" } },
   { url: "/v1/auth/password/forgot", body: { email: "a@x.com" } },
 ];
