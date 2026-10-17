@@ -1,4 +1,7 @@
+jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { version: "3.1.0" } } }));
+
 import { ApiError, createApi } from "./api";
+import { __resetUpgradeForTests, isUpgradeRequired } from "./app-headers";
 
 function mockFetch(status: number, body: unknown) {
   const fn = jest.fn().mockResolvedValue({
@@ -51,5 +54,18 @@ describe("createApi", () => {
   it("throws ApiError with a generic message when the error body is not JSON", async () => {
     mockFetch(502, undefined);
     await expect(createApi(async () => "t", "https://api.test")("/x")).rejects.toMatchObject({ status: 502, code: "HTTP_ERROR" });
+  });
+
+  it("identifies the app on every call", async () => {
+    const fetchFn = mockFetch(200, {});
+    await createApi(async () => "t", "https://api.test")("/users/me");
+    expect(fetchFn.mock.calls[0][1].headers).toMatchObject({ "X-App-Client": "mobile", "X-App-Version": "3.1.0" });
+  });
+
+  it("raises the update screen on 426 UPGRADE_REQUIRED", async () => {
+    __resetUpgradeForTests();
+    mockFetch(426, { error: { code: "UPGRADE_REQUIRED", message: "Please update the WBMSG app to continue." } });
+    await expect(createApi(async () => "t", "https://api.test")("/users/me")).rejects.toMatchObject({ status: 426, code: "UPGRADE_REQUIRED" });
+    expect(isUpgradeRequired()).toBe(true);
   });
 });

@@ -17,3 +17,13 @@ describe("missingConfig", () => {
     expect(missingConfig({ ...ok, apiUrl: "http://localhost:4000" }, true)).toEqual([]);
   });
 });
+
+describe("missingConfig per login mode", () => {
+  it("does not need the Clerk key for a WBMSG-login build", () => {
+    expect(missingConfig({ ...ok, clerkPublishableKey: "", authProvider: "wbmsg" }, false)).toEqual([]);
+  });
+  it("still needs the Clerk key for clerk and auto builds", () => {
+    expect(missingConfig({ ...ok, clerkPublishableKey: "", authProvider: "clerk" }, false)).toEqual(["EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY"]);
+    expect(missingConfig({ ...ok, clerkPublishableKey: "", authProvider: "auto" }, false)).toEqual(["EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY"]);
+  });
+});

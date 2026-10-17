@@ -1,5 +1,6 @@
 // apps/mobile/lib/media-upload.ts
 import { ApiError, type GetToken } from "./api";
+import { appHeaders, noteResponseStatus } from "./app-headers";
 import { config } from "./config";
 
 export function contentTypeForMime(mime: string): "image" | "video" | "audio" | "document" {
@@ -17,9 +18,10 @@ export async function uploadMedia(args: { uri: string; name: string; mimeType: s
   form.append("file", { uri: args.uri, name: args.name, type: args.mimeType } as unknown as Blob);
   const res = await fetch(`${args.baseUrl ?? config.apiUrl}/v1/media/upload`, {
     method: "POST",
-    headers: { Accept: "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: { Accept: "application/json", ...appHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: form,
   });
+  noteResponseStatus(res.status);
   const json: unknown = await res.json().catch(() => null);
   if (!res.ok) {
     const err = (json as { error?: { code?: string; message?: string } } | null)?.error;
