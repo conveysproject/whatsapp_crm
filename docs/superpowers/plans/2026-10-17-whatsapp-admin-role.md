@@ -61,3 +61,5 @@ Spec: `docs/prd-whatsapp-admin-role.md`. Branch: `feat/whatsapp-admin-role`. TDD
 ## Follow-up (owner, 2026-10-17)
 - Managers may **never** deactivate an Admin: `DELETE /users/:id` now loads the target (org-scoped) and returns 403 unless the target's role is in `grantableRoles(actor)`. Admins can still deactivate Admins and WhatsApp Admins; nobody in an org can deactivate a superAdmin.
 - Pending manager-issued admin invitations: owner confirmed there are none, so no action.
+- Team moves (owner "fix", 2026-10-17): `PATCH /users/:id/team`, `POST/PATCH/DELETE /teams` refuse (403) when they would add, evict, re-rank or un-team a member whose role the caller can't grant. A manager may still edit a team that contains an admin if the admin is unchanged.
+- Settings index tiles are filtered by the permission each page's API enforces (`apps/web/lib/settings-tiles.ts`). Pages whose APIs have no permission check (conversation labels, webhook actions, media library, routing) stay visible to anyone with Settings access. That is pre-existing API behavior and is not changed here.
