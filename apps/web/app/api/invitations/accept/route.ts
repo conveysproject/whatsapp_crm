@@ -1,5 +1,6 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { type NextRequest, NextResponse } from "next/server";
+import { authProvider } from "@/lib/auth/config";
 
 const API_URL = (process.env["API_URL"] ?? process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000").replace(/\/$/, "");
 
@@ -37,6 +38,8 @@ async function slowFail(res: NextResponse, ms = 1500): Promise<NextResponse> {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  // wbmsg mode accepts through the auth BFF (/api/auth/invitations/accept/<token>); no Clerk user creation.
+  if (authProvider() === "wbmsg") return new NextResponse(null, { status: 404 });
   // ── Rate limiting ──────────────────────────────────────────────────────────
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   if (Math.random() < 0.05) purgeStaleEntries();

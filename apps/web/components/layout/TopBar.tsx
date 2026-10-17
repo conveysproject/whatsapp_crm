@@ -7,7 +7,7 @@ import { ProfileMenu } from "@/components/layout/ProfileMenu";
 import { SettingsMenu } from "@/components/layout/SettingsMenu";
 import { UsagePill } from "@/components/layout/UsagePill";
 import { useSocket } from "@/hooks/useSocket";
-import { useOrganization } from "@clerk/nextjs";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 interface TopBarProps {
   orgName?: string;
@@ -15,8 +15,8 @@ interface TopBarProps {
 }
 
 export function TopBar({ orgName, userId }: TopBarProps): JSX.Element {
-  const { organization } = useOrganization();
-  const orgId = organization?.id;
+  const { user } = useCurrentUser();
+  const orgId = user?.organizationId;
 
   useSocket(orgId, userId);
 

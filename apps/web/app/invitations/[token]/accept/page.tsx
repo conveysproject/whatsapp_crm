@@ -4,8 +4,12 @@ import { useState, useEffect, type FormEvent, type JSX } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/client";
 import Link from "next/link";
+import { authProvider } from "@/lib/auth/config";
+import { invitationNextStep, signedInAcceptStep } from "@/lib/auth/invitation";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
+
+const isWbmsg = authProvider() === "wbmsg";
 
 interface InvitationMeta {
   email: string;
@@ -20,6 +24,9 @@ export default function AcceptInvitationPage(): JSX.Element {
   const [meta, setMeta] = useState<InvitationMeta | null>(null);
   const [metaError, setMetaError] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [accountExists, setAccountExists] = useState(false);
   const [mobileNumber, setMobileNumber] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -47,8 +54,18 @@ export default function AcceptInvitationPage(): JSX.Element {
       const res = await fetch(`${API_URL}/v1/invitations/${token}/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${clerkToken ?? ""}` },
-        body: JSON.stringify({ clerkUserId: userId, fullName, mobileNumber: mobileNumber || undefined }),
+        body: JSON.stringify(
+          isWbmsg
+            ? { fullName, mobileNumber: mobileNumber || undefined }
+            : { clerkUserId: userId, fullName, mobileNumber: mobileNumber || undefined },
+        ),
       });
+      if (isWbmsg) {
+        const step = signedInAcceptStep(res.status, await res.json().catch(() => null));
+        if (step.kind === "error") { setError(step.message); return; }
+        window.location.assign("/onboarding/checklist");
+        return;
+      }
       if (!res.ok) {
         const json = await res.json() as { error?: { message?: string } };
         setError(json.error?.message ?? "Failed to accept invitation.");
@@ -69,6 +86,19 @@ export default function AcceptInvitationPage(): JSX.Element {
     setLoading(true);
     setError(null);
     try {
+      if (isWbmsg) {
+        const res = await fetch(`/api/auth/invitations/accept/${encodeURIComponent(token)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ firstName: firstName.trim(), lastName: lastName.trim(), password, mobileNumber: mobileNumber || undefined }),
+        });
+        const step = invitationNextStep(res.status, await res.json().catch(() => null));
+        if (step.kind === "account_exists") { setAccountExists(true); return; }
+        if (step.kind === "error") { setError(step.message); return; }
+        window.location.assign("/onboarding/checklist");
+        return;
+      }
       const res = await fetch("/api/invitations/accept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -144,14 +174,37 @@ export default function AcceptInvitationPage(): JSX.Element {
         <p className="text-sm text-gray-500">Create your account to join your team on WBMSG.</p>
 
         <form onSubmit={(e) => { void handleSignUp(e); }} className="space-y-3">
-          <input
-            type="text"
-            placeholder="Full name"
-            required
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
+          {isWbmsg ? (
+            <>
+              <input
+                type="text"
+                placeholder="First name"
+                required
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <input
+                type="text"
+                placeholder="Last name"
+                required
+                autoComplete="family-name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </>
+          ) : (
+            <input
+              type="text"
+              placeholder="Full name"
+              required
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          )}
           <input
             type="tel"
             placeholder="Mobile number (optional)"
@@ -177,6 +230,17 @@ export default function AcceptInvitationPage(): JSX.Element {
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           {error && <p className="text-sm text-red-600">{error}</p>}
+          {accountExists && (
+            <p className="text-sm text-gray-700">
+              You already have an account.{" "}
+              <Link
+                href={`/sign-in?redirect_url=${encodeURIComponent(`/invitations/${token}/accept`)}`}
+                className="text-green-600 hover:underline"
+              >
+                Sign in to accept this invitation.
+              </Link>
+            </p>
+          )}
           <button
             type="submit"
             disabled={loading || !meta}
@@ -188,7 +252,12 @@ export default function AcceptInvitationPage(): JSX.Element {
 
         <p className="text-xs text-center text-gray-400">
           Already have an account?{" "}
-          <Link href="/sign-in" className="text-green-600 hover:underline">Sign in</Link>
+          <Link
+            href={isWbmsg ? `/sign-in?redirect_url=${encodeURIComponent(`/invitations/${token}/accept`)}` : "/sign-in"}
+            className="text-green-600 hover:underline"
+          >
+            Sign in
+          </Link>
         </p>
       </div>
     </div>

@@ -10,6 +10,7 @@ import { ImpersonationProvider } from "@/components/ImpersonationProvider";
 import { BreadcrumbNav } from "@/components/layout/BreadcrumbNav";
 import { OnboardingProvider } from "@/app/(dashboard)/onboarding-context";
 import { auth } from "@/lib/auth/server";
+import { authProvider } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import { Toaster } from "sonner";
 
@@ -79,7 +80,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   // makes getOrgStatus return provisioned=false and falls through to the redirect below,
   // so the cookie never bypasses a check on its own.
   const impersonating = (await getImpersonationCookie()) !== null;
-  if (!orgSlug && !impersonating) {
+  // orgSlug is a Clerk-only claim; in wbmsg mode the org check below (organizations/me) decides.
+  if (authProvider() === "clerk" && !orgSlug && !impersonating) {
     redirect("/checklist");
   }
 
@@ -101,7 +103,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         <Sidebar />
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           <ImpersonationBanner impersonating={impersonating} />
-          <TopBar orgName={impersonating ? status.orgName : (orgSlug ?? undefined)} userId={userId ?? undefined} />
+          <TopBar orgName={impersonating || authProvider() === "wbmsg" ? status.orgName : (orgSlug ?? undefined)} userId={userId ?? undefined} />
           <SetupBanner />
           <BillingStandingBanner />
           <main className="flex flex-col flex-1 px-4 py-4 overflow-auto min-h-0">

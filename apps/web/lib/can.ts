@@ -1,5 +1,6 @@
 export interface CurrentUser {
   id: string;
+  organizationId: string;
   fullName: string;
   email: string;
   role: string;

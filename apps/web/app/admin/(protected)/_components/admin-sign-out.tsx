@@ -1,8 +1,8 @@
 "use client";
-import { useClerk } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 
 export function AdminSignOutButton({ email }: { email: string }) {
-  const { signOut } = useClerk();
+  const { signOut } = useAuth();
 
   return (
     <div className="flex items-center gap-4">

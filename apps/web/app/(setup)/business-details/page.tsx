@@ -1,6 +1,8 @@
 "use client";
 
 import { useUser, useOrganization } from "@clerk/nextjs";
+import { useQuery } from "@tanstack/react-query";
+import { authProvider } from "@/lib/auth/config";
 import { useState, useEffect, type JSX, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -55,9 +57,46 @@ const INIT: FormState = {
   termsAccepted: false,
 };
 
+interface Identity {
+  isLoaded: boolean;
+  firstName: string | null | undefined;
+  lastName: string | null | undefined;
+  email: string;
+  orgName: string | undefined;
+}
+
+// Chosen once at module load so hook order is stable.
+function useClerkIdentity(): Identity {
+  const { user, isLoaded } = useUser();
+  const { organization, isLoaded: orgLoaded } = useOrganization();
+  return {
+    isLoaded: isLoaded && orgLoaded,
+    firstName: user?.firstName,
+    lastName: user?.lastName,
+    email: user?.primaryEmailAddress?.emailAddress ?? "",
+    orgName: organization?.name,
+  };
+}
+
+// wbmsg: only the email is shown; the API derives the register identity server-side.
+function useWbmsgIdentity(): Identity {
+  const { data, isError } = useQuery<{ email?: string } | null>({
+    queryKey: ["auth-me-security"],
+    queryFn: async () => {
+      const res = await fetch("/api/v1/auth/me/security");
+      return res.ok ? ((await res.json()) as { email?: string }) : null;
+    },
+  });
+  return { isLoaded: data !== undefined || isError, firstName: undefined, lastName: undefined, email: data?.email ?? "", orgName: undefined };
+}
+
+const useIdentity = authProvider() === "clerk" ? useClerkIdentity : useWbmsgIdentity;
+const isClerkMode = authProvider() === "clerk";
+
 type FieldError = Partial<Record<keyof FormState, string>>;
 
 export default function BusinessDetailsPage(): JSX.Element {
+  const identity = useIdentity();
   const { user, isLoaded } = useUser();
   const { organization, isLoaded: orgLoaded } = useOrganization();
   const router = useRouter();
@@ -67,10 +106,10 @@ export default function BusinessDetailsPage(): JSX.Element {
   const [apiError, setApiError] = useState("");
 
   useEffect(() => {
-    if (orgLoaded && organization?.name) {
-      setForm(f => ({ ...f, companyName: organization.name }));
+    if (isClerkMode && identity.isLoaded && identity.orgName) {
+      setForm(f => ({ ...f, companyName: identity.orgName ?? f.companyName }));
     }
-  }, [orgLoaded, organization?.name]);
+  }, [identity.isLoaded, identity.orgName]);
 
   useEffect(() => {
     if (form.companyWebsite && !form.companyWebsite.startsWith("www.") && !form.companyWebsite.startsWith("http")) {
@@ -104,12 +143,11 @@ export default function BusinessDetailsPage(): JSX.Element {
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          email: user?.primaryEmailAddress?.emailAddress,
-          firstName: user?.firstName,
-          lastName: user?.lastName,
-        }),
+        body: JSON.stringify(
+          isClerkMode
+            ? { ...form, email: identity.email || undefined, firstName: identity.firstName, lastName: identity.lastName }
+            : form,
+        ),
       });
       if (res.ok) {
         router.push("/dashboard");
@@ -124,12 +162,12 @@ export default function BusinessDetailsPage(): JSX.Element {
     }
   }
 
-  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "—";
-  const email = user?.primaryEmailAddress?.emailAddress ?? "";
-  const initials = [user?.firstName?.[0], user?.lastName?.[0]].filter(Boolean).join("").toUpperCase() || "?";
+  const fullName = [identity.firstName, identity.lastName].filter(Boolean).join(" ") || (isClerkMode ? "—" : identity.email || "—");
+  const email = identity.email;
+  const initials = [identity.firstName?.[0], identity.lastName?.[0]].filter(Boolean).join("").toUpperCase() || (identity.email[0]?.toUpperCase() ?? "?");
   const subCats = form.industry ? (SUB_CATEGORIES[form.industry] ?? []) : [];
 
-  if (!isLoaded || !orgLoaded) {
+  if (!identity.isLoaded) {
     return (
       <div className={`${bricolage.variable} ${dmSans.variable}`} style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F4F6FC", fontFamily: "var(--font-dm), sans-serif", color: "#5A7A62" }}>
         Loading your profile…
