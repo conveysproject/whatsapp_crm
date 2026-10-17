@@ -57,7 +57,12 @@ async function buildApp(): Promise<FastifyInstance> {
 
 describe("POST /v1/ai/smart-replies", () => {
   let app: FastifyInstance;
-  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  beforeEach(async () => {
+    vi.resetModules(); vi.clearAllMocks();
+    // Smart replies first confirm the caller can see the conversation.
+    mockPrisma.conversation.findFirst.mockResolvedValue({ id: "conv-1" });
+    app = await buildApp();
+  });
   afterEach(async () => { await app.close(); });
 
   it("returns smart replies for a conversation using Claude", async () => {

@@ -41,3 +41,15 @@ export async function conversationAccessWhere(
   const visWhere = await conversationVisibilityWhere(prisma, auth);
   return { ...base, ...(visWhere ?? {}) };
 }
+
+/**
+ * Where-fragment for conversation *lists* (and messages via `conversation:`). Same rule as
+ * GET /conversations: assigned_chats_only → own chats; otherwise team/role visibility.
+ */
+export async function conversationListWhere(
+  prisma: FastifyInstance["prisma"],
+  auth: AuthContext,
+): Promise<Record<string, unknown> | undefined> {
+  if (auth.permissions["assigned_chats_only"] === "allow") return { assignedTo: auth.userId };
+  return conversationVisibilityWhere(prisma, auth);
+}
