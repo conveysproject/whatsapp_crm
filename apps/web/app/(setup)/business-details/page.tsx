@@ -3,53 +3,20 @@
 import { useUser, useOrganization } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import { authProvider } from "@/lib/auth/config";
-import { useState, useEffect, type JSX, type ChangeEvent } from "react";
+import { useState, useEffect, type JSX } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
 import { PublicNav } from "@/components/public/PublicNav";
+import { BusinessFields } from "@/components/auth/BusinessFields";
+import { validateBusinessScreen, type BusinessValues, type FieldErrors } from "@/lib/auth/signup-steps";
 
 const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-br", weight: ["600", "700", "800"] });
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm", weight: ["400", "500"] });
 
 
-const INDUSTRIES = [
-  "Marketing & Advertising", "Retail", "Education",
-  "Entertainment, Social Media & Gaming", "Finance", "Healthcare",
-  "Public Utilities & Non Profits", "Professional Services", "Technology",
-  "Travel & Hospitality", "Automotive", "Real Estate & Construction",
-  "Restaurants", "Manufacturing & IMPEX", "Fitness & Wellness",
-];
-
-const SUB_CATEGORIES: Record<string, string[]> = {
-  "Marketing & Advertising": ["Digital Marketing Agency", "PR & Communications", "Brand Agency", "Media Buying", "SEO / SEM"],
-  "Retail": ["E-commerce", "Physical Store", "D2C Brand", "Wholesale / B2B", "Franchise"],
-  "Education": ["EdTech Platform", "K-12 School", "Higher Education", "Coaching Centre", "Skill Development"],
-  "Entertainment, Social Media & Gaming": ["Gaming Studio", "OTT / Streaming", "Social Media App", "Events & Entertainment", "Sports"],
-  "Finance": ["Fintech", "Banking / NBFC", "Insurance", "Wealth Management", "Lending"],
-  "Healthcare": ["Hospital / Clinic", "Pharmacy", "Health Tech", "Diagnostics Lab", "Telemedicine"],
-  "Public Utilities & Non Profits": ["NGO / Foundation", "Government", "Public Utilities", "Religious Organisation"],
-  "Professional Services": ["Legal / Law Firm", "Management Consulting", "Accounting / CA", "HR / Staffing", "Architecture / Design"],
-  "Technology": ["SaaS Product", "IT Services", "IoT", "AI / ML", "Cybersecurity"],
-  "Travel & Hospitality": ["Hotel / Resort", "Travel Agency", "Airlines", "Tourism", "Online Travel Platform"],
-  "Automotive": ["Car Dealer", "Auto Parts", "Electric Vehicles", "Auto Service Centre", "Car Rental"],
-  "Real Estate & Construction": ["Residential", "Commercial", "Construction", "Interior Design", "PropTech"],
-  "Restaurants": ["QSR / Fast Food", "Fine Dining", "Cloud Kitchen", "Café / Bakery", "Catering"],
-  "Manufacturing & IMPEX": ["Manufacturing", "Import / Export", "Logistics", "Distribution", "Packaging"],
-  "Fitness & Wellness": ["Gym / Fitness Studio", "Yoga / Meditation", "Nutrition & Diet", "Wellness Centre", "Sports Academy"],
-};
-
-const REVENUE_BANDS = [
-  "Less than $10K", "$10K – $50K", "$50K – $100K",
-  "$100K – $500K", "$500K – $5M", "$5M – $50M",
-  "More than $50M",
-];
-
-interface FormState {
-  companyName: string; companyWebsite: string; companyLocation: string;
-  industry: string; subCategory: string; revenue: string; termsAccepted: boolean;
-}
+type FormState = BusinessValues;
 
 const INIT: FormState = {
   companyName: "", companyWebsite: "",
@@ -93,7 +60,7 @@ function useWbmsgIdentity(): Identity {
 const isClerkMode = authProvider() === "clerk";
 const useIdentity = isClerkMode ? useClerkIdentity : useWbmsgIdentity;
 
-type FieldError = Partial<Record<keyof FormState, string>>;
+type FieldError = FieldErrors<FormState>;
 
 export default function BusinessDetailsPage(): JSX.Element {
   const identity = useIdentity();
@@ -109,27 +76,8 @@ export default function BusinessDetailsPage(): JSX.Element {
     }
   }, [identity.isLoaded, identity.orgName]);
 
-  useEffect(() => {
-    if (form.companyWebsite && !form.companyWebsite.startsWith("www.") && !form.companyWebsite.startsWith("http")) {
-      setForm(f => ({ ...f, companyWebsite: "www." + f.companyWebsite }));
-    }
-  }, [form.companyWebsite]);
-
-  function set<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm(f => ({ ...f, [key]: value }));
-    if (key === "industry") setForm(f => ({ ...f, industry: value as string, subCategory: "" }));
-    setErrors(e => ({ ...e, [key]: undefined }));
-  }
-
   function validate(): boolean {
-    const e: FieldError = {};
-    if (!isClerkMode && !form.companyName.trim()) e.companyName = "Company name is required";
-    if (!form.companyWebsite.trim())  e.companyWebsite = "Company website is required";
-    if (!form.companyLocation.trim()) e.companyLocation = "Company location is required";
-    if (!form.industry)               e.industry       = "Please select your industry";
-    if (!form.subCategory)            e.subCategory    = "Please select a category";
-    if (!form.revenue)                e.revenue        = "Please select annual revenue";
-    if (!form.termsAccepted)          e.termsAccepted  = "You must accept the terms to continue";
+    const e = validateBusinessScreen(form, { requireCompanyName: !isClerkMode });
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -164,7 +112,6 @@ export default function BusinessDetailsPage(): JSX.Element {
   const fullName = [identity.firstName, identity.lastName].filter(Boolean).join(" ") || (isClerkMode ? "—" : identity.email || "—");
   const email = identity.email;
   const initials = [identity.firstName?.[0], identity.lastName?.[0]].filter(Boolean).join("").toUpperCase() || (identity.email[0]?.toUpperCase() ?? "?");
-  const subCats = form.industry ? (SUB_CATEGORIES[form.industry] ?? []) : [];
 
   if (!identity.isLoaded) {
     return (
@@ -282,53 +229,6 @@ export default function BusinessDetailsPage(): JSX.Element {
         .bd2-right-title { font-family: var(--font-br); font-size: 1.25rem; font-weight: 800; color: var(--t1); }
         .bd2-right-sub { font-size: .82rem; color: var(--t3); margin-top: 2px; }
 
-        /* Section labels */
-        .bd2-section {
-          font-family: var(--font-br); font-size: .72rem; font-weight: 700;
-          text-transform: uppercase; letter-spacing: .07em; color: var(--t3);
-        }
-
-        /* Grid rows */
-        .bd2-row { display: grid; gap: .65rem; }
-        .bd2-row-2 { grid-template-columns: 1fr 1fr; }
-        .bd2-row-1 { grid-template-columns: 1fr; }
-        @media (max-width: 520px) { .bd2-row-2 { grid-template-columns: 1fr; } }
-
-        /* Fields */
-        .bd2-field { display: flex; flex-direction: column; gap: 4px; }
-        .bd2-label { font-size: .72rem; font-weight: 600; color: var(--t2); }
-        .bd2-inp {
-          background: var(--inp); border: 1.5px solid transparent; border-radius: 8px;
-          padding: 10px 12px; font-size: .85rem; color: var(--t1);
-          font-family: var(--font-dm), sans-serif;
-          outline: none; transition: border-color .15s, box-shadow .15s; width: 100%; box-sizing: border-box;
-        }
-        .bd2-inp:focus { border-color: var(--g); box-shadow: 0 0 0 3px rgba(11,191,119,.12); background: #fff; }
-        .bd2-inp::placeholder { color: var(--t3); }
-        .bd2-inp-err { border-color: var(--err) !important; }
-        .bd2-err { font-size: .68rem; color: var(--err); }
-
-        /* Select */
-        .bd2-sel {
-          background: var(--inp); border: 1.5px solid transparent; border-radius: 8px;
-          padding: 10px 12px; font-size: .85rem; color: var(--t1);
-          font-family: var(--font-dm), sans-serif; outline: none;
-          cursor: pointer; width: 100%; box-sizing: border-box; transition: border-color .15s;
-          appearance: none;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23738A7B' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-          background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px;
-        }
-        .bd2-sel:focus { border-color: var(--g); box-shadow: 0 0 0 3px rgba(11,191,119,.12); background-color: #fff; }
-
-        /* Divider */
-        .bd2-divider { border: none; border-top: 1px solid var(--bd); margin: .1rem 0; }
-
-        /* Checkboxes */
-        .bd2-check-row { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
-        .bd2-check { width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0; cursor: pointer; accent-color: var(--g); margin-top: 2px; }
-        .bd2-check-label { font-size: .79rem; color: var(--t2); line-height: 1.5; }
-        .bd2-check-label a { color: var(--g7); text-decoration: underline; }
-
         /* API error */
         .bd2-api-err {
           background: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 8px;
@@ -417,112 +317,12 @@ export default function BusinessDetailsPage(): JSX.Element {
               <div className="bd2-right-sub">Help us personalise your experience</div>
             </div>
 
-            {/* ── Company Details ── */}
-            <div className="bd2-section">Company Details</div>
-
-            {!isClerkMode && (
-              <div className="bd2-field">
-                <label className="bd2-label">Company Name *</label>
-                <input
-                  type="text"
-                  className={`bd2-inp${errors.companyName ? " bd2-inp-err" : ""}`}
-                  placeholder="Your company name"
-                  maxLength={255}
-                  value={form.companyName}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => set("companyName", e.target.value)}
-                />
-                {errors.companyName && <div className="bd2-err">{errors.companyName}</div>}
-              </div>
-            )}
-
-            <div className="bd2-row bd2-row-2">
-              <div className="bd2-field">
-                <label className="bd2-label">Company Website *</label>
-                <input
-                  type="text"
-                  className={`bd2-inp${errors.companyWebsite ? " bd2-inp-err" : ""}`}
-                  placeholder="www.yourcompany.com"
-                  value={form.companyWebsite}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => set("companyWebsite", e.target.value)}
-                />
-                {errors.companyWebsite && <div className="bd2-err">{errors.companyWebsite}</div>}
-              </div>
-            </div>
-
-            <div className="bd2-field">
-              <label className="bd2-label">Company Location *</label>
-              <input
-                type="text"
-                className={`bd2-inp${errors.companyLocation ? " bd2-inp-err" : ""}`}
-                placeholder="Mumbai, Maharashtra"
-                maxLength={48}
-                value={form.companyLocation}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => set("companyLocation", e.target.value)}
-              />
-              {errors.companyLocation && <div className="bd2-err">{errors.companyLocation}</div>}
-            </div>
-
-            <div className="bd2-row bd2-row-2">
-              <div className="bd2-field">
-                <label className="bd2-label">Industry *</label>
-                <select
-                  className={`bd2-sel${errors.industry ? " bd2-inp-err" : ""}`}
-                  value={form.industry}
-                  onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-                    setForm(f => ({ ...f, industry: e.target.value, subCategory: "" }));
-                    setErrors(er => ({ ...er, industry: undefined }));
-                  }}
-                >
-                  <option value="" disabled>Select industry</option>
-                  {INDUSTRIES.map(ind => <option key={ind} value={ind}>{ind}</option>)}
-                </select>
-                {errors.industry && <div className="bd2-err">{errors.industry}</div>}
-              </div>
-              <div className="bd2-field">
-                <label className="bd2-label">Category *</label>
-                <select
-                  className={`bd2-sel${errors.subCategory ? " bd2-inp-err" : ""}`}
-                  value={form.subCategory}
-                  onChange={(e: ChangeEvent<HTMLSelectElement>) => set("subCategory", e.target.value)}
-                  disabled={!form.industry}
-                >
-                  <option value="" disabled>Select category</option>
-                  {subCats.map(sc => <option key={sc} value={sc}>{sc}</option>)}
-                </select>
-                {errors.subCategory && <div className="bd2-err">{errors.subCategory}</div>}
-              </div>
-            </div>
-
-            <div className="bd2-field">
-              <label className="bd2-label">Annual Revenue *</label>
-              <select
-                className={`bd2-sel${errors.revenue ? " bd2-inp-err" : ""}`}
-                value={form.revenue}
-                onChange={(e: ChangeEvent<HTMLSelectElement>) => set("revenue", e.target.value)}
-              >
-                <option value="" disabled>Select annual revenue</option>
-                {REVENUE_BANDS.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-              {errors.revenue && <div className="bd2-err">{errors.revenue}</div>}
-            </div>
-
-            <hr className="bd2-divider" />
-
-            <label className="bd2-check-row">
-              <input
-                type="checkbox"
-                className="bd2-check"
-                checked={form.termsAccepted}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => set("termsAccepted", e.target.checked)}
-              />
-              <span className="bd2-check-label">
-                By creating an account you agree to our{" "}
-                <Link href="#" target="_blank" rel="noopener">Terms of Service</Link>{" "}
-                and{" "}
-                <Link href="#" target="_blank" rel="noopener">Privacy Policy</Link>
-              </span>
-            </label>
-            {errors.termsAccepted && <div className="bd2-err">{errors.termsAccepted}</div>}
+            <BusinessFields
+              values={form}
+              errors={errors}
+              onChange={patch => { setForm(f => ({ ...f, ...patch })); setErrors(er => { const n = { ...er }; for (const k of Object.keys(patch)) delete n[k as keyof FieldError]; return n; }); }}
+              showCompanyName={!isClerkMode}
+            />
 
             {apiError && <div className="bd2-api-err">{apiError}</div>}
 
