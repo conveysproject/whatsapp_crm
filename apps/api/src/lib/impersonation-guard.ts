@@ -79,6 +79,7 @@ export const BLOCKED_PREFIX_EXCEPTIONS: ReadonlySet<string> = new Set([
  * (profile data only, no tokens) were reviewed and stay readable.
  */
 export const BLOCKED_GET_PREFIXES: readonly string[] = [
+  "/v1/auth", // own auth: session lists and security overview belong to the target's own sessions only
   "/v1/admin",
   "/v1/super-admins",
 ];

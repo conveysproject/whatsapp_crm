@@ -3,6 +3,8 @@ import { authClientIp, hitLimit } from "../limits.js";
 import { signupRoutes } from "./signup.js";
 import { signinRoutes } from "./signin.js";
 import { sessionRoutes } from "./session.js";
+import { jwksRoutes } from "./jwks.js";
+import { securityRoutes } from "./security.js";
 import { passwordChangeRoutes, passwordRoutes } from "./password.js";
 
 /** Credential/code endpoints: 20 requests / 10 min per IP. onRequest so it also covers malformed bodies. */
@@ -25,4 +27,7 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
   // Refresh has its own limit; authenticated routes use only the app-wide limiter.
   await fastify.register(sessionRoutes);
   await fastify.register(passwordChangeRoutes);
+  await fastify.register(securityRoutes);
+  // Public key set: no credentials involved, so no credential limiter.
+  await fastify.register(jwksRoutes);
 };
