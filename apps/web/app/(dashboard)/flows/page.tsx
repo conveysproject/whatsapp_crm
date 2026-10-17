@@ -65,7 +65,7 @@ export default async function FlowsPage(): Promise<JSX.Element> {
   const token = await getToken() ?? "";
   const [flows, { role, permissions }] = await Promise.all([getFlows(token), getUserData(token)]);
   // Same rule as the API: every flow change needs automation_bot_flows (admins bypass).
-  const canManage = canAccessSub({ id: "", fullName: "", email: "", role, permissions: permissions ?? {} }, "automation_access", "automation_bot_flows");
+  const canManage = canAccessSub({ id: "", fullName: "", email: "", organizationId: "", role, permissions: permissions ?? {} }, "automation_access", "automation_bot_flows");
 
   return (
     <PermissionGate permission="automation_access">
