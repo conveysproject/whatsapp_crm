@@ -8,7 +8,7 @@ const NO_SESSION = { error: { code: "NO_SESSION", message: "This action needs a 
 const NOT_FOUND = { error: { code: "NOT_FOUND", message: "Session not found" } };
 
 /** Returns the caller's sid, or answers 400 NO_SESSION (clerk mode, demo, impersonation have no own session). */
-function requireSid(request: FastifyRequest, reply: FastifyReply): string | null {
+export function requireSid(request: FastifyRequest, reply: FastifyReply): string | null {
   const sid = request.auth?.sid;
   if (!sid) {
     void reply.status(400).send(NO_SESSION);

@@ -3,6 +3,7 @@ import { authClientIp, hitLimit } from "../limits.js";
 import { signupRoutes } from "./signup.js";
 import { signinRoutes } from "./signin.js";
 import { sessionRoutes } from "./session.js";
+import { passwordChangeRoutes, passwordRoutes } from "./password.js";
 
 /** Credential/code endpoints: 20 requests / 10 min per IP. onRequest so it also covers malformed bodies. */
 const credentialRoutes: FastifyPluginAsync = async (fastify) => {
@@ -16,11 +17,12 @@ const credentialRoutes: FastifyPluginAsync = async (fastify) => {
 
   await fastify.register(signupRoutes);
   await fastify.register(signinRoutes);
-  // Later tasks add password/forgot and password/reset here.
+  await fastify.register(passwordRoutes);
 };
 
 export const authRouter: FastifyPluginAsync = async (fastify) => {
   await fastify.register(credentialRoutes);
   // Refresh has its own limit; authenticated routes use only the app-wide limiter.
   await fastify.register(sessionRoutes);
+  await fastify.register(passwordChangeRoutes);
 };
