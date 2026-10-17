@@ -1,5 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { authProvider } from "@/lib/auth/config";
+import { wbmsgMiddleware } from "@/lib/auth/middleware-wbmsg";
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -22,7 +24,7 @@ const isPublicRoute = createRouteMatcher([
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
 const isAdminSignIn = createRouteMatcher(["/admin/sign-in(.*)"]);
 
-export default clerkMiddleware(async (auth, request) => {
+const clerkMiddlewareHandler = clerkMiddleware(async (auth, request) => {
   const { userId } = await auth();
 
   // ── Admin routes ─────────────────────────────────────────────────────────
@@ -52,6 +54,8 @@ export default clerkMiddleware(async (auth, request) => {
   // it calls /v1/organizations/me — if the org doesn't exist it redirects
   // to /business-details. No cookie needed; the DB is the source of truth.
 });
+
+export default authProvider() === "clerk" ? clerkMiddlewareHandler : wbmsgMiddleware;
 
 export const config = {
   matcher: ["/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)"],
