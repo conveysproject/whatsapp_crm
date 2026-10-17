@@ -7,6 +7,15 @@ Safety: everything here targets `localhost`. Never point `DATABASE_URL` at
 production (Railway) and never run `prisma migrate deploy` against it. Production
 stays on Clerk (`AUTH_PROVIDER` and `NEXT_PUBLIC_AUTH_PROVIDER` unset).
 
+> **Lessons from the first real run (2026-10-17) — read first**
+> - `docker-compose.yml` now requires `POSTGRES_PASSWORD` (no hardcoded passwords). If your own dev stack (`WBMSG_postgres`, `WBMSG_redis`, API on 4000, web on 3000) is already running, do **not** reuse it: start throwaway containers instead, e.g.
+>   `docker run -d --name wbmsg-e2e-pg -e POSTGRES_USER=WBMSG -e POSTGRES_PASSWORD=<random> -e POSTGRES_DB=WBMSG_e2e -p 5434:5432 postgres:16-alpine` and
+>   `docker run -d --name wbmsg-e2e-redis -p 6380:6379 redis:7-alpine`, then use ports 5434/6380 in `.env`, `API_PORT=4100`, `CORS_ORIGIN=http://localhost:3100`, web on `--port 3100`, and `E2E_BASE_URL=http://localhost:3100`.
+> - `prisma migrate deploy` cannot build a fresh database (the migration history has out-of-band gaps). On the throwaway DB use `npx prisma db push` instead (empty database only; never against production).
+> - Run the web app as a production build (`npx next build` then `npx next start --port 3100`): `next dev` compiles pages for 10–45 s on first hit, longer than the test timeouts. This also proves the build works with no Clerk keys.
+> - Install the Playwright browser once: `npx playwright install chromium`. Add `--headed --workers=1` to watch the run.
+> - Teardown: `docker rm -f wbmsg-e2e-pg wbmsg-e2e-redis` and delete the API log (it holds one-time codes).
+
 ## 1. Start Docker and the data services
 
 1. Start Docker Desktop and wait until it reports "running".
