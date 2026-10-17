@@ -3,6 +3,7 @@ import { authClientIp, hitLimit } from "../limits.js";
 import { revokeAllSessions, revokeSession, rotateRefreshToken } from "../sessions.js";
 
 const SESSION_EXPIRED = { error: { code: "SESSION_EXPIRED", message: "Please sign in again." } };
+const UNAVAILABLE = { error: { code: "UNAVAILABLE", message: "Please try again." } };
 const NO_SESSION = { error: { code: "NO_SESSION", message: "This action needs a WBMSG session." } };
 const NOT_FOUND = { error: { code: "NOT_FOUND", message: "Session not found" } };
 
@@ -39,7 +40,14 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const result = await rotateRefreshToken(fastify.prisma, request.body.refreshToken);
+      let result: Awaited<ReturnType<typeof rotateRefreshToken>>;
+      try {
+        result = await rotateRefreshToken(fastify.prisma, request.body.refreshToken);
+      } catch (err) {
+        // Infrastructure failure: retryable, must not sign the user out. Never log the token.
+        fastify.log.warn({ err: err instanceof Error ? err.name : "unknown" }, "refresh failed");
+        return reply.status(503).send(UNAVAILABLE);
+      }
       if ("error" in result) return reply.status(401).send(SESSION_EXPIRED);
       return reply.send({ accessToken: result.accessToken, refreshToken: result.refreshToken, expiresIn: 600 });
     },

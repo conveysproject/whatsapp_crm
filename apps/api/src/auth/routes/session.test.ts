@@ -142,6 +142,13 @@ describe("auth session routes", () => {
       expect(b.json()).toEqual(EXPIRED);
     });
 
+    it("answers 503 UNAVAILABLE (not a sign-out) when the store throws", async () => {
+      prisma.authSession.findUnique.mockRejectedValue(new Error("db down"));
+      const res = await app.inject({ method: "POST", url: "/v1/auth/refresh", payload: { refreshToken: "x" } });
+      expect(res.statusCode).toBe(503);
+      expect(res.json()).toEqual({ error: { code: "UNAVAILABLE", message: "Please try again." } });
+    });
+
     it("rejects a malformed body with 400", async () => {
       const res = await app.inject({ method: "POST", url: "/v1/auth/refresh", payload: {} });
       expect(res.statusCode).toBe(400);
@@ -182,6 +189,22 @@ describe("auth session routes", () => {
         expect(res.statusCode, `${method} ${url}`).toBe(400);
         expect(res.json()).toEqual(NO_SESSION);
       }
+    });
+  });
+
+  describe("impersonation context", () => {
+    it("answers 400 NO_SESSION on every authenticated session route", async () => {
+      m.verifyAccessToken.mockResolvedValue({ sub: "adm1", sid: "as1", typ: "admin" });
+      m.store.set(
+        "impersonate:tok",
+        JSON.stringify({ organizationId: "org1", targetUserId: "usr_t", issuedBy: "adm1", issuedSid: "as1" }),
+      );
+      for (const [method, url] of AUTHED_ROUTES) {
+        const res = await app.inject({ method, url, headers: { ...AUTHZ, "x-impersonate-token": "tok" } });
+        expect(res.statusCode, `${method} ${url}`).toBe(400);
+        expect(res.json()).toEqual(NO_SESSION);
+      }
+      expect(prisma.authSession.updateMany).not.toHaveBeenCalled();
     });
   });
 
