@@ -4,6 +4,7 @@ import { redis } from "../lib/redis.js";
 import { activatePlan } from "../lib/billing/activation.js";
 import { writeAdminAudit } from "../lib/audit.js";
 import { getClerkUser } from "../lib/clerk-admin.js";
+import { isWbmsgAuth } from "../auth/identity.js";
 import { sendMail, isEmailConfigured } from "../lib/mail.js";
 
 const SENSITIVE_CONFIG_KEYS = new Set([
@@ -671,6 +672,10 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       }
       const checks = await Promise.all(
         org.users.map(async (u) => {
+          if (isWbmsgAuth()) {
+            const account = await prisma.authAccount.findUnique({ where: { id: u.id }, select: { status: true } });
+            return account?.status === "active";
+          }
           try { await getClerkUser(u.id); return true; } catch { return false; }
         })
       );

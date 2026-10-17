@@ -7,6 +7,8 @@ import {
   isBootstrapEnabled,
 } from "../lib/clerk-admin.js";
 import { writeAdminAudit } from "../lib/audit.js";
+import { isWbmsgAuth } from "../auth/identity.js";
+import { ensureSuperAdminAccount } from "../auth/admin-accounts.js";
 
 // Redis key tracking total bootstrap attempts — max 5 ever, no expiry
 const BOOTSTRAP_ATTEMPTS_KEY = "bootstrap:attempts";
@@ -71,6 +73,50 @@ export const bootstrapRouter: FastifyPluginAsync = async (fastify) => {
         create: { id: "platform", name: "TrustCRM Platform", status: "active" },
         update: {},
       });
+
+      if (isWbmsgAuth()) {
+        // 6-7 (wbmsg). No Clerk: account must set its password via Forgot password.
+        let userId: string;
+        try {
+          userId = await fastify.prisma.$transaction(async (tx) => {
+            const account = await ensureSuperAdminAccount(tx, { email, firstName, lastName });
+            await tx.user.upsert({
+              where: { id: account.id },
+              create: {
+                id: account.id,
+                organizationId: "platform",
+                email,
+                fullName: `${firstName} ${lastName}`,
+                role: "superAdmin",
+                isActive: true,
+              },
+              update: { role: "superAdmin", organizationId: "platform", isActive: true, deletedAt: null },
+            });
+            return account.id;
+          });
+        } catch (err) {
+          fastify.log.error({ err }, "Super admin creation failed during bootstrap");
+          return reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "Failed to create super admin" } });
+        }
+        writeAdminAudit({
+          prisma: fastify.prisma,
+          actorId: userId,
+          action: "bootstrap",
+          targetType: "user",
+          targetId: userId,
+          metadata: { email, ip: request.ip },
+          request,
+        });
+        fastify.log.info({ userId, email, ip: request.ip }, "SuperAdmin bootstrapped");
+        return reply.status(201).send({
+          data: {
+            message: "Super admin created. Use Forgot password on the sign-in page to set a password. IMPORTANT: remove BOOTSTRAP_SECRET from env and delete this route.",
+            userId,
+            email,
+            setPassword: "forgot_password",
+          },
+        });
+      }
 
       // 6. Create Clerk user with a cryptographically random temp password
       const tempPassword = randomBytes(24).toString("base64url") + "!Aa1";

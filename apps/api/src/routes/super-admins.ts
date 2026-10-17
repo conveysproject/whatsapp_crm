@@ -2,6 +2,8 @@ import type { FastifyPluginAsync } from "fastify";
 import { randomBytes } from "crypto";
 import { createClerkSuperAdmin, deleteClerkUser } from "../lib/clerk-admin.js";
 import { writeAdminAudit } from "../lib/audit.js";
+import { isWbmsgAuth } from "../auth/identity.js";
+import { ensureSuperAdminAccount } from "../auth/admin-accounts.js";
 
 export const superAdminsRouter: FastifyPluginAsync = async (fastify) => {
   // ── Current super admin identity (used by admin layout server component) ─────
@@ -71,6 +73,46 @@ export const superAdminsRouter: FastifyPluginAsync = async (fastify) => {
       });
       if (existing) {
         return reply.status(409).send({ error: { code: "CONFLICT", message: "A super admin with this email already exists" } });
+      }
+
+      if (isWbmsgAuth()) {
+        // No Clerk: create the auth account (must set password via Forgot password) and the users row together.
+        try {
+          const created = await fastify.prisma.$transaction(async (tx) => {
+            const account = await ensureSuperAdminAccount(tx, { email, firstName, lastName });
+            const clash = await tx.user.findUnique({ where: { id: account.id }, select: { id: true } });
+            if (clash) return null;
+            const user = await tx.user.create({
+              data: {
+                id: account.id,
+                organizationId: "platform",
+                email,
+                fullName: `${firstName} ${lastName}`,
+                role: "superAdmin",
+                isActive: true,
+              },
+              select: { id: true, email: true, fullName: true, createdAt: true },
+            });
+            return user;
+          });
+          if (!created) {
+            return reply.status(409).send({ error: { code: "CONFLICT", message: "A super admin with this email already exists" } });
+          }
+          writeAdminAudit({
+            prisma: fastify.prisma,
+            actorId: request.auth.userId,
+            action: "superadmin.create",
+            targetType: "user",
+            targetId: created.id,
+            metadata: { email, createdBy: request.auth.userId },
+            request,
+          });
+          fastify.log.info({ userId: created.id, email, actorId: request.auth.userId }, "SuperAdmin created");
+          return reply.status(201).send({ data: { ...created, setPassword: "forgot_password" } });
+        } catch (err) {
+          fastify.log.error({ err }, "Super admin creation failed");
+          return reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "Failed to create super admin" } });
+        }
       }
 
       const tempPassword = randomBytes(24).toString("base64url") + "!Aa1";
