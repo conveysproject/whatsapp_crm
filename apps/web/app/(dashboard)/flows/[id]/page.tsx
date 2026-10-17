@@ -27,7 +27,7 @@ export default async function FlowEditorPage({
   const flow = (await res.json() as { data: FlowData }).data;
 
   return (
-    <PermissionGate permission="automation_access">
+    <PermissionGate permission="automation_access" sub="automation_bot_flows">
       <div className="-m-6 h-[calc(100vh-3.5rem)] flex flex-col overflow-hidden">
         <FlowEditor initialFlow={flow} />
       </div>

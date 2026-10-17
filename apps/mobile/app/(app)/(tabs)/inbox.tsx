@@ -47,7 +47,7 @@ export default function InboxScreen() {
   const autoPaging = quick !== null && !searching && !!list.hasNextPage && items.length < 15;
   useEffect(() => {
     if (autoPaging && !list.isFetchingNextPage && !list.isFetchNextPageError) void list.fetchNextPage();
-  }, [autoPaging, list.isFetchingNextPage, list.isFetchNextPageError, list.data?.pages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoPaging, list.isFetchingNextPage, list.isFetchNextPageError, list.data?.pages.length]);
 
   const nameOf = (id: string | null) => (id === null ? "Unassigned" : id === me.id ? "You" : users.data?.data.find((u) => u.id === id)?.fullName ?? "Assigned");
   const now = Date.now();

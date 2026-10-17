@@ -99,6 +99,12 @@ describe("DEFAULT_ROLE_PERMISSIONS", () => {
     expect(DEFAULT_ROLE_PERMISSIONS.agent["settings_access@settings_teams"]).toBeUndefined();
   });
 
+  it("managers can build flows by default; viewers and agents can't", () => {
+    expect(DEFAULT_ROLE_PERMISSIONS.manager["automation_access@automation_bot_flows"]).toBe("allow");
+    expect(DEFAULT_ROLE_PERMISSIONS.viewer["automation_access@automation_bot_flows"]).toBeUndefined();
+    expect(DEFAULT_ROLE_PERMISSIONS.agent["automation_access@automation_bot_flows"]).toBeUndefined();
+  });
+
   it("whatsappAdmin gets WhatsApp Account settings and nothing else", () => {
     const perms = DEFAULT_ROLE_PERMISSIONS.whatsappAdmin;
     expect(perms).toEqual({ settings_access: "allow", "settings_access@settings_whatsapp": "allow" });

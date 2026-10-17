@@ -141,7 +141,7 @@ describe("PUT /v1/automation/business-hours", () => {
   afterEach(async () => { await app.close(); });
 
   it("replaces slots atomically via $transaction", async () => {
-    mockPrisma.$transaction.mockImplementation(async (ops: unknown[]) => {
+    mockPrisma.$transaction.mockImplementation(async (_ops: unknown[]) => {
       // Simulate Prisma transaction: return array of results
       return [{ count: 0 }, { count: 2 }];
     });

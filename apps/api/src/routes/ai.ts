@@ -39,7 +39,6 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
     "/conversations/:id/suggestions",
     async (request, reply) => {
       if (!allowed(request.auth, INBOX)) return reply.status(403).send(forbidden(INBOX));
-      const { organizationId } = request.auth;
 
       const conversation = await fastify.prisma.conversation.findFirst({
         where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),

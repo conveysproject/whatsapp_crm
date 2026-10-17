@@ -17,6 +17,11 @@ export const flowsRouter: FastifyPluginAsync = async (fastify) => {
     if (!canAccess(role, permissions, "automation_access")) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "automation_access permission required" } });
     }
+    // Any change to a flow (create, edit, delete, duplicate, test-run) needs automation_bot_flows;
+    // reading flows and their runs only needs automation_access.
+    if (request.method !== "GET" && !canAccessSub(role, permissions, "automation_access", "automation_bot_flows")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "automation_bot_flows permission required" } });
+    }
   });
 
   fastify.get("/flows", async (request, reply) => {

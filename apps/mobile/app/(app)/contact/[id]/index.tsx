@@ -39,7 +39,7 @@ export default function ContactScreen() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
-  useEffect(() => { if (contact.data) setNotes(contact.data.notes ?? ""); }, [contact.data?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (contact.data) setNotes(contact.data.notes ?? ""); }, [contact.data?.id]);
 
   const refresh = () => { void qc.invalidateQueries({ queryKey: key }); void qc.invalidateQueries({ queryKey: ["contacts"] }); };
   const patch = useMutation({ mutationFn: (body: { tags?: string[]; leadStatusId?: string }) => api(`/contacts/${id}`, { method: "PATCH", body }), onMutate: () => setError(null), onSuccess: () => { refresh(); void qc.invalidateQueries({ queryKey: ["conversations"] }); }, onError: (e) => setError(editError(e)) });

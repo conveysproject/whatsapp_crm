@@ -131,7 +131,7 @@ export const contactsRouter: FastifyPluginAsync = async (fastify) => {
   });
 
   fastify.get("/contacts/export/count", async (request, reply) => {
-    const { organizationId, role, permissions } = request.auth;
+    const { role, permissions } = request.auth;
     if (!canAccessSub(role, permissions, "contacts_access", "contacts_export")) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "contacts_access permission required" } });
     }

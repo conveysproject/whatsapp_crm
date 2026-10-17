@@ -41,7 +41,12 @@ describe("GET /v1/segments", () => {
 
 describe("POST /v1/segments", () => {
   let app: FastifyInstance;
-  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildApp(); });
+  beforeEach(async () => {
+    vi.resetModules(); vi.clearAllMocks();
+    // Creating a segment counts its matching contacts first (evaluateSegment).
+    mockPrisma.contact.findMany.mockResolvedValue([]);
+    app = await buildApp();
+  });
   afterEach(async () => { await app.close(); });
 
   it("creates segment with match field", async () => {

@@ -78,6 +78,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleKey, Record<string, string>> =
     "automation_access@automation_ooo": "allow",
     "automation_access@automation_delayed_response": "allow",
     "automation_access@automation_bot_replies": "allow",
+    "automation_access@automation_bot_flows": "allow",
     deals_access: "allow",
     trust_score_access: "allow",
   },

@@ -1,6 +1,7 @@
 "use client";
 
 import { JSX, useState } from "react";
+import { PermissionGate } from "@/components/PermissionGate";
 import { useAuth } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
 import { AiCreatorLayout } from "@/components/ai/AiCreatorLayout";
@@ -136,81 +137,83 @@ export default function FlowAiCreatePage(): JSX.Element {
   }
 
   return (
-    <>
-      <AiCreatorLayout
-        title="Create Flow with AI"
-        backHref="/flows"
-        preview={
-          <div className="flex flex-col h-full">
-            <FlowAiPreview
-              flowDefinition={flowResult?.flowDefinition ?? null}
-              triggerType={flowResult?.triggerType ?? "new_conversation"}
-            />
-            {flowResult && (
-              <AiActionBar
-                onPrimary={() => setShowNameModal(true)}
-                primaryLabel="Save Flow"
-                onRefine={() => {
-                  setMessages((prev) => [
-                    ...prev,
-                    { role: "assistant", content: "What would you like to change in the flow?" },
-                  ]);
-                }}
-                onEdit={() => setShowNameModal(true)}
-                editLabel="Save & Open Editor"
-                disabled={isPending || saving}
+    <PermissionGate permission="automation_access" sub="automation_bot_flows">
+      <>
+        <AiCreatorLayout
+          title="Create Flow with AI"
+          backHref="/flows"
+          preview={
+            <div className="flex flex-col h-full">
+              <FlowAiPreview
+                flowDefinition={flowResult?.flowDefinition ?? null}
+                triggerType={flowResult?.triggerType ?? "new_conversation"}
               />
-            )}
-          </div>
-        }
-      >
-        <AiChatPanel
-          messages={messages}
-          onSend={handleSend}
-          isPending={isPending}
-          placeholder="Describe the automation flow you want to build..."
-        />
-        {error && <p className="px-4 pb-2 text-xs text-red-600">{error}</p>}
-      </AiCreatorLayout>
+              {flowResult && (
+                <AiActionBar
+                  onPrimary={() => setShowNameModal(true)}
+                  primaryLabel="Save Flow"
+                  onRefine={() => {
+                    setMessages((prev) => [
+                      ...prev,
+                      { role: "assistant", content: "What would you like to change in the flow?" },
+                    ]);
+                  }}
+                  onEdit={() => setShowNameModal(true)}
+                  editLabel="Save & Open Editor"
+                  disabled={isPending || saving}
+                />
+              )}
+            </div>
+          }
+        >
+          <AiChatPanel
+            messages={messages}
+            onSend={handleSend}
+            isPending={isPending}
+            placeholder="Describe the automation flow you want to build..."
+          />
+          {error && <p className="px-4 pb-2 text-xs text-red-600">{error}</p>}
+        </AiCreatorLayout>
 
-      {/* Name modal */}
-      {showNameModal && (
-        <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm space-y-4">
-            <h2 className="text-base font-semibold text-gray-900">Name your flow</h2>
-            <input
-              value={flowName}
-              onChange={(e) => setFlowName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  void handleSaveFlow();
-                }
-              }}
-              placeholder="e.g. Refund Handling"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              autoFocus
-            />
-            {error && <p className="text-xs text-red-600">{error}</p>}
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setShowNameModal(false)}
-                className="px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  void handleSaveFlow();
+        {/* Name modal */}
+        {showNameModal && (
+          <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm space-y-4">
+              <h2 className="text-base font-semibold text-gray-900">Name your flow</h2>
+              <input
+                value={flowName}
+                onChange={(e) => setFlowName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    void handleSaveFlow();
+                  }
                 }}
-                disabled={!flowName.trim() || saving}
-                className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-40"
-              >
-                {saving ? "Saving…" : "Save & Open Editor"}
-              </button>
+                placeholder="e.g. Refund Handling"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                autoFocus
+              />
+              {error && <p className="text-xs text-red-600">{error}</p>}
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowNameModal(false)}
+                  className="px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    void handleSaveFlow();
+                  }}
+                  disabled={!flowName.trim() || saving}
+                  className="px-4 py-2 text-sm font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-40"
+                >
+                  {saving ? "Saving…" : "Save & Open Editor"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </>
+        )}
+      </>
+    </PermissionGate>
   );
 }

@@ -12,7 +12,6 @@ const CSV_SESSION_TTL_SECONDS = 1800; // 30 minutes
 
 // GAP-S12: standard 7-column import spec (case-insensitive match)
 const STANDARD_IMPORT_COLUMNS = ["First Name", "Last Name", "Mobile", "Language", "Country", "Email", "Groups"] as const;
-const STANDARD_COLUMNS_LOWER = STANDARD_IMPORT_COLUMNS.map((c) => c.toLowerCase());
 
 function getImportTokenSecret(): string {
   const s = process.env["IMPORT_TOKEN_SECRET"];

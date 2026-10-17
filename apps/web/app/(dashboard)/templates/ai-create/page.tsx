@@ -1,6 +1,7 @@
 "use client";
 
 import { JSX, useState } from "react";
+import { PermissionGate } from "@/components/PermissionGate";
 import { useAuth } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
 import { AiCreatorLayout } from "@/components/ai/AiCreatorLayout";
@@ -110,39 +111,41 @@ export default function TemplateAiCreatePage(): JSX.Element {
   }
 
   return (
-    <AiCreatorLayout
-      title="Create Template with AI"
-      backHref="/templates"
-      preview={
-        <div className="flex flex-col h-full">
-          <TemplateAiPreview
-            templateState={templateState}
-            imageUrl={imageUrl}
-            imageLoading={imageLoading}
-          />
-          {templateState && (
-            <AiActionBar
-              onPrimary={handleSubmit}
-              primaryLabel="Submit for Approval"
-              onRefine={() => {
-                setMessages((prev) => [...prev, { role: "assistant", content: "What would you like to change?" }]);
-              }}
-              onEdit={handleEditManually}
-              disabled={isPending}
+    <PermissionGate permission="templates_access" sub="templates_create">
+      <AiCreatorLayout
+        title="Create Template with AI"
+        backHref="/templates"
+        preview={
+          <div className="flex flex-col h-full">
+            <TemplateAiPreview
+              templateState={templateState}
+              imageUrl={imageUrl}
+              imageLoading={imageLoading}
             />
-          )}
-        </div>
-      }
-    >
-      <AiChatPanel
-        messages={messages}
-        onSend={handleSend}
-        isPending={isPending}
-        placeholder="Describe the template you want to create..."
-      />
-      {error && (
-        <p className="px-4 pb-2 text-xs text-red-600">{error}</p>
-      )}
-    </AiCreatorLayout>
+            {templateState && (
+              <AiActionBar
+                onPrimary={handleSubmit}
+                primaryLabel="Submit for Approval"
+                onRefine={() => {
+                  setMessages((prev) => [...prev, { role: "assistant", content: "What would you like to change?" }]);
+                }}
+                onEdit={handleEditManually}
+                disabled={isPending}
+              />
+            )}
+          </div>
+        }
+      >
+        <AiChatPanel
+          messages={messages}
+          onSend={handleSend}
+          isPending={isPending}
+          placeholder="Describe the template you want to create..."
+        />
+        {error && (
+          <p className="px-4 pb-2 text-xs text-red-600">{error}</p>
+        )}
+      </AiCreatorLayout>
+    </PermissionGate>
   );
 }

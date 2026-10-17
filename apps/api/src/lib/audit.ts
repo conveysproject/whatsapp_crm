@@ -15,18 +15,22 @@ export interface AuditParams {
 export function writeAdminAudit(params: AuditParams): void {
   const { prisma, actorId, action, targetType, targetId, metadata, request } = params;
   setImmediate(() => {
-    prisma.adminAuditLog
-      .create({
-        data: {
-          actorId,
-          action,
-          targetType: targetType ?? null,
-          targetId: targetId ?? null,
-          metadata: (metadata ?? null) as Prisma.InputJsonValue,
-          ipAddress: request?.ip ?? null,
-          userAgent: request?.headers?.["user-agent"] ?? null,
-        },
-      })
+    // Promise.resolve().then(...) also catches a synchronous throw or a non-promise return,
+    // which would otherwise escape setImmediate as an uncaught exception and crash the process.
+    Promise.resolve()
+      .then(() =>
+        prisma.adminAuditLog.create({
+          data: {
+            actorId,
+            action,
+            targetType: targetType ?? null,
+            targetId: targetId ?? null,
+            metadata: (metadata ?? null) as Prisma.InputJsonValue,
+            ipAddress: request?.ip ?? null,
+            userAgent: request?.headers?.["user-agent"] ?? null,
+          },
+        }),
+      )
       .catch((err: unknown) => {
         // Audit write failed — log it; never let this propagate or block
         console.error("[AUDIT WRITE FAILED]", { action, actorId, targetId, err });
