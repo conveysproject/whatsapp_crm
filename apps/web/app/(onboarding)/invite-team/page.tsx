@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type JSX } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";

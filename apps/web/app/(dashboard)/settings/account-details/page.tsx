@@ -1,7 +1,7 @@
 import type { JSX, ReactNode } from "react";
 import Link from "next/link";
 import { serverApiHeaders } from "@/lib/server-api";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/server";
 import type { CurrentUser } from "@/lib/can";
 import { canViewBilling } from "@/lib/billing-page";
 import { formatCount, normalizeMessageUsage, periodLabel, resetLabel, type MessageUsage } from "@/lib/message-usage";

@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/server";
 import { serverApiHeaders } from "./server-api";
 import type { ApiResponse, ApiError } from "@WBMSG/shared";
 

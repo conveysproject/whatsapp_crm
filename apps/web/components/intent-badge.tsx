@@ -2,7 +2,7 @@
 
 import { JSX } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 
 interface Props {
   messageId: string;

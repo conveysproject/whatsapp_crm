@@ -12,7 +12,7 @@ import {
   useDroppable,
 } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { DealCard, type Deal } from "./DealCard";
 import { AddDealModal } from "./AddDealModal";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import type { TagStat } from "./page";
 import { getTagColor } from "@/lib/tag-color";
 

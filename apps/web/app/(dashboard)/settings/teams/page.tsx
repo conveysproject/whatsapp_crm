@@ -1,7 +1,7 @@
 "use client";
 import { JSX, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { clientFetch } from "@/lib/client-fetch";
 import { toast } from "sonner";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, FormEvent, useState, useEffect, useRef } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";

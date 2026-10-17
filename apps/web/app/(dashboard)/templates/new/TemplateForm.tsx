@@ -1,6 +1,6 @@
 "use client";
 import { useState, useMemo, useEffect, type JSX } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { HeaderSection } from "./sections/HeaderSection";
 import { BodySection } from "./sections/BodySection";

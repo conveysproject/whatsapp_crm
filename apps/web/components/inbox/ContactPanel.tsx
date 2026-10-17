@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useState, useEffect, useRef } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useContactDetail } from "@/hooks/useContactDetail";
 import { ContactTrustBadge } from "@/components/trust-score/ContactTrustBadge";
 import { TagCombobox } from "@/components/contacts/TagCombobox";

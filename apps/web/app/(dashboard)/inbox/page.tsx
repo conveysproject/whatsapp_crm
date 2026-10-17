@@ -2,7 +2,7 @@
 
 import { JSX, Suspense, useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PermissionGate } from "@/components/PermissionGate";
 import { ConversationList } from "@/components/inbox/ConversationList";

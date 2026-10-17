@@ -4,7 +4,7 @@ import { JSX, useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { toast } from "sonner";
 import { IMPERSONATION_STORAGE_KEY, setImpersonationCookie, type ImpersonationSession } from "@/lib/impersonation";
 import { sortUsersForSupport, roleHint } from "@/lib/support-users";

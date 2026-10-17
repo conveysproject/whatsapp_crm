@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/server";
 import { Suspense } from "react";
 import { ContactFieldsClient } from "./ContactFieldsClient";
 

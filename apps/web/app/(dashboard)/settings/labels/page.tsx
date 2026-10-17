@@ -1,6 +1,6 @@
 import type { JSX } from "react";
 import { serverApiHeaders } from "@/lib/server-api";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/server";
 import { ManageTagsClient } from "./LabelsClient";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";

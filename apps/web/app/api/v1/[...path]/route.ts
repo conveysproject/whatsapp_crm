@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/server";
 import { getImpersonationCookie } from "@/lib/server-api";
 import { isImpersonationAdminPath } from "@/lib/impersonation";
 import { type NextRequest, NextResponse } from "next/server";

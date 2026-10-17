@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, JSX } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { Button } from "@/components/ui/Button";
 import { clientFetch } from "@/lib/client-fetch";
 

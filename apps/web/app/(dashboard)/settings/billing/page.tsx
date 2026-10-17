@@ -1,6 +1,6 @@
 import type { JSX } from "react";
 import { serverApiHeaders } from "@/lib/server-api";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/server";
 import { redirect } from "next/navigation";
 import { canViewBilling } from "@/lib/billing-page";
 import { normalizeMessageUsage, type MessageUsage } from "@/lib/message-usage";

@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clientFetch } from "@/lib/client-fetch";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";

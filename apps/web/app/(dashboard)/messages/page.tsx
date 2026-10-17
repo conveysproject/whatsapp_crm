@@ -2,7 +2,7 @@
 
 import { JSX, useState } from "react";
 import { PermissionGate } from "@/components/PermissionGate";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LogStatusBadge } from "@/components/messages/LogStatusBadge";
 import type { DeliveryError } from "@/lib/delivery-error";

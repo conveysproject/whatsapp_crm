@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useRef, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useQuery } from "@tanstack/react-query";
 
 interface Props {

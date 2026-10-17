@@ -1,6 +1,6 @@
 import { JSX } from "react";
 import { serverApiHeaders } from "@/lib/server-api";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/server";
 import { notFound } from "next/navigation";
 import { FlowEditor } from "@/components/flows/FlowEditor";
 import type { FlowData } from "@/components/flows/utils/serialize";

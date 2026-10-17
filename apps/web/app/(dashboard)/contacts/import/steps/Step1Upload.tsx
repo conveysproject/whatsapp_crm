@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useRef, useState, DragEvent, ChangeEvent } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useWizard } from "../ImportWizard";
 import { Button } from "@/components/ui/Button";
 

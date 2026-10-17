@@ -1,6 +1,6 @@
 import { JSX, ReactNode } from "react";
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/server";
 import { redirect } from "next/navigation";
 import { Toaster } from "sonner";
 import { AdminSignOutButton } from "./_components/admin-sign-out";

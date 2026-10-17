@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useEffect, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import Link from "next/link";
 import { TrustTrendChart } from "@/components/trust-score/TrustTrendChart";
 import { PermissionGate } from "@/components/PermissionGate";

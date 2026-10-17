@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useState, useEffect, useRef, useCallback } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { TagInput } from "./TagInput";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 import { clientFetch } from "@/lib/client-fetch";

@@ -1,7 +1,7 @@
 "use client";
 import { JSX, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { toast } from "sonner";
 import { OverduePanel } from "./_components/OverduePanel";
 import { CancellationsPanel } from "./_components/CancellationsPanel";

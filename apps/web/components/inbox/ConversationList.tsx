@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useState, useRef, useEffect } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useConversations, useSearchConversations } from "@/hooks/useConversations";
 import { useInboxLabels } from "@/hooks/useInboxLabels";
 import { IntentBadge } from "@/components/intent-badge";

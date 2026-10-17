@@ -9,7 +9,7 @@ import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { ImpersonationProvider } from "@/components/ImpersonationProvider";
 import { BreadcrumbNav } from "@/components/layout/BreadcrumbNav";
 import { OnboardingProvider } from "@/app/(dashboard)/onboarding-context";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/server";
 import { redirect } from "next/navigation";
 import { Toaster } from "sonner";
 

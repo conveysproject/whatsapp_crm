@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useEffect, useRef, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useQuery } from "@tanstack/react-query";
 import { clientFetch } from "@/lib/client-fetch";
 import { MediaUrlField } from "@/components/media-url-field";

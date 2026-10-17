@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/server";
 import { type NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { IMPERSONATION_COOKIE, IMPERSONATION_META_COOKIE } from "@/lib/server-api";

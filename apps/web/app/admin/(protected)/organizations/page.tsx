@@ -1,7 +1,7 @@
 "use client";
 import { JSX, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 
 type CleanupResult = { dryRun: boolean; deleted: { id: string; name: string; reason: string }[] };
 

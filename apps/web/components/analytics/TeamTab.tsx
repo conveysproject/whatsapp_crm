@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useCallback, useEffect, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { TeamLeaderboard } from "./TeamLeaderboard";
 import Link from "next/link";
 

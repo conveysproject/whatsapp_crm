@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState, type JSX } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 

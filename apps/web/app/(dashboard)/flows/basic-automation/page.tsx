@@ -1,6 +1,6 @@
 import { JSX } from "react";
 import { serverApiHeaders } from "@/lib/server-api";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/server";
 import { PermissionGate } from "@/components/PermissionGate";
 import { BusinessHoursCard } from "./business-hours-card";
 import { OooCard } from "./ooo-card";

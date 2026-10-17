@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useEffect, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useWizard } from "../ImportWizard";
 import { TagInput } from "@/components/contacts/TagInput";
 import { Button } from "@/components/ui/Button";

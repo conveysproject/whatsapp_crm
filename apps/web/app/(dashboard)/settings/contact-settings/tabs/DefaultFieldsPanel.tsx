@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useRef, useState, useEffect } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DEFAULT_FIELDS } from "./defaultFields";
 

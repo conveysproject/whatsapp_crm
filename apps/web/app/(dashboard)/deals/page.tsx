@@ -1,7 +1,7 @@
 "use client";
 import { JSX, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { KanbanBoard } from "@/components/deals/KanbanBoard";
 import { DealSlideOver } from "@/components/deals/DealSlideOver";
 import { CreatePipelineModal } from "@/components/deals/CreatePipelineModal";

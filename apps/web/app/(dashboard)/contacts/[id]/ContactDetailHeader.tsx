@@ -3,7 +3,7 @@
 
 import { JSX, useState } from "react";
 import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { SendTemplateModal } from "@/components/contacts/SendTemplateModal";
 import { ContactChatDrawer } from "@/components/contacts/ContactChatDrawer";
 import type { Contact } from "./ContactDetailClient";

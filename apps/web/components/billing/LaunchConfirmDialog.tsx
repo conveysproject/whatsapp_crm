@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type JSX } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useQuery } from "@tanstack/react-query";
 import { API_BASE, fetchMessageUsage, formatCount } from "@/lib/message-usage";
 import { buildEstimate } from "@/lib/campaign-estimate";

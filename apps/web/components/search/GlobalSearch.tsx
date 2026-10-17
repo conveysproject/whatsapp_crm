@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, type JSX } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 
 interface SearchResult {
   id: string;

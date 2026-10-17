@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
 import { AiCreatorLayout } from "@/components/ai/AiCreatorLayout";
 import { AiChatPanel, type ChatMessage } from "@/components/ai/AiChatPanel";

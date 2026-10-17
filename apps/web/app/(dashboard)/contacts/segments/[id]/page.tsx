@@ -2,7 +2,7 @@
 
 import { JSX, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import Link from "next/link";
 import { SegmentBuilderV2 } from "@/components/segments/SegmentBuilderV2";
 import type { FilterRule, MatchMode } from "@/components/segments/types";

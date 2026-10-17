@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useState, useMemo } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { ContactDetailHeader } from "./ContactDetailHeader";
 import { ContactDetailSidebar } from "./ContactDetailSidebar";
 import { ContactDetailPanel } from "./ContactDetailPanel";

@@ -2,7 +2,7 @@
 
 import { JSX, useEffect, useState } from "react";
 import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { formatDurationCoarse } from "@/lib/format";
 
 interface AgentStats {

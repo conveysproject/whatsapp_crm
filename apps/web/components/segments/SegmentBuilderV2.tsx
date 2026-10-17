@@ -1,7 +1,7 @@
 "use client";
 
 import { JSX, useEffect, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { Trash2, PlusCircle } from "lucide-react";
 import { Dropdown, type DropdownOption } from "./Dropdown";
 import type { FilterRule, FilterTab, FieldsRule, MatchMode, RowState, TagsRule, EventsRule, EventSubCondition } from "./types";

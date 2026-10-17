@@ -3,7 +3,7 @@
 import { JSX, useState, useEffect } from "react";
 import { MediaAssetPicker } from "@/components/media-asset-picker";
 import type { MediaAsset } from "@/components/media-asset-picker";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useQuery } from "@tanstack/react-query";
 import { clientFetch } from "@/lib/client-fetch";
 import { useRouter } from "next/navigation";

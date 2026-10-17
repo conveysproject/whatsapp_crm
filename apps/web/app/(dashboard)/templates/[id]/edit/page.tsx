@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, type JSX } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { useParams } from "next/navigation";
 import { TemplateForm } from "../../new/TemplateForm";
 import { INITIAL_STATE } from "../../new/templateFormTypes";

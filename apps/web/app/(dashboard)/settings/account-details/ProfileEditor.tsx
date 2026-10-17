@@ -2,7 +2,7 @@
 
 import { useState, type JSX } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { clientFetch } from "@/lib/client-fetch";
 import { profileRows } from "@/lib/account-details";
 

@@ -1,6 +1,6 @@
 "use client";
 import { JSX, useState, useEffect } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import type { Deal } from "./DealCard";
 import { clientFetch } from "@/lib/client-fetch";
 

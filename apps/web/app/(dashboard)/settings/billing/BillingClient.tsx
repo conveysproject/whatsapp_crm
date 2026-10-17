@@ -1,7 +1,7 @@
 "use client";
 
 import type { JSX } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/client";
 import { BillSummary } from "@/components/billing/BillSummary";
 import { BandProgress } from "@/components/billing/BandProgress";
 import { UsageDetails } from "@/components/billing/UsageDetails";

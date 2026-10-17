@@ -1,5 +1,5 @@
 import { Suspense, type JSX } from "react";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth/server";
 import { TemplateForm } from "./TemplateForm";
 import { PermissionGate } from "@/components/PermissionGate";
 import { getLibraryTemplate } from "@/data/template-library";
