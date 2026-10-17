@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { SignJWT, exportPKCS8, exportSPKI, generateKeyPair } from "jose";
+import { SignJWT, UnsecuredJWT, errors, exportPKCS8, exportSPKI, generateKeyPair } from "jose";
 import { getJwks, resetTokenKeysForTests, signAccessToken, verifyAccessToken } from "./tokens.js";
 
 const b64 = (s: string) => Buffer.from(s).toString("base64");
@@ -83,5 +83,82 @@ describe("access tokens", () => {
     delete process.env.AUTH_JWT_PRIVATE_KEY;
     resetTokenKeysForTests();
     await expect(signAccessToken(claims)).rejects.toThrow(/AUTH_JWT_PRIVATE_KEY/);
+  });
+
+  describe("hardening", () => {
+    const mk = (opts: { sub?: string; sid?: string; iss?: string; exp?: boolean; kid?: string | null } = {}) => {
+      const jwt = new SignJWT({ sid: opts.sid ?? "sid_1", typ: "user" })
+        .setProtectedHeader(opts.kid === null ? { alg: "EdDSA" } : { alg: "EdDSA", kid: opts.kid ?? "k1" })
+        .setIssuer(opts.iss ?? "wbmsg").setAudience("wbmsg-api").setIssuedAt();
+      jwt.setSubject(opts.sub ?? "usr_abc");
+      if (opts.exp !== false) jwt.setExpirationTime("10m");
+      return jwt.sign(cur.privateKey);
+    };
+
+    it("rejects a token with no kid header (no matching key)", async () => {
+      await expect(verifyAccessToken(await mk({ kid: null }))).rejects.toBeInstanceOf(errors.JWKSNoMatchingKey);
+    });
+    it("rejects an unknown kid with JWKSNoMatchingKey", async () => {
+      await expect(verifyAccessToken(await mk({ kid: "zzz" }))).rejects.toBeInstanceOf(errors.JWKSNoMatchingKey);
+    });
+    it("rejects alg none", async () => {
+      const t = new UnsecuredJWT({ sid: "sid_1", typ: "user" })
+        .setSubject("usr_abc").setIssuer("wbmsg").setAudience("wbmsg-api").setIssuedAt().setExpirationTime("10m").encode();
+      await expect(verifyAccessToken(t)).rejects.toMatchObject({ code: "ERR_JOSE_ALG_NOT_ALLOWED" });
+    });
+    it("rejects the wrong issuer with a claim failure on iss", async () => {
+      const err = await verifyAccessToken(await mk({ iss: "evil" })).catch((e) => e);
+      expect(err).toBeInstanceOf(errors.JWTClaimValidationFailed);
+      expect(err.claim).toBe("iss");
+    });
+    it("rejects a tampered payload as a signature failure", async () => {
+      const [h, , sig] = (await mk()).split(".");
+      const payload = Buffer.from(JSON.stringify({ sub: "usr_admin", sid: "sid_1", typ: "admin", iss: "wbmsg", aud: "wbmsg-api", iat: 1, exp: 9999999999 })).toString("base64url");
+      await expect(verifyAccessToken(`${h}.${payload}.${sig}`)).rejects.toBeInstanceOf(errors.JWSSignatureVerificationFailed);
+    });
+    it("rejects a token without exp (claim failure on exp)", async () => {
+      const err = await verifyAccessToken(await mk({ exp: false })).catch((e) => e);
+      expect(err).toBeInstanceOf(errors.JWTClaimValidationFailed);
+      expect(err.claim).toBe("exp");
+    });
+    it("rejects an empty sub", async () => {
+      const err = await verifyAccessToken(await mk({ sub: "" })).catch((e) => e);
+      expect(err).toBeInstanceOf(errors.JWTClaimValidationFailed);
+      expect(err.claim).toBe("sub");
+    });
+    it("rejects an empty sid", async () => {
+      const err = await verifyAccessToken(await mk({ sid: "" })).catch((e) => e);
+      expect(err).toBeInstanceOf(errors.JWTClaimValidationFailed);
+      expect(err.claim).toBe("sid");
+    });
+  });
+
+  describe("key configuration", () => {
+    it("rejects a private key that is not Ed25519, without printing it", async () => {
+      const rsa = await generateKeyPair("RS256", { extractable: true });
+      const pem = await exportPKCS8(rsa.privateKey);
+      process.env.AUTH_JWT_PRIVATE_KEY = b64(pem);
+      resetTokenKeysForTests();
+      const err = await signAccessToken(claims).catch((e) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toMatch(/Ed25519/);
+      expect(err.message).not.toContain("PRIVATE KEY");
+    });
+    it("throws on a half-set previous pair (public key only)", async () => {
+      process.env.AUTH_JWT_PREVIOUS_PUBLIC_KEY = prevPub;
+      resetTokenKeysForTests();
+      await expect(signAccessToken(claims)).rejects.toThrow(/AUTH_JWT_PREVIOUS/);
+    });
+    it("throws on a half-set previous pair (kid only)", async () => {
+      process.env.AUTH_JWT_PREVIOUS_KID = "k0";
+      resetTokenKeysForTests();
+      await expect(signAccessToken(claims)).rejects.toThrow(/AUTH_JWT_PREVIOUS/);
+    });
+    it("throws when the previous kid equals the current kid", async () => {
+      process.env.AUTH_JWT_PREVIOUS_PUBLIC_KEY = prevPub;
+      process.env.AUTH_JWT_PREVIOUS_KID = "k1";
+      resetTokenKeysForTests();
+      await expect(signAccessToken(claims)).rejects.toThrow(/differ/);
+    });
   });
 });

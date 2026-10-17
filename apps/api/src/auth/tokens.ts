@@ -1,5 +1,6 @@
 import {
   SignJWT,
+  errors,
   exportJWK,
   importSPKI,
   jwtVerify,
@@ -35,10 +36,17 @@ async function load(): Promise<Keys> {
     throw new Error("AUTH_JWT_PRIVATE_KEY and AUTH_JWT_KID must be set to sign or verify access tokens");
   }
   const privateKey = createPrivateKey(decode(rawPriv));
+  if (privateKey.asymmetricKeyType !== "ed25519") {
+    throw new Error("AUTH_JWT_PRIVATE_KEY must be an Ed25519 private key");
+  }
   const publics: Keys["publics"] = [{ kid, key: createPublicKey(privateKey) }];
   const prevPub = process.env.AUTH_JWT_PREVIOUS_PUBLIC_KEY;
   const prevKid = process.env.AUTH_JWT_PREVIOUS_KID;
+  if (Boolean(prevPub) !== Boolean(prevKid)) {
+    throw new Error("AUTH_JWT_PREVIOUS_PUBLIC_KEY and AUTH_JWT_PREVIOUS_KID must be set together");
+  }
   if (prevPub && prevKid) {
+    if (prevKid === kid) throw new Error("AUTH_JWT_PREVIOUS_KID must differ from AUTH_JWT_KID");
     publics.push({ kid: prevKid, key: await importSPKI(decode(prevPub), "EdDSA", { extractable: true }) });
   }
   return { kid, privateKey, publics };
@@ -77,18 +85,20 @@ export async function verifyAccessToken(token: string): Promise<AccessClaims> {
   const k = await keys();
   const getKey: JWTVerifyGetKey = async (header) => {
     const found = k.publics.find((p) => p.kid === header.kid);
-    if (!found) throw new Error("unknown kid");
+    if (!found) throw new errors.JWKSNoMatchingKey();
     return found.key;
   };
   const { payload } = await jwtVerify(token, getKey, {
     algorithms: ["EdDSA"],
     issuer: ISSUER,
     audience: AUDIENCE,
+    requiredClaims: ["exp", "iat", "sub"],
   });
   const { sub, sid, typ } = payload as Record<string, unknown>;
-  if (typeof sub !== "string" || typeof sid !== "string" || (typ !== "user" && typ !== "admin")) {
-    throw new Error("invalid access token claims");
-  }
+  const bad = (claim: string) => new errors.JWTClaimValidationFailed(`invalid ${claim} claim`, payload, claim, "invalid");
+  if (typeof sub !== "string" || sub === "") throw bad("sub");
+  if (typeof sid !== "string" || sid === "") throw bad("sid");
+  if (typ !== "user" && typ !== "admin") throw bad("typ");
   return { sub, sid, typ };
 }
 
