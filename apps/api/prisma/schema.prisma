@@ -19,6 +19,7 @@ enum Role {
   manager
   agent
   viewer
+  whatsappAdmin
 }
 
 enum TeamRole {

@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { Role } from "@prisma/client";
 import { canAccessSub } from "../lib/permissions.js";
 import { invalidateAuthCache } from "../lib/auth-cache.js";
+import { canGrantRole, grantableRoles } from "../lib/role-grants.js";
 
 export const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/users", async (request) => {
@@ -41,7 +42,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
         params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
         body: {
           type: "object",
-          properties: { role: { type: "string", enum: ["admin", "manager", "agent", "viewer"] } },
+          properties: { role: { type: "string", enum: ["admin", "manager", "agent", "viewer", "whatsappAdmin"] } },
           required: ["role"],
         },
       },
@@ -53,6 +54,16 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (request.params.id === request.auth.userId) {
         return reply.status(400).send({ error: { code: "SELF_MODIFY", message: "Admins cannot change their own role" } });
+      }
+      const target = await fastify.prisma.user.findFirst({
+        where: { id: request.params.id, organizationId: request.auth.organizationId },
+        select: { id: true, role: true },
+      });
+      if (!target) {
+        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Team member not found" } });
+      }
+      if (!canGrantRole(role, request.body.role, target.role)) {
+        return reply.status(403).send({ error: { code: "ROLE_NOT_GRANTABLE", message: "You cannot assign or change a role higher than your own" } });
       }
       const user = await fastify.prisma.user.update({
         where: { id: request.params.id, organizationId: request.auth.organizationId },
@@ -78,6 +89,17 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (request.params.id === request.auth.userId) {
         return reply.status(400).send({ error: { code: "SELF_MODIFY", message: "Admins cannot remove themselves" } });
+      }
+      const target = await fastify.prisma.user.findFirst({
+        where: { id: request.params.id, organizationId: request.auth.organizationId },
+        select: { id: true, role: true },
+      });
+      if (!target) {
+        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Team member not found" } });
+      }
+      // Never deactivate someone holding a role you couldn't grant (e.g. a manager removing an admin).
+      if (!grantableRoles(role).includes(target.role)) {
+        return reply.status(403).send({ error: { code: "ROLE_NOT_GRANTABLE", message: "You cannot remove a member with a higher role than your own" } });
       }
       await fastify.prisma.user.update({
         where: { id: request.params.id, organizationId: request.auth.organizationId },
@@ -248,9 +270,12 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const target = await fastify.prisma.user.findFirst({
         where: { id: request.params.id, organizationId },
-        select: { id: true, organizationId: true, teamId: true, teamRole: true },
+        select: { id: true, organizationId: true, role: true, teamId: true, teamRole: true },
       });
       if (!target) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "User not found" } });
+      if (!grantableRoles(role).includes(target.role)) {
+        return reply.status(403).send({ error: { code: "ROLE_NOT_GRANTABLE", message: "You cannot move a member with a higher role than your own" } });
+      }
 
       // If moving a lead out of their current team, ensure another lead remains.
       if (target.teamId && target.teamId !== request.body.teamId && target.teamRole === "lead") {

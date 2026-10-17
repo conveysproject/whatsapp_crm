@@ -1,8 +1,17 @@
 import type { FastifyPluginAsync } from "fastify";
 import { canAccessSub } from "../lib/permissions.js";
 import { invalidateAuthCache } from "../lib/auth-cache.js";
+import { grantableRoles } from "../lib/role-grants.js";
 
 interface MemberInput { userId: string; teamRole: "lead" | "member" }
+
+// Same rule as invites/role changes: never move someone whose role you couldn't grant
+// (e.g. a manager adding, removing or re-ranking an admin). See lib/role-grants.ts.
+const PROTECTED_MEMBER = { error: { code: "ROLE_NOT_GRANTABLE", message: "You cannot move a member with a higher role than your own" } };
+
+function outranks(actorRole: string, targetRole: string): boolean {
+  return !grantableRoles(actorRole).includes(targetRole);
+}
 
 function requireTeamsPerm(request: { auth: { role: string; permissions: Record<string, string> } }): boolean {
   return canAccessSub(request.auth.role, request.auth.permissions, "settings_access", "settings_teams");
@@ -64,9 +73,12 @@ export const teamsRouter: FastifyPluginAsync = async (fastify) => {
       }
 
       const ids = members.map((m) => m.userId);
-      const orgUsers = await fastify.prisma.user.findMany({ where: { organizationId, id: { in: ids } }, select: { id: true } });
+      const orgUsers = await fastify.prisma.user.findMany({ where: { organizationId, id: { in: ids } }, select: { id: true, role: true } });
       if (orgUsers.length !== ids.length) {
         return reply.status(400).send({ error: { code: "INVALID_MEMBER", message: "All members must belong to this organization" } });
+      }
+      if (orgUsers.some((u) => outranks(request.auth.role, u.role))) {
+        return reply.status(403).send(PROTECTED_MEMBER);
       }
 
       const team = await fastify.prisma.team.create({
@@ -105,12 +117,30 @@ export const teamsRouter: FastifyPluginAsync = async (fastify) => {
 
       // Validate member org-membership BEFORE any write.
       let memberIds: string[] | undefined;
+      let evicted: { id: string }[] = [];
       if (members) {
         memberIds = members.map((m) => m.userId);
-        const orgUsers = await fastify.prisma.user.findMany({ where: { organizationId, id: { in: memberIds } }, select: { id: true } });
+        const orgUsers = await fastify.prisma.user.findMany({
+          where: { organizationId, id: { in: memberIds } },
+          select: { id: true, role: true, teamId: true, teamRole: true },
+        });
         if (orgUsers.length !== memberIds.length) {
           return reply.status(400).send({ error: { code: "INVALID_MEMBER", message: "All members must belong to this organization" } });
         }
+        // Capture evictees now (before any write) so protected ones block the whole edit.
+        const evictees = await fastify.prisma.user.findMany({
+          where: { organizationId, teamId: team.id, id: { notIn: memberIds } },
+          select: { id: true, role: true },
+        });
+        const byId = new Map(orgUsers.map((u) => [u.id, u]));
+        const changesProtected =
+          evictees.some((u) => outranks(request.auth.role, u.role)) ||
+          members.some((m) => {
+            const u = byId.get(m.userId)!;
+            return outranks(request.auth.role, u.role) && (u.teamId !== team.id || u.teamRole !== m.teamRole);
+          });
+        if (changesProtected) return reply.status(403).send(PROTECTED_MEMBER);
+        evicted = evictees;
       }
 
       // All validation passed — now write.
@@ -125,11 +155,6 @@ export const teamsRouter: FastifyPluginAsync = async (fastify) => {
       }
 
       if (members && memberIds) {
-        // Capture evictees BEFORE dropping them so we can invalidate their caches.
-        const evicted = await fastify.prisma.user.findMany({
-          where: { organizationId, teamId: team.id, id: { notIn: memberIds } },
-          select: { id: true },
-        });
         // Drop members no longer listed, then upsert the listed ones.
         await fastify.prisma.user.updateMany({
           where: { organizationId, teamId: team.id, id: { notIn: memberIds } },
@@ -160,8 +185,11 @@ export const teamsRouter: FastifyPluginAsync = async (fastify) => {
 
     const affected = await fastify.prisma.user.findMany({
       where: { organizationId, teamId: team.id },
-      select: { id: true },
+      select: { id: true, role: true },
     });
+    if (affected.some((u) => outranks(request.auth.role, u.role))) {
+      return reply.status(403).send(PROTECTED_MEMBER);
+    }
     await fastify.prisma.user.updateMany({
       where: { organizationId, teamId: team.id },
       data: { teamId: null, teamRole: null },

@@ -1,7 +1,7 @@
 export interface AuthContext {
   userId: string;
   organizationId: string;
-  role: "superAdmin" | "admin" | "manager" | "agent" | "viewer";
+  role: "superAdmin" | "admin" | "manager" | "agent" | "viewer" | "whatsappAdmin";
   permissions: Record<string, string>;
   teamId: string | null;
   teamRole: "lead" | "member" | null;

@@ -117,6 +117,21 @@ describe("auth plugin — permission merge", () => {
     await app.close();
   });
 
+  it("whatsappAdmin always resolves to its fixed defaults, ignoring stored row and member overrides", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    const { defaultsForRole } = await import("../lib/default-role-permissions.js");
+    vi.mocked(prisma.user.findFirst).mockResolvedValueOnce({ role: "whatsappAdmin", organizationId: "org-1" } as never);
+    vi.mocked(prisma.organizationMember.findFirst).mockResolvedValueOnce({ permissions: { contacts_access: "allow" } } as never);
+    vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValueOnce({ value: JSON.stringify({ inbox_access: "allow" }) } as never);
+
+    const app = await buildMergeApp();
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { authorization: "Bearer tok" } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ permissions: Record<string, string> }>().permissions).toEqual(defaultsForRole("whatsappAdmin"));
+    await app.close();
+  });
+
   it("uses the stored config exactly when the row exists, even if empty (deny all)", async () => {
     const { prisma } = await import("../lib/prisma.js");
     vi.mocked(prisma.user.findFirst).mockResolvedValueOnce({ role: "agent", organizationId: "org-1" } as never);

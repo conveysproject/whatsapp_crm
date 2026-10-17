@@ -1,7 +1,7 @@
 import fp from "fastify-plugin";
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { isWbmsgAuth, mobileUpgradeRequired, verifyBearer } from "../auth/identity.js";
-import { defaultsForRole } from "../lib/default-role-permissions.js";
+import { defaultsForRole, FIXED_PERMISSION_ROLES } from "../lib/default-role-permissions.js";
 import { isPlatformOnlyPath } from "../lib/demo-guard.js";
 import { redis } from "../lib/redis.js";
 import type { AuthContext } from "../types/fastify.js";
@@ -69,7 +69,10 @@ async function resolveAuthContext(
     }
   }
   const memberPermissions = (member?.permissions ?? {}) as Record<string, string>;
-  const permissions = { ...roleBaseline, ...memberPermissions };
+  // Fixed roles ignore the stored row and per-user overrides so they can never be widened.
+  const permissions = FIXED_PERMISSION_ROLES.includes(user.role)
+    ? defaultsForRole(user.role)
+    : { ...roleBaseline, ...memberPermissions };
 
   if (!strict) {
     await redis.setex(

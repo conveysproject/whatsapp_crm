@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { verifyBearer } from "../auth/identity.js";
-import { DEFAULT_ROLE_PERMISSIONS } from "../lib/default-role-permissions.js";
+import { DEFAULT_ROLE_PERMISSIONS, FIXED_PERMISSION_ROLES } from "../lib/default-role-permissions.js";
 import { seedLeadStatuses } from "../lib/seed-lead-statuses.js";
 
 interface RegisterBody {
@@ -150,7 +150,10 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
         });
 
         await fastify.prisma.vendorSetting.createMany({
-          data: (Object.entries(DEFAULT_ROLE_PERMISSIONS) as [string, Record<string, string>][]).map(
+          // Fixed roles never read a stored row, so don't seed one.
+          data: (Object.entries(DEFAULT_ROLE_PERMISSIONS) as [string, Record<string, string>][])
+            .filter(([role]) => !FIXED_PERMISSION_ROLES.includes(role))
+            .map(
             ([role, perms]) => ({
               organizationId,
               key: `role_permissions_${role}`,

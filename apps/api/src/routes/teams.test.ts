@@ -81,7 +81,7 @@ describe("POST /v1/teams", () => {
   it("creates a team and assigns members (201)", async () => {
     mockPrisma.team.findFirst.mockResolvedValue(null); // name not taken
     mockPrisma.team.create.mockResolvedValue({ id: "t1" });
-    mockPrisma.user.findMany.mockResolvedValue([{ id: "u1" }, { id: "u2" }]);
+    mockPrisma.user.findMany.mockResolvedValue([{ id: "u1", role: "agent" }, { id: "u2", role: "agent" }]);
     mockPrisma.user.update.mockResolvedValue({});
     const res = await app.inject({
       method: "POST",
@@ -109,7 +109,7 @@ describe("POST /v1/teams", () => {
   it("returns 400 when a member does not belong to the org", async () => {
     mockPrisma.team.findFirst.mockResolvedValue(null);
     // Only 1 user found but 2 requested
-    mockPrisma.user.findMany.mockResolvedValue([{ id: "u1" }]);
+    mockPrisma.user.findMany.mockResolvedValue([{ id: "u1", role: "agent" }]);
     const res = await app.inject({
       method: "POST",
       url: "/v1/teams",
@@ -197,8 +197,8 @@ describe("PATCH /v1/teams/:id", () => {
     // First findMany: org validation (returns the new member list)
     // Second findMany: evictee capture (returns users being dropped)
     mockPrisma.user.findMany
-      .mockResolvedValueOnce([{ id: "u2" }])   // org validation
-      .mockResolvedValueOnce([{ id: "u1" }]);   // evictee capture
+      .mockResolvedValueOnce([{ id: "u2", role: "agent" }])   // org validation
+      .mockResolvedValueOnce([{ id: "u1", role: "agent" }]);   // evictee capture
     mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.user.update.mockResolvedValue({});
     const res = await app.inject({
@@ -233,7 +233,7 @@ describe("DELETE /v1/teams/:id", () => {
 
   it("deletes team and clears member assignments (204)", async () => {
     mockPrisma.team.findFirst.mockResolvedValue({ id: "t1" });
-    mockPrisma.user.findMany.mockResolvedValue([{ id: "u1" }, { id: "u2" }]); // affected members
+    mockPrisma.user.findMany.mockResolvedValue([{ id: "u1", role: "agent" }, { id: "u2", role: "agent" }]); // affected members
     mockPrisma.user.updateMany.mockResolvedValue({ count: 2 });
     mockPrisma.team.delete.mockResolvedValue({ id: "t1" });
     const res = await app.inject({ method: "DELETE", url: "/v1/teams/t1" });
@@ -251,5 +251,72 @@ describe("DELETE /v1/teams/:id", () => {
     const res = await noPermApp.inject({ method: "DELETE", url: "/v1/teams/t1" });
     await noPermApp.close();
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("teams: a manager can never move an admin in or out of a team", () => {
+  const managerAuth = {
+    userId: "mgr-1", organizationId: "org-1", role: "manager" as const,
+    permissions: { settings_access: "allow", "settings_access@settings_teams": "allow" } as Record<string, string>,
+    teamId: null as string | null, teamRole: null as "lead" | "member" | null,
+  };
+  async function buildManagerApp(): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (request) => { request.auth = managerAuth; });
+    const { teamsRouter } = await import("./teams.js");
+    await app.register(teamsRouter, { prefix: "/v1" });
+    await app.ready();
+    return app;
+  }
+  let app: FastifyInstance;
+  beforeEach(async () => { vi.resetModules(); vi.clearAllMocks(); app = await buildManagerApp(); });
+  afterEach(async () => { await app.close(); });
+
+  it("POST: cannot put an admin into a new team", async () => {
+    mockPrisma.team.findFirst.mockResolvedValue(null);
+    mockPrisma.user.findMany.mockResolvedValue([{ id: "a1", role: "admin", teamId: null, teamRole: null }]);
+    const res = await app.inject({ method: "POST", url: "/v1/teams", payload: { name: "T", members: [{ userId: "a1", teamRole: "lead" }] } });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.team.create).not.toHaveBeenCalled();
+  });
+
+  it("PATCH: cannot evict an admin from a team", async () => {
+    mockPrisma.team.findFirst.mockResolvedValue({ id: "t1" });
+    mockPrisma.user.findMany
+      .mockResolvedValueOnce([{ id: "u2", role: "agent", teamId: "t1", teamRole: "lead" }])
+      .mockResolvedValueOnce([{ id: "a1", role: "admin" }]);
+    const res = await app.inject({ method: "PATCH", url: "/v1/teams/t1", payload: { name: "Renamed", members: [{ userId: "u2", teamRole: "lead" }] } });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.team.update).not.toHaveBeenCalled();
+    expect(mockPrisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("PATCH: cannot change an admin's team role", async () => {
+    mockPrisma.team.findFirst.mockResolvedValue({ id: "t1" });
+    mockPrisma.user.findMany
+      .mockResolvedValueOnce([{ id: "a1", role: "admin", teamId: "t1", teamRole: "member" }, { id: "u2", role: "agent", teamId: "t1", teamRole: "member" }])
+      .mockResolvedValueOnce([]);
+    const res = await app.inject({ method: "PATCH", url: "/v1/teams/t1", payload: { members: [{ userId: "a1", teamRole: "lead" }, { userId: "u2", teamRole: "member" }] } });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("PATCH: can still edit a team that has an admin, as long as the admin is unchanged", async () => {
+    mockPrisma.team.findFirst.mockResolvedValue({ id: "t1" });
+    mockPrisma.user.findMany
+      .mockResolvedValueOnce([{ id: "a1", role: "admin", teamId: "t1", teamRole: "member" }, { id: "u2", role: "agent", teamId: null, teamRole: null }])
+      .mockResolvedValueOnce([]);
+    mockPrisma.user.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.user.update.mockResolvedValue({});
+    const res = await app.inject({ method: "PATCH", url: "/v1/teams/t1", payload: { members: [{ userId: "a1", teamRole: "member" }, { userId: "u2", teamRole: "lead" }] } });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("DELETE: cannot delete a team that contains an admin", async () => {
+    mockPrisma.team.findFirst.mockResolvedValue({ id: "t1" });
+    mockPrisma.user.findMany.mockResolvedValue([{ id: "a1", role: "admin" }, { id: "u2", role: "agent" }]);
+    const res = await app.inject({ method: "DELETE", url: "/v1/teams/t1" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.team.delete).not.toHaveBeenCalled();
   });
 });

@@ -117,6 +117,17 @@ describe("PUT /roles/:role/permissions", () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it("rejects edits to the fixed whatsappAdmin role, even by superAdmin", async () => {
+    const app = await buildApp({ role: "superAdmin" as const satisfies typeof mockAuth.role });
+    const res = await app.inject({
+      method: "PUT",
+      url: "/roles/whatsappAdmin/permissions",
+      payload: { permissions: { inbox_access: "allow" } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.vendorSetting.upsert).not.toHaveBeenCalled();
+  });
+
   it("returns 400 for invalid role name", async () => {
     const app = await buildApp();
 

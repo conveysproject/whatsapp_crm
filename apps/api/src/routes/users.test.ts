@@ -142,6 +142,7 @@ describe("settings_agents sub gate", () => {
   });
 
   it("allows PATCH when settings_agents sub is on", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u-2", role: "agent" });
     mockPrisma.user.update.mockResolvedValue({ id: "u-2", email: "a@b.com", role: "agent" });
     const app = await buildAppAs({ settings_access: "allow", "settings_access@settings_agents": "allow" });
     const res = await app.inject({ method: "PATCH", url: "/v1/users/u-2/role", payload: { role: "agent" } });
@@ -150,10 +151,128 @@ describe("settings_agents sub gate", () => {
   });
 
   it("admin bypasses settings_agents sub gate", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u-2", role: "agent" });
     mockPrisma.user.update.mockResolvedValue({ id: "u-2", email: "a@b.com", role: "agent" });
     const app = await buildAppAs({}, "admin");
     const res = await app.inject({ method: "PATCH", url: "/v1/users/u-2/role", payload: { role: "agent" } });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe("PATCH /v1/users/:id/role grant rules (no higher than own)", () => {
+  const MANAGER = { settings_access: "allow", "settings_access@settings_agents": "allow" };
+  async function buildAppAs(role: string, permissions: Record<string, string> = MANAGER): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions, teamId: null, teamRole: null };
+    });
+    const { userRoutes } = await import("./users.js");
+    await app.register(userRoutes, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it.each([
+    ["manager", "agent", "admin", 403],          // promote to admin
+    ["manager", "agent", "whatsappAdmin", 403],  // only admins create WhatsApp Admins
+    ["manager", "admin", "viewer", 403],         // demote someone above you
+    ["manager", "agent", "viewer", 200],
+    ["admin", "agent", "whatsappAdmin", 200],
+    ["admin", "superAdmin", "agent", 403],
+  ])("%s changing %s → %s: %i", async (actor, current, next, expected) => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u-2", role: current });
+    mockPrisma.user.update.mockResolvedValue({ id: "u-2", email: "a@b.com", role: next });
+    const app = await buildAppAs(actor);
+    const res = await app.inject({ method: "PATCH", url: "/v1/users/u-2/role", payload: { role: next } });
+    expect(res.statusCode).toBe(expected);
+    if (expected === 403) expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("returns 404 when the target is not in the caller's org", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    const app = await buildAppAs("admin", {});
+    const res = await app.inject({ method: "PATCH", url: "/v1/users/u-x/role", payload: { role: "agent" } });
+    expect(res.statusCode).toBe(404);
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: "u-x", organizationId: "org-1" }) }));
+    await app.close();
+  });
+});
+
+describe("DELETE /v1/users/:id (deactivate) — never above your own role", () => {
+  const MANAGER = { settings_access: "allow", "settings_access@settings_agents": "allow" };
+  async function buildAppAs(role: string, permissions: Record<string, string> = MANAGER): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions, teamId: null, teamRole: null };
+    });
+    const { userRoutes } = await import("./users.js");
+    await app.register(userRoutes, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it.each([
+    ["manager", "admin", 403],
+    ["manager", "superAdmin", 403],
+    ["manager", "whatsappAdmin", 403],
+    ["manager", "agent", 204],
+    ["admin", "admin", 204],
+    ["admin", "whatsappAdmin", 204],
+    ["admin", "superAdmin", 403],
+  ])("%s deactivating %s: %i", async (actor, targetRole, expected) => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u-2", role: targetRole });
+    mockPrisma.user.update.mockResolvedValue({});
+    const app = await buildAppAs(actor);
+    const res = await app.inject({ method: "DELETE", url: "/v1/users/u-2" });
+    expect(res.statusCode).toBe(expected);
+    if (expected === 403) expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("returns 404 when the target is not in the caller's org", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    const app = await buildAppAs("admin", {});
+    const res = await app.inject({ method: "DELETE", url: "/v1/users/u-x" });
+    expect(res.statusCode).toBe(404);
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: "u-x", organizationId: "org-1" }) }));
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe("PATCH /v1/users/:id/team — never above your own role", () => {
+  const MANAGER = { settings_access: "allow", "settings_access@settings_agents": "allow" };
+  async function buildAppAs(role: string): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", mockPrisma as unknown as PrismaClient);
+    app.addHook("onRequest", async (r) => {
+      r.auth = { userId: "u-9", organizationId: "org-1", role: role as typeof mockAuth.role, permissions: MANAGER, teamId: null, teamRole: null };
+    });
+    const { userRoutes } = await import("./users.js");
+    await app.register(userRoutes, { prefix: "/v1" });
+    return app;
+  }
+
+  beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
+
+  it.each([
+    ["manager", "admin", 403],
+    ["manager", "whatsappAdmin", 403],
+    ["manager", "agent", 200],
+    ["admin", "admin", 200],
+  ])("%s moving a %s: %i", async (actor, targetRole, expected) => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u-2", organizationId: "org-1", role: targetRole, teamId: null, teamRole: null });
+    mockPrisma.user.update.mockResolvedValue({ id: "u-2", teamId: null, teamRole: null });
+    const app = await buildAppAs(actor);
+    const res = await app.inject({ method: "PATCH", url: "/v1/users/u-2/team", payload: { teamId: null } });
+    expect(res.statusCode).toBe(expected);
+    if (expected === 403) expect(mockPrisma.user.update).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -165,14 +284,14 @@ describe("PATCH /v1/users/:id/team", () => {
 
   it("rejects move that leaves the old team with no lead (400)", async () => {
     // target currently lead of team-old which has only this lead
-    mockPrisma.user.findFirst.mockResolvedValue({ id: "u9", organizationId: "org-1", teamId: "team-old", teamRole: "lead" });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u9", organizationId: "org-1", role: "agent", teamId: "team-old", teamRole: "lead" });
     mockPrisma.user.count.mockResolvedValue(0); // no other lead remains
     const res = await app.inject({ method: "PATCH", url: "/v1/users/u9/team", payload: { teamId: "team-new", teamRole: "member" } });
     expect(res.statusCode).toBe(400);
   });
 
   it("moves a user to a new team", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ id: "u9", organizationId: "org-1", teamId: null, teamRole: null });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u9", organizationId: "org-1", role: "agent", teamId: null, teamRole: null });
     mockPrisma.user.update.mockResolvedValue({ id: "u9", teamId: "team-new", teamRole: "member" });
     const res = await app.inject({ method: "PATCH", url: "/v1/users/u9/team", payload: { teamId: "team-new", teamRole: "member" } });
     expect(res.statusCode).toBe(200);
