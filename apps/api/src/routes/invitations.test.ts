@@ -6,6 +6,8 @@ import type { PrismaClient } from "@prisma/client";
 // Stub fetch so the disposable-email check never hits the network
 vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
 
+const mockSendMail = vi.hoisted(() => vi.fn());
+vi.mock("../lib/mail.js", () => ({ sendMail: (...a: unknown[]) => mockSendMail(...a) }));
 const mockCheckPlanLimit = vi.fn();
 vi.mock("../lib/plan-limits.js", () => ({
   checkPlanLimit: (...args: unknown[]) => mockCheckPlanLimit(...args),
@@ -96,6 +98,42 @@ describe("invitations", () => {
         data: expect.objectContaining({ teamId: "team-1", teamRole: "member" }),
       })
     );
+  });
+
+  it("emails the invitee a fixed template with their accept link", async () => {
+    mockCheckPlanLimit.mockResolvedValue({ allowed: true, limit: -1, current: 0 });
+    mockSendMail.mockResolvedValue(undefined);
+    mockPrisma.invitation.create.mockResolvedValue({ id: "i3", email: "new@c.com", role: "agent", token: "tok3", expiresAt: new Date() });
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/v1/invitations", payload: { email: "new@c.com", role: "agent" } });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().emailSent).toBe(true);
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    const arg = mockSendMail.mock.calls[0]![0];
+    expect(arg.to).toBe("new@c.com");
+    expect(arg.html).toContain("/invitations/tok3/accept");
+  });
+
+  it("still creates the invitation when the email fails", async () => {
+    mockCheckPlanLimit.mockResolvedValue({ allowed: true, limit: -1, current: 0 });
+    mockSendMail.mockRejectedValue(new Error("smtp down"));
+    mockPrisma.invitation.create.mockResolvedValue({ id: "i4", email: "n@c.com", role: "agent", token: "t4", expiresAt: new Date() });
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/v1/invitations", payload: { email: "n@c.com", role: "agent" } });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().emailSent).toBe(false);
+  });
+
+  it("sends no email when the caller lacks permission", async () => {
+    const app = await buildApp();
+    const saved = mockAuth.role;
+    (mockAuth as { role: string }).role = "agent";
+    (mockAuth as { permissions: Record<string, string> }).permissions = {};
+    const res = await app.inject({ method: "POST", url: "/v1/invitations", payload: { email: "x@c.com", role: "agent" } });
+    (mockAuth as { role: string }).role = saved;
+    (mockAuth as { permissions: Record<string, string> }).permissions = { settings_access: "allow", "settings_access@settings_agents": "allow" };
+    expect(res.statusCode).toBe(403);
+    expect(mockSendMail).not.toHaveBeenCalled();
   });
 
   it("creates invitation without teamId when not provided", async () => {
