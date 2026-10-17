@@ -2,12 +2,25 @@ import { auth } from "@/lib/auth/server";
 import { getImpersonationCookie } from "@/lib/server-api";
 import { isImpersonationAdminPath } from "@/lib/impersonation";
 import { type NextRequest, NextResponse } from "next/server";
+import { authProvider, COOKIE } from "@/lib/auth/config";
+import { clearSessionCookies, setSessionCookies } from "@/lib/auth/bff";
+import { resolveProxyToken, type ProxyTokenResult } from "@/lib/auth/proxy-token";
 
 const API_URL = (process.env["API_URL"] ?? process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000").replace(/\/$/, "");
 
 async function proxy(request: NextRequest, path: string[]): Promise<NextResponse> {
-  const { getToken } = await auth();
-  const token = await getToken();
+  let token: string | null;
+  let session: ProxyTokenResult | null = null;
+  if (authProvider() === "wbmsg") {
+    session = await resolveProxyToken(request, {
+      at: request.cookies.get(COOKIE.access)?.value,
+      rt: request.cookies.get(COOKIE.refresh)?.value,
+    });
+    token = session.token;
+  } else {
+    const { getToken } = await auth();
+    token = await getToken();
+  }
 
   const upstream = `${API_URL}/v1/${path.join("/")}${request.nextUrl.search}`;
 
@@ -34,10 +47,13 @@ async function proxy(request: NextRequest, path: string[]): Promise<NextResponse
   });
 
   const resBody = await res.arrayBuffer();
-  return new NextResponse(resBody, {
+  const out = new NextResponse(resBody, {
     status: res.status,
     headers: { "content-type": res.headers.get("content-type") ?? "application/json" },
   });
+  if (session?.rotated) setSessionCookies(out, session.rotated);
+  else if (session?.clear) clearSessionCookies(out);
+  return out;
 }
 
 type RouteContext = { params: Promise<{ path: string[] }> };
