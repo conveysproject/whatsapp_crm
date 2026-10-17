@@ -129,14 +129,37 @@ async function handleSignOut(req: NextRequest): Promise<NextResponse> {
   return res;
 }
 
-// GET is acceptable: this only clears the caller's own cookies and changes no state elsewhere.
+// True when the request comes from this site (not a third-party page). Fetch Metadata first;
+// without it fall back to Origin, then Referer, matched against the app origin. No signal = cross-site.
+function isSameSiteRequest(req: NextRequest): boolean {
+  const site = req.headers.get("sec-fetch-site");
+  if (site) return site === "same-origin" || site === "same-site" || site === "none";
+  const allowed = new Set<string>([req.nextUrl.origin]);
+  const app = process.env["NEXT_PUBLIC_APP_URL"];
+  if (app) {
+    try {
+      allowed.add(new URL(app).origin);
+    } catch {
+      /* ignore malformed env */
+    }
+  }
+  const from = req.headers.get("origin") ?? req.headers.get("referer");
+  if (!from) return false;
+  try {
+    return allowed.has(new URL(from).origin);
+  } catch {
+    return false;
+  }
+}
+
+// Clears the caller's own cookies, but only for same-site requests so another site cannot force a logout.
 function handleSessionExpired(req: NextRequest): NextResponse {
   const target = safeRedirect(req.nextUrl.searchParams.get("redirect_url"));
   const url = new URL("/sign-in", req.url);
   url.searchParams.set("redirect_url", target);
   const res = NextResponse.redirect(url, 303);
   res.headers.set("Cache-Control", "no-store");
-  clearSessionCookies(res);
+  if (isSameSiteRequest(req)) clearSessionCookies(res);
   return res;
 }
 

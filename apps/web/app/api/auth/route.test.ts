@@ -269,7 +269,7 @@ describe("fix round 1", () => {
 
 describe("session-expired and session-check", () => {
   const getAction = (action: string, qs = "", cookie?: string) =>
-    GET(new NextRequest(`${ORIGIN}/api/auth/${action}${qs}`, { headers: cookie ? { cookie } : {} }), ctx(action));
+    GET(new NextRequest(`${ORIGIN}/api/auth/${action}${qs}`, { headers: { "sec-fetch-site": "same-origin", ...(cookie ? { cookie } : {}) } }), ctx(action));
   const cleared = (res: Response) => (res.headers.get("set-cookie") ?? "").includes("Max-Age=0");
 
   it("session-expired clears cookies and 303s to sign-in with a safe redirect_url", async () => {
@@ -280,6 +280,36 @@ describe("session-expired and session-check", () => {
     expect(cleared(res)).toBe(true);
     const bad = await getAction("session-expired", "?redirect_url=%2F%2Fevil.example");
     expect(new URL(bad.headers.get("location") ?? "").searchParams.get("redirect_url")).toBe("/dashboard");
+  });
+
+  it("session-expired does not clear cookies for a cross-site request", async () => {
+    const get = (headers: Record<string, string>) =>
+      GET(new NextRequest(`${ORIGIN}/api/auth/session-expired`, { headers }), ctx("session-expired"));
+    for (const h of [
+      { "sec-fetch-site": "cross-site" },
+      { origin: "https://evil.example" },
+      { referer: "https://evil.example/page" },
+      {},
+    ]) {
+      const res = await get(h);
+      expect(res.status, JSON.stringify(h)).toBe(303);
+      expect(new URL(res.headers.get("location") ?? "").pathname).toBe("/sign-in");
+      expect(cleared(res), JSON.stringify(h)).toBe(false);
+    }
+  });
+
+  it("session-expired clears cookies for same-site signals", async () => {
+    const get = (headers: Record<string, string>) =>
+      GET(new NextRequest(`${ORIGIN}/api/auth/session-expired`, { headers }), ctx("session-expired"));
+    for (const h of [
+      { "sec-fetch-site": "same-origin" },
+      { "sec-fetch-site": "same-site" },
+      { "sec-fetch-site": "none" },
+      { origin: ORIGIN },
+      { referer: `${ORIGIN}/dashboard` },
+    ]) {
+      expect(cleared(await get(h)), JSON.stringify(h)).toBe(true);
+    }
   });
 
   it("session-expired 404s in clerk mode", async () => {
