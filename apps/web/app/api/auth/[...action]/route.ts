@@ -1,0 +1,144 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  callAuthApi,
+  clearSessionCookies,
+  refreshSession,
+  requireSameOrigin,
+  setSessionCookies,
+  unavailable,
+} from "../../../../lib/auth/bff";
+import { COOKIE, authProvider } from "../../../../lib/auth/config";
+import { accessTokenExpiry, verifyAccessToken } from "../../../../lib/auth/jwt";
+
+export const dynamic = "force-dynamic";
+
+const NO_STORE = { "Cache-Control": "no-store" };
+const notFound = () => NextResponse.json({ error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 });
+
+interface Spec {
+  api: string;
+  client?: boolean;
+  device?: boolean;
+  cookies?: boolean;
+}
+const ACTIONS: Record<string, Spec> = {
+  "sign-up": { api: "/v1/auth/signup" },
+  "sign-up/verify": { api: "/v1/auth/signup/verify", client: true, cookies: true },
+  "sign-in/password": { api: "/v1/auth/signin/password", client: true, device: true, cookies: true },
+  "sign-in/new-device": { api: "/v1/auth/signin/new-device", client: true, cookies: true },
+  "sign-in/code/request": { api: "/v1/auth/signin/code/request" },
+  "sign-in/code/verify": { api: "/v1/auth/signin/code/verify", client: true, cookies: true },
+  "password/forgot": { api: "/v1/auth/password/forgot" },
+  "password/reset": { api: "/v1/auth/password/reset", client: true, cookies: true },
+};
+const INVITE = /^invitations\/accept\/([A-Za-z0-9-]{1,100})$/;
+
+async function readBody(req: NextRequest): Promise<Record<string, unknown>> {
+  try {
+    const b = (await req.json()) as unknown;
+    return b && typeof b === "object" && !Array.isArray(b) ? (b as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function forward(req: NextRequest, spec: Spec): Promise<NextResponse> {
+  const body = await readBody(req);
+  if (spec.client) body["client"] = "web";
+  if (spec.device) {
+    const dev = req.cookies.get(COOKIE.device)?.value;
+    if (dev) body["deviceId"] = dev;
+  }
+  let up: Response;
+  try {
+    up = await callAuthApi(spec.api, { method: "POST", body, req });
+  } catch {
+    return unavailable();
+  }
+  let data: Record<string, unknown> = {};
+  try {
+    const j = (await up.json()) as unknown;
+    if (j && typeof j === "object" && !Array.isArray(j)) data = j as Record<string, unknown>;
+  } catch {
+    /* empty or non-JSON body */
+  }
+  const { accessToken, refreshToken, deviceId, ...rest } = data;
+  const res = NextResponse.json(rest, { status: up.status, headers: NO_STORE });
+  if (spec.cookies && up.ok && typeof accessToken === "string" && typeof refreshToken === "string") {
+    setSessionCookies(res, {
+      accessToken,
+      refreshToken,
+      deviceId: typeof deviceId === "string" ? deviceId : undefined,
+    });
+  }
+  return res;
+}
+
+function tokenResponse(accessToken: string, userId: string, exp: number): NextResponse {
+  return NextResponse.json({ accessToken, expiresAt: exp, userId }, { headers: NO_STORE });
+}
+
+async function handleToken(req: NextRequest): Promise<NextResponse> {
+  const at = req.cookies.get(COOKIE.access)?.value;
+  if (at) {
+    const exp = accessTokenExpiry(at);
+    if (exp !== null && exp > Date.now() + 60_000) {
+      const v = await verifyAccessToken(at);
+      if (v) return tokenResponse(at, v.userId, exp);
+    }
+  }
+  const rt = req.cookies.get(COOKIE.refresh)?.value;
+  if (!rt) return NextResponse.json({ accessToken: null }, { status: 401, headers: NO_STORE });
+  const r = await refreshSession(rt, req);
+  if (!r.ok) {
+    if (r.status === 503) return NextResponse.json({ accessToken: null }, { status: 503, headers: NO_STORE });
+    const res = NextResponse.json({ accessToken: null }, { status: 401, headers: NO_STORE });
+    clearSessionCookies(res);
+    return res;
+  }
+  const exp = accessTokenExpiry(r.accessToken) ?? Date.now();
+  const v = await verifyAccessToken(r.accessToken);
+  const res = tokenResponse(r.accessToken, v?.userId ?? "", exp);
+  setSessionCookies(res, { accessToken: r.accessToken, refreshToken: r.refreshToken });
+  return res;
+}
+
+async function handleSignOut(req: NextRequest): Promise<NextResponse> {
+  const at = req.cookies.get(COOKIE.access)?.value;
+  try {
+    await callAuthApi("/v1/auth/signout", { method: "POST", body: {}, req, bearer: at });
+  } catch {
+    /* ignore upstream failure */
+  }
+  const res = NextResponse.json({ ok: true }, { headers: NO_STORE });
+  clearSessionCookies(res);
+  return res;
+}
+
+type Ctx = { params: Promise<{ action: string[] }> };
+
+export async function GET(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
+  if (authProvider() === "clerk") return notFound();
+  const { action } = await ctx.params;
+  if (action.join("/") !== "token") return notFound();
+  return handleToken(req);
+}
+
+export async function POST(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
+  if (authProvider() === "clerk") return notFound();
+  const { action } = await ctx.params;
+  const key = action.join("/");
+  const spec = ACTIONS[key];
+  const invite = INVITE.exec(key);
+  const known = key === "sign-out" || spec || invite || key.startsWith("invitations/accept/");
+  if (!known) return notFound();
+  if (!requireSameOrigin(req)) {
+    return NextResponse.json({ error: { code: "FORBIDDEN", message: "Bad origin" } }, { status: 403 });
+  }
+  if (key === "sign-out") return handleSignOut(req);
+  if (spec) return forward(req, spec);
+  if (!invite) {
+    return NextResponse.json({ error: { code: "BAD_REQUEST", message: "Invalid invitation" } }, { status: 400 });
+  }
+  return forward(req, { api: `/v1/auth/invitations/${invite[1]}/accept`, client: true, cookies: true });
+}
