@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSignUpBody, validateBusinessScreen, validateIdentityScreen } from "./signup-steps";
+import { buildSignUpBody, nextSignupId, validateBusinessScreen, validateIdentityScreen } from "./signup-steps";
 
 const ok = { firstName: "Ada", lastName: "Lovelace", email: "ada@example.com", password: "longenough1" };
 const biz = {
@@ -67,5 +67,18 @@ describe("buildSignUpBody", () => {
   });
   it("adds the Turnstile token when present", () => {
     expect(buildSignUpBody(ok, biz, "tok")["turnstileToken"]).toBe("tok");
+  });
+});
+
+describe("nextSignupId", () => {
+  it("takes the new id on success", () => {
+    expect(nextSignupId("old", { status: 202, body: { ok: true, signupId: "new" } })).toBe("new");
+  });
+  it("keeps the old id when the re-send fails", () => {
+    expect(nextSignupId("old", { status: 429, body: null })).toBe("old");
+    expect(nextSignupId("old", { status: 503, body: null })).toBe("old");
+  });
+  it("keeps the old id when a success has no signupId", () => {
+    expect(nextSignupId("old", { status: 202, body: { ok: true } })).toBe("old");
   });
 });

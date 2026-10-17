@@ -6,6 +6,7 @@ import Link from "next/link";
 import { nextStep, postAuth } from "@/lib/auth/flows";
 import {
   buildSignUpBody,
+  nextSignupId,
   validateBusinessScreen,
   validateIdentityScreen,
   type BusinessValues,
@@ -79,8 +80,8 @@ export function SignUpForm(): JSX.Element {
     setTsKey((k) => k + 1);
     setToken(null);
     const step = nextStep(res);
-    const id = (res.body as { signupId?: unknown } | null)?.signupId;
-    if (step.kind === "error" || typeof id !== "string" || !id) {
+    const id = nextSignupId(null, res);
+    if (step.kind === "error" || !id) {
       setError(step.kind === "error" ? step.message : "Something went wrong. Please try again.");
       return;
     }
@@ -115,10 +116,10 @@ export function SignUpForm(): JSX.Element {
   }
 
   async function sendNewCode(): Promise<void> {
-    setSignupId(null);
-    setExpired(false);
+    // Keep the current signupId until a re-send succeeds (register sets the new one).
     // The Turnstile token is single-use and its widget lives on screen 2.
     if (TURNSTILE_ENABLED) {
+      setError("Complete the check to send a new code.");
       setScreen("business");
       return;
     }
@@ -139,6 +140,7 @@ export function SignUpForm(): JSX.Element {
         ) : (
           <>
             <CodeStep
+              key={signupId ?? "none"}
               intro={`We sent a 6-digit code to ${identity.email.trim()}. Enter it to finish creating your account.`}
               submitLabel="Verify"
               onSubmit={verify}

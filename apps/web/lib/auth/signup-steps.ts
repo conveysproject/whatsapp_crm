@@ -69,3 +69,10 @@ export function buildSignUpBody(
   if (turnstileToken) body["turnstileToken"] = turnstileToken;
   return body;
 }
+
+/** The signupId to keep after a sign-up (re)send: the new one on success, otherwise the previous one. */
+export function nextSignupId(previous: string | null, result: { status: number; body: unknown }): string | null {
+  if (result.status < 200 || result.status >= 300) return previous;
+  const id = (result.body as { signupId?: unknown } | null)?.signupId;
+  return typeof id === "string" && id ? id : previous;
+}
