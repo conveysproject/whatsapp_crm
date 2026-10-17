@@ -222,4 +222,28 @@ describe("revocation", () => {
     expect(store.has("auth:revoked:s1")).toBe(true);
     expect(store.has("auth:revoked:s2")).toBe(true);
   });
+
+  it("revokeSession resolves when the Redis revoked-key write fails after the DB revoke", async () => {
+    const { prisma, session } = makePrisma();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(redis.set).mockRejectedValueOnce(new Error("redis down"));
+    await expect(revokeSession(prisma, "s1", "logout")).resolves.toBeUndefined();
+    expect(session.updateMany).toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("revokeAllSessions resolves with the DB count when Redis fails", async () => {
+    const { prisma, session } = makePrisma();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    session.findMany.mockResolvedValueOnce([{ id: "s1" }, { id: "s2" }]);
+    session.updateMany.mockResolvedValueOnce({ count: 2 });
+    vi.mocked(redis.set).mockRejectedValue(new Error("redis down"));
+    await expect(revokeAllSessions(prisma, "a1", "password_change")).resolves.toBe(2);
+    vi.mocked(redis.set).mockImplementation(async (k: any, v: any) => {
+      store.set(k, v);
+      return "OK";
+    });
+    warn.mockRestore();
+  });
 });

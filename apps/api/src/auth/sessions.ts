@@ -18,7 +18,12 @@ const graceKey = (prevToken: string) => `auth:grace:${sha256(prevToken)}`;
 const typOf = (client: string): "user" | "admin" => (client === "admin" ? "admin" : "user");
 
 async function markRevoked(ids: string[]): Promise<void> {
-  await Promise.all(ids.map((id) => redis.set(revokedKey(id), "1", "EX", REVOKED_TTL_S)));
+  // Best effort: the DB row is already revoked, so a Redis failure must not fail the caller.
+  // Access tokens then stay valid until they expire (<= 10 min); refresh is blocked by the DB.
+  const results = await Promise.allSettled(ids.map((id) => redis.set(revokedKey(id), "1", "EX", REVOKED_TTL_S)));
+  if (results.some((r) => r.status === "rejected")) {
+    console.warn("auth: could not write session revocation marker to Redis; DB revocation kept");
+  }
 }
 
 export async function createSession(
