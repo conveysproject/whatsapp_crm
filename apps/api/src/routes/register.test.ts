@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type * as IdentityModule from "../auth/identity.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { registerRouter } from "./register.js";
@@ -8,7 +9,7 @@ const { mockVerifyClerkToken, mockVerifyBearer } = vi.hoisted(() => ({
   mockVerifyBearer: vi.fn(),
 }));
 vi.mock("../auth/identity.js", async (orig) => ({
-  ...(await orig<typeof import("../auth/identity.js")>()),
+  ...(await orig<typeof IdentityModule>()),
   verifyBearer: mockVerifyBearer,
 }));
 vi.mock("../lib/clerk.js", () => ({ verifyClerkToken: mockVerifyClerkToken }));

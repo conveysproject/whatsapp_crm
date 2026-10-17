@@ -110,7 +110,8 @@ export const superAdminsRouter: FastifyPluginAsync = async (fastify) => {
             request,
           });
           fastify.log.info({ userId: created.id, email, actorId: request.auth.userId }, "SuperAdmin created");
-          const { reused: _reused, ...publicUser } = created;
+          const { reused, ...publicUser } = created;
+          void reused; // internal flag, not part of the response
           return reply.status(201).send({ data: { ...publicUser, setPassword: "forgot_password" } });
         } catch (err) {
           if (isUniqueViolation(err) || err instanceof SuperAdminConflictError) {
