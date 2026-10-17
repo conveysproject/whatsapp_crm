@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { verifyBearer } from "../auth/identity.js";
+import { isWbmsgAuth, verifyBearer } from "../auth/identity.js";
 import { DEFAULT_ROLE_PERMISSIONS, FIXED_PERMISSION_ROLES } from "../lib/default-role-permissions.js";
 import { seedLeadStatuses } from "../lib/seed-lead-statuses.js";
 
@@ -61,8 +61,24 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
       const {
         companyName, companyWebsite, companyLocation,
         industry, subCategory, revenue,
-        email = "", firstName = "", lastName = "",
       } = request.body;
+      let { email = "", firstName = "", lastName = "" } = request.body;
+
+      if (isWbmsgAuth()) {
+        // Identity comes from the verified account, never from the request body.
+        const account = await fastify.prisma.authAccount.findUnique({
+          where: { id: userId },
+          select: { email: true, firstName: true, lastName: true, emailVerifiedAt: true },
+        });
+        if (!account || !account.emailVerifiedAt) {
+          return reply.status(403).send({
+            error: { code: "EMAIL_NOT_VERIFIED", message: "Verify your email before setting up your business." },
+          });
+        }
+        email = account.email;
+        firstName = account.firstName ?? "";
+        lastName = account.lastName ?? "";
+      }
 
       const fullName = [firstName, lastName].filter(Boolean).join(" ") || email;
 

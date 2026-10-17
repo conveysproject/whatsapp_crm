@@ -1,15 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { registerRouter } from "./register.js";
 
-const { mockVerifyClerkToken } = vi.hoisted(() => ({
+const { mockVerifyClerkToken, mockVerifyBearer } = vi.hoisted(() => ({
   mockVerifyClerkToken: vi.fn(),
+  mockVerifyBearer: vi.fn(),
+}));
+vi.mock("../auth/identity.js", async (orig) => ({
+  ...(await orig<typeof import("../auth/identity.js")>()),
+  verifyBearer: mockVerifyBearer,
 }));
 vi.mock("../lib/clerk.js", () => ({ verifyClerkToken: mockVerifyClerkToken }));
 
 const mockPrisma = {
   user: { findUnique: vi.fn(), create: vi.fn() },
+  authAccount: { findUnique: vi.fn() },
   organization: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
   vendorSetting: { createMany: vi.fn() },
   leadStatus: { count: vi.fn(), createMany: vi.fn(), findMany: vi.fn() },
@@ -26,6 +32,7 @@ describe("POST /register", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockVerifyClerkToken.mockResolvedValue({ userId: "user-new" });
+    mockVerifyBearer.mockImplementation(async () => ({ userId: "user-new", sid: null, typ: "user" }));
     mockPrisma.organization.create.mockResolvedValue({ id: "org-new" });
     mockPrisma.user.create.mockResolvedValue({});
     mockPrisma.vendorSetting.createMany.mockResolvedValue({ count: 4 });
@@ -73,5 +80,75 @@ describe("POST /register", () => {
 
     expect(res.statusCode).toBe(200);
     expect(mockPrisma.vendorSetting.createMany).not.toHaveBeenCalled();
+  });
+
+  describe("wbmsg mode", () => {
+    const verifiedAccount = {
+      email: "a@x.com", firstName: "Ann", lastName: "Lee", emailVerifiedAt: new Date(),
+    };
+    beforeEach(() => {
+      process.env.AUTH_PROVIDER = "wbmsg";
+      mockVerifyBearer.mockResolvedValue({ userId: "usr_a", sid: "s1", typ: "user" });
+      mockPrisma.authAccount.findUnique.mockResolvedValue(verifiedAccount);
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+    });
+    afterEach(() => { delete process.env.AUTH_PROVIDER; });
+
+    it("takes email and names from auth_accounts, ignoring the body", async () => {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "POST", url: "/register",
+        headers: { authorization: "Bearer t" },
+        payload: { companyName: "ACME", industry: "Tech", revenue: "1M", email: "evil@x.com", firstName: "Eve" },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(mockPrisma.authAccount.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "usr_a" } }));
+      expect(mockPrisma.user.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ id: "usr_a", email: "a@x.com", fullName: "Ann Lee" }),
+      });
+    });
+
+    it("falls back to the email when the account has no names", async () => {
+      mockPrisma.authAccount.findUnique.mockResolvedValue({ ...verifiedAccount, firstName: null, lastName: null });
+      const app = await buildApp();
+      await app.inject({
+        method: "POST", url: "/register",
+        headers: { authorization: "Bearer t" },
+        payload: { companyName: "ACME", industry: "Tech", revenue: "1M" },
+      });
+      expect(mockPrisma.user.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ email: "a@x.com", fullName: "a@x.com" }),
+      });
+    });
+
+    it.each([
+      ["missing", null],
+      ["unverified", { ...verifiedAccount, emailVerifiedAt: null }],
+    ])("rejects a %s account with EMAIL_NOT_VERIFIED", async (_n, account) => {
+      mockPrisma.authAccount.findUnique.mockResolvedValue(account);
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "POST", url: "/register",
+        headers: { authorization: "Bearer t" },
+        payload: { companyName: "ACME", industry: "Tech", revenue: "1M" },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error.code).toBe("EMAIL_NOT_VERIFIED");
+      expect(mockPrisma.organization.create).not.toHaveBeenCalled();
+    });
+  });
+
+  it("clerk mode still uses the body email", async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+    const app = await buildApp();
+    await app.inject({
+      method: "POST", url: "/register",
+      headers: { authorization: "Bearer t" },
+      payload: { companyName: "ACME", industry: "Tech", revenue: "1M", email: "body@x.com", firstName: "Bo" },
+    });
+    expect(mockPrisma.authAccount.findUnique).not.toHaveBeenCalled();
+    expect(mockPrisma.user.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ email: "body@x.com", fullName: "Bo" }),
+    });
   });
 });
