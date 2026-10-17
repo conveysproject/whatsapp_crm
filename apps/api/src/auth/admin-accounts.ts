@@ -11,8 +11,20 @@ export async function ensureSuperAdminAccount(
   input: { email: string; firstName: string; lastName: string },
 ): Promise<{ id: string; created: boolean }> {
   const email = normalizeEmail(input.email);
-  const existing = await tx.authAccount.findUnique({ where: { email }, select: { id: true } });
-  if (existing) return { id: existing.id, created: false };
+  const existing = await tx.authAccount.findUnique({ where: { email }, select: { id: true, emailVerifiedAt: true } });
+  if (existing) {
+    // Promoting an existing account: drop any password it had, so the operator must set one via Forgot password.
+    await tx.authAccount.update({
+      where: { id: existing.id },
+      data: {
+        passwordHash: null,
+        mustSetPassword: true,
+        emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
+        status: "active",
+      },
+    });
+    return { id: existing.id, created: false };
+  }
   const id = newAccountId();
   await tx.authAccount.create({
     data: {
@@ -25,4 +37,8 @@ export async function ensureSuperAdminAccount(
     },
   });
   return { id, created: true };
+}
+
+export function isUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "P2002";
 }

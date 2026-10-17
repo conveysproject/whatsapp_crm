@@ -42,6 +42,7 @@ describe("GET /admin/organizations/cleanup", () => {
     const res = await app.inject({ method: "GET", url: "/v1/admin/organizations/cleanup" });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.deleted.map((o: { id: string }) => o.id)).toEqual(["o-bad"]);
+    expect(res.json().data.deleted[0].reason).toBe("no_valid_users");
     expect(clerk.getClerkUser).not.toHaveBeenCalled();
   });
 

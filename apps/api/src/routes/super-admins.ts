@@ -3,7 +3,9 @@ import { randomBytes } from "crypto";
 import { createClerkSuperAdmin, deleteClerkUser } from "../lib/clerk-admin.js";
 import { writeAdminAudit } from "../lib/audit.js";
 import { isWbmsgAuth } from "../auth/identity.js";
-import { ensureSuperAdminAccount } from "../auth/admin-accounts.js";
+import { revokeAllSessions } from "../auth/sessions.js";
+import { normalizeEmail } from "../auth/ids.js";
+import { ensureSuperAdminAccount, isUniqueViolation } from "../auth/admin-accounts.js";
 
 export const superAdminsRouter: FastifyPluginAsync = async (fastify) => {
   // ── Current super admin identity (used by admin layout server component) ─────
@@ -64,7 +66,8 @@ export const superAdminsRouter: FastifyPluginAsync = async (fastify) => {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Super admin access required" } });
       }
 
-      const { email, firstName, lastName } = request.body;
+      const { firstName, lastName } = request.body;
+      const email = isWbmsgAuth() ? normalizeEmail(request.body.email) : request.body.email;
 
       // Prevent duplicate
       const existing = await fastify.prisma.user.findFirst({
@@ -93,8 +96,11 @@ export const superAdminsRouter: FastifyPluginAsync = async (fastify) => {
               },
               select: { id: true, email: true, fullName: true, createdAt: true },
             });
-            return user;
+            return { ...user, reused: !account.created };
           });
+          if (created && created.reused) {
+            await revokeAllSessions(fastify.prisma, created.id, "promoted_to_super_admin").catch(() => undefined);
+          }
           if (!created) {
             return reply.status(409).send({ error: { code: "CONFLICT", message: "A super admin with this email already exists" } });
           }
@@ -108,8 +114,12 @@ export const superAdminsRouter: FastifyPluginAsync = async (fastify) => {
             request,
           });
           fastify.log.info({ userId: created.id, email, actorId: request.auth.userId }, "SuperAdmin created");
-          return reply.status(201).send({ data: { ...created, setPassword: "forgot_password" } });
+          const { reused: _reused, ...publicUser } = created;
+          return reply.status(201).send({ data: { ...publicUser, setPassword: "forgot_password" } });
         } catch (err) {
+          if (isUniqueViolation(err)) {
+            return reply.status(409).send({ error: { code: "CONFLICT", message: "A super admin with this email already exists" } });
+          }
           fastify.log.error({ err }, "Super admin creation failed");
           return reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "Failed to create super admin" } });
         }

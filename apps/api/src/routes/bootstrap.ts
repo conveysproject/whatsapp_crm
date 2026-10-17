@@ -8,7 +8,9 @@ import {
 } from "../lib/clerk-admin.js";
 import { writeAdminAudit } from "../lib/audit.js";
 import { isWbmsgAuth } from "../auth/identity.js";
-import { ensureSuperAdminAccount } from "../auth/admin-accounts.js";
+import { revokeAllSessions } from "../auth/sessions.js";
+import { normalizeEmail } from "../auth/ids.js";
+import { ensureSuperAdminAccount, isUniqueViolation } from "../auth/admin-accounts.js";
 
 // Redis key tracking total bootstrap attempts — max 5 ever, no expiry
 const BOOTSTRAP_ATTEMPTS_KEY = "bootstrap:attempts";
@@ -65,7 +67,8 @@ export const bootstrapRouter: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { email, firstName, lastName } = request.body;
+      const { firstName, lastName } = request.body;
+      const email = isWbmsgAuth() ? normalizeEmail(request.body.email) : request.body.email;
 
       // 5. Ensure platform org exists (seed may not have run)
       await fastify.prisma.organization.upsert({
@@ -77,12 +80,14 @@ export const bootstrapRouter: FastifyPluginAsync = async (fastify) => {
       if (isWbmsgAuth()) {
         // 6-7 (wbmsg). No Clerk: account must set its password via Forgot password.
         let userId: string;
+        let reused = false;
         try {
-          userId = await fastify.prisma.$transaction(async (tx) => {
+          const result = await fastify.prisma.$transaction(async (tx) => {
             const account = await ensureSuperAdminAccount(tx, { email, firstName, lastName });
-            await tx.user.upsert({
-              where: { id: account.id },
-              create: {
+            const clash = await tx.user.findUnique({ where: { id: account.id }, select: { id: true } });
+            if (clash) return null;
+            await tx.user.create({
+              data: {
                 id: account.id,
                 organizationId: "platform",
                 email,
@@ -90,13 +95,23 @@ export const bootstrapRouter: FastifyPluginAsync = async (fastify) => {
                 role: "superAdmin",
                 isActive: true,
               },
-              update: { role: "superAdmin", organizationId: "platform", isActive: true, deletedAt: null },
             });
-            return account.id;
+            return { id: account.id, reused: !account.created };
           });
+          if (!result) {
+            return reply.status(409).send({ error: { code: "CONFLICT", message: "A super admin with this email already exists" } });
+          }
+          userId = result.id;
+          reused = result.reused;
         } catch (err) {
+          if (isUniqueViolation(err)) {
+            return reply.status(409).send({ error: { code: "CONFLICT", message: "A super admin with this email already exists" } });
+          }
           fastify.log.error({ err }, "Super admin creation failed during bootstrap");
           return reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "Failed to create super admin" } });
+        }
+        if (reused) {
+          await revokeAllSessions(fastify.prisma, userId, "promoted_to_super_admin").catch(() => undefined);
         }
         writeAdminAudit({
           prisma: fastify.prisma,

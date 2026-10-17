@@ -8,11 +8,13 @@ const clerk = vi.hoisted(() => ({
   isBootstrapEnabled: vi.fn(() => true),
 }));
 vi.mock("../lib/clerk-admin.js", () => clerk);
+const revoke = vi.hoisted(() => ({ revokeAllSessions: vi.fn().mockResolvedValue(0) }));
+vi.mock("../auth/sessions.js", () => revoke);
 vi.mock("../lib/redis.js", () => ({ redis: { incr: vi.fn().mockResolvedValue(1) } }));
 
 const tx = {
-  authAccount: { findUnique: vi.fn(), create: vi.fn() },
-  user: { upsert: vi.fn() },
+  authAccount: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+  user: { findUnique: vi.fn(), create: vi.fn() },
 };
 const mockPrisma = {
   user: { findFirst: vi.fn() },
@@ -41,7 +43,8 @@ describe("POST /admin/bootstrap (wbmsg)", () => {
     mockPrisma.organization.upsert.mockResolvedValue({});
     tx.authAccount.findUnique.mockResolvedValue(null);
     tx.authAccount.create.mockResolvedValue({});
-    tx.user.upsert.mockResolvedValue({});
+    tx.user.findUnique.mockResolvedValue(null);
+    tx.user.create.mockResolvedValue({});
     app = await buildApp();
   });
   afterEach(async () => { delete process.env.AUTH_PROVIDER; await app.close(); });
@@ -53,17 +56,33 @@ describe("POST /admin/bootstrap (wbmsg)", () => {
     expect(acct).toMatchObject({ email: "boss@x.com", mustSetPassword: true });
     expect(acct.id).toMatch(/^usr_/);
     expect(acct.emailVerifiedAt).toBeInstanceOf(Date);
-    expect(tx.user.upsert.mock.calls[0]![0].create).toMatchObject({ id: acct.id, role: "superAdmin" });
+    expect(tx.user.create.mock.calls[0]![0].data).toMatchObject({ id: acct.id, role: "superAdmin" });
     expect(clerk.createClerkSuperAdmin).not.toHaveBeenCalled();
     expect(res.json().data.setPassword).toBe("forgot_password");
     expect(JSON.stringify(res.json()).toLowerCase()).not.toMatch(/"password"|temppassword/);
   });
 
-  it("reuses an existing account id", async () => {
-    tx.authAccount.findUnique.mockResolvedValue({ id: "usr_existing" });
+  it.each([
+    ["unverified", null],
+    ["verified", new Date("2026-01-01")],
+  ])("reuses a %s account: clears password, forces set-password, revokes sessions", async (_n, verifiedAt) => {
+    tx.authAccount.findUnique.mockResolvedValue({ id: "usr_existing", emailVerifiedAt: verifiedAt });
     const res = await app.inject({ method: "POST", url: "/v1/admin/bootstrap", headers, payload });
     expect(res.statusCode).toBe(201);
     expect(tx.authAccount.create).not.toHaveBeenCalled();
-    expect(tx.user.upsert.mock.calls[0]![0].where).toEqual({ id: "usr_existing" });
+    expect(tx.user.create.mock.calls[0]![0].data.id).toBe("usr_existing");
+    const upd = tx.authAccount.update.mock.calls[0]![0];
+    expect(upd.data).toMatchObject({ passwordHash: null, mustSetPassword: true, status: "active" });
+    expect(upd.data.emailVerifiedAt).toBeInstanceOf(Date);
+    expect(revoke.revokeAllSessions).toHaveBeenCalledWith(mockPrisma, "usr_existing", "promoted_to_super_admin");
+  });
+
+  it("returns 409 and creates nothing when a users row already exists for the account", async () => {
+    tx.authAccount.findUnique.mockResolvedValue({ id: "usr_existing", emailVerifiedAt: new Date() });
+    tx.user.findUnique.mockResolvedValue({ id: "usr_existing" });
+    const res = await app.inject({ method: "POST", url: "/v1/admin/bootstrap", headers, payload });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("CONFLICT");
+    expect(tx.user.create).not.toHaveBeenCalled();
   });
 });

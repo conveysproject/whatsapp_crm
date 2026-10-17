@@ -680,7 +680,7 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         })
       );
       if (!checks.some(Boolean)) {
-        toDelete.push({ id: org.id, name: org.name, reason: "no_valid_clerk_users" });
+        toDelete.push({ id: org.id, name: org.name, reason: isWbmsgAuth() ? "no_valid_users" : "no_valid_clerk_users" });
       }
     }));
     return toDelete;

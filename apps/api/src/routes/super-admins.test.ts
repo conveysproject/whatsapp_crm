@@ -7,9 +7,11 @@ const clerk = vi.hoisted(() => ({
   deleteClerkUser: vi.fn(),
 }));
 vi.mock("../lib/clerk-admin.js", () => clerk);
+const revoke = vi.hoisted(() => ({ revokeAllSessions: vi.fn().mockResolvedValue(0) }));
+vi.mock("../auth/sessions.js", () => revoke);
 
 const tx = {
-  authAccount: { findUnique: vi.fn(), create: vi.fn() },
+  authAccount: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
   user: { findUnique: vi.fn(), create: vi.fn() },
 };
 const mockPrisma = {
@@ -63,16 +65,32 @@ describe("POST /admin/super-admins (wbmsg)", () => {
     expect(JSON.stringify(body).toLowerCase()).not.toMatch(/"password"|temppassword/);
   });
 
-  it("reuses the id of an existing account for the email", async () => {
-    tx.authAccount.findUnique.mockResolvedValue({ id: "usr_existing" });
+  it.each([
+    ["unverified", null],
+    ["verified", new Date("2026-01-01")],
+  ])("reuses a %s existing account: clears password, forces set-password, revokes sessions", async (_n, verifiedAt) => {
+    tx.authAccount.findUnique.mockResolvedValue({ id: "usr_existing", emailVerifiedAt: verifiedAt });
     const res = await app.inject({ method: "POST", url: "/v1/admin/super-admins", payload });
     expect(res.statusCode).toBe(201);
     expect(tx.authAccount.create).not.toHaveBeenCalled();
     expect(tx.user.create.mock.calls[0]![0].data.id).toBe("usr_existing");
+    const upd = tx.authAccount.update.mock.calls[0]![0];
+    expect(upd.where).toEqual({ id: "usr_existing" });
+    expect(upd.data).toMatchObject({ passwordHash: null, mustSetPassword: true, status: "active" });
+    if (verifiedAt) expect(upd.data.emailVerifiedAt).toBe(verifiedAt);
+    else expect(upd.data.emailVerifiedAt).toBeInstanceOf(Date);
+    expect(revoke.revokeAllSessions).toHaveBeenCalledWith(mockPrisma, "usr_existing", "promoted_to_super_admin");
+  });
+
+  it("normalizes the email and maps a unique violation to 409", async () => {
+    tx.user.create.mockRejectedValue(Object.assign(new Error("u"), { code: "P2002" }));
+    const res = await app.inject({ method: "POST", url: "/v1/admin/super-admins", payload });
+    expect(tx.authAccount.findUnique.mock.calls[0]![0].where).toEqual({ email: "new@x.com" });
+    expect(res.statusCode).toBe(409);
   });
 
   it("returns 409 when a users row already exists for the account", async () => {
-    tx.authAccount.findUnique.mockResolvedValue({ id: "usr_existing" });
+    tx.authAccount.findUnique.mockResolvedValue({ id: "usr_existing", emailVerifiedAt: null });
     tx.user.findUnique.mockResolvedValue({ id: "usr_existing" });
     const res = await app.inject({ method: "POST", url: "/v1/admin/super-admins", payload });
     expect(res.statusCode).toBe(409);
