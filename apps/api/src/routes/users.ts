@@ -270,9 +270,12 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const target = await fastify.prisma.user.findFirst({
         where: { id: request.params.id, organizationId },
-        select: { id: true, organizationId: true, teamId: true, teamRole: true },
+        select: { id: true, organizationId: true, role: true, teamId: true, teamRole: true },
       });
       if (!target) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "User not found" } });
+      if (!grantableRoles(role).includes(target.role)) {
+        return reply.status(403).send({ error: { code: "ROLE_NOT_GRANTABLE", message: "You cannot move a member with a higher role than your own" } });
+      }
 
       // If moving a lead out of their current team, ensure another lead remains.
       if (target.teamId && target.teamId !== request.body.teamId && target.teamRole === "lead") {

@@ -3,7 +3,7 @@ import { serverApiHeaders } from "@/lib/server-api";
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { PermissionGate } from "@/components/PermissionGate";
-import { ApiUsageLink } from "@/components/settings/api-usage/ApiUsageLink";
+import { SettingsTiles } from "@/components/settings/SettingsTiles";
 
 interface Org {
   name: string;
@@ -45,32 +45,7 @@ export default async function SettingsPage(): Promise<JSX.Element> {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { href: "/settings/members", label: "Members", desc: "Manage team access and permissions" },
-          { href: "/settings/teams", label: "Manage Teams", desc: "Organise agents into teams and control visibility" },
-          { href: "/settings/roles", label: "Roles", desc: "Default permissions per role" },
-          { href: "/settings/whatsapp-account", label: "WhatsApp Account", desc: "Connect your WABA" },
-          { href: "/settings/branding", label: "Branding", desc: "Logo, colors, favicon" },
-          { href: "/settings/labels", label: "Labels", desc: "Color-coded contact tags" },
-          { href: "/settings/inbox-labels", label: "Conversation Labels", desc: "Labels for inbox queue management" },
-          { href: "/settings/contact-settings", label: "Contact Settings", desc: "Fields, statuses, configuration & assignment rules" },
-          { href: "/settings/notifications", label: "Notifications", desc: "Sound and alert preferences" },
-          { href: "/settings/vendor-settings", label: "Advanced Settings", desc: "Bot timing, API credentials" },
-          { href: "/settings/webhook-actions", label: "Webhook Actions", desc: "Trigger external webhooks" },
-          { href: "/settings/media-library", label: "Media Library", desc: "Reusable images, docs, audio" },
-          { href: "/settings/canned-responses", label: "Canned Responses", desc: "Saved reply templates with shortcuts" },
-          { href: "/settings/routing", label: "Routing Rules", desc: "Auto-assign conversations" },
-          { href: "/settings/ai", label: "AI Settings", desc: "Chatbot and automation config" },
-          { href: "/settings/billing", label: "Billing", desc: "Subscription and usage" },
-        ].map(({ href, label, desc }) => (
-          <Link key={href} href={href} className="block border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-            <p className="text-sm font-medium text-gray-900">{label}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
-          </Link>
-        ))}
-        <ApiUsageLink />
-      </div>
+      <SettingsTiles />
     </div>
     </PermissionGate>
   );
