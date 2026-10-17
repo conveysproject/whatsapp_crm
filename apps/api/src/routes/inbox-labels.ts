@@ -1,5 +1,6 @@
 import { conversationAccessWhere } from "../lib/conversation-access.js";
 import type { FastifyPluginAsync } from "fastify";
+import { canAccess, canAccessSub } from "../lib/permissions.js";
 
 const LABEL_COLORS = [
   "#EF4444", "#F97316", "#F59E0B", "#84CC16",
@@ -14,6 +15,14 @@ function randomColor(): string {
 const NAME_RE = /^[a-zA-Z0-9 \-]{1,22}$/;
 
 export const inboxLabelsRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate: labels are an inbox feature, so every route needs inbox_access.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "inbox_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "inbox_access permission required" } });
+    }
+  });
+
   fastify.get("/inbox-labels", async (request, reply) => {
     const { organizationId } = request.auth;
     const labels = await fastify.prisma.inboxLabel.findMany({
@@ -86,7 +95,11 @@ export const inboxLabelsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { id: string } }>(
     "/inbox-labels/:id",
     async (request, reply) => {
-      const { organizationId } = request.auth;
+      const { organizationId, role, permissions } = request.auth;
+      // Deleting a label removes it from every conversation in the org: a settings action.
+      if (!canAccessSub(role, permissions, "settings_access", "settings_tags")) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "settings_tags permission required" } });
+      }
       const label = await fastify.prisma.inboxLabel.findFirst({
         where: { id: request.params.id, organizationId },
         select: { id: true },

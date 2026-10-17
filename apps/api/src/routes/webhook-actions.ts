@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { canAccess } from "../lib/permissions.js";
 
 interface WebhookActionBody {
   title: string;
@@ -9,6 +10,14 @@ interface WebhookActionBody {
 }
 
 export const webhookActionsRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate: webhook actions auto-send templates, so they're an automation.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!canAccess(role, permissions, "automation_access")) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "automation_access permission required" } });
+    }
+  });
+
   fastify.get("/webhook-actions", async (request, reply) => {
     const { organizationId } = request.auth;
     const data = await fastify.prisma.responseWebhookAction.findMany({
