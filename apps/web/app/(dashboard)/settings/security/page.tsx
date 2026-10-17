@@ -1,11 +1,12 @@
 "use client";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import type { FormEvent, JSX } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth/client";
 import { authProvider } from "@/lib/auth/config";
-import { clientLabel, deviceTitle, relativeTime, type DeviceSession } from "@/lib/security-settings";
+import { clientLabel, deviceTitle, passwordMode, relativeTime, type DeviceSession } from "@/lib/security-settings";
 
 interface SecurityInfo { email: string; hasPassword: boolean; mustSetPassword: boolean }
 
@@ -19,7 +20,9 @@ async function errorCode(res: Response): Promise<string> {
 
 function PasswordSection({ info, onChanged }: { info: SecurityInfo; onChanged: () => void }): JSX.Element {
   const params = useSearchParams();
-  const setMode = info.mustSetPassword || params.get("set") === "1" || !info.hasPassword;
+  const mode = passwordMode(info);
+  const setMode = mode === "set";
+  const heading = setMode || params.get("set") === "1" ? "Set your password" : "Password";
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [busy, setBusy] = useState(false);
@@ -42,16 +45,28 @@ function PasswordSection({ info, onChanged }: { info: SecurityInfo; onChanged: (
       const code = await errorCode(res);
       if (code === "NO_SESSION") setError(IMPERSONATING);
       else if (code === "WEAK_PASSWORD") setError("That password is too weak. Use a longer, less common password.");
-      else if (res.status === 401) setError("Your current password is incorrect.");
+      else if (res.status === 401) setError(setMode ? "Something went wrong. Please sign in again." : "Your current password is incorrect.");
       else setError("Could not update your password. Please try again.");
     } catch {
       setError("Could not update your password. Please try again.");
     } finally { setBusy(false); }
   }
 
+  if (mode === "no_password" && !done) {
+    return (
+      <section className="border rounded-lg p-4 space-y-3">
+        <h2 className="text-sm font-semibold">{heading}</h2>
+        <p className="text-sm text-gray-600">
+          You don&apos;t have a password yet. Use Forgot password on the sign-in page to create one.{" "}
+          <Link href="/forgot-password" className="text-green-700 hover:underline">Forgot password</Link>
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="border rounded-lg p-4 space-y-3">
-      <h2 className="text-sm font-semibold">{setMode ? "Set your password" : "Password"}</h2>
+      <h2 className="text-sm font-semibold">{heading}</h2>
       <form onSubmit={(e) => void submit(e)} className="space-y-3 max-w-sm">
         {!setMode && (
           <label className="block text-sm">

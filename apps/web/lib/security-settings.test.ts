@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clientLabel, relativeTime, summarizeUserAgent, deviceTitle } from "./security-settings";
+import { clientLabel, relativeTime, summarizeUserAgent, deviceTitle, passwordMode } from "./security-settings";
 
 describe("clientLabel", () => {
   it("maps known clients", () => {
@@ -48,5 +48,14 @@ describe("deviceTitle", () => {
     expect(deviceTitle({ client: "mobile", deviceLabel: "Pixel 8" })).toBe("Pixel 8");
     expect(deviceTitle({ client: "web", deviceLabel: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/17.0 Safari/605.1.15" })).toBe("Safari on macOS");
     expect(deviceTitle({ client: "web", deviceLabel: null })).toBe("Web session");
+  });
+});
+
+describe("passwordMode", () => {
+  it("maps account state to the form mode", () => {
+    expect(passwordMode({ mustSetPassword: true, hasPassword: false })).toBe("set");
+    expect(passwordMode({ mustSetPassword: true, hasPassword: true })).toBe("set");
+    expect(passwordMode({ mustSetPassword: false, hasPassword: false })).toBe("no_password");
+    expect(passwordMode({ mustSetPassword: false, hasPassword: true })).toBe("change");
   });
 });

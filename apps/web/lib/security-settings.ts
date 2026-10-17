@@ -64,3 +64,12 @@ export function deviceTitle(s: { client: string; deviceLabel: string | null }): 
   }
   return `${clientLabel(s.client)} session`;
 }
+
+export type PasswordMode = "set" | "change" | "no_password";
+
+/** Mirrors the API: the current password is skipped only when mustSetPassword is true. */
+export function passwordMode(info: { mustSetPassword: boolean; hasPassword: boolean }): PasswordMode {
+  if (info.mustSetPassword) return "set";
+  if (!info.hasPassword) return "no_password";
+  return "change";
+}
