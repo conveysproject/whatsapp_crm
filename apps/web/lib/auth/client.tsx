@@ -5,6 +5,8 @@ import type { JSX, ReactNode } from "react";
 import { useAuth as useClerkAuth } from "@clerk/nextjs";
 import { useQueryClient } from "@tanstack/react-query";
 import { authProvider } from "./config";
+import { decide, isPublicAuthPath, retryDelayMs } from "./provider-logic";
+import type { ProviderState } from "./provider-logic";
 import { createTokenStore } from "./token-store";
 
 export interface AuthState {
@@ -15,24 +17,10 @@ export interface AuthState {
   signOut: (opts?: { redirectUrl?: string }) => Promise<void>;
 }
 
-const PUBLIC_AUTH_PATHS = [
-  /^\/sign-in(\/|$)/,
-  /^\/sign-up(\/|$)/,
-  /^\/forgot-password(\/|$)/,
-  /^\/reset-password(\/|$)/,
-  /^\/admin\/sign-in(\/|$)/,
-  /^\/invitations\//,
-];
-
-export function isPublicAuthPath(pathname: string): boolean {
-  return PUBLIC_AUTH_PATHS.some((re) => re.test(pathname));
-}
-
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element {
   const queryClient = useQueryClient();
-  const userIdRef = useRef<string | null>(null);
   const store = useMemo(
     () =>
       createTokenStore(async () => {
@@ -40,46 +28,67 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
         if (res.status === 401) return { accessToken: null, expiresAt: null };
         if (!res.ok) throw new Error("token unavailable");
         const body = (await res.json()) as { accessToken?: string | null; expiresAt?: number; userId?: string };
-        if (typeof body.userId === "string") userIdRef.current = body.userId;
-        return { accessToken: body.accessToken ?? null, expiresAt: body.expiresAt ?? null };
+        return { accessToken: body.accessToken ?? null, expiresAt: body.expiresAt ?? null, userId: body.userId };
       }),
     [],
   );
-  const [state, setState] = useState<{ isLoaded: boolean; isSignedIn: boolean; userId: string | null }>({
-    isLoaded: false,
-    isSignedIn: false,
-    userId: null,
-  });
-  const signedInRef = useRef(false);
+  const [state, setState] = useState<ProviderState>({ isLoaded: false, isSignedIn: false, userId: null });
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const signingOut = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    void store.getToken().then((t) => {
-      if (cancelled) return;
-      signedInRef.current = t !== null;
-      setState({ isLoaded: true, isSignedIn: t !== null, userId: t !== null ? userIdRef.current : null });
+  const refresh = useCallback(async (): Promise<{ token: string | null; retry: boolean }> => {
+    const token = await store.getToken();
+    const prev = stateRef.current;
+    const d = decide({
+      token,
+      status: store.status(),
+      userId: store.userId(),
+      wasSignedIn: prev.isSignedIn,
+      wasLoaded: prev.isLoaded,
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [store]);
-
-  const getToken = useCallback(async () => {
-    const t = await store.getToken();
-    if (t === null && signedInRef.current) {
-      signedInRef.current = false;
-      userIdRef.current = null;
-      setState({ isLoaded: true, isSignedIn: false, userId: null });
+    stateRef.current = d.state;
+    setState(d.state);
+    if (d.redirect && !signingOut.current) {
       const { pathname, search } = window.location;
       if (!isPublicAuthPath(pathname)) {
         window.location.replace(`/sign-in?redirect_url=${encodeURIComponent(pathname + search)}`);
       }
     }
-    return t;
+    return { token, retry: d.retry };
   }, [store]);
+
+  // First load; while the token endpoint is unavailable, keep isLoaded=false and retry with backoff.
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let attempt = 0;
+    const run = async (): Promise<void> => {
+      const r = await refresh();
+      if (cancelled || !r.retry) return;
+      timer = setTimeout(() => void run(), retryDelayMs(attempt++));
+    };
+    void run();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [refresh]);
+
+  const getToken = useCallback(async () => {
+    const before = stateRef.current;
+    const token = await store.getToken();
+    // Only a state change needs a re-render: recovery, or a definite sign-out.
+    if (token !== null ? !before.isSignedIn : store.status() === "signed_out" && before.isSignedIn) {
+      return (await refresh()).token;
+    }
+    return token;
+  }, [store, refresh]);
 
   const signOut = useCallback(
     async (opts?: { redirectUrl?: string }) => {
+      signingOut.current = true;
+      stateRef.current = { ...stateRef.current, isSignedIn: false };
       try {
         await fetch("/api/auth/sign-out", { method: "POST", credentials: "same-origin" });
       } catch {

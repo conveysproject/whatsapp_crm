@@ -26,12 +26,14 @@ describe("createTokenStore", () => {
   });
 
   it("returns null on a 401 and re-fetches next time", async () => {
+    let now = NOW;
     const fetchToken = vi
       .fn()
       .mockResolvedValueOnce({ accessToken: null, expiresAt: null })
       .mockResolvedValueOnce(tok("a"));
-    const s = createTokenStore(fetchToken, () => NOW);
+    const s = createTokenStore(fetchToken, () => now);
     expect(await s.getToken()).toBeNull();
+    now = NOW + 5_001;
     expect(await s.getToken()).toBe("a");
     expect(fetchToken).toHaveBeenCalledTimes(2);
   });
@@ -54,5 +56,44 @@ describe("createTokenStore", () => {
     expect(await s.getToken()).toBe("a");
     now = NOW + 700_000;
     expect(await s.getToken()).toBeNull();
+  });
+});
+
+describe("createTokenStore status", () => {
+  it("503 first load is unknown, never signed_out", async () => {
+    const s = createTokenStore(vi.fn().mockRejectedValue(new Error("503")), () => NOW);
+    expect(await s.getToken()).toBeNull();
+    expect(s.status()).toBe("unknown");
+  });
+  it("401 is signed_out, negative-cached for 5s, then refetches", async () => {
+    let now = NOW;
+    const f = vi
+      .fn()
+      .mockResolvedValueOnce({ accessToken: null, expiresAt: null })
+      .mockResolvedValueOnce({ ...tok("a"), userId: "u1" });
+    const s = createTokenStore(f, () => now);
+    await s.getToken();
+    expect(s.status()).toBe("signed_out");
+    await s.getToken();
+    expect(f).toHaveBeenCalledTimes(1);
+    now = NOW + 5_001;
+    expect(await s.getToken()).toBe("a");
+    expect(f).toHaveBeenCalledTimes(2);
+    expect(s.status()).toBe("signed_in");
+    expect(s.userId()).toBe("u1");
+  });
+  it("503 with a valid cached token stays signed_in", async () => {
+    let now = NOW;
+    const f = vi.fn().mockResolvedValueOnce(tok("a")).mockRejectedValue(new Error("x"));
+    const s = createTokenStore(f, () => now);
+    await s.getToken();
+    now = NOW + 580_000;
+    await s.getToken();
+    expect(s.status()).toBe("signed_in");
+  });
+  it("clear() makes status signed_out", () => {
+    const s = createTokenStore(vi.fn(), () => NOW);
+    s.clear();
+    expect(s.status()).toBe("signed_out");
   });
 });

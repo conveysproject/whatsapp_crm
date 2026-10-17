@@ -29,13 +29,19 @@ async function authImpl() {
   return wbmsgAuth();
 }
 
+// wbmsg mode ignores Clerk-style protect() arguments (role/permission checks are done by the API).
 async function protectImpl(...args: unknown[]) {
   if (authProvider() === "clerk") {
     const { auth: clerkAuth } = await import("@clerk/nextjs/server");
     return (clerkAuth.protect as (...a: unknown[]) => unknown)(...args);
   }
   const a = await wbmsgAuth();
-  if (!a.userId) redirect("/sign-in");
+  if (!a.userId) {
+    // x-pathname is optional (set by middleware when available); fall back to plain /sign-in.
+    const { headers } = await import("next/headers");
+    const path = (await headers()).get("x-pathname");
+    redirect(path && path.startsWith("/") && !path.startsWith("//") ? `/sign-in?redirect_url=${encodeURIComponent(path)}` : "/sign-in");
+  }
   return a;
 }
 
