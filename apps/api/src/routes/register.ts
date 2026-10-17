@@ -1,7 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { isWbmsgAuth, verifyBearer } from "../auth/identity.js";
-import { DEFAULT_ROLE_PERMISSIONS, FIXED_PERMISSION_ROLES } from "../lib/default-role-permissions.js";
-import { seedLeadStatuses } from "../lib/seed-lead-statuses.js";
+import { BUSINESS_SCHEMA, createWorkspace } from "../lib/create-workspace.js";
 
 interface RegisterBody {
   companyName: string;
@@ -36,12 +35,7 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
           type: "object",
           required: ["companyName", "industry", "revenue"],
           properties: {
-            companyName:     { type: "string", minLength: 1, maxLength: 255 },
-            companyWebsite:  { type: "string" },
-            companyLocation: { type: "string" },
-            industry:        { type: "string" },
-            subCategory:     { type: "string" },
-            revenue:         { type: "string" },
+            ...BUSINESS_SCHEMA,
             email:           { type: "string" },
             firstName:       { type: "string" },
             lastName:        { type: "string" },
@@ -130,54 +124,12 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
         });
       } else {
         // First-time: create org + user
-        const org = await fastify.prisma.organization.create({
-          data: {
-            name: companyName,
-            website: companyWebsite,
-            location: companyLocation,
-            industry,
-            subCategory,
-            revenue,
-            registeredAt: new Date(),
-            settings: {
-              website: companyWebsite,
-              location: companyLocation,
-              industry,
-              subCategory,
-              revenue,
-              registeredAt: new Date().toISOString(),
-            },
-          },
-        });
-        organizationId = org.id;
-        await seedLeadStatuses(fastify.prisma, organizationId);
-
-        // GAP-S02: if vendor activation is required, start inactive until superAdmin approves
-        const requireActivation = process.env["REQUIRE_VENDOR_ACTIVATION"] === "true";
-        await fastify.prisma.user.create({
-          data: {
-            id: userId,
-            organizationId,
-            email,
-            fullName,
-            role: "admin",
-            isActive: !requireActivation,
-          },
-        });
-
-        await fastify.prisma.vendorSetting.createMany({
-          // Fixed roles never read a stored row, so don't seed one.
-          data: (Object.entries(DEFAULT_ROLE_PERMISSIONS) as [string, Record<string, string>][])
-            .filter(([role]) => !FIXED_PERMISSION_ROLES.includes(role))
-            .map(
-            ([role, perms]) => ({
-              organizationId,
-              key: `role_permissions_${role}`,
-              value: JSON.stringify(perms),
-            })
-          ),
-          skipDuplicates: true,
-        });
+        ({ organizationId } = await createWorkspace(fastify.prisma, {
+          userId,
+          email,
+          fullName,
+          business: { companyName, companyWebsite, companyLocation, industry, subCategory, revenue },
+        }));
       }
 
       return reply.send({ success: true, organizationId });

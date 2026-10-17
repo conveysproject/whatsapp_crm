@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
 export const SEED_LEAD_STATUSES: { name: string; color: string; sortOrder: number }[] = [
   { name: "New Lead",       color: "#F97316", sortOrder: 0 },
@@ -14,7 +14,7 @@ const CLOSURE_NAMES = ["Closed Won", "Closed Lost"];
 
 // Idempotent: seeds the 7 default lead statuses only if the org has none yet.
 // Also writes the two closure statuses into org contactConfig.closureLeadStatusIds.
-export async function seedLeadStatuses(prisma: PrismaClient, organizationId: string): Promise<void> {
+export async function seedLeadStatuses(prisma: Prisma.TransactionClient | PrismaClient, organizationId: string): Promise<void> {
   const existing = await prisma.leadStatus.count({ where: { organizationId } });
   if (existing > 0) return;
   await prisma.leadStatus.createMany({
