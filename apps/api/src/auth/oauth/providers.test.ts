@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHmac } from "node:crypto";
-import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair, type KeyLike } from "jose";
+import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from "jose";
 import { googleProvider, setGoogleJwksForTests } from "./google.js";
 import { facebookProvider } from "./facebook.js";
 import { getOAuthProvider } from "./registry.js";
@@ -9,7 +9,7 @@ import { oauthRedirectUri } from "./types.js";
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
-let key: KeyLike;
+let key: CryptoKey;
 beforeAll(async () => {
   const pair = await generateKeyPair("RS256");
   key = pair.privateKey;

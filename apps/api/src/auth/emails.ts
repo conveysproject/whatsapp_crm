@@ -23,10 +23,11 @@ function wrap(body: string): string {
   return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1a1a1a">${body}</div>`;
 }
 
-export async function sendCodeEmail(to: string, purpose: CodePurpose, code: string): Promise<void> {
+/** `lead` replaces the purpose's first line; it must be fixed text (it is inserted as HTML). */
+export async function sendCodeEmail(to: string, purpose: CodePurpose, code: string, lead?: string): Promise<void> {
   if (!/^\d{6}$/.test(code)) throw new Error("Invalid code format");
   const html = wrap(
-    `<p>${LEAD[purpose]}</p>` +
+    `<p>${lead ?? LEAD[purpose]}</p>` +
       `<p style="font-size:32px;font-weight:bold;letter-spacing:6px;margin:24px 0">${code}</p>` +
       `<p>This code expires in 10 minutes.</p>` +
       `<p style="color:#666">If you didn't ask for this, you can ignore this email.</p>`,
