@@ -41,6 +41,7 @@ export async function verifyAccessToken(
       algorithms: ["EdDSA"],
       issuer: "wbmsg",
       audience: "wbmsg-api",
+      requiredClaims: ["exp", "sub"],
     });
     const { sub, sid, typ } = payload as { sub?: string; sid?: unknown; typ?: unknown };
     if (!sub || typeof sid !== "string" || (typ !== "user" && typ !== "admin")) return null;

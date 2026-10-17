@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { generateKeyPair, exportJWK, SignJWT } from "jose";
+import { generateKeyPair, exportJWK, SignJWT, UnsecuredJWT } from "jose";
 import { accessTokenExpiry, verifyAccessToken, resetJwksForTests } from "./jwt";
 
 async function makeKey(kid: string) {
@@ -54,6 +54,27 @@ describe("jwt helpers", () => {
     ).toBeNull();
     expect(await verifyAccessToken(await sign(other.privateKey, "k1"))).toBeNull();
     expect(await verifyAccessToken("garbage")).toBeNull();
+  });
+  it("rejects wrong audience, alg none, HS256, missing sid, bad typ, no exp", async () => {
+    const k = await makeKey("k1");
+    jwks = { keys: [k.jwk] };
+    const base = (claims: Record<string, unknown>, aud = "wbmsg-api", exp: string | null = "10m") => {
+      const j = new SignJWT(claims).setProtectedHeader({ alg: "EdDSA", kid: "k1" }).setSubject("acc_1").setIssuer("wbmsg").setAudience(aud);
+      if (exp) j.setExpirationTime(exp);
+      return j.sign(k.privateKey);
+    };
+    expect(await verifyAccessToken(await base({ sid: "s1", typ: "user" }, "other"))).toBeNull();
+    expect(await verifyAccessToken(await base({ typ: "user" }))).toBeNull();
+    expect(await verifyAccessToken(await base({ sid: "s1", typ: "root" }))).toBeNull();
+    expect(await verifyAccessToken(await base({ sid: "s1", typ: "user" }, "wbmsg-api", null))).toBeNull();
+    const none = new UnsecuredJWT({ sid: "s1", typ: "user" })
+      .setSubject("acc_1").setIssuer("wbmsg").setAudience("wbmsg-api").setExpirationTime("10m").encode();
+    expect(await verifyAccessToken(none)).toBeNull();
+    const hs = await new SignJWT({ sid: "s1", typ: "user" })
+      .setProtectedHeader({ alg: "HS256", kid: "k1" })
+      .setSubject("acc_1").setIssuer("wbmsg").setAudience("wbmsg-api").setExpirationTime("10m")
+      .sign(new TextEncoder().encode("0123456789abcdef0123456789abcdef"));
+    expect(await verifyAccessToken(hs)).toBeNull();
   });
   it("accessTokenExpiry", async () => {
     const k = await makeKey("k1");
