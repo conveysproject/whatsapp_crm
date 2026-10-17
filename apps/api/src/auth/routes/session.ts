@@ -1,21 +1,11 @@
-import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
+import { requireAccountSession } from "../account-auth.js";
 import { authClientIp, hitLimit } from "../limits.js";
 import { revokeAllSessions, revokeSession, rotateRefreshToken } from "../sessions.js";
 
 const SESSION_EXPIRED = { error: { code: "SESSION_EXPIRED", message: "Please sign in again." } };
 const UNAVAILABLE = { error: { code: "UNAVAILABLE", message: "Please try again." } };
-const NO_SESSION = { error: { code: "NO_SESSION", message: "This action needs a WBMSG session." } };
 const NOT_FOUND = { error: { code: "NOT_FOUND", message: "Session not found" } };
-
-/** Returns the caller's sid, or answers 400 NO_SESSION (clerk mode, demo, impersonation have no own session). */
-export function requireSid(request: FastifyRequest, reply: FastifyReply): string | null {
-  const sid = request.auth?.sid;
-  if (!sid) {
-    void reply.status(400).send(NO_SESSION);
-    return null;
-  }
-  return sid;
-}
 
 export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { refreshToken: string } }>(
@@ -53,18 +43,18 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  fastify.post("/signout", async (request, reply) => {
-    const sid = requireSid(request, reply);
-    if (!sid) return reply;
+  const accountRoute = { config: { public: true }, preHandler: requireAccountSession };
+
+  fastify.post("/signout", accountRoute, async (request, reply) => {
+    const { sid } = request.account!;
     await revokeSession(fastify.prisma, sid, "signout");
     return reply.send({ ok: true });
   });
 
-  fastify.get("/sessions", async (request, reply) => {
-    const sid = requireSid(request, reply);
-    if (!sid) return reply;
+  fastify.get("/sessions", accountRoute, async (request, reply) => {
+    const { sid, accountId } = request.account!;
     const rows = await fastify.prisma.authSession.findMany({
-      where: { accountId: request.auth.userId, revokedAt: null, expiresAt: { gt: new Date() } },
+      where: { accountId: accountId, revokedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { lastUsedAt: "desc" },
       select: { id: true, client: true, deviceLabel: true, ip: true, lastUsedAt: true },
     });
@@ -82,12 +72,11 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete<{ Params: { id: string } }>(
     "/sessions/:id",
-    { schema: { params: { type: "object", properties: { id: { type: "string", maxLength: 64 } } } } },
+    { ...accountRoute, schema: { params: { type: "object", properties: { id: { type: "string", maxLength: 64 } } } } },
     async (request, reply) => {
-      const sid = requireSid(request, reply);
-      if (!sid) return reply;
+      const { accountId } = request.account!;
       const owned = await fastify.prisma.authSession.findFirst({
-        where: { id: request.params.id, accountId: request.auth.userId, revokedAt: null },
+        where: { id: request.params.id, accountId: accountId, revokedAt: null },
         select: { id: true },
       });
       if (!owned) return reply.status(404).send(NOT_FOUND);
@@ -96,10 +85,9 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  fastify.post("/sessions/revoke-all", async (request, reply) => {
-    const sid = requireSid(request, reply);
-    if (!sid) return reply;
-    const revoked = await revokeAllSessions(fastify.prisma, request.auth.userId, "user_revoked_all", sid);
+  fastify.post("/sessions/revoke-all", accountRoute, async (request, reply) => {
+    const { sid, accountId } = request.account!;
+    const revoked = await revokeAllSessions(fastify.prisma, accountId, "user_revoked_all", sid);
     return reply.send({ revoked });
   });
 };

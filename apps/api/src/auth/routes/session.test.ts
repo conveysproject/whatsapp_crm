@@ -37,6 +37,7 @@ const prisma = {
     findMany: vi.fn(),
     updateMany: vi.fn(),
   },
+  authAccount: { findUnique: vi.fn() },
   user: { findFirst: vi.fn(), updateMany: vi.fn() },
   organizationMember: { findFirst: vi.fn() },
   vendorSetting: { findUnique: vi.fn() },
@@ -193,16 +194,11 @@ describe("auth session routes", () => {
   });
 
   describe("impersonation context", () => {
-    it("answers 400 NO_SESSION on every authenticated session route", async () => {
-      m.verifyAccessToken.mockResolvedValue({ sub: "adm1", sid: "as1", typ: "admin" });
-      m.store.set(
-        "impersonate:tok",
-        JSON.stringify({ organizationId: "org1", targetUserId: "usr_t", issuedBy: "adm1", issuedSid: "as1" }),
-      );
+    it("answers 403 IMPERSONATION_BLOCKED on every authenticated session route", async () => {
       for (const [method, url] of AUTHED_ROUTES) {
         const res = await app.inject({ method, url, headers: { ...AUTHZ, "x-impersonate-token": "tok" } });
-        expect(res.statusCode, `${method} ${url}`).toBe(400);
-        expect(res.json()).toEqual(NO_SESSION);
+        expect(res.statusCode, `${method} ${url}`).toBe(403);
+        expect(res.json().error.code).toBe("IMPERSONATION_BLOCKED");
       }
       expect(prisma.authSession.updateMany).not.toHaveBeenCalled();
     });
@@ -297,6 +293,50 @@ describe("auth session routes", () => {
       );
       expect(m.store.get("auth:revoked:s1")).toBeUndefined();
       expect(m.store.get("auth:revoked:s2")).toBe("1");
+    });
+  });
+  describe("account without a users row (business not set up yet)", () => {
+    beforeEach(() => {
+      prisma.user.findFirst.mockResolvedValue(null);
+    });
+    it("lists sessions", async () => {
+      const res = await app.inject({ method: "GET", url: "/v1/auth/sessions", headers: AUTHZ });
+      expect(res.statusCode).toBe(200);
+    });
+    it("returns me/security", async () => {
+      (prisma.authSession as any).count = vi.fn().mockResolvedValue(1);
+      prisma.authAccount.findUnique.mockResolvedValue({
+        email: "a@x.com",
+        emailVerifiedAt: new Date(),
+        passwordHash: "h",
+        mustSetPassword: false,
+        phoneE164: null,
+        phoneVerifiedAt: null,
+        oauthLinks: [],
+      });
+      const res = await app.inject({ method: "GET", url: "/v1/auth/me/security", headers: AUTHZ });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().email).toBe("a@x.com");
+      expect(prisma.authAccount.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "usr_a" } }));
+    });
+    it("signs out and revokes all", async () => {
+      expect((await app.inject({ method: "POST", url: "/v1/auth/sessions/revoke-all", headers: AUTHZ })).statusCode).toBe(200);
+      expect((await app.inject({ method: "POST", url: "/v1/auth/signout", headers: AUTHZ })).statusCode).toBe(200);
+    });
+    it("blocks impersonation with 403 IMPERSONATION_BLOCKED on every account route", async () => {
+      for (const [method, url] of AUTHED_ROUTES) {
+        const res = await app.inject({ method, url, headers: { ...AUTHZ, "x-impersonate-token": "t" } });
+        expect(res.statusCode).toBe(403);
+        expect(res.json().error.code).toBe("IMPERSONATION_BLOCKED");
+      }
+    });
+    it("answers 401 UNAUTHORIZED without a bearer", async () => {
+      m.verifyAccessToken.mockRejectedValue(new Error("bad"));
+      for (const [method, url] of AUTHED_ROUTES) {
+        const res = await app.inject({ method, url });
+        expect(res.statusCode).toBe(401);
+        expect(res.json().error.code).toBe("UNAUTHORIZED");
+      }
     });
   });
 });

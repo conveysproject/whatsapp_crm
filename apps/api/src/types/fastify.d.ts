@@ -14,6 +14,8 @@ export interface AuthContext {
 declare module "fastify" {
   interface FastifyRequest {
     auth: AuthContext;
+    /** Set by requireAccountSession on account-level auth routes (no organization needed). */
+    account?: { accountId: string; sid: string; typ: "user" | "admin" };
     /** Set by the public API Basic-auth preHandler. */
     publicApi?: { apiKeyId: string; organizationId: string };
     /** Set as soon as the public API credential row is found (before the token check); used only for usage attribution. */

@@ -494,11 +494,11 @@ describe("auth abuse suite", () => {
       expect(res.json()).toMatchObject({ emailVerified: false, hasPassword: false, mustSetPassword: true, phone: null, oauth: [] });
     });
 
-    it("answers 400 NO_SESSION when the request has no own session (demo / clerk)", async () => {
+    it("answers 403 IMPERSONATION_BLOCKED for a demo impersonation token", async () => {
       r.store.set("impersonate:demo-tok", JSON.stringify({ isDemo: true, organizationId: "org1" }));
       const res = await getSecurity({ "x-impersonate-token": "demo-tok" });
-      expect(res.statusCode).toBe(400);
-      expect(res.json().error.code).toBe("NO_SESSION");
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error.code).toBe("IMPERSONATION_BLOCKED");
     });
 
     it("is refused while a super admin impersonates the user (GET included)", async () => {

@@ -33,6 +33,10 @@ vi.mock("../sessions.js", () => ({
   revokeSession: vi.fn(),
   rotateRefreshToken: vi.fn(),
 }));
+vi.mock("../identity.js", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  verifyBearer: async () => ({ userId: "usr_a", sid: (globalThis as any).__pwSid ?? null, typ: "user" }),
+}));
 vi.mock("../devices.js", () => ({ isTrustedDevice: vi.fn(), trustDevice: m.trustDevice }));
 
 import { authRouter } from "./index.js";
@@ -51,9 +55,8 @@ let currentSid: string | null = "s1";
 async function build(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: "error" } });
   app.decorate("prisma", prisma as any);
-  app.decorateRequest("auth", null as any);
-  app.addHook("onRequest", async (req) => {
-    (req as any).auth = { userId: "usr_a", sid: currentSid };
+  app.addHook("onRequest", async () => {
+    (globalThis as any).__pwSid = currentSid;
   });
   await app.register(authRouter, { prefix: "/v1/auth" });
   return app;

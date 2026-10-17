@@ -6,7 +6,7 @@ import { normalizeEmail } from "../ids.js";
 import { authClientIp, clearPasswordFailures, isLocked, recordPasswordFailure } from "../limits.js";
 import { checkPasswordPolicy, hashPassword, verifyPassword } from "../password.js";
 import { createSession, revokeAllSessions } from "../sessions.js";
-import { requireSid } from "./session.js";
+import { requireAccountSession } from "../account-auth.js";
 import { BOT_CHECK_FAILED, verifyTurnstile } from "../turnstile.js";
 
 const MIN_DURATION_MS = 300;
@@ -189,6 +189,8 @@ export const passwordChangeRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { currentPassword?: string; newPassword: string } }>(
     "/password/change",
     {
+      config: { public: true },
+      preHandler: requireAccountSession,
       schema: {
         body: {
           type: "object",
@@ -202,14 +204,13 @@ export const passwordChangeRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const sid = requireSid(request, reply);
-      if (!sid) return reply;
+      const { sid, accountId } = request.account!;
       const { currentPassword, newPassword } = request.body;
       const db = fastify.prisma;
 
       if (!checkPasswordPolicy(newPassword).ok) return reply.status(400).send(WEAK_PASSWORD);
 
-      const account = await db.authAccount.findUnique({ where: { id: request.auth.userId } });
+      const account = await db.authAccount.findUnique({ where: { id: accountId } });
       if (!account || account.status !== "active") return reply.status(401).send(INVALID_CREDENTIALS);
 
       // A flagged account has no usable password yet, so there is nothing to confirm.
