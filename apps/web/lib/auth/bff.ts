@@ -24,6 +24,7 @@ export function requireSameOrigin(req: Request): boolean {
   return allowed.has(origin);
 }
 
+// Relies on Vercel overwriting x-forwarded-for/x-real-ip with the connecting client; not safe behind proxies that append.
 function clientIp(req: Request): string | null {
   const xff = req.headers.get("x-forwarded-for");
   const first = xff?.split(",")[0]?.trim();

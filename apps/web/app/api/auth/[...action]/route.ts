@@ -44,6 +44,7 @@ async function readBody(req: NextRequest): Promise<Record<string, unknown>> {
 
 async function forward(req: NextRequest, spec: Spec): Promise<NextResponse> {
   const body = await readBody(req);
+  for (const k of ["deviceId", "accessToken", "refreshToken", "client"]) delete body[k];
   if (spec.client) body["client"] = "web";
   if (spec.device) {
     const dev = req.cookies.get(COOKIE.device)?.value;
@@ -63,7 +64,10 @@ async function forward(req: NextRequest, spec: Spec): Promise<NextResponse> {
     /* empty or non-JSON body */
   }
   const { accessToken, refreshToken, deviceId, ...rest } = data;
-  const res = NextResponse.json(rest, { status: up.status, headers: NO_STORE });
+  const headers: Record<string, string> = { ...NO_STORE };
+  const retryAfter = up.headers.get("retry-after");
+  if (retryAfter) headers["Retry-After"] = retryAfter;
+  const res = NextResponse.json(rest, { status: up.status, headers });
   if (spec.cookies && up.ok && typeof accessToken === "string" && typeof refreshToken === "string") {
     setSessionCookies(res, {
       accessToken,
@@ -98,14 +102,23 @@ async function handleToken(req: NextRequest): Promise<NextResponse> {
   }
   const exp = accessTokenExpiry(r.accessToken) ?? Date.now();
   const v = await verifyAccessToken(r.accessToken);
-  const res = tokenResponse(r.accessToken, v?.userId ?? "", exp);
+  // The old refresh token is consumed, so the rotated cookies must be persisted either way.
+  const res = v
+    ? tokenResponse(r.accessToken, v.userId, exp)
+    : NextResponse.json({ accessToken: null }, { status: 503, headers: NO_STORE });
   setSessionCookies(res, { accessToken: r.accessToken, refreshToken: r.refreshToken });
   return res;
 }
 
 async function handleSignOut(req: NextRequest): Promise<NextResponse> {
-  const at = req.cookies.get(COOKIE.access)?.value;
+  let at = req.cookies.get(COOKIE.access)?.value;
+  const rt = req.cookies.get(COOKIE.refresh)?.value;
   try {
+    const exp = at ? accessTokenExpiry(at) : null;
+    if ((!at || exp === null || exp <= Date.now() + 60_000) && rt) {
+      const r = await refreshSession(rt, req);
+      at = r.ok ? r.accessToken : undefined;
+    }
     await callAuthApi("/v1/auth/signout", { method: "POST", body: {}, req, bearer: at });
   } catch {
     /* ignore upstream failure */

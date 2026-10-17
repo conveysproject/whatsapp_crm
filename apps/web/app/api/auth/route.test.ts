@@ -132,10 +132,11 @@ describe("BFF auth routes", () => {
 
   it("sign-out clears cookies even if upstream fails", async () => {
     fetchMock.mockRejectedValue(new Error("down"));
-    const res = await post("sign-out", {}, {}, "wb_at=AT; wb_rt=RT");
+    const at = jwt(nowSec() + 500);
+    const res = await post("sign-out", {}, {}, `wb_at=${at}; wb_rt=RT`);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
-    expect((fetchMock.mock.calls[0]![1] as RequestInit).headers).toMatchObject({ authorization: "Bearer AT" });
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).headers).toMatchObject({ authorization: `Bearer ${at}` });
     for (const n of ["wb_rt", "wb_dev", "wb_at"]) expect(res.cookies.get(n)).toMatchObject({ value: "", maxAge: 0 });
   });
 });
@@ -190,5 +191,78 @@ describe("GET token", () => {
     const res = await getToken();
     expect(res.status).toBe(401);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("fix round 1", () => {
+  it("refresh ok but verify fails: 503 with rotated cookies persisted", async () => {
+    const jwtMod = await import("../../../lib/auth/jwt");
+    vi.mocked(jwtMod.verifyAccessToken).mockResolvedValueOnce(null);
+    fetchMock.mockResolvedValue(json(200, { accessToken: jwt(nowSec() + 600), refreshToken: "RT2" }));
+    const res = await getToken("wb_rt=RT");
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ accessToken: null });
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.cookies.get("wb_rt")?.value).toBe("RT2");
+  });
+
+  it("ignores client-supplied deviceId/client/tokens", async () => {
+    fetchMock.mockResolvedValue(json(200, { next: "x" }));
+    await post("sign-in/password", { email: "a", deviceId: "evil", client: "mobile", accessToken: "a", refreshToken: "r" });
+    const sent = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(sent).toEqual({ email: "a", client: "web" });
+    fetchMock.mockClear();
+    await post("sign-up", { email: "a", client: "mobile", deviceId: "evil" });
+    expect(JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)).toEqual({ email: "a" });
+  });
+
+  it("sign-out refreshes first when wb_at is missing", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json(200, { accessToken: "NEWAT", refreshToken: "R2" }))
+      .mockResolvedValueOnce(json(200, { ok: true }));
+    const res = await post("sign-out", {}, {}, "wb_rt=RT");
+    expect(fetchMock.mock.calls[0]![0]).toBe("http://api.test/v1/auth/refresh");
+    expect(fetchMock.mock.calls[1]![0]).toBe("http://api.test/v1/auth/signout");
+    expect((fetchMock.mock.calls[1]![1] as RequestInit).headers).toMatchObject({ authorization: "Bearer NEWAT" });
+    expect(res.cookies.get("wb_rt")).toMatchObject({ value: "", maxAge: 0 });
+  });
+
+  it("sign-out uses a fresh wb_at without refreshing", async () => {
+    fetchMock.mockResolvedValue(json(200, { ok: true }));
+    const at = jwt(nowSec() + 500);
+    await post("sign-out", {}, {}, `wb_at=${at}; wb_rt=RT`);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).headers).toMatchObject({ authorization: `Bearer ${at}` });
+  });
+
+  it("forwards Retry-After", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: "RATE_LIMITED", message: "x" } }), {
+        status: 429,
+        headers: { "retry-after": "42" },
+      }),
+    );
+    const res = await post("sign-up", {});
+    expect(res.status).toBe(429);
+    expect(res.headers.get("retry-after")).toBe("42");
+  });
+
+  it("uses x-real-ip fallback and omits bff header when secret unset", async () => {
+    delete process.env["AUTH_BFF_SECRET"];
+    fetchMock.mockResolvedValue(json(200, {}));
+    await post("sign-up", {}, { "x-real-ip": "9.9.9.9" });
+    const h = (fetchMock.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
+    expect(h["x-wbmsg-client-ip"]).toBe("9.9.9.9");
+    expect(h["x-wbmsg-bff"]).toBeUndefined();
+  });
+
+  it("accepts NEXT_PUBLIC_APP_URL origin", async () => {
+    process.env["NEXT_PUBLIC_APP_URL"] = "https://app.example.com/";
+    try {
+      fetchMock.mockResolvedValue(json(200, {}));
+      expect((await post("sign-up", {}, { origin: "https://app.example.com" })).status).toBe(200);
+    } finally {
+      delete process.env["NEXT_PUBLIC_APP_URL"];
+    }
   });
 });
