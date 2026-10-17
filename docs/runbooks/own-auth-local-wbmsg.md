@@ -49,7 +49,8 @@ npx tsx scripts/gen-auth-keys.ts
 
 Paste the `AUTH_JWT_PRIVATE_KEY` and `AUTH_JWT_KID` lines into `.env`. Generate a
 32+ character secret for the pepper and the BFF secret (use a different value
-for each):
+for each). `AUTH_BFF_SECRET` must be 32+ characters on BOTH Vercel and Railway
+(and equal on both); a shorter value is ignored by the API:
 
 ```
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -64,7 +65,9 @@ cd apps/api
 npx prisma migrate deploy
 ```
 
-Check that `DATABASE_URL` is the `localhost:5432/WBMSG_dev` one first.
+Check that `DATABASE_URL` is the `localhost:5432/WBMSG_dev` one first, and unset any
+shell-exported `DATABASE_URL` before `prisma migrate deploy` (an exported value
+overrides `.env`).
 
 ## 4. Start the API, piping stdout to a log file
 

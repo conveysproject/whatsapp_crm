@@ -32,6 +32,17 @@ function clientIp(req: Request): string | null {
   return req.headers.get("x-real-ip")?.trim() || null;
 }
 
+let warnedShortSecret = false;
+function warnIfShortSecret(secret: string): void {
+  if (secret.length >= 32 || warnedShortSecret) return;
+  warnedShortSecret = true;
+  console.warn("AUTH_BFF_SECRET is too short; the API will ignore it");
+}
+
+export function resetBffWarningForTests(): void {
+  warnedShortSecret = false;
+}
+
 export async function callAuthApi(
   path: string,
   init: { method: string; body?: unknown; req: Request; bearer?: string },
@@ -39,7 +50,10 @@ export async function callAuthApi(
   const headers: Record<string, string> = { accept: "application/json" };
   if (init.body !== undefined) headers["content-type"] = "application/json";
   const secret = process.env["AUTH_BFF_SECRET"];
-  if (secret) headers["x-wbmsg-bff"] = secret;
+  if (secret) {
+    warnIfShortSecret(secret);
+    headers["x-wbmsg-bff"] = secret;
+  }
   const ip = clientIp(init.req);
   if (ip) headers["x-wbmsg-client-ip"] = ip;
   const ua = init.req.headers.get("user-agent");
