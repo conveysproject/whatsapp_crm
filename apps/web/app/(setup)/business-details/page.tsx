@@ -90,15 +90,13 @@ function useWbmsgIdentity(): Identity {
   return { isLoaded: data !== undefined || isError, firstName: undefined, lastName: undefined, email: data?.email ?? "", orgName: undefined };
 }
 
-const useIdentity = authProvider() === "clerk" ? useClerkIdentity : useWbmsgIdentity;
 const isClerkMode = authProvider() === "clerk";
+const useIdentity = isClerkMode ? useClerkIdentity : useWbmsgIdentity;
 
 type FieldError = Partial<Record<keyof FormState, string>>;
 
 export default function BusinessDetailsPage(): JSX.Element {
   const identity = useIdentity();
-  const { user, isLoaded } = useUser();
-  const { organization, isLoaded: orgLoaded } = useOrganization();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(INIT);
   const [errors, setErrors] = useState<FieldError>({});

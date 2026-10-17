@@ -27,7 +27,8 @@ function errorOf(body: unknown): { code?: string; message?: string } {
 function failure(body: unknown): InvitationStep {
   const { code, message } = errorOf(body);
   if (code === "WEAK_PASSWORD" && message) return { kind: "error", message };
-  if (code && BY_CODE[code]) return { kind: "error", message: BY_CODE[code]! };
+  const known = code ? BY_CODE[code] : undefined;
+  if (known) return { kind: "error", message: known };
   return { kind: "error", message: message ?? GENERIC };
 }
 
