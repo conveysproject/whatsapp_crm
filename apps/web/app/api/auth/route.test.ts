@@ -287,6 +287,7 @@ describe("session-expired and session-check", () => {
       GET(new NextRequest(`${ORIGIN}/api/auth/session-expired`, { headers }), ctx("session-expired"));
     for (const h of [
       { "sec-fetch-site": "cross-site" },
+      { "sec-fetch-site": "same-site" },
       { origin: "https://evil.example" },
       { referer: "https://evil.example/page" },
       {},
@@ -298,12 +299,11 @@ describe("session-expired and session-check", () => {
     }
   });
 
-  it("session-expired clears cookies for same-site signals", async () => {
+  it("session-expired clears cookies for same-origin signals", async () => {
     const get = (headers: Record<string, string>) =>
       GET(new NextRequest(`${ORIGIN}/api/auth/session-expired`, { headers }), ctx("session-expired"));
     for (const h of [
       { "sec-fetch-site": "same-origin" },
-      { "sec-fetch-site": "same-site" },
       { "sec-fetch-site": "none" },
       { origin: ORIGIN },
       { referer: `${ORIGIN}/dashboard` },

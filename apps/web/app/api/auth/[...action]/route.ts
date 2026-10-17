@@ -129,11 +129,11 @@ async function handleSignOut(req: NextRequest): Promise<NextResponse> {
   return res;
 }
 
-// True when the request comes from this site (not a third-party page). Fetch Metadata first;
+// True when the request comes from this origin (not a third-party page). Fetch Metadata first;
 // without it fall back to Origin, then Referer, matched against the app origin. No signal = cross-site.
 function isSameSiteRequest(req: NextRequest): boolean {
   const site = req.headers.get("sec-fetch-site");
-  if (site) return site === "same-origin" || site === "same-site" || site === "none";
+  if (site) return site === "same-origin" || site === "none";
   const allowed = new Set<string>([req.nextUrl.origin]);
   const app = process.env["NEXT_PUBLIC_APP_URL"];
   if (app) {

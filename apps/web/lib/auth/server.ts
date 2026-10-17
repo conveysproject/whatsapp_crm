@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { authProvider, COOKIE } from "./config";
 import { verifyAccessToken } from "./jwt";
+import { safeRedirect } from "./redirect";
 
 export interface ServerAuth {
   userId: string | null;
@@ -40,7 +41,7 @@ async function protectImpl(...args: unknown[]) {
     // x-pathname is optional (set by middleware when available); fall back to plain /sign-in.
     const { headers } = await import("next/headers");
     const path = (await headers()).get("x-pathname");
-    redirect(path && path.startsWith("/") && !path.startsWith("//") ? `/sign-in?redirect_url=${encodeURIComponent(path)}` : "/sign-in");
+    redirect(path && safeRedirect(path, "") === path ? `/sign-in?redirect_url=${encodeURIComponent(path)}` : "/sign-in");
   }
   return a;
 }

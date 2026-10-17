@@ -17,3 +17,7 @@
 
 ## Open questions
 None. Docs (prd-own-auth, asvs checklist) mention signup/verify but I did not edit them.
+
+## Review follow-up
+- `session-expired` now clears cookies only for `Sec-Fetch-Site` same-origin/none (same-site dropped; Origin/Referer fallback unchanged). Test updated: same-site no longer clears.
+- `protect()` in `lib/auth/server.ts` validates `x-pathname` with `safeRedirect(path, "") === path`. No unit test: the function needs `next/headers` and `redirect`, and there is no existing test harness for server.ts; the check itself is covered by `redirect.test.ts`.
