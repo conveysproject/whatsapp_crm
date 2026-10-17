@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { isWbmsgAuth } from "../identity.js";
 import { authClientIp, hitLimit } from "../limits.js";
 import { signupRoutes } from "./signup.js";
 import { signinRoutes } from "./signin.js";
@@ -23,6 +24,13 @@ const credentialRoutes: FastifyPluginAsync = async (fastify) => {
 };
 
 export const authRouter: FastifyPluginAsync = async (fastify) => {
+  // Dark in clerk mode: every /v1/auth route 404s before any limiter, Redis, DB or mail work. Registered first so it runs first.
+  fastify.addHook("onRequest", async (_request, reply) => {
+    if (!isWbmsgAuth()) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Not found" } });
+    }
+  });
+
   await fastify.register(credentialRoutes);
   // Refresh has its own limit; authenticated routes use only the app-wide limiter.
   await fastify.register(sessionRoutes);
