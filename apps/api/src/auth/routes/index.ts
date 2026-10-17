@@ -6,6 +6,7 @@ import { signinRoutes } from "./signin.js";
 import { sessionRoutes } from "./session.js";
 import { jwksRoutes } from "./jwks.js";
 import { securityRoutes } from "./security.js";
+import { invitationAcceptRoutes } from "./invitations.js";
 import { passwordChangeRoutes, passwordRoutes } from "./password.js";
 
 /** Credential/code endpoints: 20 requests / 10 min per IP. onRequest so it also covers malformed bodies. */
@@ -21,6 +22,7 @@ const credentialRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(signupRoutes);
   await fastify.register(signinRoutes);
   await fastify.register(passwordRoutes);
+  await fastify.register(invitationAcceptRoutes);
 };
 
 export const authRouter: FastifyPluginAsync = async (fastify) => {

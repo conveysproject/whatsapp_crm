@@ -1,9 +1,79 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import type { Role, TeamRole } from "@prisma/client";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 import { canAccessSub } from "../lib/permissions.js";
 import { canGrantRole } from "../lib/role-grants.js";
+import { isWbmsgAuth, verifyBearer } from "../auth/identity.js";
+import { normalizeEmail } from "../auth/ids.js";
+
+class InvitationGone extends Error {}
+
+/** wbmsg mode: an already signed-in account (no org yet) joins the invited workspace. */
+async function acceptSignedIn(
+  request: FastifyRequest<{ Params: { token: string }; Body: { fullName: string; mobileNumber?: string } }>,
+  reply: FastifyReply,
+) {
+  let userId: string;
+  try {
+    ({ userId } = await verifyBearer(request.headers.authorization));
+  } catch {
+    return reply.status(401).send({ error: { code: "UNAUTHORIZED", message: "Please sign in." } });
+  }
+  const invitation = await prisma.invitation.findUnique({ where: { token: request.params.token } });
+  if (!invitation || invitation.status !== "pending" || invitation.expiresAt < new Date()) {
+    return reply.status(400).send({ error: { code: "INVALID_TOKEN", message: "Invitation is invalid or expired" } });
+  }
+  const account = await prisma.authAccount.findUnique({ where: { id: userId }, select: { email: true } });
+  if (!account || normalizeEmail(account.email) !== normalizeEmail(invitation.email)) {
+    return reply
+      .status(403)
+      .send({ error: { code: "EMAIL_MISMATCH", message: "This invitation was sent to a different email." } });
+  }
+  if (await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })) {
+    return reply
+      .status(409)
+      .send({ error: { code: "ALREADY_MEMBER", message: "You already belong to a workspace." } });
+  }
+  const limit = await checkPlanLimit(prisma, invitation.organizationId, "team_members");
+  if (!limit.allowed) {
+    return reply
+      .status(403)
+      .send({ error: { code: "SEAT_LIMIT", message: "This workspace has no free seats. Ask your admin." } });
+  }
+  const { fullName, mobileNumber } = request.body;
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.user.create({
+        data: {
+          id: userId,
+          organizationId: invitation.organizationId,
+          email: invitation.email,
+          fullName,
+          role: invitation.role,
+          ...(mobileNumber ? { mobileNumber } : {}),
+          ...(invitation.teamId ? { teamId: invitation.teamId, teamRole: invitation.teamRole ?? "member" } : {}),
+        },
+      });
+      const claimed = await tx.invitation.updateMany({
+        where: { id: invitation.id, status: "pending" },
+        data: { status: "accepted" },
+      });
+      if (claimed.count !== 1) throw new InvitationGone();
+    });
+  } catch (err) {
+    if (err instanceof InvitationGone) {
+      return reply.status(400).send({ error: { code: "INVALID_TOKEN", message: "Invitation is invalid or expired" } });
+    }
+    if ((err as { code?: unknown })?.code === "P2002") {
+      return reply
+        .status(409)
+        .send({ error: { code: "ALREADY_MEMBER", message: "You already belong to a workspace." } });
+    }
+    throw err;
+  }
+  return reply.status(201).send({ data: { organizationId: invitation.organizationId } });
+}
 
 export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { email: string; role: Role; teamId?: string; teamRole?: TeamRole } }>(
@@ -90,7 +160,7 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  fastify.post<{ Params: { token: string }; Body: { clerkUserId: string; fullName: string; mobileNumber?: string } }>(
+  fastify.post<{ Params: { token: string }; Body: { clerkUserId?: string; fullName: string; mobileNumber?: string } }>(
     "/invitations/:token/accept",
     {
       config: { public: true },
@@ -98,7 +168,7 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
         params: { type: "object", properties: { token: { type: "string" } }, required: ["token"] },
         body: {
           type: "object",
-          required: ["clerkUserId", "fullName"],
+          required: ["fullName"],
           properties: {
             clerkUserId: { type: "string" },
             fullName: { type: "string" },
@@ -108,6 +178,15 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
+      if (isWbmsgAuth()) return acceptSignedIn(request, reply);
+
+      if (!request.body.clerkUserId) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: "Bad Request",
+          message: "body must have required property 'clerkUserId'",
+        });
+      }
       const invitation = await prisma.invitation.findUnique({
         where: { token: request.params.token, status: "pending" },
       });
