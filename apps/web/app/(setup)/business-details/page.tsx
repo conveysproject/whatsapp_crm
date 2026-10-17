@@ -123,6 +123,7 @@ export default function BusinessDetailsPage(): JSX.Element {
 
   function validate(): boolean {
     const e: FieldError = {};
+    if (!isClerkMode && !form.companyName.trim()) e.companyName = "Company name is required";
     if (!form.companyWebsite.trim())  e.companyWebsite = "Company website is required";
     if (!form.companyLocation.trim()) e.companyLocation = "Company location is required";
     if (!form.industry)               e.industry       = "Please select your industry";
@@ -144,7 +145,7 @@ export default function BusinessDetailsPage(): JSX.Element {
         body: JSON.stringify(
           isClerkMode
             ? { ...form, email: identity.email || undefined, firstName: identity.firstName, lastName: identity.lastName }
-            : form,
+            : { ...form, companyName: form.companyName.trim() },
         ),
       });
       if (res.ok) {
@@ -418,6 +419,21 @@ export default function BusinessDetailsPage(): JSX.Element {
 
             {/* ── Company Details ── */}
             <div className="bd2-section">Company Details</div>
+
+            {!isClerkMode && (
+              <div className="bd2-field">
+                <label className="bd2-label">Company Name *</label>
+                <input
+                  type="text"
+                  className={`bd2-inp${errors.companyName ? " bd2-inp-err" : ""}`}
+                  placeholder="Your company name"
+                  maxLength={255}
+                  value={form.companyName}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => set("companyName", e.target.value)}
+                />
+                {errors.companyName && <div className="bd2-err">{errors.companyName}</div>}
+              </div>
+            )}
 
             <div className="bd2-row bd2-row-2">
               <div className="bd2-field">
