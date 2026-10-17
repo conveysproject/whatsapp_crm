@@ -78,7 +78,7 @@ API: `src/auth/phone.ts`, `src/auth/whatsapp-codes.ts`, `src/auth/oauth/{types,g
 `src/auth/routes/{whatsapp,oauth,methods}.ts`, small edits to `routes/index.ts`, `routes/signin.ts` (exports), `emails.ts`
 (optional lead line). Web: `app/api/auth/[...action]/route.ts`, `lib/auth/oauth.ts`, `components/auth/{SocialButtons,
 WhatsAppSignIn,OAuthConfirmEmail}.tsx`, `SignInForm.tsx`, `app/(auth)/sign-in/confirm-email/page.tsx`, security page sections.
-Docs: `docs/runbooks/own-auth-providers-setup.md` (Meta template text, Google/Facebook app setup, env vars).
+Docs: `docs/runbooks/own-auth-sign-in-providers.md` (Meta template text, Google/Facebook app setup, env vars).
 
 ## TDD tasks
 1. phone.ts (E.164) + whatsapp-codes.ts (config gate, template payload) — unit tests.

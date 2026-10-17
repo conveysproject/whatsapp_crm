@@ -214,3 +214,26 @@ Phase 2-5 routes (not yet present, to be added to this table with their class wh
 
 Closed in Phase 2: socket disconnect on revoke, BFF trusted client IP (`AUTH_BFF_SECRET`, 32+ chars on Vercel and Railway), Turnstile (needs keys), web token verification pinned (EdDSA, iss, aud, exp, sub).
 Still open before cutover: run `docs/runbooks/own-auth-local-wbmsg.md` end to end (needs Docker), `next build`/`start` in wbmsg mode without Clerk keys, breached-password check, audit-log rows for password/session events.
+
+## Phase 4 security audit (WhatsApp code, Google, Facebook; 2026-10-18)
+
+All routes are under the `/v1/auth` router, which 404s in Clerk mode before any work. Org scoping is N/A (account-level).
+
+| Route | Auth | Checks |
+|---|---|---|
+| `POST /signin/whatsapp/request` | public, credential limiter | 404 unless configured; Turnstile; format-only 400; **202 before any lookup**; code only for verified, active, unlocked, non-super-admin accounts; 3 codes/10 min per number |
+| `POST /signin/whatsapp/verify` | public, credential limiter | code must be issued to the account that holds the verified number; lock respected; 300 ms padding; `login_logs` method `whatsapp_code` |
+| `POST /phone/verify/request` | account session (impersonation blocked) | 5/h per account, 10/h per IP, 3/10 min per number (WhatsApp cost guard); synchronous (no enumeration surface: the user types their own number) |
+| `POST /phone/verify/confirm` | account session | code must belong to the caller's account; stale unverified claims cleared; 409 only after proof of possession |
+| `DELETE /phone` | account session | caller's account only |
+| `POST /oauth/:provider/start` | public, credential limiter; `link` needs an account session | 256-bit `state`, PKCE S256, Google `nonce`; state single use (GETDEL), 10 min; redirect path sanitised |
+| `POST /oauth/:provider/callback` | public, credential limiter | state must exist, match the provider, and (at the BFF) match the browser's httpOnly cookie (login CSRF); Google ID token verified (issuer, audience, nonce, signature); Facebook `/me` with `appsecret_proof` |
+| `POST /oauth/pending/send` | public, credential limiter | 202 before work; code bound to the pending entry (`codeId`); provider email cannot be replaced by a typed one |
+| `POST /oauth/pending/verify` | public, credential limiter | `verifyCodeById` + target match; 5 attempts/code; padding |
+| `DELETE /oauth/:provider` | account session | refuses removing the last sign-in method |
+| `GET /methods` | public | booleans only |
+
+Linking rules: Google auto-links only with `email_verified` and a matching email; Facebook never links or creates on its
+email alone (email code first); super admins cannot sign in with or link providers, or use WhatsApp codes.
+Tokens: the provider's tokens never leave the API; our session tokens reach the browser only as httpOnly cookies set by the BFF.
+Open redirect: the BFF only redirects to the provider's own origin, and post-sign-in paths pass `safeRedirect` on both sides.
