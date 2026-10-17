@@ -9,6 +9,7 @@ import {
 } from "../../../../lib/auth/bff";
 import { COOKIE, authProvider } from "../../../../lib/auth/config";
 import { accessTokenExpiry, verifyAccessToken } from "../../../../lib/auth/jwt";
+import { safeRedirect } from "../../../../lib/auth/redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -128,13 +129,64 @@ async function handleSignOut(req: NextRequest): Promise<NextResponse> {
   return res;
 }
 
+// GET is acceptable: this only clears the caller's own cookies and changes no state elsewhere.
+function handleSessionExpired(req: NextRequest): NextResponse {
+  const target = safeRedirect(req.nextUrl.searchParams.get("redirect_url"));
+  const url = new URL("/sign-in", req.url);
+  url.searchParams.set("redirect_url", target);
+  const res = NextResponse.redirect(url, 303);
+  res.headers.set("Cache-Control", "no-store");
+  clearSessionCookies(res);
+  return res;
+}
+
+// Open-tab liveness probe: 200 valid, 401 revoked (cookies cleared), 503 unknown (never sign out).
+async function handleSessionCheck(req: NextRequest): Promise<NextResponse> {
+  let at = req.cookies.get(COOKIE.access)?.value;
+  const rt = req.cookies.get(COOKIE.refresh)?.value;
+  let rotated: { accessToken: string; refreshToken: string } | null = null;
+  const exp = at ? accessTokenExpiry(at) : null;
+  if (!at || exp === null || exp <= Date.now() + 60_000) {
+    if (!rt) return signedOut();
+    const r = await refreshSession(rt, req);
+    if (!r.ok) return r.status === 503 ? checkUnavailable() : signedOut();
+    at = r.accessToken;
+    rotated = { accessToken: r.accessToken, refreshToken: r.refreshToken };
+  }
+  let up: Response;
+  try {
+    up = await callAuthApi("/v1/auth/me/security", { method: "GET", req, bearer: at });
+  } catch {
+    return withRotation(checkUnavailable(), rotated);
+  }
+  if (up.status === 401) return signedOut();
+  if (!up.ok) return withRotation(checkUnavailable(), rotated);
+  return withRotation(NextResponse.json({ ok: true }, { headers: NO_STORE }), rotated);
+}
+
+function signedOut(): NextResponse {
+  const res = NextResponse.json({ ok: false }, { status: 401, headers: NO_STORE });
+  clearSessionCookies(res);
+  return res;
+}
+function checkUnavailable(): NextResponse {
+  return NextResponse.json({ ok: false }, { status: 503, headers: NO_STORE });
+}
+function withRotation(res: NextResponse, t: { accessToken: string; refreshToken: string } | null): NextResponse {
+  if (t) setSessionCookies(res, t);
+  return res;
+}
+
 type Ctx = { params: Promise<{ action: string[] }> };
 
 export async function GET(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
   if (authProvider() === "clerk") return notFound();
   const { action } = await ctx.params;
-  if (action.join("/") !== "token") return notFound();
-  return handleToken(req);
+  const key = action.join("/");
+  if (key === "token") return handleToken(req);
+  if (key === "session-expired") return handleSessionExpired(req);
+  if (key === "session-check") return handleSessionCheck(req);
+  return notFound();
 }
 
 export async function POST(req: NextRequest, ctx: Ctx): Promise<NextResponse> {

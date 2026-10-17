@@ -12,6 +12,8 @@ import { OnboardingProvider } from "@/app/(dashboard)/onboarding-context";
 import { auth } from "@/lib/auth/server";
 import { authProvider } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { sessionExpiredRedirect } from "@/lib/auth/session-expired";
 import { Toaster } from "sonner";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -24,6 +26,8 @@ type OrgStatus = {
 };
 
 class OrgStatusUnavailableError extends Error {}
+// The API rejected the bearer token (e.g. the session was revoked elsewhere): not retryable.
+class UnauthorizedError extends Error {}
 
 // Only 403/404 from the API mean "this user has no organization yet". Anything else
 // (5xx, 401, timeout, network) is transient: retry once, then throw so the user sees an
@@ -36,6 +40,7 @@ async function getOrgStatus(token: string): Promise<OrgStatus> {
       if (result) return result;
       return { provisioned: false, wabaConnected: false, numberProvisioned: false };
     } catch (err) {
+      if (err instanceof UnauthorizedError) throw err;
       lastFailure = err instanceof Error ? err.message : String(err);
       console.error(`[dashboard-layout] org status attempt ${attempt} failed: ${lastFailure}`);
     }
@@ -57,6 +62,7 @@ async function fetchOrgStatus(token: string): Promise<OrgStatus | null> {
       }),
     ]);
     if (orgRes.status === 403 || orgRes.status === 404) return null;
+    if (orgRes.status === 401) throw new UnauthorizedError("/organizations/me returned 401");
     if (!orgRes.ok) throw new Error(`/organizations/me returned ${orgRes.status}`);
     const org = (await orgRes.json().catch(() => null)) as { data?: { name?: string } } | null;
     const status = statusRes.ok
@@ -85,7 +91,16 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     redirect("/checklist");
   }
 
-  const status = await getOrgStatus(token ?? "");
+  let status: OrgStatus;
+  try {
+    status = await getOrgStatus(token ?? "");
+  } catch (err) {
+    if (err instanceof UnauthorizedError && !impersonating) {
+      const target = sessionExpiredRedirect(401, authProvider(), (await headers()).get("x-pathname") ?? "/dashboard");
+      if (target) redirect(target);
+    }
+    throw err;
+  }
 
   if (!status.provisioned) {
     // Stale/revoked impersonation cookie: clear it instead of sending the admin to onboarding.

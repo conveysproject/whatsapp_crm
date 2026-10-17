@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { authProvider } from "./config";
 import { decide, isPublicAuthPath, retryDelayMs } from "./provider-logic";
 import type { ProviderState } from "./provider-logic";
+import { shouldRecheckSession } from "./session-expired";
 import { createTokenStore } from "./token-store";
 
 export interface AuthState {
@@ -74,6 +75,44 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
       if (timer) clearTimeout(timer);
     };
   }, [refresh]);
+
+  // Open tabs notice a revoked session within 60 s (and when the tab regains focus).
+  useEffect(() => {
+    let running = false;
+    const check = async (): Promise<void> => {
+      if (running || signingOut.current) return;
+      if (!shouldRecheckSession(stateRef.current.isSignedIn, window.location.pathname)) return;
+      running = true;
+      try {
+        const res = await fetch("/api/auth/session-check", { credentials: "same-origin", cache: "no-store" });
+        if (res.status !== 401) return; // 200 fine; 503/other = unknown, never sign out
+        store.clear();
+        queryClient.clear();
+        const next: ProviderState = { isLoaded: true, isSignedIn: false, userId: null };
+        stateRef.current = next;
+        setState(next);
+        const { pathname, search } = window.location;
+        if (!isPublicAuthPath(pathname)) {
+          window.location.replace(`/sign-in?redirect_url=${encodeURIComponent(pathname + search)}`);
+        }
+      } catch {
+        // network error: unknown, keep the session
+      } finally {
+        running = false;
+      }
+    };
+    const onVisible = (): void => {
+      if (document.visibilityState === "visible") void check();
+    };
+    const timer = setInterval(() => void check(), 60_000);
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [store, queryClient]);
 
   const getToken = useCallback(async () => {
     const before = stateRef.current;

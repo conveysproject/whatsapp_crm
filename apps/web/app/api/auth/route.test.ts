@@ -266,3 +266,64 @@ describe("fix round 1", () => {
     }
   });
 });
+
+describe("session-expired and session-check", () => {
+  const getAction = (action: string, qs = "", cookie?: string) =>
+    GET(new NextRequest(`${ORIGIN}/api/auth/${action}${qs}`, { headers: cookie ? { cookie } : {} }), ctx(action));
+  const cleared = (res: Response) => (res.headers.get("set-cookie") ?? "").includes("Max-Age=0");
+
+  it("session-expired clears cookies and 303s to sign-in with a safe redirect_url", async () => {
+    const res = await getAction("session-expired", "?redirect_url=%2Fcontacts");
+    expect(res.status).toBe(303);
+    expect(new URL(res.headers.get("location") ?? "").pathname).toBe("/sign-in");
+    expect(new URL(res.headers.get("location") ?? "").searchParams.get("redirect_url")).toBe("/contacts");
+    expect(cleared(res)).toBe(true);
+    const bad = await getAction("session-expired", "?redirect_url=%2F%2Fevil.example");
+    expect(new URL(bad.headers.get("location") ?? "").searchParams.get("redirect_url")).toBe("/dashboard");
+  });
+
+  it("session-expired 404s in clerk mode", async () => {
+    process.env["NEXT_PUBLIC_AUTH_PROVIDER"] = "clerk";
+    expect((await getAction("session-expired")).status).toBe(404);
+    expect((await getAction("session-check")).status).toBe(404);
+  });
+
+  const fresh = () => `wb_at=${jwt(nowSec() + 600)}`;
+  it("session-check: upstream 200 -> 200, cookies kept", async () => {
+    fetchMock.mockResolvedValueOnce(json(200, {}));
+    const res = await getAction("session-check", "", fresh());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(cleared(res)).toBe(false);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/v1/auth/me/security");
+  });
+  it("session-check: upstream 401 -> 401 and cookies cleared", async () => {
+    fetchMock.mockResolvedValueOnce(json(401, {}));
+    const res = await getAction("session-check", "", fresh());
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ ok: false });
+    expect(cleared(res)).toBe(true);
+  });
+  it("session-check: 5xx or network error -> 503, cookies kept", async () => {
+    fetchMock.mockResolvedValueOnce(json(500, {}));
+    const a = await getAction("session-check", "", fresh());
+    expect(a.status).toBe(503);
+    expect(cleared(a)).toBe(false);
+    fetchMock.mockRejectedValueOnce(new Error("down"));
+    const b = await getAction("session-check", "", fresh());
+    expect(b.status).toBe(503);
+    expect(cleared(b)).toBe(false);
+  });
+  it("session-check: no cookies -> 401", async () => {
+    expect((await getAction("session-check")).status).toBe(401);
+  });
+  it("session-check: refreshes first when wb_at is missing", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json(200, { accessToken: jwt(nowSec() + 900), refreshToken: "r2" }))
+      .mockResolvedValueOnce(json(200, {}));
+    const res = await getAction("session-check", "", "wb_rt=r1");
+    expect(res.status).toBe(200);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/v1/auth/refresh");
+    expect(res.headers.get("set-cookie") ?? "").toContain("r2");
+  });
+});

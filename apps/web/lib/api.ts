@@ -1,5 +1,9 @@
 import { auth } from "@/lib/auth/server";
 import { serverApiHeaders } from "./server-api";
+import { authProvider } from "@/lib/auth/config";
+import { sessionExpiredRedirect } from "@/lib/auth/session-expired";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import type { ApiResponse, ApiError } from "@WBMSG/shared";
 
 const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -23,6 +27,11 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
+
+  if (res.status === 401) {
+    const target = sessionExpiredRedirect(401, authProvider(), (await headers()).get("x-pathname") ?? "/dashboard");
+    if (target) redirect(target);
+  }
 
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as
