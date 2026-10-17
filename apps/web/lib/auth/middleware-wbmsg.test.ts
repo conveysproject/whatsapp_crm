@@ -50,6 +50,11 @@ describe("wbmsgMiddleware", () => {
     expect(r.headers.get("x-middleware-next")).toBe("1");
     expect(refresh).not.toHaveBeenCalled();
   });
+  it("forwards other cookies byte-identical when refreshing", async () => {
+    refresh.mockResolvedValue({ ok: true, accessToken: "NEWAT", refreshToken: "NEWRT" });
+    const r = await wbmsgMiddleware(req("/inbox", { theme: "a%3Db", wb_at: stale(), wb_rt: "oldrt", x: "1" }));
+    expect(r.headers.get("x-middleware-request-cookie")).toBe("theme=a%3Db; x=1; wb_at=NEWAT; wb_rt=NEWRT");
+  });
   it("refreshes a stale token, sets cookies and forwards the new token", async () => {
     refresh.mockResolvedValue({ ok: true, accessToken: "NEWAT", refreshToken: "NEWRT" });
     const r = await wbmsgMiddleware(req("/inbox", { wb_at: stale(), wb_rt: "oldrt" }));

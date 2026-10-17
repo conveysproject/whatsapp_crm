@@ -67,10 +67,14 @@ export async function wbmsgMiddleware(req: NextRequest): Promise<NextResponse> {
     const result = await refreshSession(rt, req);
     if (result.ok) {
       // Forward the new tokens to this same request's server components.
-      const cookies = req.cookies
-        .getAll()
-        .filter((c) => c.name !== COOKIE.access && c.name !== COOKIE.refresh)
-        .map((c) => `${c.name}=${c.value}`);
+      // Keep the other cookies byte-identical: work on the raw header, not decoded values.
+      const cookies = (req.headers.get("cookie") ?? "")
+        .split("; ")
+        .filter((entry) => {
+          if (!entry) return false;
+          const name = entry.split("=")[0]!.trim();
+          return name !== COOKIE.access && name !== COOKIE.refresh;
+        });
       cookies.push(`${COOKIE.access}=${result.accessToken}`, `${COOKIE.refresh}=${result.refreshToken}`);
       const headers = new Headers(req.headers);
       headers.set("cookie", cookies.join("; "));
