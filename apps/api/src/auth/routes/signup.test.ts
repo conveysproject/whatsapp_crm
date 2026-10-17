@@ -42,8 +42,8 @@ const prisma = {
   $transaction: vi.fn(),
 };
 
-async function build(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
+async function build(logStream?: { write: (line: string) => void }): Promise<FastifyInstance> {
+  const app = Fastify({ logger: logStream ? { level: "warn", stream: logStream } : false });
   app.decorate("prisma", prisma as any);
   await app.register(authRouter, { prefix: "/v1/auth" });
   return app;
@@ -161,6 +161,17 @@ describe("auth signup", () => {
     expect(res.statusCode).toBe(202);
     expect(res.json()).toEqual({ ok: true, signupId: expect.any(String) });
     expect(m.sendCodeEmail).not.toHaveBeenCalled();
+    expect(m.savePending).not.toHaveBeenCalled();
+  });
+
+  it("issues the code before storing the pending entry, then sends the email", async () => {
+    const order: string[] = [];
+    m.issueCode.mockImplementation(async () => (order.push("issue"), { code: "123456", codeId: "c1" }));
+    m.savePending.mockImplementation(async () => (order.push("save"), "created"));
+    m.sendCodeEmail.mockImplementation(async () => void order.push("send"));
+    await app.inject({ method: "POST", url: "/v1/auth/signup", payload: body });
+    await settleSignupWork();
+    expect(order).toEqual(["issue", "save", "send"]);
   });
 
   it("weak password -> 400 WEAK_PASSWORD before any work", async () => {
@@ -305,6 +316,19 @@ describe("auth signup/verify", () => {
     expect(res.json().error.code).toBe("INVALID_CODE");
     expect(m.deletePending).toHaveBeenCalledWith("sid1");
     expect(m.createSession).not.toHaveBeenCalled();
+  });
+
+  it("logs one PII-free warning when verify hits an email conflict", async () => {
+    const lines: string[] = [];
+    const logApp = await build({ write: (l) => void lines.push(l) });
+    prisma.$transaction.mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002", meta: { target: ["email"] } }));
+    const res = await logApp.inject({ method: "POST", url: "/v1/auth/signup/verify", payload: vbody });
+    expect(res.statusCode).toBe(400);
+    const hits = lines.map((l) => JSON.parse(l)).filter((l) => l.reason === "signup_email_conflict");
+    expect(hits).toHaveLength(1);
+    expect(hits[0].msg).toBe("sign-up verify hit an existing email");
+    expect(JSON.stringify(hits[0])).not.toContain("foo@x.com");
+    await logApp.close();
   });
 
   it("unique violation on another target -> 500, pending kept, no session", async () => {

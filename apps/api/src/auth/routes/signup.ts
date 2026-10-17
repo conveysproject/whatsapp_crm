@@ -59,11 +59,12 @@ async function processSignup(
   const account = await db.authAccount.findUnique({ where: { email } });
   if (account?.emailVerifiedAt) return;
 
-  const passwordHash = await hashPassword(password);
-  await savePendingSignup(signupId, { email, passwordHash, firstName, lastName, business });
-
+  // Issue the code first: when throttled, nothing is stored (a bot cannot fill Redis) and nothing is sent.
   const issued = await issueCode(db, { purpose: "email_verify", target: email });
   if ("error" in issued) return;
+
+  const passwordHash = await hashPassword(password);
+  await savePendingSignup(signupId, { email, passwordHash, firstName, lastName, business });
   await sendCodeEmail(email, "email_verify", issued.code);
 }
 
@@ -189,6 +190,7 @@ export const signupRoutes: FastifyPluginAsync = async (fastify) => {
         }));
       } catch (err) {
         if (!isEmailUniqueViolation(err)) throw err;
+        request.log.warn({ reason: "signup_email_conflict" }, "sign-up verify hit an existing email");
         await deletePendingSignup(signupId);
         return fail(INVALID_CODE);
       }
