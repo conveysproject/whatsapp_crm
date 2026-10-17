@@ -1,9 +1,18 @@
 import type { FastifyPluginAsync } from "fastify";
+import { canAccess } from "../lib/permissions.js";
 import { uploadMedia, getMediaUrl, downloadMediaBytes, uploadResumableMedia } from "../lib/whatsapp.js";
 
 const RESUMABLE_THRESHOLD = 50 * 1024 * 1024; // 50MB
 
 export const mediaRouter: FastifyPluginAsync = async (fastify) => {
+  // Section gate: WhatsApp media upload/fetch is for users who send messages.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    if (!(["inbox_access", "campaigns_access", "automation_access"].some((k) => canAccess(role, permissions, k)))) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "inbox, campaigns or automation access required" } });
+    }
+  });
+
   // ── Upload media to WhatsApp ──────────────────────────────────────────────
   fastify.post("/media/upload", async (request, reply) => {
     const { organizationId } = request.auth;

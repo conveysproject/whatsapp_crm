@@ -1,5 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
 import { uploadToR2, deleteFromR2, R2_PUBLIC_URL } from "../lib/r2.js";
+import { canAccess } from "../lib/permissions.js";
+
+// Anyone who sends media (inbox, campaigns, automations) may browse and add assets;
+// renaming or deleting shared assets is a settings action.
+const SENDER_KEYS = ["inbox_access", "campaigns_access", "automation_access"] as const;
 
 interface CreateUrlBody {
   title: string;
@@ -14,6 +19,18 @@ interface UpdateBody {
 }
 
 export const mediaAssetsRouter: FastifyPluginAsync = async (fastify) => {
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role, permissions } = request.auth;
+    const manage = request.method === "PUT" || request.method === "DELETE";
+    const ok = manage
+      ? canAccess(role, permissions, "settings_access")
+      : SENDER_KEYS.some((k) => canAccess(role, permissions, k));
+    if (!ok) {
+      const message = manage ? "settings_access permission required" : "inbox, campaigns or automation access required";
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message } });
+    }
+  });
+
   fastify.get<{ Querystring: { type?: string } }>("/media-assets", async (request, reply) => {
     const { organizationId } = request.auth;
     const { type } = request.query;

@@ -9,6 +9,14 @@ interface InfoMaterialBody {
 }
 
 export const infoMaterialsRouter: FastifyPluginAsync = async (fastify) => {
+  // No screen uses this API yet, so it is admin-only until one does.
+  fastify.addHook("preHandler", async (request, reply) => {
+    const { role } = request.auth;
+    if (role !== "admin" && role !== "superAdmin") {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can use this API" } });
+    }
+  });
+
   fastify.get<{ Querystring: { type?: string } }>("/info-materials", async (request, reply) => {
     const { organizationId } = request.auth;
     const { type } = request.query;

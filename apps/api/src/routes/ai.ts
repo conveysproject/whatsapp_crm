@@ -1,4 +1,5 @@
-import { conversationAccessWhere } from "../lib/conversation-access.js";
+import { conversationAccessWhere, conversationListWhere } from "../lib/conversation-access.js";
+import { canAccess, canAccessSub } from "../lib/permissions.js";
 import type { FastifyPluginAsync } from "fastify";
 import { generateSuggestions, detectIntent, analyzeSentiment, generateSmartReplies, detectIntentWithConfidence, buildAiContext, summarizeConversation, AI_CONTEXT_LONG } from "../lib/claude.js";
 import { findTopRelevantSections, generateAnswerFromSections } from "../lib/ai-rag.js";
@@ -16,10 +17,28 @@ function containsPii(value: unknown): boolean {
   return false;
 }
 
+// Permission per AI feature, matching the screen that uses it.
+type Need = { perm: string; sub?: string };
+const INBOX: Need = { perm: "inbox_access" };
+const ANALYTICS: Need = { perm: "analytics_access" };
+const TEMPLATE_CREATE: Need = { perm: "templates_access", sub: "templates_create" };
+const BOT_FLOWS: Need = { perm: "automation_access", sub: "automation_bot_flows" };
+
+function allowed(auth: { role: string; permissions: Record<string, string> }, need: Need): boolean {
+  return need.sub
+    ? canAccessSub(auth.role, auth.permissions, need.perm, need.sub)
+    : canAccess(auth.role, auth.permissions, need.perm);
+}
+
+function forbidden(need: Need): { error: { code: string; message: string } } {
+  return { error: { code: "FORBIDDEN", message: `${need.sub ?? need.perm} permission required` } };
+}
+
 export const aiRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: ConversationId } }>(
     "/conversations/:id/suggestions",
     async (request, reply) => {
+      if (!allowed(request.auth, INBOX)) return reply.status(403).send(forbidden(INBOX));
       const { organizationId } = request.auth;
 
       const conversation = await fastify.prisma.conversation.findFirst({
@@ -70,10 +89,12 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: MessageId } }>(
     "/messages/:id/analyze",
     async (request, reply) => {
+      if (!allowed(request.auth, INBOX)) return reply.status(403).send(forbidden(INBOX));
       const { organizationId } = request.auth;
 
+      const convVis = await conversationListWhere(fastify.prisma, request.auth);
       const message = await fastify.prisma.message.findFirst({
-        where: { id: request.params.id, organizationId },
+        where: { id: request.params.id, organizationId, ...(convVis ? { conversation: convVis } : {}) },
       });
       if (!message) {
         return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Message not found" } });
@@ -93,12 +114,20 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Smart replies ────────────────────────────────────────────────────────
   fastify.post<{ Body: { conversationId: string } }>("/ai/smart-replies", async (request, reply) => {
+    if (!allowed(request.auth, INBOX)) return reply.status(403).send(forbidden(INBOX));
     if (!request.body.conversationId) {
       return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "conversationId is required" } });
     }
     const { organizationId } = request.auth;
+    const conversation = await fastify.prisma.conversation.findFirst({
+      where: await conversationAccessWhere(fastify.prisma, request.auth, request.body.conversationId),
+      select: { id: true },
+    });
+    if (!conversation) {
+      return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Conversation not found" } });
+    }
     const messages = await fastify.prisma.message.findMany({
-      where: { conversationId: request.body.conversationId, organizationId },
+      where: { conversationId: conversation.id, organizationId },
       orderBy: { sentAt: "desc" },
       take: 10,
       select: { body: true, direction: true },
@@ -129,6 +158,7 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Intent detection ─────────────────────────────────────────────────────
   fastify.post<{ Body: { messageId: string; text: string } }>("/ai/intent", async (request, reply) => {
+    if (!allowed(request.auth, INBOX)) return reply.status(403).send(forbidden(INBOX));
     if (!request.body.text) {
       return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "text is required" } });
     }
@@ -138,6 +168,7 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── RAG answer from training data (GAP-S27) ───────────────────────────────
   fastify.post<{ Body: { question: string; topK?: number } }>("/ai/rag-answer", async (request, reply) => {
+    if (!allowed(request.auth, INBOX)) return reply.status(403).send(forbidden(INBOX));
     const { organizationId } = request.auth;
     const { question, topK = 3 } = request.body;
     if (!question) return reply.status(400).send({ error: { code: "MISSING_QUESTION", message: "question is required" } });
@@ -154,6 +185,7 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── Predictive analytics (churn risk, high value, reorder candidates) ─────
   fastify.get("/ai/predictive", async (request, reply) => {
+    if (!allowed(request.auth, ANALYTICS)) return reply.status(403).send(forbidden(ANALYTICS));
     const { organizationId } = request.auth;
     const now = Date.now();
     const thirtyDaysAgo = new Date(now - 30 * 86_400_000);
@@ -244,6 +276,7 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── AI Creator: Template generation ──────────────────────────────────────
   fastify.post<{ Body: { description: string } }>("/ai/creator/template/generate", async (request, reply) => {
+    if (!allowed(request.auth, TEMPLATE_CREATE)) return reply.status(403).send(forbidden(TEMPLATE_CREATE));
     const { description } = request.body;
     if (!description || description.trim().length < 3) {
       return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "description is required" } });
@@ -266,6 +299,7 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { templateState: object; imageUrl: string; refinement: string } }>(
     "/ai/creator/template/refine",
     async (request, reply) => {
+      if (!allowed(request.auth, TEMPLATE_CREATE)) return reply.status(403).send(forbidden(TEMPLATE_CREATE));
       const { templateState, imageUrl, refinement } = request.body;
       if (!templateState || !refinement) {
         return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "templateState and refinement are required" } });
@@ -287,6 +321,7 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── AI Creator: Standalone image generation ────────────────────────────────
   fastify.post<{ Body: { prompt: string } }>("/ai/creator/template/image", async (request, reply) => {
+    if (!allowed(request.auth, TEMPLATE_CREATE)) return reply.status(403).send(forbidden(TEMPLATE_CREATE));
     const { prompt } = request.body;
     if (!prompt || prompt.trim().length < 3) {
       return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "prompt is required" } });
@@ -301,6 +336,7 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── AI Creator: Flow generation ────────────────────────────────────────────
   fastify.post<{ Body: { description: string } }>("/ai/creator/flow/generate", async (request, reply) => {
+    if (!allowed(request.auth, BOT_FLOWS)) return reply.status(403).send(forbidden(BOT_FLOWS));
     const { description } = request.body;
     if (!description || description.trim().length < 3) {
       return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "description is required" } });
@@ -316,6 +352,7 @@ export const aiRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { flowDefinition: object; triggerType: string; refinement: string } }>(
     "/ai/creator/flow/refine",
     async (request, reply) => {
+      if (!allowed(request.auth, BOT_FLOWS)) return reply.status(403).send(forbidden(BOT_FLOWS));
       const { flowDefinition, triggerType, refinement } = request.body;
       if (!flowDefinition || !triggerType || !refinement) {
         return reply.status(400).send({ error: { code: "INVALID_INPUT", message: "flowDefinition, triggerType and refinement are required" } });
