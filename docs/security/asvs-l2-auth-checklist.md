@@ -11,16 +11,16 @@ Evidence is a file plus function or test name (line numbers drift). `abuse.test.
 
 | Req | Requirement | Status | Evidence / reason |
 |---|---|---|---|
-| 2.1.1 | Passwords at least 8 characters (12 recommended) | met | `password.ts` `checkPasswordPolicy` (8 min); applied in signup, reset and change. Test: `password.test.ts`. 8 follows the PRD decision |
+| 2.1.1 | Passwords are at least 12 characters (ASVS 4.0.3) | deviation (PRD decision) | We enforce a minimum of 8 (`password.ts` `checkPasswordPolicy`; `password.test.ts`), owner-approved in PRD §4.8. Risk: shorter passwords are easier to guess. Mitigated by lockout, rate limits and argon2id. |
 | 2.1.2 | Passwords of 64 characters or more are allowed; over 128 may be denied | met | `PASSWORD_MAX_LENGTH` = 128; `checkPasswordPolicy` |
-| 2.1.3 | No truncation; only consecutive spaces may be collapsed | met | The full string goes to argon2; no trimming or collapsing in `hashPassword` |
-| 2.1.4 | All printable Unicode, including spaces, allowed | met | Length-only policy, no character filter |
+| 2.1.3 | No truncation; only consecutive spaces may be collapsed | met (code-read only) | The full string goes to argon2; no trimming or collapsing in `hashPassword`. |
+| 2.1.4 | All printable Unicode, including spaces, allowed | met (code-read only) | Length-only policy in `checkPasswordPolicy`, no character filter |
 | 2.1.5 | Users can change their password | met | `POST /v1/auth/password/change` (`routes/password.ts`); `password.test.ts` |
 | 2.1.6 | Change requires current and new password | met | Same route; current password verified with argon2 unless the account is flagged `mustSetPassword` (invited or migrated users with no usable password) |
 | 2.1.7 | New passwords checked against breached lists | Phase 2-5 | PRD §4.8 range query (k-anonymity), fail-open. Not in Phase 1; tracked for the web phase |
 | 2.1.8 | Strength meter offered | Phase 2-5 | UI (web and mobile) |
-| 2.1.9 | No composition rules | met | Length-only policy |
-| 2.1.10 | No periodic rotation | met | No expiry logic exists |
+| 2.1.9 | No composition rules | met | `password.test.ts` (length-only policy) |
+| 2.1.10 | No periodic rotation | met (code-read only) | No expiry logic exists |
 | 2.1.11 | Paste and password managers allowed | Phase 2-5 | UI |
 | 2.1.12 | Option to show the typed password | Phase 2-5 | UI |
 
@@ -29,7 +29,7 @@ Evidence is a file plus function or test name (line numbers drift). `abuse.test.
 | Req | Requirement | Status | Evidence / reason |
 |---|---|---|---|
 | 2.2.1 | Anti-automation against credential stuffing and brute force | met | 5 failures / 15 min lock with doubling backoff (`limits.ts` `recordPasswordFailure`, `isLocked`); 20 requests / 10 min per IP on credential routes (`routes/index.ts` `credentialRoutes`); 3 codes / 10 min per target (`codes.ts` `issueCode`). Tests: `abuse.test.ts` "brute force", `lockout.test.ts`, `limits.test.ts` |
-| 2.2.1 | (bot protection) | Phase 2-5 | Cloudflare Turnstile on signup and after failures (PRD §4.8, open question §11); web phase |
+| 2.2.1b | Bot protection on signup and after failures | Phase 2-5 | Cloudflare Turnstile (PRD §4.8, open question §11); web phase |
 | 2.2.2 | Weaker methods (SMS, email) are not the only strong factor | N/A | Email and WhatsApp codes are first-factor alternatives and new-device confirmations, not an MFA claim. Platform admins get a code on every new session (`signin.ts` new-device flow) |
 | 2.2.3 | Users notified of security-relevant changes | met (partial) | Password-changed email on reset and change (`emails.ts` `sendPasswordChangedEmail`; `password.test.ts`). New-device sign-in sends a confirmation code. Social link/unlink and phone-change notices: Phase 3-4 |
 | 2.2.4 | Impersonation resistance of phishing-resistant factors | N/A | No MFA/WebAuthn at L2 scope for this project |
@@ -46,7 +46,7 @@ Evidence is a file plus function or test name (line numbers drift). `abuse.test.
 | Req | Requirement | Status | Evidence / reason |
 |---|---|---|---|
 | 2.4.1 | Passwords stored with an approved salted one-way function | met | argon2id, per-hash random salt, `memoryCost=65536` KiB, `timeCost=3`, `parallelism=1` (`password.ts` `PARAMS`). Test: `password.test.ts` |
-| 2.4.2 | Salt at least 32 bits, random | met | argon2 library salt (16 bytes) |
+| 2.4.2 | Salt at least 32 bits, random | met (code-read only) | argon2 library generates a 16-byte random salt per hash; not asserted by a test |
 | 2.4.3 | Iteration/work factor meets current guidance | met | Parameters above exceed the OWASP argon2id minimum (19 MiB, t=2). Load-test of p95 is a PRD §8 gate (Phase 5) |
 | 2.4.4 | Work factor can be raised; rehash on login | met | `verifyPassword` returns `needsRehash`; sign-in rewrites the hash (`signin.ts`) |
 | 2.4.5 | Additional secret (pepper) | met (codes) / N/A (passwords) | One-time codes use HMAC-SHA256 with `AUTH_CODE_PEPPER` (`codes.ts` `hashCode`). Password hashes rely on argon2 salt, which is within the requirement |
@@ -55,10 +55,10 @@ Evidence is a file plus function or test name (line numbers drift). `abuse.test.
 
 | Req | Requirement | Status | Evidence / reason |
 |---|---|---|---|
-| 2.5.1 | No plaintext or reversible recovery secret | met | Codes are HMAC-hashed at rest; no password hints or security questions exist |
-| 2.5.2 | No password hints or knowledge-based answers | met | None implemented |
-| 2.5.3 | Recovery does not reveal the current password | met | Reset sets a new hash only |
-| 2.5.4 | No shared or default accounts | met | Accounts are created per user; migration creates them from the `users` table |
+| 2.5.1 | No plaintext or reversible recovery secret | met (code-read only) | Codes are HMAC-hashed at rest (`codes.ts` `hashCode`); no password hints or security questions exist |
+| 2.5.2 | No password hints or knowledge-based answers | met (code-read only) | None implemented |
+| 2.5.3 | Recovery does not reveal the current password | met | `password.test.ts` (reset sets a new hash only) |
+| 2.5.4 | No shared or default accounts | met (code-read only) | Accounts are created per user; migration creates them from the `users` table |
 | 2.5.5 | User notified when an authenticator changes | met | `sendPasswordChangedEmail` on reset and change |
 | 2.5.6 | Recovery uses a secure channel, no weaker than the primary method | met | Emailed 6-digit code, 10 min expiry, 5 attempts, single use (`codes.ts`); `abuse.test.ts` "one-time codes" |
 | 2.5.7 | Lost authenticator recovery does not bypass MFA | N/A | No MFA enrolment in scope |
@@ -109,7 +109,7 @@ Evidence is a file plus function or test name (line numbers drift). `abuse.test.
 
 | Req | Requirement | Status | Evidence / reason |
 |---|---|---|---|
-| 3.1.1 | Session tokens are never exposed in URLs | met | Tokens travel in the JSON body, `Authorization` header, or the BFF cookie (Phase 2); no route takes a token in the query string |
+| 3.1.1 | Session tokens are never exposed in URLs | met (code-read only) | Tokens travel in the JSON body, `Authorization` header, or the BFF cookie (Phase 2); no route takes a token in the query string |
 
 ### V3.2 Session binding
 
@@ -142,7 +142,8 @@ Evidence is a file plus function or test name (line numbers drift). `abuse.test.
 | Req | Requirement | Status | Evidence / reason |
 |---|---|---|---|
 | 3.5.1 | Users can revoke OAuth/refresh tokens tied to devices | met | Session list and revoke routes above |
-| 3.5.2 | Stateless tokens verified before trust; claims checked | met | `verifyAccessToken`: signature, `iss="wbmsg"`, `aud="wbmsg-api"`, expiry, `typ` claim shape, and `kid` lookup (`tokens.ts`); the session must also not be revoked (`identity.ts` `verifyBearer`). Tests: `tokens.test.ts`, `abuse.test.ts` "access tokens" (tampered payload, alg:none, expired, revoked) |
+| 3.5.2 | Stateless tokens verified before trust; claims checked | met (signature, alg, iss, aud, exp when present) - see deferred row below | `verifyAccessToken` in `tokens.ts` checks signature, EdDSA only, `iss="wbmsg"`, `aud="wbmsg-api"`, `kid` lookup, `typ` shape; session must not be revoked (`identity.ts` `verifyBearer`). Tests: `tokens.test.ts`, `abuse.test.ts` "access tokens" |
+| 3.5.2b | Token verification hardening (Task 4) | open (deferred - fix in final wave) | `jwtVerify` lacks `requiredClaims` [exp, iat, sub] and does not reject an empty `sub`; no check that the private key is Ed25519; no error on a half-set previous key pair or on previous kid equal to current kid |
 | 3.5.3 | Stateless tokens do not carry sensitive data; reference tokens preferred for sessions | met | Claims are `sub`, `sid`, `typ` only; the long-lived credential is an opaque, hashed, rotating refresh token |
 | Refresh rotation and reuse detection | met | Rotate on every use; reuse after the 10 s grace revokes the family (`sessions.ts` `rotateRefreshToken`). Test: `abuse.test.ts` "refresh token reuse" |
 | Rotation does not recheck `expiresAt` inside the conditional update | open (deferred, ms window) | Task 5 |
@@ -155,7 +156,7 @@ Evidence is a file plus function or test name (line numbers drift). `abuse.test.
 | 3.6.x | Re-authentication for sensitive operations | met (partial) | Password change requires the current password. Sensitive actions that appear later (phone change, social unlink) are Phase 3-4 |
 | 3.7.1 | Valid session required for sensitive transactions | met | `/password/change`, `/sessions*`, `/signout`, `/me/security` need a verified Bearer plus `request.auth.sid` (`requireSid`, `NO_SESSION` otherwise) |
 | Impersonation cannot touch the target's auth | met | `/v1/auth` is in `BLOCKED_PREFIXES` (writes) and `BLOCKED_GET_PREFIXES` (reads) in `lib/impersonation-guard.ts`; the impersonation bearer must be the issuing admin's own `typ=admin` session. Test: `abuse.test.ts` "is refused while a super admin impersonates" |
-| Mobile minimum version gate | met | `AUTH_MIN_MOBILE_VERSION` (`identity.ts` `mobileUpgradeRequired`); a malformed value silently disables the gate (deferred: warn at boot, Task 7) |
+| Mobile minimum version gate | met (UX nudge, not a security boundary) | `AUTH_MIN_MOBILE_VERSION` (`identity.ts` `mobileUpgradeRequired`) trusts client-asserted `x-app-client`/`x-app-version` headers, so it only steers honest clients to upgrade; a malformed value silently disables the gate (deferred: warn at boot, Task 7) |
 
 ## Security audit note (Phase 1 route inventory)
 
@@ -194,3 +195,4 @@ Phase 2-5 routes (not yet present, to be added to this table with their class wh
 - `settleSignupWork`-style test hooks are exported from production modules (Task 8): harmless, cleanup later.
 - `@node-rs/argon2` Linux prebuilt on the Railway build must be confirmed at the first deploy (Task 3).
 - Remaining test gaps (Task 12): reset for a disabled account; change with a null hash and no flag; client reset with no users row.
+- Task 2 deferred check: SQL migration versus `schema.prisma` drift is not machine-verified (no shadow DB). Verify with `prisma migrate status` at the Phase 1 exit deploy.
