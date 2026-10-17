@@ -30,6 +30,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The Prisma client is generated code (not committed); without it every
+      # import of @prisma/client fails type-check and tests.
+      - name: Generate Prisma client
+        run: pnpm --filter @WBMSG/api exec prisma generate
+
+      - name: Build shared packages
+        run: pnpm --filter @WBMSG/shared build
+
       - name: Type check
         run: pnpm type-check
 
@@ -55,8 +63,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The Prisma client is generated code (not committed); without it every
+      # import of @prisma/client fails type-check and tests.
+      - name: Generate Prisma client
+        run: pnpm --filter @WBMSG/api exec prisma generate
+
       - name: Build shared packages
-        run: pnpm --filter @trustcrm/shared build
+        run: pnpm --filter @WBMSG/shared build
 
       - name: Run tests
         run: pnpm test
@@ -80,6 +93,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # The Prisma client is generated code (not committed); without it every
+      # import of @prisma/client fails type-check and tests.
+      - name: Generate Prisma client
+        run: pnpm --filter @WBMSG/api exec prisma generate
+
+      - name: Build shared packages
+        run: pnpm --filter @WBMSG/shared build
 
       - name: Build all packages
         run: pnpm build

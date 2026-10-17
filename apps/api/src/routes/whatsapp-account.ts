@@ -17,9 +17,6 @@ import {
   getAppAccessToken,
   uploadResumableMedia,
   syncAllMetaData,
-  blockContact,
-  unblockContact,
-  sendMarketingTemplateMessage,
   uploadProfilePicture,
 } from "../lib/whatsapp.js";
 
@@ -792,7 +789,6 @@ export const whatsappAccountRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── App-level webhook: setup ──────────────────────────────────────────────
   fastify.post("/whatsapp-account/app-webhook", async (request, reply) => {
-    const { organizationId } = request.auth;
     const appId = process.env["META_APP_ID"] ?? "";
     const appSecret = process.env["META_APP_SECRET"] ?? "";
     if (!appId || !appSecret) {

@@ -12,7 +12,7 @@ function randomColor(): string {
   return LABEL_COLORS[Math.floor(Math.random() * LABEL_COLORS.length)]!;
 }
 
-const NAME_RE = /^[a-zA-Z0-9 \-]{1,22}$/;
+const NAME_RE = /^[a-zA-Z0-9 -]{1,22}$/;
 
 export const inboxLabelsRouter: FastifyPluginAsync = async (fastify) => {
   // Section gate: labels are an inbox feature, so every route needs inbox_access.
@@ -77,7 +77,6 @@ export const inboxLabelsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { id: string } }>(
     "/conversations/:id/label",
     async (request, reply) => {
-      const { organizationId } = request.auth;
       const conversation = await fastify.prisma.conversation.findFirst({
         where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
         select: { id: true },

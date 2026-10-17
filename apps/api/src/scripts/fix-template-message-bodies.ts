@@ -11,7 +11,6 @@ const DB: string =
   process.env["DATABASE_URL"] ??
   (() => { throw new Error("Set DATABASE_PUBLIC_URL (run via: railway run --service Postgres <command>)"); })();
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DB }) });
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const apply = process.argv.includes("--apply");
 
 async function q<T>(sql: string): Promise<T[]> {

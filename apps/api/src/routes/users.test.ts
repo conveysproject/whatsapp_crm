@@ -300,7 +300,7 @@ describe("PATCH /v1/users/:id/team", () => {
 
   it("returns 403 when caller lacks settings_agents permission", async () => {
     const noPermApp = Fastify({ logger: false });
-    noPermApp.decorate("prisma", mockPrisma as unknown as import("@prisma/client").PrismaClient);
+    noPermApp.decorate("prisma", mockPrisma as unknown as PrismaClient);
     noPermApp.addHook("onRequest", async (r) => {
       r.auth = { userId: "u-caller", organizationId: "org-1", role: "manager" as const, permissions: { settings_access: "allow" }, teamId: null, teamRole: null };
     });

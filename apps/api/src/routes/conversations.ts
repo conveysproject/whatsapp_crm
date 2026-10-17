@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync, FastifyInstance } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import type { ConversationStatus, Prisma } from "@prisma/client";
 import type { ConversationId } from "@WBMSG/shared";
 import { getIo } from "../lib/io-ref.js";
@@ -7,7 +7,6 @@ import { summarizeConversation } from "../lib/claude.js";
 import { canAccess, maskPhone, shouldHidePhone } from "../lib/permissions.js";
 import { dispatchFlowTrigger } from "../lib/trigger-dispatcher.js";
 import { conversationVisibilityWhere, conversationAccessWhere } from "../lib/conversation-access.js";
-import type { AuthContext } from "../types/fastify.js";
 
 const listInclude = {
   contact: { select: { id: true, firstName: true, lastName: true, phoneNumber: true, tags: true } },
@@ -175,7 +174,6 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { id: ConversationId } }>(
     "/conversations/:id/history",
     async (request, reply) => {
-      const { organizationId } = request.auth;
       const conversation = await fastify.prisma.conversation.findFirst({
         where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
       });
@@ -293,7 +291,6 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: ConversationId } }>(
     "/conversations/:id/read",
     async (request, reply) => {
-      const { organizationId } = request.auth;
       const conversation = await fastify.prisma.conversation.findFirst({
         where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
       });
@@ -335,7 +332,6 @@ export const conversationsRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── AI conversation summary ────────────────────────────────────────────
   fastify.post<{ Params: { id: ConversationId } }>("/conversations/:id/summarize", async (request, reply) => {
-    const { organizationId } = request.auth;
     const conversation = await fastify.prisma.conversation.findFirst({
       where: await conversationAccessWhere(fastify.prisma, request.auth, request.params.id),
       include: { contact: { select: { id: true, pastAiSummary: true } } },
