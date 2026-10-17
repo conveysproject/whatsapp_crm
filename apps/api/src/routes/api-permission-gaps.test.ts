@@ -83,8 +83,8 @@ describe("AI: each feature follows the permission of the screen that uses it", (
     ["agent", "POST", "/v1/ai/creator/template/refine", false],
     ["agent", "POST", "/v1/ai/creator/template/image", false],
     ["manager", "POST", "/v1/ai/creator/template/generate", true],
-    ["manager", "POST", "/v1/ai/creator/flow/generate", false],
-    ["manager", "POST", "/v1/ai/creator/flow/refine", false],
+    ["manager", "POST", "/v1/ai/creator/flow/generate", true],
+    ["viewer", "POST", "/v1/ai/creator/flow/refine", false],
     ["admin", "POST", "/v1/ai/creator/flow/generate", true],
   ])("%s %s %s → allowed=%s", async (...c) => check((await import("./ai.js")).aiRouter, c));
 

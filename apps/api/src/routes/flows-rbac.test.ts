@@ -32,7 +32,8 @@ describe("flows RBAC", () => {
     ["viewer", "DELETE", "/v1/flows/f1", false],
     ["viewer", "POST", "/v1/flows/f1/duplicate", false],
     ["viewer", "POST", "/v1/flows/f1/test", false],
-    ["manager", "DELETE", "/v1/flows/f1", false],
+    ["manager", "DELETE", "/v1/flows/f1", true],
+    ["agent", "DELETE", "/v1/flows/f1", false],
     ["admin", "DELETE", "/v1/flows/f1", true],
     ["admin", "PATCH", "/v1/flows/f1", true],
   ] as const)("%s %s %s → allowed=%s", async (role, method, url, allowed) => {
