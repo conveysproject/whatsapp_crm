@@ -1,9 +1,13 @@
 "use client";
 import { JSX, Suspense, useEffect } from "react";
 import Link from "next/link";
-import { SignIn, useAuth } from "@clerk/nextjs";
+import { SignIn } from "@clerk/nextjs";
+import { SignInForm } from "@/components/auth/SignInForm";
+import { authProvider } from "@/lib/auth/config";
+import { useAuth } from "@/lib/auth/client";
 import { useRouter, useSearchParams } from "next/navigation";
 
+const wbmsg = authProvider() === "wbmsg";
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 function AdminSignInInner(): JSX.Element {
@@ -47,6 +51,11 @@ function AdminSignInInner(): JSX.Element {
       )}
 
       <div className="w-full max-w-sm">
+        {wbmsg ? (
+          <div className="rounded-xl border border-gray-700 bg-gray-900 p-6 shadow-xl">
+            <SignInForm variant="admin" />
+          </div>
+        ) : (
         <SignIn
           routing="hash"
           fallbackRedirectUrl="/admin/organizations"
@@ -64,6 +73,7 @@ function AdminSignInInner(): JSX.Element {
             },
           }}
         />
+        )}
       </div>
 
       <p className="mt-6 text-xs text-gray-600">

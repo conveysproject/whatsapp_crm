@@ -4,9 +4,13 @@ import { DM_Sans, Bricolage_Grotesque } from "next/font/google";
 import Link from "next/link";
 import Image from "next/image";
 import { PublicNav } from "@/components/public/PublicNav";
+import { SignInForm } from "@/components/auth/SignInForm";
+import { authProvider } from "@/lib/auth/config";
 
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm", weight: ["400", "500"] });
 const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-br", weight: ["500", "600", "700", "800"] });
+
+const wbmsg = authProvider() === "wbmsg";
 
 export default function SignInPage(): JSX.Element {
   return (
@@ -41,7 +45,7 @@ export default function SignInPage(): JSX.Element {
           {/* Right: Clerk SignIn */}
           <div className="flex-1 flex flex-col justify-center items-center px-6 py-12">
             <div className="w-full max-w-md">
-              <SignIn signInUrl="/dashboard" />
+              {wbmsg ? <SignInForm /> : <SignIn signInUrl="/dashboard" />}
             </div>
           </div>
         </div>

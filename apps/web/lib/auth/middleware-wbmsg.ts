@@ -9,6 +9,8 @@ const PUBLIC: RegExp[] = [
   /^\/$/,
   /^\/sign-in(\/.*)?$/,
   /^\/sign-up(\/.*)?$/,
+  /^\/forgot-password$/,
+  /^\/reset-password$/,
   /^\/docs(\/.*)?$/,
   /^\/terms$/,
   /^\/privacy$/,
