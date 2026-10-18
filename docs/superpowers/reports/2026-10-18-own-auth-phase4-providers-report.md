@@ -48,3 +48,27 @@ Browser form-POSTs to the BFF → BFF gets `{url, state}` from the API, sets htt
 - No audit-log table exists, so link/unlink/phone changes are not audited beyond `login_logs` for sign-ins.
 - Env examples not updated (`.env*` files are off-limits in this session); the vars are listed in the runbook:
   `AUTH_WHATSAPP_ORG_ID`, `AUTH_WHATSAPP_TEMPLATE`, `AUTH_WHATSAPP_TEMPLATE_LANG`, `AUTH_GOOGLE_CLIENT_ID`, `AUTH_GOOGLE_CLIENT_SECRET`, `AUTH_FACEBOOK_APP_ID`, `AUTH_FACEBOOK_APP_SECRET`, optional `AUTH_OAUTH_REDIRECT_BASE`.
+
+## Review follow-up (verdict "With fixes"; commit `bef8217a`)
+1. **WhatsApp send abuse (important), fixed.** There is now a global daily cap on all auth WhatsApp sends (sign-in codes and phone verification): `AUTH_WHATSAPP_DAILY_CAP` (default 500), counted in Redis under `auth:wa:daily:<UTC date>` with a 48 h TTL (`whatsappDailyCapHit` in `whatsapp-codes.ts`). Once the cap is reached:
+   - phone verification answers 429 `{ code: "RATE_LIMITED", message: "Please try again later." }`;
+   - sign-in requests skip the send silently and still answer 202.
+
+   A warning is logged with `reason: "whatsapp_daily_cap"` and no PII. Only eligible accounts count against the cap (unknown numbers do not). `POST /phone/verify/request` now requires Turnstile when `TURNSTILE_SECRET_KEY` is set, and the Security page phone form shows the widget when `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is set.
+2. **Last-method rule (important), fixed.**
+   - `DELETE /oauth/:provider` and `DELETE /phone` now check and change inside one `$transaction` that first takes a row lock: `SELECT id FROM auth_accounts WHERE id = $1 FOR UPDATE` (`account-lock.ts`). Concurrent unlinks are serialized.
+   - `DELETE /phone` refuses with 409 `LAST_SIGN_IN_METHOD` when a verified number is the last non-email method (password or a remaining OAuth link counts as another method). It is now behind the WhatsApp feature flag (404 when off).
+   - The concurrent case is tested: two simultaneous unlinks on an account with only Google and Facebook give one 200 and one 409, and one link remains.
+3. **Pending email step (minor), fixed.** At most 3 code emails per pending id (`auth:oauth:pending-sends:<id>`, 429 after that). Re-saving a pending entry uses `SET ... KEEPTTL XX`, so it keeps the original 30-minute expiry and never recreates an entry that has already expired.
+4. **Facebook token exchange (minor), fixed.** It is now a `POST` with a form body, so the code and the app secret are never in a URL.
+5. **Runbook, updated.** It now states plainly that the WhatsApp, Google and Facebook env vars must stay unset until the daily cap value is chosen and the Meta template is approved, and it documents `AUTH_WHATSAPP_DAILY_CAP`.
+
+Verification after the fixes:
+- root `pnpm type-check`: exit 0;
+- root `pnpm lint`: 0 errors (61 pre-existing-style warnings), 5/5 tasks;
+- API: 200 files, 2855 tests passed;
+- web: 42 files, 466 tests passed.
+
+New or changed tests: whatsapp-codes +2, whatsapp routes +7, oauth routes +3, state +1, providers (Facebook POST).
+
+New owner decision: the value of `AUTH_WHATSAPP_DAILY_CAP` (default 500 messages per UTC day).
