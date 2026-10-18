@@ -3,21 +3,27 @@ import { config } from "../config";
 import type { AuthResponse } from "./flows";
 import type { RefreshResult } from "./session-store";
 
+/** A hung request must not hold the single-flight refresh forever; a timeout counts as a network error. */
+export const AUTH_TIMEOUT_MS = 15_000;
+
 /** Direct calls to the WBMSG auth API (no web BFF on mobile). Every sign-in says `client: "mobile"`. */
-export function createAuthClient(baseUrl: string = config.apiUrl) {
+export function createAuthClient(baseUrl: string = config.apiUrl, timeoutMs: number = AUTH_TIMEOUT_MS) {
   async function call(method: "GET" | "POST", path: string, body?: Record<string, unknown>, bearer?: string): Promise<AuthResponse> {
     const headers: Record<string, string> = { Accept: "application/json", ...appHeaders() };
     if (body) headers["Content-Type"] = "application/json";
     if (bearer) headers["Authorization"] = `Bearer ${bearer}`;
-    let res: Response;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      res = await fetch(`${baseUrl}/v1${path}`, { method, headers, ...(body ? { body: JSON.stringify(body) } : {}) });
+      const res = await fetch(`${baseUrl}/v1${path}`, { method, headers, signal: controller.signal, ...(body ? { body: JSON.stringify(body) } : {}) });
+      noteResponseStatus(res.status);
+      const json: unknown = await res.json().catch(() => null);
+      return { status: res.status, body: json };
     } catch {
       return { status: 0, body: null };
+    } finally {
+      clearTimeout(timer);
     }
-    noteResponseStatus(res.status);
-    const json: unknown = await res.json().catch(() => null);
-    return { status: res.status, body: json };
   }
 
   return {
@@ -45,10 +51,8 @@ export function createAuthClient(baseUrl: string = config.apiUrl) {
       if (r.status === 401) return { ok: false };
       throw new Error(r.status === 0 ? "Network request failed" : `Refresh failed (${r.status})`);
     },
-    /** Status of the public key endpoint: 200 when the API runs WBMSG login, 404 when it runs Clerk, 0 offline. */
-    async probe(): Promise<number> {
-      return (await call("GET", "/auth/.well-known/jwks.json")).status;
-    },
+    /** The public key endpoint's raw answer; read it with classifyProbe(). */
+    probe: () => call("GET", "/auth/.well-known/jwks.json"),
   };
 }
 

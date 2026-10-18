@@ -183,3 +183,63 @@ describe("session store: signOut", () => {
     expect(kv.data[KEYS.refresh]).toBeUndefined();
   });
 });
+
+describe("session store: forceRefresh (server revoked an unexpired token)", () => {
+  it("refreshes once even though the access token has not expired", async () => {
+    const refresh = jest.fn(async (): Promise<RefreshResult> => ({ ok: true, accessToken: access("u", 2), refreshToken: "r2", expiresIn: 600 }));
+    const { store } = setup({ refresh });
+    await store.restore();
+    await store.signIn({ accessToken: access("u", 1), refreshToken: "r1", expiresIn: 600 });
+    await expect(store.forceRefresh(access("u", 1))).resolves.toBe(access("u", 2));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    // A second caller whose request failed with the same old token gets the new one without another rotation.
+    await expect(store.forceRefresh(access("u", 1))).resolves.toBe(access("u", 2));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await expect(store.getToken()).resolves.toBe(access("u", 2));
+  });
+
+  it("concurrent forced refreshes share one rotation", async () => {
+    let resolve!: (r: RefreshResult) => void;
+    const refresh = jest.fn(() => new Promise<RefreshResult>((r) => { resolve = r; }));
+    const { store } = setup({ refresh });
+    await store.restore();
+    await store.signIn({ accessToken: access("u", 1), refreshToken: "r1", expiresIn: 600 });
+    const a = store.forceRefresh(access("u", 1));
+    const b = store.forceRefresh(access("u", 1));
+    const c = store.getToken();
+    resolve({ ok: true, accessToken: access("u", 2), refreshToken: "r2", expiresIn: 600 });
+    await expect(Promise.all([a, b, c])).resolves.toEqual([access("u", 2), access("u", 2), access("u", 2)]);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("signs out when the forced refresh answers 401", async () => {
+    const refresh = jest.fn(async (): Promise<RefreshResult> => ({ ok: false }));
+    const { store } = setup({ refresh });
+    await store.restore();
+    await store.signIn({ accessToken: access("u"), refreshToken: "r1", expiresIn: 600 });
+    await expect(store.forceRefresh(access("u"))).resolves.toBeNull();
+    expect(store.getState().status).toBe("signed_out");
+  });
+
+  it("returns null without any call when signed out", async () => {
+    const { store, refresh } = setup();
+    await store.restore();
+    await expect(store.forceRefresh("x")).resolves.toBeNull();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+describe("session store: persisting the rotated refresh token", () => {
+  it("keeps working and warns in dev (without the token) when SecureStore fails", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const kv = memoryKV({ [KEYS.refresh]: "r1", [KEYS.userId]: "u" });
+    (kv.set as jest.Mock).mockRejectedValueOnce(new Error("keychain"));
+    const refresh = jest.fn(async (): Promise<RefreshResult> => ({ ok: true, accessToken: access("u"), refreshToken: "secret-r2", expiresIn: 600 }));
+    const { store } = setup({ kv, refresh });
+    await store.restore();
+    await expect(store.getToken()).resolves.toBe(access("u"));
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("secret-r2");
+    warn.mockRestore();
+  });
+});

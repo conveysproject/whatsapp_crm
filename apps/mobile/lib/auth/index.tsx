@@ -3,8 +3,9 @@ import * as SecureStore from "expo-secure-store";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { config } from "../config";
 import { createAuthClient, type AuthClient } from "./client";
-import { parseAuthMode, resolveAuthMode, type AuthMode } from "./provider";
-import { createSessionStore, type SecureKV, type SessionStore } from "./session-store";
+import { classifyProbe, parseAuthMode, parseModeRecord, recordAfterProbe, startMode, type AuthMode } from "./provider";
+import { setSessionRecovery } from "./recovery";
+import { createSessionStore, KEYS, type SecureKV, type SessionStore } from "./session-store";
 
 /** The same shape the app used from @clerk/expo's useAuth(), whichever login is active. */
 export interface AuthValue {
@@ -18,8 +19,8 @@ export interface AuthValue {
 const AuthContext = createContext<AuthValue | null>(null);
 const ModeContext = createContext<AuthMode>("clerk");
 
-const MODE_KEY = "wbmsg.auth.mode";
-const PROBE_TIMEOUT_MS = 5_000;
+/** `auto` mode's memory between launches (kept outside the wbmsg.auth.* session keys, which a downgrade wipes). */
+export const MODE_KEY = "wbmsg.mode";
 
 const secureKV: SecureKV = {
   get: (k) => SecureStore.getItemAsync(k),
@@ -45,6 +46,32 @@ export function wbmsgSession(): { client: AuthClient; store: SessionStore } {
   return wbmsg;
 }
 
+async function bestEffort<T>(p: Promise<T>): Promise<T | null> {
+  try {
+    return await p;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `auto` mode at launch: decide from what is stored (no network, so the app shows at once), then ask the API in the
+ * background. The answer only changes what the NEXT launch uses; the running session never switches login.
+ */
+async function startAutoMode(onMode: (mode: AuthMode) => void): Promise<void> {
+  const [raw, storedRefresh] = await Promise.all([bestEffort(SecureStore.getItemAsync(MODE_KEY)), bestEffort(SecureStore.getItemAsync(KEYS.refresh))]);
+  const record = parseModeRecord(raw);
+  const start = startMode(record, Boolean(storedRefresh));
+  if (start.wipeWbmsg) {
+    // A downgrade to Clerk was decided on earlier launches: the WBMSG session cannot be used any more.
+    await Promise.all(Object.values(KEYS).map((k) => bestEffort(SecureStore.deleteItemAsync(k))));
+  }
+  onMode(start.mode);
+  const res = await wbmsgSession().client.probe();
+  const next = recordAfterProbe(record, start.mode, classifyProbe(res.status, res.body));
+  await bestEffort(SecureStore.setItemAsync(MODE_KEY, JSON.stringify(next)));
+}
+
 function ClerkBridge({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn, userId, getToken, signOut } = useClerkAuth();
   const value = useMemo<AuthValue>(
@@ -59,6 +86,9 @@ function WbmsgBridge({ children }: { children: ReactNode }) {
   const { store } = session;
   useEffect(() => {
     if (wbmsg && !wbmsg.restoring) wbmsg.restoring = store.restore();
+    // API calls that get a 401 on an unexpired token (server-revoked session) force one refresh and retry once.
+    setSessionRecovery((stale) => store.forceRefresh(stale));
+    return () => setSessionRecovery(null);
   }, [store]);
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const getToken = useCallback(() => store.getToken(), [store]);
@@ -70,26 +100,18 @@ function WbmsgBridge({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-function withTimeout(p: Promise<number>, ms: number): Promise<number> {
-  return new Promise((resolve) => {
-    const t = setTimeout(() => resolve(0), ms);
-    p.then((v) => { clearTimeout(t); resolve(v); }, () => { clearTimeout(t); resolve(0); });
-  });
-}
-
 /** Picks the login from EXPO_PUBLIC_AUTH_PROVIDER (clerk by default) and provides useAuth() for it. */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const configured = parseAuthMode(config.authProvider);
+  // `auto` waits only for the local SecureStore read (no network) before rendering.
   const [mode, setMode] = useState<AuthMode | null>(configured === "auto" ? null : configured);
 
   useEffect(() => {
     if (configured !== "auto") return;
     let alive = true;
-    void resolveAuthMode("auto", {
-      probe: () => withTimeout(wbmsgSession().client.probe(), PROBE_TIMEOUT_MS),
-      lastKnown: () => SecureStore.getItemAsync(MODE_KEY),
-      remember: (m) => SecureStore.setItemAsync(MODE_KEY, m),
-    }).then((m) => { if (alive) setMode(m); });
+    void startAutoMode((m) => { if (alive) setMode((current) => current ?? m); }).catch(() => {
+      if (alive) setMode((current) => current ?? "clerk");
+    });
     return () => { alive = false; };
   }, [configured]);
 

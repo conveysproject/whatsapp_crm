@@ -2,6 +2,54 @@ jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { 
 
 import { ApiError, createApi } from "./api";
 import { __resetUpgradeForTests, isUpgradeRequired } from "./app-headers";
+import { setSessionRecovery } from "./auth/recovery";
+
+afterEach(() => setSessionRecovery(null));
+
+function fetchSequence(...statuses: number[]) {
+  const fn = jest.fn();
+  for (const status of statuses) {
+    fn.mockResolvedValueOnce({ ok: status < 300, status, json: async () => (status < 300 ? { data: 1 } : { error: { code: "UNAUTHORIZED", message: "Unauthorized" } }) });
+  }
+  globalThis.fetch = fn as unknown as typeof fetch;
+  return fn;
+}
+
+describe("createApi: 401 recovery", () => {
+  it("forces one refresh and retries once with the new token", async () => {
+    const fetchFn = fetchSequence(401, 200);
+    const recover = jest.fn(async () => "fresh");
+    setSessionRecovery(recover);
+    await expect(createApi(async () => "stale", "https://api.test")("/x")).resolves.toEqual({ data: 1 });
+    expect(recover).toHaveBeenCalledWith("stale");
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(fetchFn.mock.calls[1][1].headers.Authorization).toBe("Bearer fresh");
+  });
+
+  it("never loops: a second 401 is reported", async () => {
+    const fetchFn = fetchSequence(401, 401, 200);
+    setSessionRecovery(async () => "fresh");
+    await expect(createApi(async () => "stale", "https://api.test")("/x")).rejects.toMatchObject({ status: 401 });
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports the 401 when the session is over (recovery signed out)", async () => {
+    const fetchFn = fetchSequence(401);
+    setSessionRecovery(async () => null);
+    await expect(createApi(async () => "stale", "https://api.test")("/x")).rejects.toMatchObject({ status: 401 });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("Clerk mode (nothing registered) and token-less calls are unchanged", async () => {
+    const fetchFn = fetchSequence(401, 401);
+    await expect(createApi(async () => "t", "https://api.test")("/x")).rejects.toMatchObject({ status: 401 });
+    const recover = jest.fn(async () => "fresh");
+    setSessionRecovery(recover);
+    await expect(createApi(async () => null, "https://api.test")("/x")).rejects.toMatchObject({ status: 401 });
+    expect(recover).not.toHaveBeenCalled();
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+});
 
 function mockFetch(status: number, body: unknown) {
   const fn = jest.fn().mockResolvedValue({

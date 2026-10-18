@@ -2,6 +2,7 @@ jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { 
 
 import { ApiError } from "./api";
 import { __resetUpgradeForTests, isUpgradeRequired } from "./app-headers";
+import { setSessionRecovery } from "./auth/recovery";
 import { contentTypeForMime, uploadMedia } from "./media-upload";
 
 describe("contentTypeForMime", () => {
@@ -31,6 +32,20 @@ describe("uploadMedia", () => {
     globalThis.fetch = jest.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({ error: { code: "NO_FILE", message: "No file uploaded" } }) }) as unknown as typeof fetch;
     await expect(uploadMedia({ uri: "x", name: "x", mimeType: "image/png", getToken: async () => "t", baseUrl: "https://api.test" })).rejects.toMatchObject({ status: 400, code: "NO_FILE" });
     await expect(uploadMedia({ uri: "x", name: "x", mimeType: "image/png", getToken: async () => "t", baseUrl: "https://api.test" })).rejects.toBeInstanceOf(ApiError);
+  });
+  it("retries once with a forced-refresh token after a 401", async () => {
+    const fetchFn = jest.fn()
+      .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ error: { code: "UNAUTHORIZED" } }) })
+      .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ data: { mediaId: "m", mimeType: "image/png", filename: "x" } }) });
+    globalThis.fetch = fetchFn as unknown as typeof fetch;
+    setSessionRecovery(async () => "fresh");
+    try {
+      await expect(uploadMedia({ uri: "x", name: "x", mimeType: "image/png", getToken: async () => "stale", baseUrl: "https://api.test" })).resolves.toMatchObject({ mediaId: "m" });
+      expect(fetchFn).toHaveBeenCalledTimes(2);
+      expect(fetchFn.mock.calls[1][1].headers.Authorization).toBe("Bearer fresh");
+    } finally {
+      setSessionRecovery(null);
+    }
   });
   it("raises the update screen on 426", async () => {
     __resetUpgradeForTests();

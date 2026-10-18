@@ -38,6 +38,8 @@ export interface SessionStore {
   getState(): SessionState;
   subscribe(listener: () => void): () => void;
   getToken(): Promise<string | null>;
+  /** After a 401 on `staleToken`: refresh once even though it has not expired (joins a refresh already running). */
+  forceRefresh(staleToken: string | null): Promise<string | null>;
   signIn(tokens: SessionTokens): Promise<void>;
   signOut(): Promise<void>;
   deviceId(): Promise<string | null>;
@@ -99,8 +101,21 @@ export function createSessionStore(deps: {
     }
     refreshToken = result.refreshToken;
     access = { token: result.accessToken, expiresAt: expiryOf(result.expiresIn) };
-    await bestEffort(() => deps.kv.set(KEYS.refresh, result.refreshToken));
+    try {
+      await deps.kv.set(KEYS.refresh, result.refreshToken);
+    } catch {
+      // The server already rotated: the stored token is now stale, so the next launch will need a new sign-in.
+      if (__DEV__) console.warn("auth: could not save the rotated refresh token to SecureStore");
+    }
     return result.accessToken;
+  }
+
+  function startRefresh(): Promise<string | null> {
+    inflight ??= runRefresh().finally(() => {
+      inflight = null;
+      inflightRaw = null;
+    });
+    return inflight;
   }
 
   return {
@@ -130,14 +145,19 @@ export function createSessionStore(deps: {
       return () => listeners.delete(listener);
     },
 
+    async forceRefresh(staleToken) {
+      if (state.status !== "signed_in") return null;
+      if (inflight) return inflight;
+      // Another caller already replaced the rejected token: use the new one instead of rotating again.
+      if (access && access.token !== staleToken && access.expiresAt - REFRESH_SKEW_MS > now()) return access.token;
+      access = null;
+      return startRefresh();
+    },
+
     async getToken() {
       if (state.status !== "signed_in") return null;
       if (access && access.expiresAt - REFRESH_SKEW_MS > now()) return access.token;
-      inflight ??= runRefresh().finally(() => {
-        inflight = null;
-        inflightRaw = null;
-      });
-      return inflight;
+      return startRefresh();
     },
 
     async signIn(tokens) {

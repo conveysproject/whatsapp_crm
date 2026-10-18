@@ -1,6 +1,7 @@
 // apps/mobile/lib/media-upload.ts
 import { ApiError, type GetToken } from "./api";
 import { appHeaders, noteResponseStatus } from "./app-headers";
+import { recoverFrom401 } from "./auth/recovery";
 import { config } from "./config";
 
 export function contentTypeForMime(mime: string): "image" | "video" | "audio" | "document" {
@@ -16,11 +17,18 @@ export async function uploadMedia(args: { uri: string; name: string; mimeType: s
   const form = new FormData();
   // React Native's FormData accepts { uri, name, type } file parts.
   form.append("file", { uri: args.uri, name: args.name, type: args.mimeType } as unknown as Blob);
-  const res = await fetch(`${args.baseUrl ?? config.apiUrl}/v1/media/upload`, {
-    method: "POST",
-    headers: { Accept: "application/json", ...appHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: form,
-  });
+  const send = (bearer: string | null) =>
+    fetch(`${args.baseUrl ?? config.apiUrl}/v1/media/upload`, {
+      method: "POST",
+      headers: { Accept: "application/json", ...appHeaders(), ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) },
+      body: form,
+    });
+  let res = await send(token);
+  // Same one-shot recovery as lib/api.ts: a revoked-but-unexpired token gets one forced refresh and one retry.
+  if (res.status === 401) {
+    const fresh = await recoverFrom401(token);
+    if (fresh) res = await send(fresh);
+  }
   noteResponseStatus(res.status);
   const json: unknown = await res.json().catch(() => null);
   if (!res.ok) {

@@ -91,7 +91,26 @@ describe("auth client", () => {
 
   it("probes the public key endpoint", async () => {
     const fetchFn = mockFetch(404, { error: { code: "NOT_FOUND" } });
-    await expect(createAuthClient("https://api.test").probe()).resolves.toBe(404);
+    await expect(createAuthClient("https://api.test").probe()).resolves.toEqual({ status: 404, body: { error: { code: "NOT_FOUND" } } });
     expect(fetchFn.mock.calls[0][0]).toBe("https://api.test/v1/auth/.well-known/jwks.json");
+  });
+
+  it("times out a hung request as a network error, so a hung refresh throws (user stays signed in)", async () => {
+    jest.useFakeTimers();
+    try {
+      globalThis.fetch = jest.fn((_url: string, init: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => init.signal.addEventListener("abort", () => reject(new Error("aborted")))),
+      ) as unknown as typeof fetch;
+      const c = createAuthClient("https://api.test", 15_000);
+      const pending = c.refresh("r1");
+      const assertion = expect(pending).rejects.toThrow("Network request failed");
+      jest.advanceTimersByTime(15_000);
+      await assertion;
+      const me = c.me("acc");
+      jest.advanceTimersByTime(15_000);
+      await expect(me).resolves.toEqual({ status: 0, body: null });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
