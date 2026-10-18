@@ -72,7 +72,7 @@ const INVALID_CODE = {
   error: { code: "INVALID_CODE", message: "That code is not valid. Request a new one." },
 };
 const SIGNUP_EXPIRED = {
-  error: { code: "INVALID_CODE", message: "Your sign-up expired. Please start again." },
+  error: { code: "SIGNUP_EXPIRED", message: "Your sign-up expired. Please start again." },
 };
 
 export const signupRoutes: FastifyPluginAsync = async (fastify) => {

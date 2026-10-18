@@ -33,6 +33,17 @@ export function nextStep(response: { status: number; body: unknown }): Step {
   return { kind: "error", message: FALLBACK[status] ?? "Something went wrong. Please try again." };
 }
 
+// The API error code of a failed response ("SIGNUP_EXPIRED", ...), or null.
+export function errorCode(response: { body: unknown }): string | null {
+  const code = asRecord(asRecord(response.body)?.["error"])?.["code"];
+  return typeof code === "string" ? code : null;
+}
+
+// The sign-up window ended. Matches the SIGNUP_EXPIRED code; the message check covers an older API.
+export function isSignupExpired(code: string | null, message: string): boolean {
+  return code === "SIGNUP_EXPIRED" || /expired/i.test(message);
+}
+
 export interface BffResult {
   status: number;
   body: unknown;

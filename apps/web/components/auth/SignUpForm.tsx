@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { FormEvent, JSX } from "react";
 import Link from "next/link";
-import { nextStep, postAuth } from "@/lib/auth/flows";
+import { errorCode, isSignupExpired, nextStep, postAuth } from "@/lib/auth/flows";
 import {
   buildSignUpBody,
   nextSignupId,
@@ -99,9 +99,10 @@ export function SignUpForm(): JSX.Element {
   }
 
   async function verify(code: string): Promise<string | null> {
-    const step = nextStep(await postAuth("sign-up/verify", { signupId, email: identity.email.trim(), code }));
+    const res = await postAuth("sign-up/verify", { signupId, email: identity.email.trim(), code });
+    const step = nextStep(res);
     if (step.kind === "error") {
-      if (/expired/i.test(step.message)) setExpired(true);
+      if (isSignupExpired(errorCode(res), step.message)) setExpired(true);
       return step.message;
     }
     window.location.assign("/dashboard");

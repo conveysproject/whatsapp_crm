@@ -239,7 +239,7 @@ describe("auth signup/verify", () => {
   let app: FastifyInstance;
   const vbody = { signupId: "sid1", email: "Foo@X.com", code: "123456", client: "mobile" };
   const pending = { email: "foo@x.com", passwordHash: "$argon2id$h", firstName: "Foo", lastName: "Bar", business };
-  const expired = { error: { code: "INVALID_CODE", message: "Your sign-up expired. Please start again." } };
+  const expired = { error: { code: "SIGNUP_EXPIRED", message: "Your sign-up expired. Please start again." } };
   const generic = { error: { code: "INVALID_CODE", message: "That code is not valid. Request a new one." } };
   beforeEach(async () => {
     vi.clearAllMocks();

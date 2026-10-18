@@ -40,6 +40,32 @@ describe("wbmsgMiddleware", () => {
       expect(r.headers.get("x-middleware-next"), p).toBe("1");
     }
   });
+  describe("x-pathname", () => {
+    const fwd = (r: Response) => r.headers.get("x-middleware-request-x-pathname");
+    it("forwards pathname + search to a protected page", async () => {
+      expect(fwd(await wbmsgMiddleware(req("/inbox?a=1&b=2", { wb_at: fresh() })))).toBe("/inbox?a=1&b=2");
+    });
+    it("forwards it on public pages and on the refresh path (cookies unchanged)", async () => {
+      expect(fwd(await wbmsgMiddleware(req("/terms")))).toBe("/terms");
+      refresh.mockResolvedValue({ ok: true, accessToken: "A", refreshToken: "R" });
+      const r = await wbmsgMiddleware(req("/inbox?x=1", { theme: "t", wb_at: stale(), wb_rt: "rt" }));
+      expect(fwd(r)).toBe("/inbox?x=1");
+      expect(r.headers.get("x-middleware-request-cookie")).toBe("theme=t; wb_at=A; wb_rt=R");
+    });
+    it("overwrites a client-supplied x-pathname", async () => {
+      const spoof = new NextRequest("https://app.test/inbox", {
+        headers: { cookie: `wb_at=${fresh()}`, "x-pathname": "//evil.example" },
+      });
+      expect(fwd(await wbmsgMiddleware(spoof))).toBe("/inbox");
+    });
+    it("is never set for /api routes", async () => {
+      expect(fwd(await wbmsgMiddleware(req("/api/auth/token")))).toBeNull();
+    });
+    it("is not set when the path is not a safe relative path", async () => {
+      const r = await wbmsgMiddleware(req("/a%5Cb", { wb_at: fresh() }));
+      expect(fwd(r)).toBeNull();
+    });
+  });
   it("never touches /api routes", async () => {
     const r = await wbmsgMiddleware(req("/api/auth/token"));
     expect(r.headers.get("x-middleware-next")).toBe("1");

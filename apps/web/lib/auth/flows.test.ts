@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextStep, postSignInDestination } from "./flows";
+import { errorCode, isSignupExpired, nextStep, postSignInDestination } from "./flows";
 
 describe("nextStep", () => {
   it("maps a plain 200 to done", () => {
@@ -26,6 +26,18 @@ describe("nextStep", () => {
   });
   it("errors when a next step has no challengeId", () => {
     expect(nextStep({ status: 200, body: { next: "new_device" } }).kind).toBe("error");
+  });
+  it("errorCode reads the API error code", () => {
+    expect(errorCode({ body: { error: { code: "SIGNUP_EXPIRED", message: "x" } } })).toBe("SIGNUP_EXPIRED");
+    expect(errorCode({ body: { error: { message: "x" } } })).toBeNull();
+    expect(errorCode({ body: "oops" })).toBeNull();
+    expect(errorCode({ body: null })).toBeNull();
+  });
+  it("isSignupExpired prefers the code and falls back to the message", () => {
+    expect(isSignupExpired("SIGNUP_EXPIRED", "anything")).toBe(true);
+    expect(isSignupExpired("INVALID_CODE", "Your sign-up expired. Please start again.")).toBe(true);
+    expect(isSignupExpired("INVALID_CODE", "That code is not valid.")).toBe(false);
+    expect(isSignupExpired(null, "Too many attempts.")).toBe(false);
   });
   it("uses the API error message", () => {
     expect(nextStep({ status: 400, body: { error: { code: "INVALID_CODE", message: "That code is not right." } } })).toEqual({
