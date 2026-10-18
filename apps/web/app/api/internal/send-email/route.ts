@@ -4,9 +4,8 @@ import { sendMail, type MailOptions } from "../../../../lib/mail";
 
 // Generic transactional email bridge — Vercel can reach GoDaddy SMTP, Railway cannot.
 //
-// Two callers, one header (Authorization: Bearer <token>):
-//   1. Browser (signed-in user)   — access token from getToken()  → own JWKS verify (wbmsg) or Clerk verifyToken()
-//   2. Railway background workers — INTERNAL_EMAIL_SECRET hex  → verified via timingSafeEqual()
+// Server-to-server only: Authorization: Bearer <INTERNAL_EMAIL_SECRET> (Railway API),
+// verified via timingSafeEqual(). User tokens are rejected in both auth modes.
 
 const MAX_HTML_BYTES = 64 * 1024;
 

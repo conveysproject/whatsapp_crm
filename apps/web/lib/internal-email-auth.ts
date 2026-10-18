@@ -1,33 +1,16 @@
-import { authProvider } from "./auth/config";
-import { verifyAccessToken } from "./auth/jwt";
-
 /**
  * Authorizes callers of the transactional email bridge.
- *  - JWT-looking token: own access token (wbmsg mode) or Clerk JWT (clerk mode)
- *  - otherwise / fallthrough: INTERNAL_EMAIL_SECRET for Railway workers (both modes)
+ *
+ * Server-to-server only: the caller must present INTERNAL_EMAIL_SECRET
+ * (the Railway API). Signed-in user tokens (Clerk JWT or our own access
+ * token) are deliberately NOT accepted — the bridge sends arbitrary HTML to
+ * arbitrary recipients, so any user token would turn it into a spam relay.
+ * Browser features that need an email must have the API send it instead.
  */
 export async function isAuthorized(token: string): Promise<boolean> {
   if (!token) return false;
-
-  if (token.startsWith("eyJ")) {
-    if (authProvider() === "wbmsg") {
-      if ((await verifyAccessToken(token)) !== null) return true;
-    } else {
-      const secretKey = process.env["CLERK_SECRET_KEY"];
-      if (secretKey) {
-        try {
-          // Lazy import: a wbmsg build without Clerk keys never loads Clerk.
-          const { verifyToken } = await import("@clerk/nextjs/server");
-          const payload = await verifyToken(token, { secretKey });
-          if (payload?.sub) return true;
-        } catch { /* invalid JWT — fall through */ }
-      }
-    }
-  }
-
   const secret = process.env["INTERNAL_EMAIL_SECRET"];
   if (secret && secret.length >= 32) return timingSafeEqual(token, secret);
-
   return false;
 }
 
