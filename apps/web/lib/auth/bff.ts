@@ -85,8 +85,13 @@ export function setSessionCookies(
   if (tokens.deviceId) res.cookies.set(COOKIE.device, tokens.deviceId, cookieOpts(DEVICE_MAX_AGE));
 }
 
+/**
+ * Ends the session in this browser. The trusted-device cookie (wb_dev) is kept on purpose: signing out
+ * does not make the browser an unknown device, so the next sign-in here skips the new-device code
+ * (super admins still always get a code; the API decides that).
+ */
 export function clearSessionCookies(res: NextResponse): void {
-  for (const name of [COOKIE.refresh, COOKIE.device, COOKIE.access]) {
+  for (const name of [COOKIE.refresh, COOKIE.access]) {
     res.cookies.set(name, "", cookieOpts(0));
   }
 }

@@ -137,7 +137,9 @@ describe("BFF auth routes", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect((fetchMock.mock.calls[0]![1] as RequestInit).headers).toMatchObject({ authorization: `Bearer ${at}` });
-    for (const n of ["wb_rt", "wb_dev", "wb_at"]) expect(res.cookies.get(n)).toMatchObject({ value: "", maxAge: 0 });
+    for (const n of ["wb_rt", "wb_at"]) expect(res.cookies.get(n)).toMatchObject({ value: "", maxAge: 0 });
+    // The trusted-device id survives sign-out, so the next sign-in on this browser skips the new-device code.
+    expect(res.cookies.get("wb_dev")).toBeUndefined();
   });
 });
 
