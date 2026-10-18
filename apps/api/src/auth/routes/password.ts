@@ -3,11 +3,11 @@ import { issueCode, verifyCode } from "../codes.js";
 import { trustDevice } from "../devices.js";
 import { sendCodeEmail, sendPasswordChangedEmail } from "../emails.js";
 import { normalizeEmail } from "../ids.js";
-import { authClientIp, clearPasswordFailures, isLocked, recordPasswordFailure } from "../limits.js";
+import { authClientIp, clearPasswordFailures, hitLimit, isLocked, recordPasswordFailure } from "../limits.js";
 import { checkPasswordPolicy, hashPassword, verifyPassword } from "../password.js";
 import { createSession, revokeAllSessions } from "../sessions.js";
 import { requireAccountSession } from "../account-auth.js";
-import { BOT_CHECK_FAILED, verifyTurnstile } from "../turnstile.js";
+import { BOT_CHECK_FAILED, passesBotCheck } from "../turnstile.js";
 
 const MIN_DURATION_MS = 300;
 
@@ -79,7 +79,7 @@ export const passwordRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      if (!(await verifyTurnstile(request.body.turnstileToken, authClientIp(request)))) {
+      if (!(await passesBotCheck(request.headers, request.body.turnstileToken, authClientIp(request), hitLimit))) {
         return reply.status(400).send(BOT_CHECK_FAILED);
       }
       const email = normalizeEmail(request.body.email);

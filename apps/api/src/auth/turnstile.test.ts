@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { verifyTurnstile } from "./turnstile.js";
+import { MOBILE_NO_TURNSTILE_LIMIT, passesBotCheck, verifyTurnstile } from "./turnstile.js";
 
 describe("verifyTurnstile", () => {
   const fetchMock = vi.fn();
@@ -46,5 +46,46 @@ describe("verifyTurnstile", () => {
     expect(await verifyTurnstile("tok", "1.1.1.1")).toBe(false);
     fetchMock.mockRejectedValueOnce(new DOMException("timeout", "TimeoutError"));
     expect(await verifyTurnstile("tok", "1.1.1.1")).toBe(false);
+  });
+});
+
+describe("passesBotCheck (mobile bypass)", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.TURNSTILE_SECRET_KEY = "secret";
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.TURNSTILE_SECRET_KEY;
+  });
+
+  it("passes without any check when Turnstile is not configured", async () => {
+    delete process.env.TURNSTILE_SECRET_KEY;
+    const hit = vi.fn();
+    expect(await passesBotCheck({}, undefined, "1.2.3.4", hit)).toBe(true);
+    expect(hit).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("mobile requests skip Turnstile but use the stricter per-IP limit", async () => {
+    const hit = vi.fn().mockResolvedValue(false);
+    expect(await passesBotCheck({ "x-app-client": "Mobile" }, undefined, "1.2.3.4", hit)).toBe(true);
+    expect(hit).toHaveBeenCalledWith("auth:mobile-no-turnstile:1.2.3.4", MOBILE_NO_TURNSTILE_LIMIT.max, MOBILE_NO_TURNSTILE_LIMIT.windowSec);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("mobile requests over the limit fail the check", async () => {
+    const hit = vi.fn().mockResolvedValue(true);
+    expect(await passesBotCheck({ "x-app-client": "mobile" }, undefined, "1.2.3.4", hit)).toBe(false);
+  });
+
+  it("web requests still need a valid Turnstile token", async () => {
+    const hit = vi.fn();
+    expect(await passesBotCheck({}, undefined, "1.2.3.4", hit)).toBe(false);
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    expect(await passesBotCheck({ "x-app-client": "web" }, "tok", "1.2.3.4", hit)).toBe(true);
+    expect(hit).not.toHaveBeenCalled();
   });
 });

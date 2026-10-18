@@ -6,12 +6,13 @@ import { normalizeEmail } from "../ids.js";
 import {
   authClientIp,
   clearPasswordFailures,
+  hitLimit,
   isLocked,
   recordPasswordFailure,
 } from "../limits.js";
 import { hashPassword, verifyPassword } from "../password.js";
 import { createSession } from "../sessions.js";
-import { BOT_CHECK_FAILED, verifyTurnstile } from "../turnstile.js";
+import { BOT_CHECK_FAILED, passesBotCheck } from "../turnstile.js";
 
 interface SigninBody {
   email: string;
@@ -293,7 +294,7 @@ export const signinRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      if (!(await verifyTurnstile(request.body.turnstileToken, authClientIp(request)))) {
+      if (!(await passesBotCheck(request.headers, request.body.turnstileToken, authClientIp(request), hitLimit))) {
         return reply.status(400).send(BOT_CHECK_FAILED);
       }
       const email = normalizeEmail(request.body.email);

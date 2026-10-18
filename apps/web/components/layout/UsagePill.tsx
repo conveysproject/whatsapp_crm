@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth/client";
 import { useQuery } from "@tanstack/react-query";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useHydrated } from "@/hooks/useHydrated";
 import { canViewBilling } from "@/lib/billing-page";
 import { fetchMessageUsage, formatCount } from "@/lib/message-usage";
 
@@ -23,7 +24,9 @@ export function UsagePill(): JSX.Element | null {
     retry: false,
     staleTime: 60_000,
   });
-  if (!allowed || !q.data) return null;
+  // The usage query shares its cache with the dashboard card, so the pill waits until hydration is over (React #418).
+  const hydrated = useHydrated();
+  if (!hydrated || !allowed || !q.data) return null;
   return (
     <Link
       href="/settings/billing"

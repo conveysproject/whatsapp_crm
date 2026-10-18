@@ -5,6 +5,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/client";
 import { useQuery } from "@tanstack/react-query";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useHydrated } from "@/hooks/useHydrated";
 import { canAccess, canAccessSub } from "@/lib/can";
 import { DashboardError, fetchDashboard, type DashRange } from "@/lib/dashboard";
 import { ConversationChart } from "@/components/analytics/ConversationChart";
@@ -116,6 +117,11 @@ export function DashboardView(): JSX.Element {
     },
     [params, pathname, router],
   );
+
+  // This body streams in and hydrates late, when the user and dashboard queries may already hold data; rendering
+  // that on the first client pass would differ from the server HTML (React #418). Skeleton until hydration is over.
+  const hydrated = useHydrated();
+  if (!hydrated) return <DashboardSkeleton />;
 
   return (
     <DashboardBody
