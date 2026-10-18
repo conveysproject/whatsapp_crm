@@ -64,7 +64,7 @@ function mailInBackground(fastify: FastifyInstance, to: string, purpose: CodePur
 }
 
 /** A Redis hiccup must not turn a sign-in answer into a 500. */
-async function bestEffort(fn: () => Promise<unknown>): Promise<void> {
+export async function bestEffort(fn: () => Promise<unknown>): Promise<void> {
   try {
     await fn();
   } catch {
@@ -72,7 +72,7 @@ async function bestEffort(fn: () => Promise<unknown>): Promise<void> {
   }
 }
 
-async function padTo(startedAt: number): Promise<void> {
+export async function padTo(startedAt: number): Promise<void> {
   const left = MIN_DURATION_MS - (Date.now() - startedAt);
   if (left > 0) await new Promise((r) => setTimeout(r, left));
 }
@@ -91,7 +91,7 @@ export async function userRow(fastify: FastifyInstance, accountId: string) {
 
 export const UNAVAILABLE = { error: { code: "UNAVAILABLE", message: "Please try again." } };
 
-async function logAttempt(
+export async function logAttempt(
   fastify: FastifyInstance,
   request: FastifyRequest,
   input: { userId: string; orgId: string | null; success: boolean; method?: string },
