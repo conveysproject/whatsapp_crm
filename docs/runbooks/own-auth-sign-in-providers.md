@@ -6,6 +6,13 @@ until its env vars are set, so these steps can be done in any order.
 
 The code cannot create the Meta template or the Google/Facebook apps. These steps are for the owner.
 
+> **Keep every WhatsApp, Google and Facebook env var unset until both of these are done:**
+> 1. the global WhatsApp daily cap value is chosen (`AUTH_WHATSAPP_DAILY_CAP`, default 500 auth messages per UTC day,
+>    counted across sign-in codes and phone verification; past it, phone verification answers "Please try again later"
+>    and sign-in codes are skipped), and
+> 2. the Meta Authentication template is approved (section 1.1).
+> Setting the vars earlier switches the buttons on for everyone.
+
 ---
 
 ## 1. WhatsApp sign-in code
@@ -41,12 +48,14 @@ The API sends the code as the body variable `{{1}}` and as the copy-code button 
 | `AUTH_WHATSAPP_ORG_ID` | The `organizations.id` of the Conveys org (its connected number sends the codes) |
 | `AUTH_WHATSAPP_TEMPLATE` | `wbmsg_login_code` (after Meta approves it) |
 | `AUTH_WHATSAPP_TEMPLATE_LANG` | `en_US` (optional; default `en_US`) |
+| `AUTH_WHATSAPP_DAILY_CAP` | Global cap on auth WhatsApp sends per UTC day (default `500`). Choose it before switching WhatsApp on |
 
 The sender uses that org's `phone_number_id` and `waba_access_token`, the same as any other template send. If that org
 were ever paused for billing, auth codes would stop too (the user is then offered the email code).
 
 ### 1.3 How people use it
-1. Settings → Security → **WhatsApp number**: enter the number with country code → code on WhatsApp → Verify.
+1. Settings → Security → **WhatsApp number**: enter the number with country code (plus the bot check when Turnstile is on) → code on WhatsApp → Verify.
+   Removing the number is refused when it is the only non-email way to sign in.
 2. Sign-in page → **Send code on WhatsApp** → number → code. "Didn't get it? Email me a code instead" is always shown.
    WhatsApp is never a sign-up method; super admins cannot use it.
 

@@ -5,9 +5,14 @@ const store = vi.hoisted(() => new Map<string, string>());
 const ttl = vi.hoisted(() => new Map<string, number>());
 vi.mock("../../lib/redis.js", () => ({
   redis: {
-    set: vi.fn(async (k: string, v: string, _ex: string, t: number) => {
+    set: vi.fn(async (k: string, v: string, mode: string, t: number | string) => {
+      if (mode === "KEEPTTL") {
+        if (t === "XX" && !store.has(k)) return null;
+        store.set(k, v);
+        return "OK";
+      }
       store.set(k, v);
-      ttl.set(k, t);
+      ttl.set(k, t as number);
       return "OK";
     }),
     get: vi.fn(async (k: string) => store.get(k) ?? null),
@@ -29,6 +34,7 @@ import {
   safeRelativePath,
   saveOAuthState,
   savePendingOAuth,
+  updatePendingOAuth,
 } from "./state.js";
 
 beforeEach(() => {
@@ -72,6 +78,17 @@ describe("oauth state", () => {
     expect(await loadPendingOAuth("p1")).toEqual(p);
     await deletePendingOAuth("p1");
     expect(await loadPendingOAuth("p1")).toBeNull();
+  });
+
+  it("update keeps the original expiry and never recreates an expired entry", async () => {
+    const p = { provider: "facebook" as const, sub: "fb1", email: null, firstName: null, lastName: null, redirectUrl: "/dashboard" };
+    await savePendingOAuth("p1", p);
+    ttl.set("auth:oauth:pending:p1", 42); // pretend time passed
+    await updatePendingOAuth("p1", { ...p, codeId: "c1", target: "a@x.com" });
+    expect(ttl.get("auth:oauth:pending:p1")).toBe(42);
+    expect((await loadPendingOAuth("p1"))?.codeId).toBe("c1");
+    await updatePendingOAuth("gone", p);
+    expect(store.has("auth:oauth:pending:gone")).toBe(false);
   });
 
   it("safeRelativePath keeps only same-site paths", () => {

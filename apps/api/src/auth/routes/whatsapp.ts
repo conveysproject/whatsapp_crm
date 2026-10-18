@@ -5,7 +5,8 @@ import { authClientIp, hitLimit, isLocked } from "../limits.js";
 import { toE164 } from "../phone.js";
 import { BOT_CHECK_FAILED, verifyTurnstile } from "../turnstile.js";
 import { startUserSession } from "../user-session.js";
-import { sendWhatsappCode, whatsappAuthConfig } from "../whatsapp-codes.js";
+import { lockAccount } from "../account-lock.js";
+import { sendWhatsappCode, whatsappAuthConfig, whatsappDailyCapHit } from "../whatsapp-codes.js";
 import { UNAVAILABLE, logAttempt, padTo, userRow } from "./signin.js";
 
 const DISABLED = { error: { code: "FEATURE_DISABLED", message: "WhatsApp sign-in is not available." } };
@@ -26,6 +27,14 @@ const SEND_FAILED = {
 };
 const PHONE_IN_USE = {
   error: { code: "PHONE_IN_USE", message: "This number is already linked to another account." },
+};
+
+const LATER = { error: { code: "RATE_LIMITED", message: "Please try again later." } };
+const LAST_METHOD = {
+  error: {
+    code: "LAST_SIGN_IN_METHOD",
+    message: "This is your only way to sign in. Set a password or connect another option before removing it.",
+  },
 };
 
 const PHONE = { type: "string", minLength: 4, maxLength: 40 } as const;
@@ -74,6 +83,11 @@ export const whatsappSigninRoutes: FastifyPluginAsync = async (fastify) => {
           if (await isLocked(account.id)) return;
           const row = await userRow(fastify, account.id);
           if (row === "error" || row?.role === "superAdmin") return;
+          // Global daily budget: past it, sign-in codes are silently skipped (the reply was already 202).
+          if (await whatsappDailyCapHit()) {
+            fastify.log.warn({ reason: "whatsapp_daily_cap" }, "auth WhatsApp daily cap reached; sign-in code skipped");
+            return;
+          }
           const issued = await issueCode(db, { purpose: "signin_whatsapp", target: phone, accountId: account.id });
           if ("error" in issued) return;
           await sendWhatsappCode(db, phone, issued.code);
@@ -149,18 +163,26 @@ export const whatsappSigninRoutes: FastifyPluginAsync = async (fastify) => {
 
 /** Authenticated (account session): add, confirm or remove the account's WhatsApp number. Scoped to request.account. */
 export const phoneRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.post<{ Body: { phone: string } }>(
+  fastify.post<{ Body: { phone: string; turnstileToken?: string } }>(
     "/phone/verify/request",
     {
       config: { public: true },
       preHandler: requireAccountSession,
       schema: {
-        body: { type: "object", required: ["phone"], properties: { phone: PHONE }, additionalProperties: false },
+        body: {
+          type: "object",
+          required: ["phone"],
+          properties: { phone: PHONE, turnstileToken: { type: "string", maxLength: 2048 } },
+          additionalProperties: false,
+        },
       },
     },
     async (request, reply) => {
       if (!whatsappAuthConfig()) return reply.status(404).send(DISABLED);
       const { accountId } = request.account!;
+      if (!(await verifyTurnstile(request.body.turnstileToken, authClientIp(request)))) {
+        return reply.status(400).send(BOT_CHECK_FAILED);
+      }
       const phone = toE164(request.body.phone);
       if (!phone) return reply.status(400).send(INVALID_PHONE);
       // Each send costs money: cap per account and per IP on top of the per-number code throttle.
@@ -169,6 +191,10 @@ export const phoneRoutes: FastifyPluginAsync = async (fastify) => {
         (await hitLimit(`auth:phonev:ip:${authClientIp(request)}`, 10, 3600))
       ) {
         return reply.status(429).send(RATE_LIMITED);
+      }
+      if (await whatsappDailyCapHit()) {
+        fastify.log.warn({ reason: "whatsapp_daily_cap" }, "auth WhatsApp daily cap reached; phone verification refused");
+        return reply.status(429).send(LATER);
       }
       const issued = await issueCode(fastify.prisma, { purpose: "phone_verify", target: phone, accountId });
       if ("error" in issued) return reply.status(429).send(RATE_LIMITED);
@@ -226,11 +252,23 @@ export const phoneRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   fastify.delete("/phone", { config: { public: true }, preHandler: requireAccountSession }, async (request, reply) => {
+    if (!whatsappAuthConfig()) return reply.status(404).send(DISABLED);
     const { accountId } = request.account!;
-    await fastify.prisma.authAccount.update({
-      where: { id: accountId },
-      data: { phoneE164: null, phoneVerifiedAt: null },
+    // Check and clear under a row lock so a concurrent unlink cannot remove the last other method meanwhile.
+    const outcome = await fastify.prisma.$transaction(async (tx) => {
+      await lockAccount(tx, accountId);
+      const account = await tx.authAccount.findUnique({
+        where: { id: accountId },
+        select: { passwordHash: true, mustSetPassword: true, phoneVerifiedAt: true, oauthLinks: { select: { provider: true } } },
+      });
+      if (!account) return "missing" as const;
+      const others = account.oauthLinks.length + (account.passwordHash && !account.mustSetPassword ? 1 : 0);
+      if (account.phoneVerifiedAt && others === 0) return "last" as const;
+      await tx.authAccount.update({ where: { id: accountId }, data: { phoneE164: null, phoneVerifiedAt: null } });
+      return "ok" as const;
     });
+    if (outcome === "missing") return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Account not found" } });
+    if (outcome === "last") return reply.status(409).send(LAST_METHOD);
     return reply.send({ ok: true });
   });
 };

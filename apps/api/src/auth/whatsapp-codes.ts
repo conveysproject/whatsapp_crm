@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { sendTemplateMessage, type WaTemplateComponent } from "../lib/whatsapp.js";
+import { hitLimit } from "./limits.js";
 
 export interface WhatsappAuthConfig {
   orgId: string;
@@ -37,4 +38,20 @@ export async function sendWhatsappCode(prisma: Db, phoneE164: string, code: stri
     { type: "button", sub_type: "url", index: 0, parameters: [{ type: "text", text: code }] },
   ];
   await sendTemplateMessage(org.phoneNumberId, phoneE164.slice(1), cfg.template, cfg.language, components, org.wabaAccessToken);
+}
+
+const DEFAULT_DAILY_CAP = 500;
+
+export function whatsappDailyCap(): number {
+  const raw = Number.parseInt(process.env["AUTH_WHATSAPP_DAILY_CAP"] ?? "", 10);
+  return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_DAILY_CAP;
+}
+
+/**
+ * Counts one auth WhatsApp send against a global budget per UTC day (sign-in codes + phone verification).
+ * True when the budget is used up: the caller must not send.
+ */
+export async function whatsappDailyCapHit(now: Date = new Date()): Promise<boolean> {
+  const day = now.toISOString().slice(0, 10);
+  return hitLimit(`auth:wa:daily:${day}`, whatsappDailyCap(), 172_800);
 }

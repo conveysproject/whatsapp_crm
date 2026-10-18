@@ -4,6 +4,7 @@ import type { FormEvent, JSX } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ProviderButton } from "@/components/auth/SocialButtons";
+import { TURNSTILE_ENABLED, Turnstile } from "@/components/auth/Turnstile";
 import {
   PROVIDER_LABEL,
   canUnlink,
@@ -30,6 +31,7 @@ const PHONE_ERRORS: Record<string, string> = {
   INVALID_CODE: "That code is not valid. Request a new one.",
   PHONE_IN_USE: "This number is already linked to another account.",
   NO_SESSION: "Not available while viewing as another user.",
+  BOT_CHECK_FAILED: "Please complete the check and try again.",
 };
 
 async function errorCode(res: Response): Promise<string> {
@@ -51,6 +53,8 @@ export function WhatsAppNumberSection({ info, enabled, onChanged }: { info: Sign
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [tsKey, setTsKey] = useState(0);
 
   if (!enabled) return null;
   const verified = info.phone?.verified ? info.phone.e164 : null;
@@ -60,7 +64,12 @@ export function WhatsAppNumberSection({ info, enabled, onChanged }: { info: Sign
     setBusy(true);
     setError(null);
     try {
-      const res = await postJson("/api/v1/auth/phone/verify/request", { phone: phone.trim() });
+      const payload: Record<string, unknown> = { phone: phone.trim() };
+      if (token) payload["turnstileToken"] = token;
+      const res = await postJson("/api/v1/auth/phone/verify/request", payload);
+      // Turnstile tokens are single use.
+      setTsKey((k) => k + 1);
+      setToken(null);
       if (res.ok) setSentTo(phone.trim());
       else setError(PHONE_ERRORS[await errorCode(res)] ?? "Could not send the code. Please try again.");
     } catch {
@@ -96,7 +105,8 @@ export function WhatsAppNumberSection({ info, enabled, onChanged }: { info: Sign
     setBusy(true);
     try {
       const res = await fetch("/api/v1/auth/phone", { method: "DELETE" });
-      if (!res.ok) toast.error("Could not remove the number.");
+      if (res.status === 409) toast.error("This is your only way to sign in besides email. Set a password or connect another option first.");
+      else if (!res.ok) toast.error("Could not remove the number.");
       else onChanged();
     } catch {
       toast.error("Could not remove the number.");
@@ -136,9 +146,10 @@ export function WhatsAppNumberSection({ info, enabled, onChanged }: { info: Sign
             <span className="text-gray-600">{verified ? "New WhatsApp number" : "WhatsApp number (with country code)"}</span>
             <input type="tel" autoComplete="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" className={inputCls} />
           </label>
+          <Turnstile onToken={setToken} resetKey={tsKey} />
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-2">
-            <button type="submit" disabled={busy || !phone.trim()} className={btnCls}>{busy ? "Sending…" : "Send code on WhatsApp"}</button>
+            <button type="submit" disabled={busy || !phone.trim() || (TURNSTILE_ENABLED && !token)} className={btnCls}>{busy ? "Sending…" : "Send code on WhatsApp"}</button>
             {verified && (
               <button type="button" disabled={busy} onClick={() => void remove()} className="px-3 py-2 text-sm text-red-600 hover:underline disabled:opacity-50">
                 Remove number

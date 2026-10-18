@@ -82,6 +82,12 @@ export async function savePendingOAuth(id: string, data: PendingOAuth): Promise<
   await redis.set(pendingKey(id), JSON.stringify(data), "EX", PENDING_TTL_S);
 }
 
+/** Rewrites an existing entry and keeps its original expiry (re-sends never extend the 30 minutes). */
+export async function updatePendingOAuth(id: string, data: PendingOAuth): Promise<void> {
+  // XX: never recreate an entry that expired meanwhile (it would then have no TTL at all).
+  await redis.set(pendingKey(id), JSON.stringify(data), "KEEPTTL", "XX");
+}
+
 export async function loadPendingOAuth(id: string): Promise<PendingOAuth | null> {
   const raw = await redis.get(pendingKey(id));
   return parse<PendingOAuth>(raw, (v) => isProvider(v["provider"]) && isStr(v["sub"]) && isStr(v["redirectUrl"]));

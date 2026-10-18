@@ -51,7 +51,12 @@ export const facebookProvider: OAuthProvider = {
       code,
       code_verifier: codeVerifier,
     });
-    const token = await getJson(`${GRAPH}/oauth/access_token?${tq.toString()}`);
+    // POST with a form body, so the code and app secret never appear in a URL.
+    const token = await getJson(`${GRAPH}/oauth/access_token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+      body: tq.toString(),
+    });
     const accessToken = str(token["access_token"]);
     if (!accessToken) throw new OAuthError("facebook returned no access_token");
 

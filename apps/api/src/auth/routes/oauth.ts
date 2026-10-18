@@ -4,7 +4,8 @@ import { requireAccountSession } from "../account-auth.js";
 import { issueCode, verifyCodeById } from "../codes.js";
 import { sendCodeEmail } from "../emails.js";
 import { newAccountId, normalizeEmail } from "../ids.js";
-import { isLocked } from "../limits.js";
+import { hitLimit, isLocked } from "../limits.js";
+import { lockAccount } from "../account-lock.js";
 import { getOAuthProvider } from "../oauth/registry.js";
 import {
   consumeOAuthState,
@@ -15,6 +16,7 @@ import {
   safeRelativePath,
   saveOAuthState,
   savePendingOAuth,
+  updatePendingOAuth,
   type PendingOAuth,
 } from "../oauth/state.js";
 import { OAuthError, oauthRedirectUri, type OAuthIdentity, type OAuthProvider, type OAuthProviderId } from "../oauth/types.js";
@@ -339,6 +341,10 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify) => {
       const target = pending.email ?? (request.body.email ? normalizeEmail(request.body.email) : null);
       if (!validEmail(target)) return reply.status(400).send(INVALID_EMAIL);
       const label = getOAuthProvider(pending.provider)?.label ?? "your account";
+      // At most 3 code emails per pending sign-in (the entry itself lives 30 minutes).
+      if (await hitLimit(`auth:oauth:pending-sends:${pendingId}`, 3, 1800)) {
+        return reply.status(429).send(err("RATE_LIMITED", "Too many codes requested. Please start again."));
+      }
 
       // Same answer whether or not an account uses the address; the work happens after the reply.
       await reply.status(202).send({ ok: true });
@@ -346,7 +352,7 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify) => {
         try {
           const issued = await issueCode(fastify.prisma, { purpose: "email_verify", target });
           if ("error" in issued) return;
-          await savePendingOAuth(pendingId, { ...pending, target, codeId: issued.codeId });
+          await updatePendingOAuth(pendingId, { ...pending, target, codeId: issued.codeId });
           await sendCodeEmail(
             target,
             "email_verify",
@@ -424,20 +430,26 @@ export const oauthAccountRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { accountId } = request.account!;
       const { provider } = request.params;
-      const account = await fastify.prisma.authAccount.findUnique({
-        where: { id: accountId },
-        select: { passwordHash: true, mustSetPassword: true, phoneVerifiedAt: true, oauthLinks: { select: { provider: true } } },
+      // Check and delete under a row lock on the account: two concurrent unlinks (or an unlink and a
+      // number removal) are serialized, so they can never remove the last two methods together.
+      const outcome = await fastify.prisma.$transaction(async (tx) => {
+        await lockAccount(tx, accountId);
+        const account = await tx.authAccount.findUnique({
+          where: { id: accountId },
+          select: { passwordHash: true, mustSetPassword: true, phoneVerifiedAt: true, oauthLinks: { select: { provider: true } } },
+        });
+        if (!account || !account.oauthLinks.some((l) => l.provider === provider)) return "not_linked" as const;
+        // Email codes are a recovery path, not counted: something else must still sign this person in.
+        const others =
+          account.oauthLinks.filter((l) => l.provider !== provider).length +
+          (account.passwordHash && !account.mustSetPassword ? 1 : 0) +
+          (account.phoneVerifiedAt && whatsappAuthConfig() ? 1 : 0);
+        if (others === 0) return "last" as const;
+        await tx.authOAuthLink.deleteMany({ where: { accountId, provider } });
+        return "ok" as const;
       });
-      if (!account || !account.oauthLinks.some((l) => l.provider === provider)) {
-        return reply.status(404).send(NOT_LINKED);
-      }
-      // Email codes are a recovery path, not counted: something else must still sign this person in.
-      const others =
-        account.oauthLinks.filter((l) => l.provider !== provider).length +
-        (account.passwordHash && !account.mustSetPassword ? 1 : 0) +
-        (account.phoneVerifiedAt && whatsappAuthConfig() ? 1 : 0);
-      if (others === 0) return reply.status(409).send(LAST_METHOD);
-      await fastify.prisma.authOAuthLink.deleteMany({ where: { accountId, provider } });
+      if (outcome === "not_linked") return reply.status(404).send(NOT_LINKED);
+      if (outcome === "last") return reply.status(409).send(LAST_METHOD);
       return reply.send({ ok: true });
     },
   );

@@ -170,8 +170,10 @@ describe("facebook", () => {
     fetchMock.mockResolvedValueOnce(json(200, { id: "fb-1", email: "b@x.com", first_name: "Bo", last_name: "Ng" }));
     const id = await facebookProvider.exchange({ code: "c", codeVerifier: "v", nonce: "", redirectUri: FB_REDIRECT });
     expect(id).toEqual({ sub: "fb-1", email: "b@x.com", emailVerified: false, firstName: "Bo", lastName: "Ng" });
-    const tokenUrl = new URL((fetchMock.mock.calls[0] as [string])[0]);
-    expect(Object.fromEntries(tokenUrl.searchParams)).toEqual({
+    const [tokenUrl, tokenInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(tokenUrl).toBe("https://graph.facebook.com/v25.0/oauth/access_token");
+    expect(tokenInit.method).toBe("POST");
+    expect(Object.fromEntries(new URLSearchParams(tokenInit.body as string))).toEqual({
       client_id: "fid",
       client_secret: "fsecret",
       redirect_uri: FB_REDIRECT,

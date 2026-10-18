@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const m = vi.hoisted(() => ({ sendTemplateMessage: vi.fn() }));
+const m = vi.hoisted(() => ({ sendTemplateMessage: vi.fn(), hitLimit: vi.fn() }));
 vi.mock("../lib/whatsapp.js", () => ({ sendTemplateMessage: m.sendTemplateMessage }));
+vi.mock("./limits.js", () => ({ hitLimit: m.hitLimit }));
 
-import { sendWhatsappCode, whatsappAuthConfig } from "./whatsapp-codes.js";
+import { sendWhatsappCode, whatsappAuthConfig, whatsappDailyCap, whatsappDailyCapHit } from "./whatsapp-codes.js";
 
 const prisma = { organization: { findUnique: vi.fn() } };
 
@@ -58,5 +59,27 @@ describe("sendWhatsappCode", () => {
   it("propagates a send failure", async () => {
     m.sendTemplateMessage.mockRejectedValue(new Error("WA template send failed"));
     await expect(sendWhatsappCode(prisma as never, "+918779506101", "123456")).rejects.toThrow("WA template");
+  });
+});
+
+describe("global daily cap", () => {
+  afterEach(() => {
+    delete process.env["AUTH_WHATSAPP_DAILY_CAP"];
+  });
+
+  it("defaults to 500 and reads AUTH_WHATSAPP_DAILY_CAP", () => {
+    expect(whatsappDailyCap()).toBe(500);
+    process.env["AUTH_WHATSAPP_DAILY_CAP"] = "20";
+    expect(whatsappDailyCap()).toBe(20);
+    process.env["AUTH_WHATSAPP_DAILY_CAP"] = "junk";
+    expect(whatsappDailyCap()).toBe(500);
+  });
+
+  it("counts against one Redis key per UTC day", async () => {
+    process.env["AUTH_WHATSAPP_DAILY_CAP"] = "7";
+    m.hitLimit.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    expect(await whatsappDailyCapHit(new Date("2026-10-18T23:59:00Z"))).toBe(false);
+    expect(await whatsappDailyCapHit(new Date("2026-10-18T23:59:30Z"))).toBe(true);
+    expect(m.hitLimit).toHaveBeenCalledWith("auth:wa:daily:2026-10-18", 7, 172800);
   });
 });

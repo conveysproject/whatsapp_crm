@@ -67,6 +67,7 @@ const prisma = {
   loginLog: { create: vi.fn() },
   organization: { findUnique: vi.fn() },
   $transaction: vi.fn(),
+  $queryRaw: vi.fn(),
 };
 
 async function build(): Promise<FastifyInstance> {
@@ -389,6 +390,15 @@ describe("pending email confirmation", () => {
     expect(m.issueCode).toHaveBeenCalledWith(prisma, { purpose: "email_verify", target: "new@x.com" });
   });
 
+  it("send: at most 3 code emails per pending sign-in", async () => {
+    const pendingId = await pendingFrom({ sub: "fb-1", email: "ann@x.com" });
+    m.hitLimit.mockImplementation(async (key: string) => key === `auth:oauth:pending-sends:${pendingId}`);
+    const res = await send({ pendingId });
+    expect(res.statusCode).toBe(429);
+    expect(m.issueCode).not.toHaveBeenCalled();
+    expect(m.hitLimit).toHaveBeenCalledWith(`auth:oauth:pending-sends:${pendingId}`, 3, 1800);
+  });
+
   it("send/verify with an unknown pending id: 400 OAUTH_EXPIRED", async () => {
     expect((await send({ pendingId: "nope" })).json().error.code).toBe("OAUTH_EXPIRED");
     expect((await verify({ pendingId: "nope" })).json().error.code).toBe("OAUTH_EXPIRED");
@@ -475,6 +485,43 @@ describe("DELETE /oauth/:provider", () => {
     process.env["AUTH_WHATSAPP_ORG_ID"] = "org";
     process.env["AUTH_WHATSAPP_TEMPLATE"] = "tpl";
     expect((await unlink()).statusCode).toBe(200);
+  });
+
+  it("checks and deletes inside one transaction with a row lock on the account", async () => {
+    withMethods({ passwordHash: "h" });
+    await unlink();
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    const sql = (prisma.$queryRaw.mock.calls[0]![0] as TemplateStringsArray).join("?");
+    expect(sql).toMatch(/FROM auth_accounts WHERE id = \? FOR UPDATE/);
+  });
+
+  it("two concurrent unlinks cannot remove both last methods", async () => {
+    // A tiny in-memory account; transactions run one at a time, as the row lock enforces in Postgres.
+    const links = [{ provider: "google" }, { provider: "facebook" }];
+    prisma.authAccount.findUnique.mockImplementation(async () => ({
+      passwordHash: null,
+      mustSetPassword: false,
+      phoneVerifiedAt: null,
+      oauthLinks: links.map((l) => ({ ...l })),
+    }));
+    prisma.authOAuthLink.deleteMany.mockImplementation(async ({ where }: { where: { provider: string } }) => {
+      const i = links.findIndex((l) => l.provider === where.provider);
+      if (i >= 0) links.splice(i, 1);
+      return { count: i >= 0 ? 1 : 0 };
+    });
+    let queue: Promise<unknown> = Promise.resolve();
+    prisma.$transaction.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
+      const run = queue.then(() => fn(prisma));
+      queue = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
+    });
+    const [a, b] = await Promise.all([unlink("google"), unlink("facebook")]);
+    expect([a.statusCode, b.statusCode].sort()).toEqual([200, 409]);
+    expect(links).toHaveLength(1);
   });
 
   it("404 when that provider is not linked", async () => {

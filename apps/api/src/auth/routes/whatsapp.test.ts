@@ -38,6 +38,7 @@ const prisma = {
   user: { findUnique: vi.fn() },
   loginLog: { create: vi.fn() },
   $transaction: vi.fn(),
+  $queryRaw: vi.fn(),
 };
 
 async function build(): Promise<FastifyInstance> {
@@ -140,6 +141,23 @@ describe("POST /signin/whatsapp/request", () => {
     await request();
     await settleWhatsappWork();
     expect(m.sendWhatsappCode).not.toHaveBeenCalled();
+  });
+
+  it("global daily cap reached: still 202, the code is silently skipped", async () => {
+    m.hitLimit.mockImplementation(async (key: string) => key.startsWith("auth:wa:daily:"));
+    const res = await request();
+    await settleWhatsappWork();
+    expect(res.statusCode).toBe(202);
+    expect(m.issueCode).not.toHaveBeenCalled();
+    expect(m.sendWhatsappCode).not.toHaveBeenCalled();
+  });
+
+  it("unknown numbers do not use up the daily cap", async () => {
+    prisma.authAccount.findUnique.mockResolvedValue(null);
+    await request();
+    await settleWhatsappWork();
+    const keys = m.hitLimit.mock.calls.map((c) => c[0] as string);
+    expect(keys.some((k) => k.startsWith("auth:wa:daily:"))).toBe(false);
   });
 
   it("a WhatsApp send failure still answers 202 (no enumeration)", async () => {
@@ -262,12 +280,64 @@ describe("phone verification (Settings → Security)", () => {
     expect(res.json().error.code).toBe("PHONE_IN_USE");
   });
 
-  it("DELETE /phone clears the caller's number", async () => {
-    const res = await app.inject({ method: "DELETE", url: "/v1/auth/phone", headers: AUTHZ });
+  const methods = (over: Record<string, unknown>) =>
+    prisma.authAccount.findUnique.mockResolvedValue({
+      passwordHash: null,
+      mustSetPassword: false,
+      phoneVerifiedAt: new Date(),
+      oauthLinks: [],
+      ...over,
+    });
+  const delPhone = () => app.inject({ method: "DELETE", url: "/v1/auth/phone", headers: AUTHZ });
+
+  it("DELETE /phone clears the caller's number under a row lock when another method remains", async () => {
+    methods({ passwordHash: "h" });
+    const res = await delPhone();
     expect(res.statusCode).toBe(200);
+    expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(prisma.authAccount.update).toHaveBeenCalledWith({
       where: { id: "usr_a" },
       data: { phoneE164: null, phoneVerifiedAt: null },
     });
+    methods({ oauthLinks: [{ provider: "google" }] });
+    expect((await delPhone()).statusCode).toBe(200);
+  });
+
+  it("DELETE /phone refuses removing the last non-email method", async () => {
+    methods({});
+    const res = await delPhone();
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("LAST_SIGN_IN_METHOD");
+    methods({ passwordHash: "h", mustSetPassword: true });
+    expect((await delPhone()).statusCode).toBe(409);
+    expect(prisma.authAccount.update).not.toHaveBeenCalled();
+  });
+
+  it("DELETE /phone on an unverified number is always allowed", async () => {
+    methods({ phoneVerifiedAt: null });
+    expect((await delPhone()).statusCode).toBe(200);
+  });
+
+  it("DELETE /phone is behind the WhatsApp feature flag", async () => {
+    delete process.env["AUTH_WHATSAPP_TEMPLATE"];
+    expect((await delPhone()).statusCode).toBe(404);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("request: Turnstile is enforced", async () => {
+    m.verifyTurnstile.mockResolvedValue(false);
+    const res = await req({ phone: PHONE, turnstileToken: "t" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("BOT_CHECK_FAILED");
+    expect(m.issueCode).not.toHaveBeenCalled();
+  });
+
+  it("request: global daily cap reached gives 429, nothing sent", async () => {
+    m.hitLimit.mockImplementation(async (key: string) => key.startsWith("auth:wa:daily:"));
+    const res = await req({ phone: PHONE });
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toEqual({ error: { code: "RATE_LIMITED", message: "Please try again later." } });
+    expect(m.issueCode).not.toHaveBeenCalled();
+    expect(m.sendWhatsappCode).not.toHaveBeenCalled();
   });
 });
