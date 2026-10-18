@@ -1,3 +1,7 @@
+// Full-screen flow tests render the real React Native tree; the first one pays the cold-start cost,
+// which exceeds jest's 5 s default on slower CI runners.
+jest.setTimeout(30_000);
+
 const mockStore: Record<string, string> = {};
 jest.mock("expo-secure-store", () => ({
   getItemAsync: jest.fn(async (k: string) => mockStore[k] ?? null),
