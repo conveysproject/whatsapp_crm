@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
+import type * as WaCodes from "../whatsapp-codes.js";
 
 const m = vi.hoisted(() => ({
   hitLimit: vi.fn(),
@@ -21,7 +22,7 @@ vi.mock("../limits.js", () => ({
 }));
 vi.mock("../codes.js", () => ({ issueCode: m.issueCode, verifyCode: m.verifyCode, verifyCodeById: vi.fn() }));
 vi.mock("../whatsapp-codes.js", async (orig) => ({
-  ...(await orig<typeof import("../whatsapp-codes.js")>()),
+  ...(await orig<typeof WaCodes>()),
   sendWhatsappCode: m.sendWhatsappCode,
 }));
 vi.mock("../sessions.js", () => ({ createSession: m.createSession }));
