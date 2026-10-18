@@ -44,3 +44,14 @@ No new dependencies; lockfile unchanged.
 - Google/Facebook and WhatsApp-code sign-in on mobile (PRD §4.5): not in this task's scope.
 - No device run (no simulator here); flows are covered by component tests with a mocked API.
 - Socket handshake does not send `X-App-Version` (the API's socket auth has no version gate).
+
+## Review follow-up (commit d7053e9e)
+1. **Safe auto mode** (`lib/auth/provider.ts`): `classifyProbe` accepts WBMSG only for a 200 JWKS body (`{keys:[...]}`) and Clerk only for the API's JSON 404 `{error:{code:"NOT_FOUND"}}`; anything else is "unknown" and changes nothing. WBMSG is sticky: running WBMSG (remembered, or a stored WBMSG refresh token with no record) needs a Clerk answer on two launches in a row before the record flips to Clerk; a WBMSG answer resets the count. The downgrade takes effect on the following launch, which deletes the `wbmsg.auth.*` keys (refresh, user, device). Clerk → WBMSG flips at once (next launch). The record now lives under `wbmsg.mode` as JSON `{mode, clerkSeen}`, outside the wiped keys.
+2. **No blank start:** `auto` renders as soon as the local SecureStore read finishes (remembered mode, default clerk; no network wait). The probe runs in the background and only updates the record for the next launch; the running session never switches login.
+3. **Revoked-session recovery:** `lib/auth/recovery.ts` (registered by the WBMSG bridge only). `lib/api.ts` and `lib/media-upload.ts`: a 401 on a sent token → one `store.forceRefresh(staleToken)` (bypasses the cached token, joins a refresh already running, reuses a token another caller already got) → one retry. Refresh 401 → signed out. Never more than one retry. Clerk mode: nothing registered, behaviour unchanged. `Composer.tsx` untouched.
+4. **Timeouts:** every auth-client fetch has a 15 s AbortController timeout; a timeout is a network error (status 0), so a hung refresh throws, releases the single-flight lock and the user stays signed in.
+5. **Dev log:** a failed SecureStore write of the rotated refresh token logs `auth: could not save the rotated refresh token to SecureStore` in `__DEV__` only (no token value).
+6. **Sockets:** verified, no change needed. `RealtimeBridge` mounts only in the `(app)` layout's `ok` gate branch, which returns early unless `isLoaded && isSignedIn` and `/users/me` succeeded, so `connectRealtime` never runs before `restore()` finishes. `resolveGate` → `super_admin` already has a test (`lib/session-gate.test.ts`, "blocks super admins").
+
+Results: mobile jest **23 suites / 191 tests passed**; mobile tsc + eslint 0 problems; root `pnpm type-check` 5/5, `pnpm lint` 0 errors (59 pre-existing API warnings).
+Remaining note: `auto` still waits for one local SecureStore read (milliseconds) before the first render, since the remembered mode cannot be read synchronously.
