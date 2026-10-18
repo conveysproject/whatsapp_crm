@@ -1,14 +1,14 @@
-import { ClerkProvider, useAuth } from "@clerk/expo";
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, useFonts } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Slot } from "expo-router";
-import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
+import { UpdateRequired } from "../components/auth/UpdateRequired";
 import { ApiProvider } from "../lib/api-context";
-import { config } from "../lib/config";
+import { useUpgradeRequired } from "../lib/app-headers";
+import { AuthProvider, useAuth } from "../lib/auth";
 import { missingConfig } from "../lib/config-check";
 import { useResetOnUserChange } from "../lib/use-reset-on-user-change";
 
@@ -17,12 +17,7 @@ if (__DEV__ && configProblems.length) console.warn(`Missing config: ${configProb
 
 void SplashScreen.preventAutoHideAsync();
 
-const tokenCache = {
-  getToken: (key: string) => SecureStore.getItemAsync(key),
-  saveToken: (key: string, value: string) => SecureStore.setItemAsync(key, value),
-};
-
-/** Drops all cached server data when the signed-in Clerk user changes, so one user's data never shows to the next. */
+/** Drops all cached server data when the signed-in user changes, so one user's data never shows to the next. */
 function UserChangeReset() {
   const { userId } = useAuth();
   const queryClient = useQueryClient();
@@ -33,6 +28,7 @@ function UserChangeReset() {
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, retry: 1 } } }));
+  const upgradeRequired = useUpgradeRequired();
 
   useEffect(() => {
     if (fontsLoaded || fontError) void SplashScreen.hideAsync();
@@ -47,8 +43,11 @@ export default function RootLayout() {
     );
   }
 
+  // The API turned this build away (426): nothing else works until the app is updated.
+  if (upgradeRequired) return <UpdateRequired />;
+
   return (
-    <ClerkProvider publishableKey={config.clerkPublishableKey} tokenCache={tokenCache}>
+    <AuthProvider>
       <QueryClientProvider client={queryClient}>
         <ApiProvider>
           <UserChangeReset />
@@ -56,6 +55,6 @@ export default function RootLayout() {
           <Slot />
         </ApiProvider>
       </QueryClientProvider>
-    </ClerkProvider>
+    </AuthProvider>
   );
 }
