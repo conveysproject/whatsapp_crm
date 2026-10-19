@@ -4,6 +4,7 @@ import { redis } from "../lib/redis.js";
 import { activatePlan } from "../lib/billing/activation.js";
 import { writeAdminAudit } from "../lib/audit.js";
 import { sendMail, isEmailConfigured } from "../lib/mail.js";
+import { parentOrgsEnabled, getChildOrgIds } from "../lib/parent-orgs.js";
 
 const SENSITIVE_CONFIG_KEYS = new Set([
   "smtp_password", "stripe_secret", "stripe_webhook_secret",
@@ -235,6 +236,57 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         request,
       });
       return reply.send({ data });
+    }
+  );
+
+  // ── Parent capability (super admin only) ─────────────────────────────────
+  // Only a super admin can make an org a parent. A child can never be a parent,
+  // and a parent that still has children cannot lose the capability.
+  fastify.patch<{ Params: { orgId: string }; Body: { enabled: boolean } }>(
+    "/admin/organizations/:orgId/parent-capability",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["enabled"],
+          properties: { enabled: { type: "boolean" } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!parentOrgsEnabled()) {
+        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Not found" } });
+      }
+      if (!requireSuperAdmin(request.auth.role, reply)) return;
+      const { orgId } = request.params;
+      const { enabled } = request.body;
+      const org = await fastify.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { id: true, parentOrganizationId: true },
+      });
+      if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
+      if (enabled && org.parentOrganizationId) {
+        return reply.status(409).send({ error: { code: "IS_CHILD", message: "A child organization cannot be a parent" } });
+      }
+      if (!enabled && (await getChildOrgIds(fastify.prisma, org.id)).length > 0) {
+        return reply.status(409).send({ error: { code: "HAS_CHILDREN", message: "Unlink all child organizations first" } });
+      }
+      const updated = await fastify.prisma.organization.update({
+        where: { id: org.id },
+        data: { isParent: enabled },
+        select: { id: true, isParent: true },
+      });
+      writeAdminAudit({
+        prisma: fastify.prisma,
+        actorId: request.auth.userId,
+        action: "org.parent_capability",
+        targetType: "organization",
+        targetId: org.id,
+        metadata: { enabled },
+        request,
+      });
+      return reply.send({ data: { organizationId: updated.id, isParent: updated.isParent } });
     }
   );
 
