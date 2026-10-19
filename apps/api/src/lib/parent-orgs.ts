@@ -66,6 +66,8 @@ export async function linkChild(
 ): Promise<void> {
   if (parentOrgId === childOrgId) throw new ParentLinkError("SELF_LINK");
   await prisma.$transaction(async (tx) => {
+    // Lock both rows in a stable order so concurrent links/unlinks serialize.
+    await tx.$queryRaw`SELECT id FROM organizations WHERE id IN (${parentOrgId}, ${childOrgId}) ORDER BY id FOR UPDATE`;
     const select = { isParent: true, parentOrganizationId: true } as const;
     const parent = await tx.organization.findUnique({ where: { id: parentOrgId }, select });
     const child = await tx.organization.findUnique({ where: { id: childOrgId }, select });
@@ -76,7 +78,11 @@ export async function linkChild(
     const grandchildren = await tx.organization.count({ where: { parentOrganizationId: childOrgId } });
     if (grandchildren > 0) throw new ParentLinkError("CHILD_HAS_CHILDREN");
 
-    await tx.organization.update({ where: { id: childOrgId }, data: { parentOrganizationId: parentOrgId } });
+    const r = await tx.organization.updateMany({
+      where: { id: childOrgId, parentOrganizationId: null },
+      data: { parentOrganizationId: parentOrgId },
+    });
+    if (r.count !== 1) throw new ParentLinkError("CHILD_ALREADY_LINKED");
     await tx.parentAuditEvent.create({
       data: { parentOrganizationId: parentOrgId, childOrganizationId: childOrgId, actorUserId, action: "linked" },
     });
@@ -90,6 +96,7 @@ export async function unlinkChild(
   actorUserId: string
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${childOrgId} FOR UPDATE`;
     const child = await tx.organization.findUnique({
       where: { id: childOrgId },
       select: { parentOrganizationId: true },
@@ -97,7 +104,11 @@ export async function unlinkChild(
     const parentId = child?.parentOrganizationId;
     if (!parentId) throw new ParentLinkError("NOT_A_CHILD");
 
-    await tx.organization.update({ where: { id: childOrgId }, data: { parentOrganizationId: null } });
+    const r = await tx.organization.updateMany({
+      where: { id: childOrgId, parentOrganizationId: parentId },
+      data: { parentOrganizationId: null },
+    });
+    if (r.count !== 1) throw new ParentLinkError("NOT_A_CHILD");
     await tx.parentAuditEvent.create({
       data: {
         parentOrganizationId: parentId,

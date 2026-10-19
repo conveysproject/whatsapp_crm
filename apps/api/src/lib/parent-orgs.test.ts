@@ -13,13 +13,16 @@ import {
 
 type OrgRow = { isParent: boolean; parentOrganizationId: string | null } | null;
 
-function makePrisma(opts: { orgs?: Record<string, OrgRow>; childCount?: number; findMany?: unknown[] } = {}) {
+function makePrisma(
+  opts: { orgs?: Record<string, OrgRow>; childCount?: number; findMany?: unknown[]; updateCount?: number } = {}
+) {
   const orgs = opts.orgs ?? {};
   const tx = {
+    $queryRaw: vi.fn(async () => []),
     organization: {
       findUnique: vi.fn(async ({ where }: { where: { id: string } }) => orgs[where.id] ?? null),
       count: vi.fn(async () => opts.childCount ?? 0),
-      update: vi.fn(async () => ({})),
+      updateMany: vi.fn(async () => ({ count: opts.updateCount ?? 1 })),
     },
     parentAuditEvent: { create: vi.fn(async () => ({})) },
   };
@@ -118,8 +121,8 @@ describe("linkChild", () => {
     const { prisma, tx, raw } = makePrisma({ orgs: { p1: okParent, c1: freeChild } });
     await linkChild(prisma, "p1", "c1", "u1");
     expect(raw.$transaction).toHaveBeenCalledTimes(1);
-    expect(tx.organization.update).toHaveBeenCalledWith({
-      where: { id: "c1" },
+    expect(tx.organization.updateMany).toHaveBeenCalledWith({
+      where: { id: "c1", parentOrganizationId: null },
       data: { parentOrganizationId: "p1" },
     });
     expect(tx.parentAuditEvent.create).toHaveBeenCalledWith({
@@ -133,31 +136,48 @@ describe("linkChild", () => {
   });
 
   async function expectCode(p: Promise<unknown>, code: string) {
+    await expect(p).rejects.toBeInstanceOf(ParentLinkError);
     await expect(p).rejects.toMatchObject({ name: "ParentLinkError", code });
-    await p.catch((e) => expect(e).toBeInstanceOf(ParentLinkError));
   }
+
+  it("locks both rows (stable order, FOR UPDATE) before any read", async () => {
+    const { prisma, tx } = makePrisma({ orgs: { p1: okParent, c1: freeChild } });
+    await linkChild(prisma, "p1", "c1", "u1");
+    const lockOrder = tx.$queryRaw.mock.invocationCallOrder[0]!;
+    expect(lockOrder).toBeLessThan(tx.organization.findUnique.mock.invocationCallOrder[0]!);
+    expect(lockOrder).toBeLessThan(tx.organization.count.mock.invocationCallOrder[0]!);
+    const call = tx.$queryRaw.mock.calls[0] as unknown as [TemplateStringsArray, ...string[]];
+    expect(call[0].join("?")).toContain("ORDER BY id FOR UPDATE");
+    expect(call.slice(1)).toEqual(["p1", "c1"]);
+  });
+
+  it("throws CHILD_ALREADY_LINKED and writes no audit row when a concurrent link won (count 0)", async () => {
+    const { prisma, tx } = makePrisma({ orgs: { p1: okParent, c1: freeChild }, updateCount: 0 });
+    await expectCode(linkChild(prisma, "p1", "c1", "u1"), "CHILD_ALREADY_LINKED");
+    expect(tx.parentAuditEvent.create).not.toHaveBeenCalled();
+  });
 
   it("throws PARENT_NOT_ENABLED when parent is not isParent", async () => {
     const { prisma, tx } = makePrisma({ orgs: { p1: { isParent: false, parentOrganizationId: null }, c1: freeChild } });
     await expectCode(linkChild(prisma, "p1", "c1", null), "PARENT_NOT_ENABLED");
-    expect(tx.organization.update).not.toHaveBeenCalled();
+    expect(tx.organization.updateMany).not.toHaveBeenCalled();
   });
   it("throws PARENT_HAS_PARENT when the parent has a parent", async () => {
     const { prisma, tx } = makePrisma({ orgs: { p1: { isParent: true, parentOrganizationId: "g" }, c1: freeChild } });
     await expectCode(linkChild(prisma, "p1", "c1", null), "PARENT_HAS_PARENT");
-    expect(tx.organization.update).not.toHaveBeenCalled();
+    expect(tx.organization.updateMany).not.toHaveBeenCalled();
   });
   it("throws CHILD_ALREADY_LINKED when the child already has a parent", async () => {
     const { prisma, tx } = makePrisma({
       orgs: { p1: okParent, c1: { isParent: false, parentOrganizationId: "other" } },
     });
     await expectCode(linkChild(prisma, "p1", "c1", null), "CHILD_ALREADY_LINKED");
-    expect(tx.organization.update).not.toHaveBeenCalled();
+    expect(tx.organization.updateMany).not.toHaveBeenCalled();
   });
   it("throws CHILD_HAS_CHILDREN when the child has children", async () => {
     const { prisma, tx } = makePrisma({ orgs: { p1: okParent, c1: freeChild }, childCount: 2 });
     await expectCode(linkChild(prisma, "p1", "c1", null), "CHILD_HAS_CHILDREN");
-    expect(tx.organization.update).not.toHaveBeenCalled();
+    expect(tx.organization.updateMany).not.toHaveBeenCalled();
   });
   it("throws SELF_LINK when parent and child are the same org", async () => {
     const { prisma } = makePrisma({ orgs: { p1: okParent } });
@@ -177,8 +197,8 @@ describe("unlinkChild", () => {
     const { prisma, tx, raw } = makePrisma({ orgs: { c1: { isParent: false, parentOrganizationId: "p1" } } });
     await unlinkChild(prisma, "c1", by, "u1");
     expect(raw.$transaction).toHaveBeenCalledTimes(1);
-    expect(tx.organization.update).toHaveBeenCalledWith({
-      where: { id: "c1" },
+    expect(tx.organization.updateMany).toHaveBeenCalledWith({
+      where: { id: "c1", parentOrganizationId: "p1" },
       data: { parentOrganizationId: null },
     });
     expect(tx.parentAuditEvent.create).toHaveBeenCalledWith({
@@ -191,9 +211,28 @@ describe("unlinkChild", () => {
     });
   });
 
+  it("locks the child row before reading it", async () => {
+    const { prisma, tx } = makePrisma({ orgs: { c1: { isParent: false, parentOrganizationId: "p1" } } });
+    await unlinkChild(prisma, "c1", "parent", "u1");
+    const lockOrder = tx.$queryRaw.mock.invocationCallOrder[0]!;
+    const readOrder = tx.organization.findUnique.mock.invocationCallOrder[0]!;
+    expect(lockOrder).toBeLessThan(readOrder);
+    const sql = (tx.$queryRaw.mock.calls[0] as unknown as [TemplateStringsArray])[0].join("?");
+    expect(sql).toContain("FOR UPDATE");
+  });
+
+  it("throws NOT_A_CHILD and writes no audit row when a concurrent unlink won (count 0)", async () => {
+    const { prisma, tx } = makePrisma({
+      orgs: { c1: { isParent: false, parentOrganizationId: "p1" } },
+      updateCount: 0,
+    });
+    await expect(unlinkChild(prisma, "c1", "child", "u1")).rejects.toMatchObject({ code: "NOT_A_CHILD" });
+    expect(tx.parentAuditEvent.create).not.toHaveBeenCalled();
+  });
+
   it("throws NOT_A_CHILD when the org has no parent", async () => {
     const { prisma, tx } = makePrisma({ orgs: { c1: { isParent: false, parentOrganizationId: null } } });
     await expect(unlinkChild(prisma, "c1", "parent", "u1")).rejects.toMatchObject({ code: "NOT_A_CHILD" });
-    expect(tx.organization.update).not.toHaveBeenCalled();
+    expect(tx.organization.updateMany).not.toHaveBeenCalled();
   });
 });
