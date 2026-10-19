@@ -7,7 +7,7 @@ import {
   setSessionCookies,
   unavailable,
 } from "../../../../lib/auth/bff";
-import { COOKIE, authProvider } from "../../../../lib/auth/config";
+import { COOKIE } from "../../../../lib/auth/config";
 import { accessTokenExpiry, verifyAccessToken } from "../../../../lib/auth/jwt";
 import { safeRedirect } from "../../../../lib/auth/redirect";
 import {
@@ -212,7 +212,6 @@ function withRotation(res: NextResponse, t: { accessToken: string; refreshToken:
 type Ctx = { params: Promise<{ action: string[] }> };
 
 export async function GET(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
-  if (authProvider() === "clerk") return notFound();
   const { action } = await ctx.params;
   const key = action.join("/");
   if (key === "token") return handleToken(req);
@@ -225,7 +224,6 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
 }
 
 export async function POST(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
-  if (authProvider() === "clerk") return notFound();
   const { action } = await ctx.params;
   const key = action.join("/");
   const spec = ACTIONS[key];

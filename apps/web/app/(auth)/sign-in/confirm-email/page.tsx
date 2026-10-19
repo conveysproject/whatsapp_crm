@@ -1,14 +1,11 @@
 import { Suspense } from "react";
 import type { JSX } from "react";
-import { notFound } from "next/navigation";
 import Image from "next/image";
 import { PublicNav } from "@/components/public/PublicNav";
 import { OAuthConfirmEmail } from "@/components/auth/OAuthConfirmEmail";
-import { authProvider } from "@/lib/auth/config";
 
 /** Own-auth only: finishing a Google/Facebook sign-in that still needs an email code. */
 export default function ConfirmEmailPage(): JSX.Element {
-  if (authProvider() !== "wbmsg") notFound();
   return (
     <div className="min-h-screen bg-[#F4F6FC]">
       <PublicNav active="sign-in" />

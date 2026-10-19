@@ -6,7 +6,7 @@ const hrefs = (user: ReturnType<typeof u>) => visibleSettingsTiles(user).map((t)
 
 describe("visibleSettingsTiles", () => {
   it("admin sees every tile", () => {
-    expect(hrefs(u("admin"))).toHaveLength(16);
+    expect(hrefs(u("admin"))).toHaveLength(17);
   });
 
   it("manager with default permissions only sees tiles their APIs allow", () => {
@@ -41,21 +41,10 @@ describe("visibleSettingsTiles", () => {
 });
 
 describe("Security tile", () => {
-  const withProvider = (value: string | undefined, fn: () => void) => {
-    const prev = process.env["NEXT_PUBLIC_AUTH_PROVIDER"];
-    if (value === undefined) delete process.env["NEXT_PUBLIC_AUTH_PROVIDER"]; else process.env["NEXT_PUBLIC_AUTH_PROVIDER"] = value;
-    try { fn(); } finally { if (prev === undefined) delete process.env["NEXT_PUBLIC_AUTH_PROVIDER"]; else process.env["NEXT_PUBLIC_AUTH_PROVIDER"] = prev; }
-  };
-  it("is shown to every signed-in role in wbmsg mode", () => {
-    withProvider("wbmsg", () => {
-      for (const role of ["admin", "manager", "agent"]) expect(hrefs(u(role))).toContain("/settings/security");
-    });
-  });
-  it("is hidden in clerk mode and by default", () => {
-    withProvider("clerk", () => expect(hrefs(u("admin"))).not.toContain("/settings/security"));
-    withProvider(undefined, () => expect(hrefs(u("agent"))).not.toContain("/settings/security"));
+  it("is shown to every signed-in role", () => {
+    for (const role of ["admin", "manager", "agent"]) expect(hrefs(u(role))).toContain("/settings/security");
   });
   it("is hidden while the user is unknown", () => {
-    withProvider("wbmsg", () => expect(visibleSettingsTiles(null)).toEqual([]));
+    expect(visibleSettingsTiles(null)).toEqual([]);
   });
 });

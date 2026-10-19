@@ -2,9 +2,9 @@
  * Authorizes callers of the transactional email bridge.
  *
  * Server-to-server only: the caller must present INTERNAL_EMAIL_SECRET
- * (the Railway API). Signed-in user tokens (Clerk JWT or our own access
- * token) are deliberately NOT accepted — the bridge sends arbitrary HTML to
- * arbitrary recipients, so any user token would turn it into a spam relay.
+ * (the Railway API). Signed-in user tokens (our own access token) are
+ * deliberately NOT accepted — the bridge sends arbitrary HTML to arbitrary
+ * recipients, so any user token would turn it into a spam relay.
  * Browser features that need an email must have the API send it instead.
  */
 export async function isAuthorized(token: string): Promise<boolean> {

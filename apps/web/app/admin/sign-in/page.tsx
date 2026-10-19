@@ -1,13 +1,10 @@
 "use client";
 import { JSX, Suspense, useEffect } from "react";
 import Link from "next/link";
-import { SignIn } from "@clerk/nextjs";
 import { SignInForm } from "@/components/auth/SignInForm";
-import { authProvider } from "@/lib/auth/config";
 import { useAuth } from "@/lib/auth/client";
 import { useRouter, useSearchParams } from "next/navigation";
 
-const wbmsg = authProvider() === "wbmsg";
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 function AdminSignInInner(): JSX.Element {
@@ -51,29 +48,9 @@ function AdminSignInInner(): JSX.Element {
       )}
 
       <div className="w-full max-w-sm">
-        {wbmsg ? (
-          <div className="rounded-xl border border-gray-700 bg-gray-900 p-6 shadow-xl">
-            <SignInForm variant="admin" />
-          </div>
-        ) : (
-        <SignIn
-          routing="hash"
-          fallbackRedirectUrl="/admin/organizations"
-          signUpUrl={undefined}
-          appearance={{
-            elements: {
-              card: "bg-gray-900 border border-gray-700 shadow-xl",
-              headerTitle: "text-white",
-              headerSubtitle: "text-gray-400",
-              socialButtonsBlockButton: "bg-gray-800 border-gray-600 text-white hover:bg-gray-700",
-              formFieldLabel: "text-gray-300",
-              formFieldInput: "bg-gray-800 border-gray-600 text-white",
-              footerActionLink: "hidden",
-              footerAction: "hidden",
-            },
-          }}
-        />
-        )}
+        <div className="rounded-xl border border-gray-700 bg-gray-900 p-6 shadow-xl">
+          <SignInForm variant="admin" />
+        </div>
       </div>
 
       <p className="mt-6 text-xs text-gray-600">

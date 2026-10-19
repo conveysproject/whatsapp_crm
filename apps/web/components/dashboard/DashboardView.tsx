@@ -32,7 +32,7 @@ export interface DashboardBodyProps {
   getToken: () => Promise<string | null>;
   range: DashRange;
   onRangeChange: (r: DashRange) => void;
-  /** Legacy widgets that authenticate through Clerk themselves; injected so the body is testable. */
+  /** Legacy widgets that authenticate themselves; injected so the body is testable. */
   slots?: {
     myWork?: ReactNode;
     leaderboard?: ReactNode;
@@ -101,7 +101,7 @@ export function DashboardBody({ getToken, range, onRangeChange, slots }: Dashboa
   );
 }
 
-/** Client entry: range lives in the URL (?range=), auth and legacy widgets come from Clerk. */
+/** Client entry: range lives in the URL (?range=), auth comes from useAuth and legacy widgets are injected. */
 export function DashboardView(): JSX.Element {
   const { getToken } = useAuth();
   const router = useRouter();

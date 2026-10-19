@@ -10,7 +10,6 @@ import { ImpersonationProvider } from "@/components/ImpersonationProvider";
 import { BreadcrumbNav } from "@/components/layout/BreadcrumbNav";
 import { OnboardingProvider } from "@/app/(dashboard)/onboarding-context";
 import { auth } from "@/lib/auth/server";
-import { authProvider } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { sessionExpiredRedirect } from "@/lib/auth/session-expired";
@@ -78,25 +77,21 @@ async function fetchOrgStatus(token: string): Promise<OrgStatus | null> {
 }
 
 export default async function DashboardLayout({ children }: { children: ReactNode }): Promise<JSX.Element> {
-  const { getToken, orgSlug, userId } = await auth.protect();
+  const { getToken, userId } = await auth.protect();
   const token = await getToken();
 
-  // Under impersonation the admin has no Clerk org; the API resolves the target user's org
+  // Under impersonation the API resolves the target user's org
   // from the imp_token cookie. A forged/garbage cookie is rejected by the API (401), which
   // makes getOrgStatus return provisioned=false and falls through to the redirect below,
   // so the cookie never bypasses a check on its own.
   const impersonating = (await getImpersonationCookie()) !== null;
-  // orgSlug is a Clerk-only claim; in wbmsg mode the org check below (organizations/me) decides.
-  if (authProvider() === "clerk" && !orgSlug && !impersonating) {
-    redirect("/checklist");
-  }
 
   let status: OrgStatus;
   try {
     status = await getOrgStatus(token ?? "");
   } catch (err) {
     if (err instanceof UnauthorizedError && !impersonating) {
-      const target = sessionExpiredRedirect(401, authProvider(), (await headers()).get("x-pathname") ?? "/dashboard");
+      const target = sessionExpiredRedirect(401, (await headers()).get("x-pathname") ?? "/dashboard");
       if (target) redirect(target);
     }
     throw err;
@@ -118,7 +113,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         <Sidebar />
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           <ImpersonationBanner impersonating={impersonating} />
-          <TopBar orgName={impersonating || authProvider() === "wbmsg" ? status.orgName : (orgSlug ?? undefined)} userId={userId ?? undefined} />
+          <TopBar orgName={status.orgName} userId={userId ?? undefined} />
           <SetupBanner />
           <BillingStandingBanner />
           <main className="flex flex-col flex-1 px-4 py-4 overflow-auto min-h-0">

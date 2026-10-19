@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { authProvider, COOKIE } from "./config";
+import { COOKIE } from "./config";
 import { verifyAccessToken } from "./jwt";
 import { safeRedirect } from "./redirect";
 
@@ -18,24 +18,12 @@ async function wbmsgAuth(): Promise<ServerAuth> {
   };
 }
 
-// Clerk's call shape is kept as the compile-time type so existing callers
-// (including auth.protect() and Clerk-only fields) keep type-checking. In wbmsg
-// mode only { userId, getToken } exist; Clerk-only fields are migrated in a later task.
-type ClerkAuth = typeof import("@clerk/nextjs/server").auth;
-
 async function authImpl() {
-  if (authProvider() === "clerk") {
-    return (await import("@clerk/nextjs/server")).auth();
-  }
   return wbmsgAuth();
 }
 
-// wbmsg mode ignores Clerk-style protect() arguments (role/permission checks are done by the API).
-async function protectImpl(...args: unknown[]) {
-  if (authProvider() === "clerk") {
-    const { auth: clerkAuth } = await import("@clerk/nextjs/server");
-    return (clerkAuth.protect as (...a: unknown[]) => unknown)(...args);
-  }
+// Role/permission checks are done by the API, so protect() takes no arguments.
+async function protectImpl() {
   const a = await wbmsgAuth();
   if (!a.userId) {
     // x-pathname is optional (set by middleware when available); fall back to plain /sign-in.
@@ -46,4 +34,4 @@ async function protectImpl(...args: unknown[]) {
   return a;
 }
 
-export const auth = Object.assign(authImpl, { protect: protectImpl }) as unknown as ClerkAuth;
+export const auth = Object.assign(authImpl, { protect: protectImpl });

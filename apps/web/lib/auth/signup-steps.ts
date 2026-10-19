@@ -31,13 +31,9 @@ export function validateIdentityScreen(v: IdentityValues): FieldErrors<IdentityV
   return e;
 }
 
-/** `requireCompanyName` is false only for the Clerk business-details page, where the org name is used. */
-export function validateBusinessScreen(
-  v: BusinessValues,
-  opts: { requireCompanyName?: boolean } = {},
-): FieldErrors<BusinessValues> {
+export function validateBusinessScreen(v: BusinessValues): FieldErrors<BusinessValues> {
   const e: FieldErrors<BusinessValues> = {};
-  if ((opts.requireCompanyName ?? true) && !v.companyName.trim()) e.companyName = "Company name is required";
+  if (!v.companyName.trim()) e.companyName = "Company name is required";
   if (!v.companyWebsite.trim()) e.companyWebsite = "Company website is required";
   if (!v.companyLocation.trim()) e.companyLocation = "Company location is required";
   if (!v.industry) e.industry = "Please select your industry";

@@ -33,7 +33,7 @@ export function TeamLeaderboard(props: TeamLeaderboardProps): JSX.Element {
   return <TeamLeaderboardPanel getToken={getToken} {...props} />;
 }
 
-/** Same as TeamLeaderboard but with an injected token source (testable without Clerk). */
+/** Same as TeamLeaderboard but with an injected token source (testable without the auth provider). */
 export function TeamLeaderboardPanel({
   getToken, days = 30, limit, viewAllHref, onAgentClick,
 }: TeamLeaderboardProps & { getToken: () => Promise<string | null> }): JSX.Element {

@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import type { JSX } from "react";
-import { ClerkProvider } from "@clerk/nextjs";
 import { AuthProvider } from "@/lib/auth/client";
-import { authProvider } from "@/lib/auth/config";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { organizationSchema } from "@/lib/docs/structured-data";
 import "./globals.css";
@@ -51,15 +49,14 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }): JSX.Element {
-  const wbmsg = authProvider() === "wbmsg";
-  const shell = (
+  return (
       <html lang="en">
         <body>
           <script
             type="application/ld+json"
             dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema()) }}
           />
-          <QueryProvider>{wbmsg ? <AuthProvider>{children}</AuthProvider> : children}</QueryProvider>
+          <QueryProvider><AuthProvider>{children}</AuthProvider></QueryProvider>
           {/* Google Analytics 4 */}
                 <Script
                   src="https://www.googletagmanager.com/gtag/js?id=G-4Q09E6BQC1"
@@ -93,5 +90,4 @@ export default function RootLayout({
         </body>
       </html>
   );
-  return wbmsg ? shell : <ClerkProvider>{shell}</ClerkProvider>;
 }

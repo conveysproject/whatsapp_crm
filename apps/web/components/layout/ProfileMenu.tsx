@@ -2,9 +2,7 @@
 import { JSX, useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useClerk, useUser } from "@clerk/nextjs";
 import { useAuth } from "@/lib/auth/client";
-import { authProvider } from "@/lib/auth/config";
 import { AvailabilityConfirmModal } from "./AvailabilityConfirmModal";
 
 interface UserMe {
@@ -21,19 +19,6 @@ interface OrgMe {
   planTier: string;
   phone: string | null;
 }
-
-// Chosen once at module load so hook order is stable. Clerk-only extras (avatar, profile dialog)
-// exist only in clerk mode; wbmsg mode uses our own settings page and has no avatar image.
-function useClerkExtras(): { imageUrl: string | undefined; openUserProfile: () => void } {
-  const { openUserProfile } = useClerk();
-  const { user } = useUser();
-  return { imageUrl: user?.imageUrl, openUserProfile: () => { openUserProfile(); } };
-}
-function useNoExtras(): { imageUrl: string | undefined; openUserProfile: () => void } {
-  return { imageUrl: undefined, openUserProfile: () => undefined };
-}
-const useAccountExtras = authProvider() === "clerk" ? useClerkExtras : useNoExtras;
-const isWbmsg = authProvider() === "wbmsg";
 
 function initials(name: string | null | undefined, email: string): string {
   if (name) {
@@ -52,7 +37,6 @@ export function ProfileMenu(): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { signOut } = useAuth();
-  const { imageUrl, openUserProfile } = useAccountExtras();
   const qc = useQueryClient();
 
   // NOTE: queryKey ["user-me"] is shared with useCurrentUser — both MUST return
@@ -125,7 +109,7 @@ export function ProfileMenu(): JSX.Element {
     }
   }
 
-  // Platform role drives all access control (DB User.role). Clerk role is identity-only.
+  // Platform role drives all access control (DB User.role).
   const platformRoleLabel: Record<string, string> = {
     superAdmin: "Super Admin",
     admin: "Admin",
@@ -164,12 +148,7 @@ export function ProfileMenu(): JSX.Element {
           onClick={() => setOpen((v) => !v)}
           className="relative flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500 text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-400 overflow-hidden"
         >
-          {imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={imageUrl} alt={user?.fullName ?? "avatar"} className="w-full h-full object-cover" />
-          ) : (
-            userInitials
-          )}
+          {userInitials}
           {/* Online/Away dot */}
           <span
             className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${
@@ -188,12 +167,7 @@ export function ProfileMenu(): JSX.Element {
               </p>
               <div className="flex items-center gap-3 mb-4">
                 <div className="relative flex-shrink-0 w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold text-base overflow-hidden">
-                  {imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={imageUrl} alt={user?.fullName ?? "avatar"} className="w-full h-full object-cover" />
-                  ) : (
-                    userInitials
-                  )}
+                  {userInitials}
                   <span
                     className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
                       isOnline ? "bg-emerald-400" : "bg-gray-400"
@@ -289,22 +263,13 @@ export function ProfileMenu(): JSX.Element {
 
             {/* Manage Account */}
             <div className="px-5 py-3 border-b border-gray-100">
-              {isWbmsg ? (
-                <Link
-                  href="/settings/security"
-                  onClick={() => setOpen(false)}
-                  className="flex items-center justify-between w-full text-sm text-gray-700 hover:text-gray-900 py-1 transition-colors"
-                >
+              <Link
+                href="/settings/security"
+                onClick={() => setOpen(false)}
+                className="flex items-center justify-between w-full text-sm text-gray-700 hover:text-gray-900 py-1 transition-colors"
+              >
                 {manageAccountContent}
-                </Link>
-              ) : (
-                <button
-                  onClick={() => { setOpen(false); openUserProfile(); }}
-                  className="flex items-center justify-between w-full text-sm text-gray-700 hover:text-gray-900 py-1 transition-colors"
-                >
-                  {manageAccountContent}
-                </button>
-              )}
+              </Link>
             </div>
 
             {/* Log Out */}

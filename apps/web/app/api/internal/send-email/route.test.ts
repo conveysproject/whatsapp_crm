@@ -4,7 +4,6 @@ import { NextRequest } from "next/server";
 const sendMail = vi.fn();
 vi.mock("../../../../lib/mail", () => ({ sendMail: (...a: unknown[]) => sendMail(...a) }));
 vi.mock("../../../../lib/auth/jwt", () => ({ verifyAccessToken: vi.fn().mockResolvedValue({ userId: "u" }) }));
-vi.mock("@clerk/nextjs/server", () => ({ verifyToken: vi.fn().mockResolvedValue({ sub: "user_1" }) }));
 
 import { POST } from "./route";
 
@@ -16,12 +15,10 @@ const req = (token: string) =>
     body: JSON.stringify({ to: "victim@example.com", subject: "hi", html: "<p>x</p>" }),
   });
 
-describe.each(["wbmsg", "clerk"])("POST /api/internal/send-email (%s mode)", (mode) => {
+describe("POST /api/internal/send-email", () => {
   beforeEach(() => {
     sendMail.mockReset().mockResolvedValue(undefined);
     vi.stubEnv("INTERNAL_EMAIL_SECRET", SECRET);
-    vi.stubEnv("CLERK_SECRET_KEY", "sk_test_x");
-    vi.stubEnv("NEXT_PUBLIC_AUTH_PROVIDER", mode);
   });
   afterEach(() => vi.unstubAllEnvs());
 

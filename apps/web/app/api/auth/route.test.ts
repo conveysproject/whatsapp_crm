@@ -31,7 +31,6 @@ const json = (status: number, body: unknown) =>
 
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
-  process.env["NEXT_PUBLIC_AUTH_PROVIDER"] = "wbmsg";
   process.env["AUTH_BFF_SECRET"] = "bffsecret";
   process.env["API_URL"] = "http://api.test";
   fetchMock = vi.fn();
@@ -39,18 +38,11 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.unstubAllGlobals();
-  delete process.env["NEXT_PUBLIC_AUTH_PROVIDER"];
   delete process.env["AUTH_BFF_SECRET"];
   delete process.env["API_URL"];
 });
 
 describe("BFF auth routes", () => {
-  it("404s every action in clerk mode", async () => {
-    process.env["NEXT_PUBLIC_AUTH_PROVIDER"] = "clerk";
-    expect((await post("sign-out", {})).status).toBe(404);
-    expect((await getToken()).status).toBe(404);
-  });
-
   it("404s unknown actions", async () => {
     expect((await post("nope", {})).status).toBe(404);
   });
@@ -312,12 +304,6 @@ describe("session-expired and session-check", () => {
     ]) {
       expect(cleared(await get(h)), JSON.stringify(h)).toBe(true);
     }
-  });
-
-  it("session-expired 404s in clerk mode", async () => {
-    process.env["NEXT_PUBLIC_AUTH_PROVIDER"] = "clerk";
-    expect((await getAction("session-expired")).status).toBe(404);
-    expect((await getAction("session-check")).status).toBe(404);
   });
 
   const fresh = () => `wb_at=${jwt(nowSec() + 600)}`;

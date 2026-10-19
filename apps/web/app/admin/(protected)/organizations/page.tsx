@@ -91,7 +91,7 @@ export default function AdminOrgsPage(): JSX.Element {
             disabled={cleanup.isPending}
             className="text-xs px-3 py-1.5 border border-orange-300 text-orange-700 rounded hover:bg-orange-50 disabled:opacity-50"
           >
-            {cleanup.isPending ? "Checking…" : "Validate vs Clerk"}
+            {cleanup.isPending ? "Checking…" : "Validate users"}
           </button>
         </div>
       </div>
@@ -101,8 +101,8 @@ export default function AdminOrgsPage(): JSX.Element {
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-orange-900">
               {cleanupPreview.deleted.length === 0
-                ? "All organizations have valid Clerk users."
-                : `${cleanupPreview.deleted.length} ghost org(s) found — no valid Clerk users`}
+                ? "All organizations have valid users."
+                : `${cleanupPreview.deleted.length} ghost org(s) found — no valid users`}
             </p>
             <button onClick={() => setCleanupPreview(null)} className="text-xs text-orange-600 hover:underline">Dismiss</button>
           </div>

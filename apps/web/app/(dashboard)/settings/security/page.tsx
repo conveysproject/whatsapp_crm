@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth/client";
-import { authProvider } from "@/lib/auth/config";
 import { clientLabel, deviceTitle, passwordMode, relativeTime, type DeviceSession } from "@/lib/security-settings";
 import { useAuthMethods } from "@/components/auth/SocialButtons";
 import { ConnectedAccountsSection, WhatsAppNumberSection, type SignInMethodsInfo } from "@/components/settings/SecuritySignInMethods";
@@ -203,11 +202,7 @@ export default function SecuritySettingsPage(): JSX.Element {
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Security</h1>
-      {authProvider() === "wbmsg" ? (
-        <Suspense fallback={null}><WbmsgSecurity /></Suspense>
-      ) : (
-        <p className="text-sm text-gray-600">Your sign-in settings are managed in your profile menu.</p>
-      )}
+      <Suspense fallback={null}><WbmsgSecurity /></Suspense>
     </div>
   );
 }

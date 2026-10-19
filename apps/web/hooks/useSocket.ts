@@ -37,7 +37,7 @@ export function useSocket(organizationId: string | undefined, userId?: string): 
     }
 
     async function connect() {
-      // Function form: socket.io calls this on every (re)connect, so an expired Clerk token is never reused.
+      // Function form: socket.io calls this on every (re)connect, so an expired token is never reused.
       socket.auth = (cb: (data: { token: string | null }) => void) => {
         void getToken()
           .then((token) => cb({ token }))

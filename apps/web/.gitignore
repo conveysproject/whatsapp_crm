@@ -1,7 +1,4 @@
 
-# clerk configuration (can include secrets)
-/.clerk/
-
 .vercel
 
 # Playwright — all E2E test files are local-only

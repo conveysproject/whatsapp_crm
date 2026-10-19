@@ -1,6 +1,5 @@
 import { auth } from "@/lib/auth/server";
 import { serverApiHeaders } from "./server-api";
-import { authProvider } from "@/lib/auth/config";
 import { sessionExpiredRedirect } from "@/lib/auth/session-expired";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -29,7 +28,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (res.status === 401) {
-    const target = sessionExpiredRedirect(401, authProvider(), (await headers()).get("x-pathname") ?? "/dashboard");
+    const target = sessionExpiredRedirect(401, (await headers()).get("x-pathname") ?? "/dashboard");
     if (target) redirect(target);
   }
 

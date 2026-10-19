@@ -87,8 +87,7 @@ export default function SuperAdminsPage(): JSX.Element {
         <div className="border border-red-200 bg-red-50 rounded-lg p-5 space-y-4">
           <h2 className="font-medium text-red-900">New Super Admin</h2>
           <p className="text-xs text-red-700">
-            A Clerk account will be created. The new admin will receive login credentials via email
-            and must set up MFA before accessing the platform.
+            The new admin sets their password through Forgot password on first sign-in.
           </p>
 
           {formError && (

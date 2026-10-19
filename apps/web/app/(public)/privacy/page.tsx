@@ -44,7 +44,6 @@ export default function PrivacyPage(): JSX.Element {
       <ul>
         <li>Meta, to send and receive WhatsApp messages;</li>
         <li>Razorpay and Stripe, to process payments;</li>
-        <li>Clerk, for sign-in and identity;</li>
         <li>cloud hosting, database, email and error-monitoring providers.</li>
       </ul>
 

@@ -13,7 +13,7 @@ export async function getImpersonationCookie(): Promise<string | null> {
 }
 
 /**
- * Auth headers for server-side API calls: the Clerk bearer token, plus the
+ * Auth headers for server-side API calls: the bearer token, plus the
  * X-Impersonate-Token when an impersonation session cookie is present.
  * The API validates the token; a forged/garbage cookie only yields a 401.
  */

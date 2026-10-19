@@ -1,4 +1,3 @@
-import { SignUp } from "@clerk/nextjs";
 import type { JSX } from "react";
 import { DM_Sans, Bricolage_Grotesque } from "next/font/google";
 import Link from "next/link";
@@ -6,12 +5,9 @@ import Image from "next/image";
 import { PublicNav } from "@/components/public/PublicNav";
 import { SignUpForm } from "@/components/auth/SignUpForm";
 import { SocialSignInSection } from "@/components/auth/SocialButtons";
-import { authProvider } from "@/lib/auth/config";
 
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm", weight: ["400", "500"] });
 const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-br", weight: ["500", "600", "700", "800"] });
-
-const wbmsg = authProvider() === "wbmsg";
 
 export default function SignUpPage(): JSX.Element {
   return (
@@ -43,17 +39,11 @@ export default function SignUpPage(): JSX.Element {
             </div>
           </div>
 
-          {/* Right: Clerk SignUp */}
+          {/* Right: sign-up form */}
           <div className="flex-1 flex flex-col justify-center items-center px-6 py-12">
             <div className="w-full max-w-md">
-              {wbmsg ? (
-                <>
-                  <SignUpForm />
-                  <SocialSignInSection />
-                </>
-              ) : (
-                <SignUp forceRedirectUrl="/business-details" />
-              )}
+              <SignUpForm />
+              <SocialSignInSection />
             </div>
           </div>
         </div>

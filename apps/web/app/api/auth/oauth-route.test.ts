@@ -46,14 +46,12 @@ const sentBody = (i = 0) => JSON.parse((fetchMock.mock.calls[i] as [string, Requ
 
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
-  process.env["NEXT_PUBLIC_AUTH_PROVIDER"] = "wbmsg";
   process.env["API_URL"] = "http://api.test";
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
-  delete process.env["NEXT_PUBLIC_AUTH_PROVIDER"];
   delete process.env["API_URL"];
 });
 
@@ -63,12 +61,6 @@ describe("BFF: methods", () => {
     expect(await (await get("methods")).json()).toEqual({ whatsapp: true, google: true, facebook: false });
     fetchMock.mockRejectedValueOnce(new Error("down"));
     expect(await (await get("methods")).json()).toEqual({ whatsapp: false, google: false, facebook: false });
-  });
-
-  it("is dark in clerk mode", async () => {
-    process.env["NEXT_PUBLIC_AUTH_PROVIDER"] = "clerk";
-    expect((await get("methods")).status).toBe(404);
-    expect((await formPost("oauth/google/start", {})).status).toBe(404);
   });
 });
 

@@ -1,20 +1,10 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { authProvider, apiBaseUrl, COOKIE } from "./config";
+import { apiBaseUrl, COOKIE } from "./config";
 
 describe("auth config", () => {
   const saved = { ...process.env };
   afterEach(() => {
     process.env = { ...saved };
-  });
-  it("defaults to clerk", () => {
-    delete process.env["NEXT_PUBLIC_AUTH_PROVIDER"];
-    expect(authProvider()).toBe("clerk");
-    process.env["NEXT_PUBLIC_AUTH_PROVIDER"] = "bogus";
-    expect(authProvider()).toBe("clerk");
-  });
-  it("selects wbmsg", () => {
-    process.env["NEXT_PUBLIC_AUTH_PROVIDER"] = "wbmsg";
-    expect(authProvider()).toBe("wbmsg");
   });
   it("apiBaseUrl strips trailing slash and falls back", () => {
     delete process.env["API_URL"];

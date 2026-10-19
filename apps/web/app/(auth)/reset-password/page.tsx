@@ -1,18 +1,12 @@
 import type { JSX } from "react";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
-import { authProvider } from "@/lib/auth/config";
-
-const wbmsg = authProvider() === "wbmsg";
 
 export default async function ResetPasswordPage({
   searchParams,
 }: {
   searchParams: Promise<{ email?: string }>;
 }): Promise<JSX.Element> {
-  // Clerk has its own reset flow on the sign-in page.
-  if (!wbmsg) redirect("/sign-in");
   const { email } = await searchParams;
   return (
     <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 mx-4 space-y-4">

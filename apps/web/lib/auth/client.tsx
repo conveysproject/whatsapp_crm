@@ -2,9 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
-import { useAuth as useClerkAuth } from "@clerk/nextjs";
 import { useQueryClient } from "@tanstack/react-query";
-import { authProvider } from "./config";
 import { decide, isPublicAuthPath, retryDelayMs } from "./provider-logic";
 import type { ProviderState } from "./provider-logic";
 import { shouldRecheckSession } from "./session-expired";
@@ -144,14 +142,8 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-function useWbmsgAuth(): AuthState {
+export function useAuth(): AuthState {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
   return ctx;
 }
-
-// Chosen once at module load from the build-time flag, so hook order is stable.
-// In Clerk mode this is Clerk's own hook, unchanged at runtime; it is typed as the shared
-// facade contract so callers can only use fields that also exist in wbmsg mode.
-export const useAuth: () => AuthState =
-  authProvider() === "clerk" ? (useClerkAuth as unknown as () => AuthState) : useWbmsgAuth;

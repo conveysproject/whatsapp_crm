@@ -134,7 +134,7 @@ export default function MembersPage(): JSX.Element {
     setInviting(true);
     setInviteError(null);
     try {
-      const clerkToken = await getToken();
+      const token = await getToken();
 
       // Build invite body — only include teamId/teamRole when a team is chosen
       const inviteBody: {
@@ -151,7 +151,7 @@ export default function MembersPage(): JSX.Element {
       // Step 1: Create invitation on Railway
       const res = await clientFetch(`${API_URL}/v1/invitations`, {
         method: "POST",
-        token: clerkToken ?? "",
+        token: token ?? "",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(inviteBody),
       });

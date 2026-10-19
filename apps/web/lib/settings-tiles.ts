@@ -1,11 +1,10 @@
-import { authProvider } from "./auth/config";
 import { canAccess, canAccessSub, isAdmin, type CurrentUser } from "./can";
 
 // Settings index tiles. Each tile's rule mirrors what its page's API enforces, so users only
 // see settings they can actually use. No rule = any user who can open Settings.
 type Rule = { perm: string; sub?: string } | { adminOnly: true };
 
-export interface SettingsTile { href: string; label: string; desc: string; rule?: Rule; wbmsgOnly?: boolean }
+export interface SettingsTile { href: string; label: string; desc: string; rule?: Rule }
 
 export const SETTINGS_TILES: SettingsTile[] = [
   { href: "/settings/members", label: "Members", desc: "Manage team access and permissions", rule: { perm: "settings_access", sub: "settings_agents" } },
@@ -23,15 +22,13 @@ export const SETTINGS_TILES: SettingsTile[] = [
   { href: "/settings/canned-responses", label: "Canned Responses", desc: "Saved reply templates with shortcuts", rule: { perm: "automation_access", sub: "automation_bot_replies" } },
   { href: "/settings/routing", label: "Routing Rules", desc: "Auto-assign conversations", rule: { perm: "settings_access", sub: "settings_teams" } },
   { href: "/settings/ai", label: "AI Settings", desc: "Chatbot and automation config" },
-  { href: "/settings/security", label: "Security", desc: "Password and signed-in devices", wbmsgOnly: true },
+  { href: "/settings/security", label: "Security", desc: "Password and signed-in devices" },
   { href: "/settings/billing", label: "Billing", desc: "Subscription and usage", rule: { perm: "settings_access", sub: "settings_billing" } },
 ];
 
 export function visibleSettingsTiles(user: CurrentUser | null | undefined): SettingsTile[] {
   if (!user) return [];
-  const wbmsg = authProvider() === "wbmsg";
-  return SETTINGS_TILES.filter(({ rule, wbmsgOnly }) => {
-    if (wbmsgOnly && !wbmsg) return false;
+  return SETTINGS_TILES.filter(({ rule }) => {
     if (!rule) return true;
     if ("adminOnly" in rule) return isAdmin(user);
     return rule.sub ? canAccessSub(user, rule.perm, rule.sub) : canAccess(user, rule.perm);

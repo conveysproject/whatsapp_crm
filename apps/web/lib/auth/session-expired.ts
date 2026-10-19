@@ -4,10 +4,9 @@ import { safeRedirect } from "./redirect";
 /** Where to send a user whose API call returned `status`; null when no redirect applies. */
 export function sessionExpiredRedirect(
   status: number,
-  provider: "clerk" | "wbmsg",
   path: string | null | undefined,
 ): string | null {
-  if (provider !== "wbmsg" || status !== 401) return null;
+  if (status !== 401) return null;
   return "/api/auth/session-expired?redirect_url=" + encodeURIComponent(safeRedirect(path ?? null));
 }
 

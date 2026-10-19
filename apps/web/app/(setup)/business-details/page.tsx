@@ -1,9 +1,7 @@
 "use client";
 
-import { useUser, useOrganization } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
-import { authProvider } from "@/lib/auth/config";
-import { useState, useEffect, type JSX } from "react";
+import { useState, type JSX } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -32,19 +30,6 @@ interface Identity {
   orgName: string | undefined;
 }
 
-// Chosen once at module load so hook order is stable.
-function useClerkIdentity(): Identity {
-  const { user, isLoaded } = useUser();
-  const { organization, isLoaded: orgLoaded } = useOrganization();
-  return {
-    isLoaded: isLoaded && orgLoaded,
-    firstName: user?.firstName,
-    lastName: user?.lastName,
-    email: user?.primaryEmailAddress?.emailAddress ?? "",
-    orgName: organization?.name,
-  };
-}
-
 // wbmsg: only the email is shown; the API derives the register identity server-side.
 function useWbmsgIdentity(): Identity {
   const { data, isError } = useQuery<{ email?: string } | null>({
@@ -57,27 +42,18 @@ function useWbmsgIdentity(): Identity {
   return { isLoaded: data !== undefined || isError, firstName: undefined, lastName: undefined, email: data?.email ?? "", orgName: undefined };
 }
 
-const isClerkMode = authProvider() === "clerk";
-const useIdentity = isClerkMode ? useClerkIdentity : useWbmsgIdentity;
-
 type FieldError = FieldErrors<FormState>;
 
 export default function BusinessDetailsPage(): JSX.Element {
-  const identity = useIdentity();
+  const identity = useWbmsgIdentity();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(INIT);
   const [errors, setErrors] = useState<FieldError>({});
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState("");
 
-  useEffect(() => {
-    if (isClerkMode && identity.isLoaded && identity.orgName) {
-      setForm(f => ({ ...f, companyName: identity.orgName ?? f.companyName }));
-    }
-  }, [identity.isLoaded, identity.orgName]);
-
   function validate(): boolean {
-    const e = validateBusinessScreen(form, { requireCompanyName: !isClerkMode });
+    const e = validateBusinessScreen(form);
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -90,11 +66,7 @@ export default function BusinessDetailsPage(): JSX.Element {
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          isClerkMode
-            ? { ...form, email: identity.email || undefined, firstName: identity.firstName, lastName: identity.lastName }
-            : { ...form, companyName: form.companyName.trim() },
-        ),
+        body: JSON.stringify({ ...form, companyName: form.companyName.trim() }),
       });
       if (res.ok) {
         router.push("/dashboard");
@@ -109,7 +81,7 @@ export default function BusinessDetailsPage(): JSX.Element {
     }
   }
 
-  const fullName = [identity.firstName, identity.lastName].filter(Boolean).join(" ") || (isClerkMode ? "—" : identity.email || "—");
+  const fullName = [identity.firstName, identity.lastName].filter(Boolean).join(" ") || (identity.email || "—");
   const email = identity.email;
   const initials = [identity.firstName?.[0], identity.lastName?.[0]].filter(Boolean).join("").toUpperCase() || (identity.email[0]?.toUpperCase() ?? "?");
 
@@ -321,7 +293,6 @@ export default function BusinessDetailsPage(): JSX.Element {
               values={form}
               errors={errors}
               onChange={patch => { setForm(f => ({ ...f, ...patch })); setErrors(er => { const n = { ...er }; for (const k of Object.keys(patch)) delete n[k as keyof FieldError]; return n; }); }}
-              showCompanyName={!isClerkMode}
             />
 
             {apiError && <div className="bd2-api-err">{apiError}</div>}

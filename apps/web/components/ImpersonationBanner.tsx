@@ -73,13 +73,13 @@ export function ImpersonationBanner({ impersonating }: { impersonating: boolean 
     return () => clearTimeout(timer);
   }, [state]);
 
-  // These calls are made as the real super admin (Clerk token only). The fetch
+  // These calls are made as the real super admin (access token only). The fetch
   // interceptor never adds the impersonation header to these paths.
   async function adminCall(path: string, method: "POST" | "DELETE", body: unknown): Promise<Response> {
-    const clerk = await getToken();
+    const token = await getToken();
     return fetch(`${API_URL}${path}`, {
       method,
-      headers: { Authorization: `Bearer ${clerk ?? ""}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${token ?? ""}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
   }

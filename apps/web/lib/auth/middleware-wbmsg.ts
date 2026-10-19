@@ -5,7 +5,7 @@ import { COOKIE } from "./config";
 import { accessTokenExpiry, verifyAccessToken } from "./jwt";
 import { safeRedirect } from "./redirect";
 
-// Same list as the Clerk middleware (middleware.ts), as regexes.
+// Public routes, as regexes.
 const PUBLIC: RegExp[] = [
   /^\/$/,
   /^\/sign-in(\/.*)?$/,

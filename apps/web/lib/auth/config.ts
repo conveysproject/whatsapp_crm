@@ -1,8 +1,4 @@
 // Edge-safe: no Node-only imports. Used by server code and Next middleware.
-export function authProvider(): "clerk" | "wbmsg" {
-  return process.env["NEXT_PUBLIC_AUTH_PROVIDER"] === "wbmsg" ? "wbmsg" : "clerk";
-}
-
 export const COOKIE = { refresh: "wb_rt", device: "wb_dev", access: "wb_at" } as const;
 export const ACCESS_MAX_AGE = 600;
 export const REFRESH_MAX_AGE = 2_592_000;
