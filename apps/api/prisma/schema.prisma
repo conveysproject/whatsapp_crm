@@ -72,6 +72,10 @@ model Organization {
   billingStatus          String    @default("active") @map("billing_status") // active | past_due | cancelled
   billingGraceEndsAt     DateTime? @map("billing_grace_ends_at")
   planCancelAtPeriodEnd  Boolean   @default(false) @map("plan_cancel_at_period_end")
+  parentOrganizationId   String?   @map("parent_organization_id")
+  isParent               Boolean   @default(false) @map("is_parent")
+  parentOrganization     Organization?  @relation("OrgParentChild", fields: [parentOrganizationId], references: [id], onDelete: SetNull)
+  childOrganizations     Organization[] @relation("OrgParentChild")
   vendorSettings     VendorSetting[]
   cannedResponses    CannedResponse[]
   contactGroups      ContactGroup[]
@@ -91,6 +95,37 @@ model Organization {
   @@map("organizations")
   @@index([stripeId])
   @@index([billingStatus, billingGraceEndsAt])
+  @@index([parentOrganizationId])
+}
+
+model ClientInvitation {
+  id                   String   @id @default(uuid())
+  parentOrganizationId String   @map("parent_organization_id")
+  email                String
+  token                String   @unique
+  status               String   @default("pending") // pending | accepted | expired | revoked
+  expiresAt            DateTime @map("expires_at")
+  createdBy            String   @map("created_by")
+  acceptedOrgId        String?  @map("accepted_org_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@index([parentOrganizationId])
+  @@map("client_invitations")
+}
+
+model ParentAuditEvent {
+  id                   String   @id @default(uuid())
+  parentOrganizationId String   @map("parent_organization_id")
+  childOrganizationId  String?  @map("child_organization_id")
+  actorUserId          String?  @map("actor_user_id")
+  action               String
+  metadata             Json     @default("{}")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@index([parentOrganizationId])
+  @@index([childOrganizationId])
+  @@index([createdAt])
+  @@map("parent_audit_events")
 }
 
 model VendorSetting {
@@ -893,6 +928,7 @@ model ApiMessageMeta {
   queuedAt         DateTime  @default(now()) @map("queued_at")
   sentAt           DateTime? @map("sent_at")
   deliveryReportAt DateTime? @map("delivery_report_at")
+  parentOrganizationId String? @map("parent_organization_id")
 
   @@index([organizationId, queuedAt])
   @@index([apiKeyId])
@@ -1510,6 +1546,7 @@ model ImpersonationLog {
   userAgent      String?   @map("user_agent") @db.Text
   startedAt      DateTime  @default(now()) @map("started_at")
   endedAt        DateTime? @map("ended_at")
+  actorOrganizationId String? @map("actor_organization_id")
 
   @@index([actorId])
   @@index([organizationId])
