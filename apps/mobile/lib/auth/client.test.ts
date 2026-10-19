@@ -89,12 +89,6 @@ describe("auth client", () => {
     expect(isUpgradeRequired()).toBe(true);
   });
 
-  it("probes the public key endpoint", async () => {
-    const fetchFn = mockFetch(404, { error: { code: "NOT_FOUND" } });
-    await expect(createAuthClient("https://api.test").probe()).resolves.toEqual({ status: 404, body: { error: { code: "NOT_FOUND" } } });
-    expect(fetchFn.mock.calls[0][0]).toBe("https://api.test/v1/auth/.well-known/jwks.json");
-  });
-
   it("times out a hung request as a network error, so a hung refresh throws (user stays signed in)", async () => {
     jest.useFakeTimers();
     try {

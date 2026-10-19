@@ -40,7 +40,7 @@ describe("createApi: 401 recovery", () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
-  it("Clerk mode (nothing registered) and token-less calls are unchanged", async () => {
+  it("nothing registered and token-less calls are unchanged", async () => {
     const fetchFn = fetchSequence(401, 401);
     await expect(createApi(async () => "t", "https://api.test")("/x")).rejects.toMatchObject({ status: 401 });
     const recover = jest.fn(async () => "fresh");

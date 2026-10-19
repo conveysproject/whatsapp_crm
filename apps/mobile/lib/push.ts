@@ -74,7 +74,7 @@ export async function flushPendingUnregister(api: Api): Promise<void> {
   }
 }
 
-/** Shared phones: remove this device from the user's push list first, then end the Clerk session even if offline. */
+/** Shared phones: remove this device from the user's push list first, then end the session even if offline. */
 export async function signOutAndUnregister(api: Api, signOut: () => Promise<unknown>): Promise<void> {
   try {
     await unregisterDevice(api);

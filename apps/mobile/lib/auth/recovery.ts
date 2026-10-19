@@ -1,7 +1,7 @@
 /**
  * Lets API callers recover from a 401 on a token that has not expired yet (the server revoked the session, or the
- * access token was rotated elsewhere). Registered only by WBMSG login; in Clerk mode nothing is registered and a 401
- * is reported as before. Kept free of other imports so lib/api.ts can use it.
+ * access token was rotated elsewhere). Registered by the WBMSG login; with nothing registered a 401
+ * is reported as is. Kept free of other imports so lib/api.ts can use it.
  */
 type Recover = (staleToken: string) => Promise<string | null>;
 

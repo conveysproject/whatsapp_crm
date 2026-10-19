@@ -9,7 +9,6 @@ jest.mock("expo-secure-store", () => ({
   deleteItemAsync: jest.fn(async (k: string) => { delete mockStore[k]; }),
 }));
 jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { version: "1.0.0" } } }));
-jest.mock("@clerk/expo", () => ({ ClerkProvider: () => null, useAuth: () => ({}) }));
 jest.mock("react-native-safe-area-context", () => {
   const { View } = jest.requireActual("react-native");
   return { SafeAreaView: View };

@@ -64,7 +64,7 @@ describe("connectRealtime", () => {
     expect(second).toEqual({ token: "t2" });
   });
 
-  it("passes a null token when Clerk fails instead of hanging", async () => {
+  it("passes a null token when getToken fails instead of hanging", async () => {
     connectRealtime({ url: "https://api.test", getToken: jest.fn().mockRejectedValue(new Error("x")), onEvent: jest.fn() });
     const auth = mockSocket.auth as (cb: (d: { token: string | null }) => void) => void;
     await expect(new Promise((r) => auth(r))).resolves.toEqual({ token: null });

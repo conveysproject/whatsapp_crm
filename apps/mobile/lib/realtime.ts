@@ -39,7 +39,7 @@ export function isForegroundRefreshable(queryKey: readonly unknown[]): boolean {
 const RETRY_BASE_MS = 2_000;
 const RETRY_MAX_MS = 30_000;
 
-/** Socket.IO connection that sends a fresh Clerk token on every handshake and retries after an auth rejection. */
+/** Socket.IO connection that sends a fresh token on every handshake and retries after an auth rejection. */
 export function connectRealtime(opts: {
   url: string;
   getToken: GetToken;

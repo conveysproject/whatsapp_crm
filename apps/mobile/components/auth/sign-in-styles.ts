@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
 import { colors, font, radius, space } from "../../lib/theme";
 
-/** Shared by the Clerk and WBMSG sign-in screens. */
+/** Styles for the WBMSG sign-in screen. */
 export const signInStyles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   body: { flex: 1, paddingHorizontal: space.xl, paddingTop: space.xl, gap: space.md },

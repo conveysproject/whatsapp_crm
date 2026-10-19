@@ -51,8 +51,6 @@ export function createAuthClient(baseUrl: string = config.apiUrl, timeoutMs: num
       if (r.status === 401) return { ok: false };
       throw new Error(r.status === 0 ? "Network request failed" : `Refresh failed (${r.status})`);
     },
-    /** The public key endpoint's raw answer; read it with classifyProbe(). */
-    probe: () => call("GET", "/auth/.well-known/jwks.json"),
   };
 }
 
