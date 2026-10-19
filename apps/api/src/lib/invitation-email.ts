@@ -51,3 +51,24 @@ export function buildInvitationEmail({ role, acceptUrl }: { role: string; accept
 </body>
 </html>`;
 }
+
+export const CLIENT_INVITATION_SUBJECT = "You've been invited to create a WBMSG account";
+
+export function clientInvitationAcceptUrl(token: string): string {
+  const base = (process.env["WEB_URL"] ?? "https://wbmsg.com").replace(/\/$/, "");
+  return `${base}/client-invitations/${encodeURIComponent(token)}/accept`;
+}
+
+// Same layout as buildInvitationEmail; D12: the invitee must be told the parent gets full read access.
+export function buildClientInvitationEmail({ parentName, acceptUrl }: { parentName: string; acceptUrl: string }): string {
+  const name = escapeHtml(parentName);
+  return buildInvitationEmail({ role: "admin", acceptUrl })
+    .replace(
+      /You've been invited to join as <strong>[\s\S]*?<\/strong>\.<br>\s*Accept below to create your account and get started\./,
+      `<strong>${name}</strong> has invited you to create your own WBMSG account.<br>Accept below to create your account and get started.`,
+    )
+    .replace(
+      "This invitation expires in 7 days.<br>",
+      `Important: ${name} will have full read access to the new account, including its conversations, contacts and settings.<br>This invitation expires in 7 days.<br>`,
+    );
+}

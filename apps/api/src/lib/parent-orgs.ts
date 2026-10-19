@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
 export type ParentLinkErrorCode =
   | "PARENT_NOT_ENABLED"
@@ -58,14 +58,18 @@ export async function canBeParent(prisma: PrismaClient, orgId: string): Promise<
   return !!org && org.isParent && org.parentOrganizationId === null;
 }
 
+/**
+ * Accepts a PrismaClient (opens its own transaction) or a Prisma.TransactionClient
+ * (already inside the caller's transaction, which cannot nest: runs directly on it).
+ */
 export async function linkChild(
-  prisma: PrismaClient,
+  client: PrismaClient | Prisma.TransactionClient,
   parentOrgId: string,
   childOrgId: string,
   actorUserId: string | null
 ): Promise<void> {
   if (parentOrgId === childOrgId) throw new ParentLinkError("SELF_LINK");
-  await prisma.$transaction(async (tx) => {
+  const run = async (tx: Prisma.TransactionClient) => {
     // Lock both rows in a stable order so concurrent links/unlinks serialize.
     await tx.$queryRaw`SELECT id FROM organizations WHERE id IN (${parentOrgId}, ${childOrgId}) ORDER BY id FOR UPDATE`;
     const select = { isParent: true, parentOrganizationId: true } as const;
@@ -86,7 +90,12 @@ export async function linkChild(
     await tx.parentAuditEvent.create({
       data: { parentOrganizationId: parentOrgId, childOrganizationId: childOrgId, actorUserId, action: "linked" },
     });
-  });
+  };
+  if ("$transaction" in client && typeof client.$transaction === "function") {
+    await client.$transaction(run);
+  } else {
+    await run(client as Prisma.TransactionClient);
+  }
 }
 
 export async function unlinkChild(

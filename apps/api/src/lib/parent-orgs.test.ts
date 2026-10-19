@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import {
   parentOrgsEnabled,
   getChildOrgIds,
@@ -132,6 +132,24 @@ describe("linkChild", () => {
         actorUserId: "u1",
         action: "linked",
       }),
+    });
+  });
+
+  it("runs directly on a transaction client (no nested $transaction), still locking and compare-and-set", async () => {
+    const { tx } = makePrisma({ orgs: { p1: okParent, c1: freeChild } });
+    await linkChild(tx as unknown as Prisma.TransactionClient, "p1", "c1", "u1");
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.organization.updateMany).toHaveBeenCalledWith({
+      where: { id: "c1", parentOrganizationId: null },
+      data: { parentOrganizationId: "p1" },
+    });
+    expect(tx.parentAuditEvent.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("transaction-client path still rejects an invalid link", async () => {
+    const { tx } = makePrisma({ orgs: { p1: { isParent: false, parentOrganizationId: null }, c1: freeChild } });
+    await expect(linkChild(tx as unknown as Prisma.TransactionClient, "p1", "c1", "u1")).rejects.toMatchObject({
+      code: "PARENT_NOT_ENABLED",
     });
   });
 
