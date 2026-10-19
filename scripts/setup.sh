@@ -81,7 +81,7 @@ if [ ${#MISSING_KEYS[@]} -gt 0 ]; then
   for k in "${MISSING_KEYS[@]}"; do
     echo -e "    ${YELLOW}• $k${RESET}"
   done
-  echo -e "  ${CYAN}The app will start but features needing these keys (Clerk auth, WhatsApp, Sentry) won't work until filled in.${RESET}"
+  echo -e "  ${CYAN}The app will start but features needing these keys (sign-in, WhatsApp, Sentry) won't work until filled in.${RESET}"
 fi
 
 # Symlink root .env into apps so each tool picks up the vars it needs.

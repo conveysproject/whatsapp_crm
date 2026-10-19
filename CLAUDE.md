@@ -6,7 +6,7 @@ Never write a password, token, API key or connection string with credentials dir
 code, scripts, docs, tests, commit messages or chat. Always read it from an environment
 variable (or a secret manager).
 
-- Code and scripts: `process.env["DATABASE_URL"]`, `process.env["CLERK_SECRET_KEY"]`, etc.
+- Code and scripts: `process.env["DATABASE_URL"]`, `process.env["AUTH_CODE_PEPPER"]`, etc.
   For one-off prod scripts use `process.env["DATABASE_PUBLIC_URL"] ?? process.env["DATABASE_URL"]`
   and run them with `railway run --service Postgres node <script>` so Railway injects the value.
 - Fail loudly when a required variable is missing; never fall back to a literal secret.

@@ -4,8 +4,8 @@ Runs the API and web app against a throwaway Docker Postgres and Redis with the
 WBMSG own-auth provider, and runs the Playwright end-to-end spec against it.
 
 Safety: everything here targets `localhost`. Never point `DATABASE_URL` at
-production (Railway) and never run `prisma migrate deploy` against it. Production
-stays on Clerk (`AUTH_PROVIDER` and `NEXT_PUBLIC_AUTH_PROVIDER` unset).
+production (Railway) and never run `prisma migrate deploy` against it. Since
+2026-10-19 the own login is the only login; there is no provider switch.
 
 > **Lessons from the first real run (2026-10-17) — read first**
 > - `docker-compose.yml` now requires `POSTGRES_PASSWORD` (no hardcoded passwords). If your own dev stack (`WBMSG_postgres`, `WBMSG_redis`, API on 4000, web on 3000) is already running, do **not** reuse it: start throwaway containers instead, e.g.
@@ -37,7 +37,6 @@ the directory you run it in). Set these names:
 | Name | Value |
 | --- | --- |
 | `NODE_ENV` | `development` |
-| `AUTH_PROVIDER` | `wbmsg` |
 | `AUTH_DEV_LOG_CODES` | `1` (dev-only: logs `[dev-code] <purpose> <email> <code>` so the e2e can read codes; ignored when `NODE_ENV=production`) |
 | `DATABASE_URL` | `postgresql://WBMSG:WBMSG@localhost:5432/WBMSG_dev` |
 | `REDIS_URL` | `redis://localhost:6379` |
@@ -107,7 +106,6 @@ Create `apps/web/.env.local` (gitignored) with these names:
 
 | Name | Value |
 | --- | --- |
-| `NEXT_PUBLIC_AUTH_PROVIDER` | `wbmsg` |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:4000` |
 | `API_URL` | `http://localhost:4000` |
 | `AUTH_BFF_SECRET` | same value as in the API `.env` |

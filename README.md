@@ -19,7 +19,7 @@
 | Mobile     | React Native 0.74.1 + Expo 51                   |
 | Database   | PostgreSQL 16 + Prisma 7                        |
 | Cache      | Redis 7                                         |
-| Auth       | Clerk                                           |
+| Auth       | WBMSG own login (Ed25519 JWT, rotating sessions) |
 | Queue      | BullMQ                                          |
 | Storage    | Cloudflare R2                                   |
 | AI         | OpenAI (gpt-4o-mini)                            |
@@ -99,8 +99,10 @@ Copy `.env.example` to `.env` and fill in the values.
 |------------------------|----------------------------------|
 | `DATABASE_URL`         | PostgreSQL connection string     |
 | `REDIS_URL`            | Redis connection string          |
-| `CLERK_SECRET_KEY`     | Clerk auth secret                |
-| `CLERK_WEBHOOK_SECRET` | Clerk webhook secret             |
+| `AUTH_JWT_PRIVATE_KEY` | Access-token signing key (Ed25519) |
+| `AUTH_JWT_KID`         | Signing key id                   |
+| `AUTH_CODE_PEPPER`     | Secret for one-time codes        |
+| `AUTH_BFF_SECRET`      | Shared secret with the web app   |
 | `OPENAI_API_KEY`       | OpenAI API key                   |
 | `WA_ACCESS_TOKEN`      | WhatsApp Business API token      |
 | `WA_PHONE_NUMBER_ID`   | WhatsApp phone number ID         |
@@ -119,14 +121,10 @@ Copy `.env.example` to `.env` and fill in the values.
 
 | Variable                            | Description                  |
 |-------------------------------------|------------------------------|
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk public key             |
-| `CLERK_SECRET_KEY`                  | Clerk secret key             |
-| `CLERK_WEBHOOK_SECRET`              | Clerk webhook secret         |
+| `AUTH_BFF_SECRET`                   | Same value as the API        |
 | `NEXT_PUBLIC_API_URL`               | API base URL                 |
 | `NEXT_PUBLIC_META_APP_ID`           | Meta app ID (public)         |
 | `NEXT_PUBLIC_META_REDIRECT_URI`     | Meta OAuth redirect URI      |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_URL`     | Clerk sign-in path           |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_URL`     | Clerk sign-up path           |
 
 ---
 
