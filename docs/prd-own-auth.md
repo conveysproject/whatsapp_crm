@@ -1,6 +1,9 @@
 # PRD: WBMSG's own login (replace Clerk)
 
 **Status:** Approved for planning. Owner delegated remaining decisions to engineering on 2026-10-17 ("all yours"); calls made under that delegation are marked *my call*.
+
+> **Update 2026-10-19 — Phase 6 done.** Production switched to the own login on 2026-10-18. On 2026-10-19 the owner chose to remove Clerk right away instead of waiting a week: the Clerk SDKs, webhook, pages and the `AUTH_PROVIDER` / `NEXT_PUBLIC_AUTH_PROVIDER` / `EXPO_PUBLIC_AUTH_PROVIDER` switches are deleted (plan: docs/superpowers/plans/2026-10-19-remove-clerk.md). The own login is the only login and there is no rollback to Clerk. Sections below that describe the switch are historical.
+
 **Date:** 2026-10-17
 **Owner decision so far:** build our own login system and remove Clerk completely. Existing users keep their passwords. Authenticator-app 2FA comes in a later phase.
 

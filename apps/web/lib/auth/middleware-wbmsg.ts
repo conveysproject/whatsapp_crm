@@ -23,7 +23,6 @@ const PUBLIC: RegExp[] = [
   /^\/llms\.txt$/,
   /^\/invitations\/[^/]+\/accept$/,
   /^\/api\/internal\/.*$/,
-  /^\/api\/invitations\/.*$/,
 ];
 const isPublic = (p: string) => PUBLIC.some((r) => r.test(p));
 const isAdmin = (p: string) => p === "/admin" || p.startsWith("/admin/");

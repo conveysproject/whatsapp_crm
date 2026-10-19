@@ -268,7 +268,7 @@ describe("invitations", () => {
     });
 
     it("creates the user with the account id and ignores a body-supplied user id", async () => {
-      const res = await call({ fullName: "Alice", mobileNumber: "+1", userId: "evil-id" });
+      const res = await call({ fullName: "Alice", mobileNumber: "+1", userId: "evil-id", clerkUserId: "evil-legacy-id" });
       expect(res.statusCode).toBe(201);
       expect(mockPrisma.user.create.mock.calls[0][0].data).toMatchObject({
         id: "usr_1",

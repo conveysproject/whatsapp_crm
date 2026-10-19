@@ -54,7 +54,7 @@ export default function AcceptInvitationPage(): JSX.Element {
       });
       const step = signedInAcceptStep(res.status, await res.json().catch(() => null));
       if (step.kind === "error") { setError(step.message); return; }
-      window.location.assign("/onboarding/checklist");
+      window.location.assign("/checklist");
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -78,7 +78,7 @@ export default function AcceptInvitationPage(): JSX.Element {
       const step = invitationNextStep(res.status, await res.json().catch(() => null));
       if (step.kind === "account_exists") { setAccountExists(true); return; }
       if (step.kind === "error") { setError(step.message); return; }
-      window.location.assign("/onboarding/checklist");
+      window.location.assign("/checklist");
     } catch {
       setError("Network error. Please try again.");
     } finally {
