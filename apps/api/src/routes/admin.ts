@@ -4,7 +4,7 @@ import { redis } from "../lib/redis.js";
 import { activatePlan } from "../lib/billing/activation.js";
 import { writeAdminAudit } from "../lib/audit.js";
 import { sendMail, isEmailConfigured } from "../lib/mail.js";
-import { parentOrgsEnabled, getChildOrgIds } from "../lib/parent-orgs.js";
+import { parentOrgsEnabled } from "../lib/parent-orgs.js";
 
 const SENSITIVE_CONFIG_KEYS = new Set([
   "smtp_password", "stripe_secret", "stripe_webhook_secret",
@@ -261,22 +261,26 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       if (!requireSuperAdmin(request.auth.role, reply)) return;
       const { orgId } = request.params;
       const { enabled } = request.body;
-      const org = await fastify.prisma.organization.findUnique({
-        where: { id: orgId },
-        select: { id: true, parentOrganizationId: true },
+      const exists = await fastify.prisma.organization.findUnique({ where: { id: orgId }, select: { id: true } });
+      if (!exists) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
+      // Lock the org row so a concurrent linkChild (which also locks it) cannot slip a child in
+      // between the child count and the update.
+      const result = await fastify.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`;
+        const org = await tx.organization.findUnique({ where: { id: orgId }, select: { id: true, parentOrganizationId: true } });
+        if (!org) return { code: "NOT_FOUND" as const };
+        if (enabled && org.parentOrganizationId) return { code: "IS_CHILD" as const };
+        if (!enabled && (await tx.organization.count({ where: { parentOrganizationId: org.id } })) > 0) {
+          return { code: "HAS_CHILDREN" as const };
+        }
+        const row = await tx.organization.update({ where: { id: org.id }, data: { isParent: enabled }, select: { id: true, isParent: true } });
+        return { code: "OK" as const, row };
       });
-      if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
-      if (enabled && org.parentOrganizationId) {
-        return reply.status(409).send({ error: { code: "IS_CHILD", message: "A child organization cannot be a parent" } });
-      }
-      if (!enabled && (await getChildOrgIds(fastify.prisma, org.id)).length > 0) {
-        return reply.status(409).send({ error: { code: "HAS_CHILDREN", message: "Unlink all child organizations first" } });
-      }
-      const updated = await fastify.prisma.organization.update({
-        where: { id: org.id },
-        data: { isParent: enabled },
-        select: { id: true, isParent: true },
-      });
+      if (result.code === "NOT_FOUND") return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
+      if (result.code === "IS_CHILD") return reply.status(409).send({ error: { code: "IS_CHILD", message: "A child organization cannot be a parent" } });
+      if (result.code === "HAS_CHILDREN") return reply.status(409).send({ error: { code: "HAS_CHILDREN", message: "Unlink all child organizations first" } });
+      const updated = result.row;
+      const org = { id: updated.id };
       writeAdminAudit({
         prisma: fastify.prisma,
         actorId: request.auth.userId,

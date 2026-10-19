@@ -9,8 +9,11 @@ const mockPrisma = {
   organization: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
+    count: vi.fn(),
     update: vi.fn(),
   },
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(),
   adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
 };
 
@@ -36,7 +39,9 @@ describe("PATCH /v1/admin/organizations/:orgId/parent-capability", () => {
     vi.clearAllMocks();
     process.env["PARENT_ORGS_ENABLED"] = "true";
     mockPrisma.organization.findUnique.mockResolvedValue({ id: "org-1", parentOrganizationId: null, isParent: false });
-    mockPrisma.organization.findMany.mockResolvedValue([]);
+    mockPrisma.organization.count.mockResolvedValue(0);
+    mockPrisma.$queryRaw.mockResolvedValue([]);
+    mockPrisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(mockPrisma));
     mockPrisma.organization.update.mockImplementation(async (a: { data: { isParent: boolean } }) => ({ id: "org-1", isParent: a.data.isParent }));
   });
   afterEach(async () => {
@@ -61,12 +66,13 @@ describe("PATCH /v1/admin/organizations/:orgId/parent-capability", () => {
     app = await buildApp("admin");
     const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled: true } });
     expect(res.statusCode).toBe(403);
+    expect(mockPrisma.organization.findUnique).not.toHaveBeenCalled();
     expect(mockPrisma.organization.update).not.toHaveBeenCalled();
   });
 
   it("returns 409 HAS_CHILDREN when disabling a parent that still has children", async () => {
     app = await buildApp("superAdmin");
-    mockPrisma.organization.findMany.mockResolvedValue([{ id: "child-1" }]);
+    mockPrisma.organization.count.mockResolvedValue(1);
     const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled: false } });
     expect(res.statusCode).toBe(409);
     expect(res.json<{ error: { code: string } }>().error.code).toBe("HAS_CHILDREN");
@@ -110,5 +116,21 @@ describe("PATCH /v1/admin/organizations/:orgId/parent-capability", () => {
     app = await buildApp("superAdmin");
     const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled: "yes" } });
     expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 404 for a non-super-admin when the flag is off", async () => {
+    app = await buildApp("admin");
+    delete process.env["PARENT_ORGS_ENABLED"];
+    const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled: true } });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("locks the org row before counting children and before updating", async () => {
+    app = await buildApp("superAdmin");
+    await app.inject({ method: "PATCH", url: URL, payload: { enabled: false } });
+    const lock = mockPrisma.$queryRaw.mock.invocationCallOrder[0]!;
+    expect(lock).toBeLessThan(mockPrisma.organization.count.mock.invocationCallOrder[0]!);
+    expect(lock).toBeLessThan(mockPrisma.organization.update.mock.invocationCallOrder[0]!);
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });
