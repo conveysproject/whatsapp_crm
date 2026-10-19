@@ -1795,7 +1795,7 @@ model ApiPayloadAccessAudit {
   @@map("api_payload_access_audit")
 }
 
-// ─── Own auth (replaces Clerk; Phase 1, shipped dark) ─────────────────────────
+// ─── Own auth (WBMSG login) ─────────────────────────
 // No FK from users yet. auth_accounts.id = users.id for migrated users.
 
 model AuthAccount {

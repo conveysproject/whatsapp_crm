@@ -28,7 +28,7 @@ vi.mock("../whatsapp-codes.js", async (orig) => ({
 vi.mock("../sessions.js", () => ({ createSession: m.createSession }));
 vi.mock("../devices.js", () => ({ isTrustedDevice: vi.fn(), trustDevice: m.trustDevice }));
 vi.mock("../turnstile.js", () => ({ verifyTurnstile: m.verifyTurnstile, BOT_CHECK_FAILED: { error: { code: "BOT_CHECK_FAILED" } } }));
-vi.mock("../identity.js", () => ({ isWbmsgAuth: () => true, verifyBearer: m.verifyBearer }));
+vi.mock("../identity.js", () => ({ verifyBearer: m.verifyBearer }));
 
 import { authRouter } from "./index.js";
 import { settleWhatsappWork } from "./whatsapp.js";

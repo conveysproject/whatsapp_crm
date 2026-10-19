@@ -21,8 +21,6 @@ vi.mock("../devices.js", () => ({ trustDevice: vi.fn(), isTrustedDevice: vi.fn()
 import { authRouter } from "./index.js";
 import { settleSignupWork } from "./signup.js";
 
-process.env.AUTH_PROVIDER = "wbmsg";
-
 const prisma = {
   authAccount: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
   user: { findUnique: vi.fn() },

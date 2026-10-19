@@ -1,13 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
-import { randomBytes } from "crypto";
 import { redis } from "../lib/redis.js";
-import {
-  createClerkSuperAdmin,
-  verifyBootstrapSecret,
-  isBootstrapEnabled,
-} from "../lib/clerk-admin.js";
+import { verifyBootstrapSecret, isBootstrapEnabled } from "../lib/bootstrap-secret.js";
 import { writeAdminAudit } from "../lib/audit.js";
-import { isWbmsgAuth } from "../auth/identity.js";
 import { revokeAllSessions } from "../auth/sessions.js";
 import { normalizeEmail } from "../auth/ids.js";
 import { assertNoUserForEmail, ensureSuperAdminAccount, isUniqueViolation, SuperAdminConflictError } from "../auth/admin-accounts.js";
@@ -68,7 +62,7 @@ export const bootstrapRouter: FastifyPluginAsync = async (fastify) => {
       }
 
       const { firstName, lastName } = request.body;
-      const email = isWbmsgAuth() ? normalizeEmail(request.body.email) : request.body.email;
+      const email = normalizeEmail(request.body.email);
 
       // 5. Ensure platform org exists (seed may not have run)
       await fastify.prisma.organization.upsert({
@@ -77,112 +71,53 @@ export const bootstrapRouter: FastifyPluginAsync = async (fastify) => {
         update: {},
       });
 
-      if (isWbmsgAuth()) {
-        // 6-7 (wbmsg). No Clerk: account must set its password via Forgot password.
-        let userId: string;
-        let reused = false;
-        try {
-          const result = await fastify.prisma.$transaction(async (tx) => {
-            await assertNoUserForEmail(tx, email);
-            const account = await ensureSuperAdminAccount(tx, { email, firstName, lastName });
-            await tx.user.create({
-              data: {
-                id: account.id,
-                organizationId: "platform",
-                email,
-                fullName: `${firstName} ${lastName}`,
-                role: "superAdmin",
-                isActive: true,
-              },
-            });
-            return { id: account.id, reused: !account.created };
+      // 6-7. The account must set its password via Forgot password.
+      let userId: string;
+      let reused = false;
+      try {
+        const result = await fastify.prisma.$transaction(async (tx) => {
+          await assertNoUserForEmail(tx, email);
+          const account = await ensureSuperAdminAccount(tx, { email, firstName, lastName });
+          await tx.user.create({
+            data: {
+              id: account.id,
+              organizationId: "platform",
+              email,
+              fullName: `${firstName} ${lastName}`,
+              role: "superAdmin",
+              isActive: true,
+            },
           });
-          userId = result.id;
-          reused = result.reused;
-        } catch (err) {
-          if (isUniqueViolation(err) || err instanceof SuperAdminConflictError) {
-            return reply.status(409).send({ error: { code: "CONFLICT", message: "A super admin with this email already exists" } });
-          }
-          fastify.log.error({ err }, "Super admin creation failed during bootstrap");
-          return reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "Failed to create super admin" } });
-        }
-        if (reused) {
-          await revokeAllSessions(fastify.prisma, userId, "promoted_to_super_admin").catch(() => undefined);
-        }
-        writeAdminAudit({
-          prisma: fastify.prisma,
-          actorId: userId,
-          action: "bootstrap",
-          targetType: "user",
-          targetId: userId,
-          metadata: { email, ip: request.ip },
-          request,
+          return { id: account.id, reused: !account.created };
         });
-        fastify.log.info({ userId, email, ip: request.ip }, "SuperAdmin bootstrapped");
-        return reply.status(201).send({
-          data: {
-            message: "Super admin created. Use Forgot password on the sign-in page to set a password. IMPORTANT: remove BOOTSTRAP_SECRET from env and delete this route.",
-            userId,
-            email,
-            setPassword: "forgot_password",
-          },
-        });
-      }
-
-      // 6. Create Clerk user with a cryptographically random temp password
-      const tempPassword = randomBytes(24).toString("base64url") + "!Aa1";
-      let clerkUserId: string;
-      try {
-        const clerkUser = await createClerkSuperAdmin(email, firstName, lastName, tempPassword);
-        clerkUserId = clerkUser.id;
+        userId = result.id;
+        reused = result.reused;
       } catch (err) {
-        fastify.log.error({ err }, "Clerk user creation failed during bootstrap");
-        return reply.status(502).send({ error: { code: "UPSTREAM_ERROR", message: "Failed to create Clerk account" } });
-      }
-
-      // 7. Upsert superAdmin DB user — handles both new users and existing Clerk accounts
-      try {
-        await fastify.prisma.user.upsert({
-          where: { id: clerkUserId },
-          create: {
-            id: clerkUserId,
-            organizationId: "platform",
-            email,
-            fullName: `${firstName} ${lastName}`,
-            role: "superAdmin",
-            isActive: true,
-          },
-          update: {
-            role: "superAdmin",
-            organizationId: "platform",
-            isActive: true,
-            deletedAt: null,
-          },
-        });
-      } catch (err) {
-        fastify.log.error({ err }, "DB user creation failed during bootstrap");
+        if (isUniqueViolation(err) || err instanceof SuperAdminConflictError) {
+          return reply.status(409).send({ error: { code: "CONFLICT", message: "A super admin with this email already exists" } });
+        }
+        fastify.log.error({ err }, "Super admin creation failed during bootstrap");
         return reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "Failed to create super admin" } });
       }
-
-      // 8. Immutable audit record
+      if (reused) {
+        await revokeAllSessions(fastify.prisma, userId, "promoted_to_super_admin").catch(() => undefined);
+      }
       writeAdminAudit({
         prisma: fastify.prisma,
-        actorId: clerkUserId,
+        actorId: userId,
         action: "bootstrap",
         targetType: "user",
-        targetId: clerkUserId,
+        targetId: userId,
         metadata: { email, ip: request.ip },
         request,
       });
-
-      fastify.log.info({ clerkUserId, email, ip: request.ip }, "SuperAdmin bootstrapped");
-
-      // 9. Return minimal info — credentials delivered via Clerk email
+      fastify.log.info({ userId, email, ip: request.ip }, "SuperAdmin bootstrapped");
       return reply.status(201).send({
         data: {
-          message: "Super admin created. Check email for login credentials. IMPORTANT: remove BOOTSTRAP_SECRET from env and delete this route.",
-          clerkUserId,
+          message: "Super admin created. Use Forgot password on the sign-in page to set a password. IMPORTANT: remove BOOTSTRAP_SECRET from env and delete this route.",
+          userId,
           email,
+          setPassword: "forgot_password",
         },
       });
     }

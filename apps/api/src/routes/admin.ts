@@ -3,8 +3,6 @@ import { randomBytes } from "crypto";
 import { redis } from "../lib/redis.js";
 import { activatePlan } from "../lib/billing/activation.js";
 import { writeAdminAudit } from "../lib/audit.js";
-import { getClerkUser } from "../lib/clerk-admin.js";
-import { isWbmsgAuth } from "../auth/identity.js";
 import { sendMail, isEmailConfigured } from "../lib/mail.js";
 
 const SENSITIVE_CONFIG_KEYS = new Set([
@@ -306,7 +304,7 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
   );
 
   // ── Elevate an impersonation session to edit mode ─────────────────────────
-  // Only the issuing real super admin (own Clerk token, never an impersonation session).
+  // Only the issuing real super admin (own session token, never an impersonation session).
   // The remaining TTL is preserved: elevation never extends the session.
   fastify.post<{ Body: { token: string; reason: string } }>(
     "/admin/impersonation/elevate",
@@ -672,15 +670,12 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       }
       const checks = await Promise.all(
         org.users.map(async (u) => {
-          if (isWbmsgAuth()) {
-            const account = await prisma.authAccount.findUnique({ where: { id: u.id }, select: { status: true } });
-            return account?.status === "active";
-          }
-          try { await getClerkUser(u.id); return true; } catch { return false; }
+          const account = await prisma.authAccount.findUnique({ where: { id: u.id }, select: { status: true } });
+          return account?.status === "active";
         })
       );
       if (!checks.some(Boolean)) {
-        toDelete.push({ id: org.id, name: org.name, reason: isWbmsgAuth() ? "no_valid_users" : "no_valid_clerk_users" });
+        toDelete.push({ id: org.id, name: org.name, reason: "no_valid_users" });
       }
     }));
     return toDelete;

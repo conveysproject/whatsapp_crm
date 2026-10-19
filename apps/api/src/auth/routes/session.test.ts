@@ -67,7 +67,6 @@ describe("auth session routes", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     m.store.clear();
-    process.env.AUTH_PROVIDER = "wbmsg";
     m.hitLimit.mockResolvedValue(false);
     m.verifyAccessToken.mockResolvedValue({ sub: "usr_a", sid: "s1", typ: "user" });
     prisma.user.findFirst.mockResolvedValue({ role: "admin", organizationId: "org1", teamId: null, teamRole: null });
@@ -79,7 +78,6 @@ describe("auth session routes", () => {
     app = await build();
   });
   afterEach(async () => {
-    delete process.env.AUTH_PROVIDER;
     await app.close();
   });
 

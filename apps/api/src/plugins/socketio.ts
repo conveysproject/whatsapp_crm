@@ -23,7 +23,7 @@ export default fp(async (fastify: FastifyInstance) => {
 
   setIo(io);
 
-  // Rooms: `org:{organizationId}` and `user:{userId}`. The handshake must carry a Clerk session token
+  // Rooms: `org:{organizationId}` and `user:{userId}`. The handshake must carry a WBMSG session token
   // (`auth: { token }`); the socket is joined to its OWN rooms only. join-*/leave-* events from older
   // clients are honoured only for those same rooms.
   io.use((socket, next) => {

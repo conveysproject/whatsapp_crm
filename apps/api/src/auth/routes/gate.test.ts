@@ -17,40 +17,30 @@ const prisma = {
   user: { findUnique: vi.fn() },
 };
 
-describe("auth module gate", () => {
+describe("auth module", () => {
   let app: FastifyInstance;
-  const saved = process.env.AUTH_PROVIDER;
   beforeEach(async () => {
     vi.clearAllMocks();
-    delete process.env.AUTH_PROVIDER;
     app = Fastify({ logger: false });
     app.decorate("prisma", prisma as any);
     await app.register(authRouter, { prefix: "/v1/auth" });
   });
-  afterEach(() => {
-    if (saved === undefined) delete process.env.AUTH_PROVIDER;
-    else process.env.AUTH_PROVIDER = saved;
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it("answers /v1/auth routes without any env switch", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/auth/.well-known/jwks.json" });
+    expect(res.statusCode).not.toBe(404);
   });
 
   it.each([
     ["POST", "/v1/auth/signup"],
     ["POST", "/v1/auth/signin/password"],
     ["POST", "/v1/auth/refresh"],
-    ["GET", "/v1/auth/.well-known/jwks.json"],
     ["GET", "/v1/auth/me/security"],
-  ])("%s %s answers 404 in clerk mode with no side effects", async (method, url) => {
+  ])("%s %s is routed (not a 404)", async (method, url) => {
     const res = await app.inject({ method: method as "GET" | "POST", url, payload: method === "POST" ? {} : undefined });
-    expect(res.statusCode).toBe(404);
-    expect(res.json()).toEqual({ error: { code: "NOT_FOUND", message: "Not found" } });
-    for (const model of Object.values(prisma)) for (const fn of Object.values(model)) expect(fn).not.toHaveBeenCalled();
-    expect(m.hitLimit).not.toHaveBeenCalled();
-    expect(m.issueCode).not.toHaveBeenCalled();
-    expect(m.sendCodeEmail).not.toHaveBeenCalled();
-  });
-
-  it("answers 404 for AUTH_PROVIDER=clerk too", async () => {
-    process.env.AUTH_PROVIDER = "clerk";
-    const res = await app.inject({ method: "GET", url: "/v1/auth/.well-known/jwks.json" });
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).not.toBe(404);
   });
 });

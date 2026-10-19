@@ -19,9 +19,9 @@ const auth = `Basic ${Buffer.from(`${ID}:good`).toString("base64")}`;
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorate("prisma", mockPrisma as unknown as PrismaClient);
-  // simulate the global Clerk hook: it must skip routes marked public
+  // simulate the global auth hook: it must skip routes marked public
   app.addHook("preHandler", async (request, reply) => {
-    if (!(request.routeOptions?.config as { public?: boolean } | undefined)?.public) return reply.status(401).send({ error: "clerk" });
+    if (!(request.routeOptions?.config as { public?: boolean } | undefined)?.public) return reply.status(401).send({ error: "session" });
   });
   const { publicApiRouter } = await import("./index.js");
   await app.register(publicApiRouter, { prefix: "/v1/Account/:authId" });
@@ -49,11 +49,11 @@ describe("publicApiRouter", () => {
   const list = (headers: Record<string, string> = { authorization: auth }) =>
     app.inject({ method: "GET", url: `/v1/Account/${ID}/Message/`, headers });
 
-  it("serves public routes with Basic auth (Clerk hook does not apply) and 401s without it", async () => {
+  it("serves public routes with Basic auth (the auth hook does not apply) and 401s without it", async () => {
     expect((await list()).statusCode).toBe(200);
     const res = await list({});
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toMatchObject({ api_id: expect.any(String) }); // Plivo-style body, not the Clerk one
+    expect(res.json()).toMatchObject({ api_id: expect.any(String) }); // Plivo-style body, not the session one
   });
 
   it("serves the template routes in the same authenticated child context (401 without credentials, org-scoped 404 with them)", async () => {

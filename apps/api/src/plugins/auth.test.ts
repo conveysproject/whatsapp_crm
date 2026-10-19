@@ -1,15 +1,8 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 import Fastify from "fastify";
 
-vi.mock("../lib/clerk.js", () => ({
-  verifyClerkToken: vi.fn().mockResolvedValue({
-    userId: "user_123",
-    organizationId: "org_123",
-  }),
-}));
-
 vi.mock("../auth/tokens.js", () => ({
-  verifyAccessToken: vi.fn(),
+  verifyAccessToken: vi.fn().mockResolvedValue({ sub: "user_123", sid: "sid-1", typ: "user" }),
 }));
 
 vi.mock("../auth/sessions.js", () => ({
@@ -76,8 +69,6 @@ describe("auth plugin", () => {
   });
 
   it("returns 401 when token is missing", async () => {
-    const { verifyClerkToken } = await import("../lib/clerk.js");
-    vi.mocked(verifyClerkToken).mockRejectedValueOnce(new Error("Missing Authorization header"));
     const res = await app.inject({ method: "GET", url: "/protected" });
     expect(res.statusCode).toBe(401);
   });
@@ -255,17 +246,17 @@ describe("auth plugin — permission merge", () => {
 
 describe("auth plugin — user impersonation", () => {
   beforeEach(async () => {
-    const { verifyClerkToken } = await import("../lib/clerk.js");
-    vi.mocked(verifyClerkToken).mockResolvedValue({ userId: "sa-1", organizationId: "org_123" } as never);
+    const { verifyAccessToken } = await import("../auth/tokens.js");
+    vi.mocked(verifyAccessToken).mockResolvedValue({ sub: "sa-1", sid: "sid-A", typ: "admin" });
   });
   afterAll(async () => {
-    const { verifyClerkToken } = await import("../lib/clerk.js");
-    vi.mocked(verifyClerkToken).mockResolvedValue({ userId: "user_123", organizationId: "org_123" } as never);
+    const { verifyAccessToken } = await import("../auth/tokens.js");
+    vi.mocked(verifyAccessToken).mockResolvedValue({ sub: "user_123", sid: "sid-1", typ: "user" });
   });
 
-  it("rejects with 401 when the Clerk bearer user differs from issuedBy", async () => {
-    const { verifyClerkToken } = await import("../lib/clerk.js");
-    vi.mocked(verifyClerkToken).mockResolvedValueOnce({ userId: "someone-else", organizationId: "x" } as never);
+  it("rejects with 401 when the bearer user differs from issuedBy", async () => {
+    const { verifyAccessToken } = await import("../auth/tokens.js");
+    vi.mocked(verifyAccessToken).mockResolvedValueOnce({ sub: "someone-else", sid: "sid-A", typ: "admin" });
     await mockToken({ organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", mode: "readonly" });
     const app = await buildImpApp();
     const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok", authorization: "Bearer x" } });
@@ -274,9 +265,7 @@ describe("auth plugin — user impersonation", () => {
     await app.close();
   });
 
-  it("rejects with 401 when the Clerk bearer is missing/invalid", async () => {
-    const { verifyClerkToken } = await import("../lib/clerk.js");
-    vi.mocked(verifyClerkToken).mockRejectedValueOnce(new Error("Missing Authorization header"));
+  it("rejects with 401 when the bearer is missing/invalid", async () => {
     await mockToken({ organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", mode: "readonly" });
     const app = await buildImpApp();
     const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
@@ -286,8 +275,6 @@ describe("auth plugin — user impersonation", () => {
   });
 
   it("demo tokens are exempt from the bearer check but cannot reach /v1/admin", async () => {
-    const { verifyClerkToken } = await import("../lib/clerk.js");
-    vi.mocked(verifyClerkToken).mockRejectedValue(new Error("no bearer"));
     await mockToken({ organizationId: "demo-org", orgName: "Demo Account", isDemo: true });
     const prismaPlugin = (await import("./prisma.js")).default;
     const authPlugin = (await import("./auth.js")).default;
@@ -325,7 +312,7 @@ describe("auth plugin — user impersonation", () => {
   async function mockToken(payload: Record<string, unknown> | null) {
     const { redis } = await import("../lib/redis.js");
     vi.mocked(redis.get).mockImplementation((async (key: string) =>
-      key === "impersonate:tok" && payload ? JSON.stringify(payload) : null) as never);
+      key === "impersonate:tok" && payload ? JSON.stringify({ issuedSid: "sid-A", ...payload }) : null) as never);
   }
 
   it("resolves the target user's role, permissions and team, and sets impersonation", async () => {
@@ -336,7 +323,7 @@ describe("auth plugin — user impersonation", () => {
     vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValueOnce({ value: JSON.stringify({ contacts_access: "allow" }) } as never);
 
     const app = await buildImpApp();
-    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { authorization: "Bearer x", "x-impersonate-token": "tok" } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       auth: {
@@ -367,7 +354,7 @@ describe("auth plugin — user impersonation", () => {
     vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValueOnce(null);
 
     const app = await buildImpApp();
-    await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    await app.inject({ method: "GET", url: "/probe", headers: { authorization: "Bearer x", "x-impersonate-token": "tok" } });
     expect(prisma.user.updateMany).not.toHaveBeenCalled();
     expect(redis.exists).not.toHaveBeenCalled();
     await app.close();
@@ -380,7 +367,7 @@ describe("auth plugin — user impersonation", () => {
     vi.mocked(prisma.organizationMember.findFirst).mockResolvedValueOnce(null);
     vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValueOnce(null);
     const app = await buildImpApp();
-    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { authorization: "Bearer x", "x-impersonate-token": "tok" } });
     expect(res.json<{ auth: { impersonation: unknown } }>().auth.impersonation).toEqual({ adminId: "sa-1", mode: "edit" });
     await app.close();
   });
@@ -388,7 +375,7 @@ describe("auth plugin — user impersonation", () => {
   it("a revoked token (key deleted from Redis) gives 401 immediately", async () => {
     const { prisma } = await import("../lib/prisma.js");
     const { redis } = await import("../lib/redis.js");
-    const payload = JSON.stringify({ organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", mode: "edit" });
+    const payload = JSON.stringify({ organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", issuedSid: "sid-A", mode: "edit" });
     const store = new Map<string, string>([["impersonate:tok", payload]]);
     vi.mocked(redis.get).mockImplementation((async (k: string) => store.get(k) ?? null) as never);
     vi.mocked(prisma.user.findFirst).mockResolvedValue({ role: "agent", organizationId: "org-1", teamId: null, teamRole: null } as never);
@@ -396,9 +383,9 @@ describe("auth plugin — user impersonation", () => {
     vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValue(null);
     const app = await buildImpApp();
     try {
-      expect((await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } })).statusCode).toBe(200);
+      expect((await app.inject({ method: "GET", url: "/probe", headers: { authorization: "Bearer x", "x-impersonate-token": "tok" } })).statusCode).toBe(200);
       store.delete("impersonate:tok"); // what DELETE .../impersonate does
-      const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+      const res = await app.inject({ method: "GET", url: "/probe", headers: { authorization: "Bearer x", "x-impersonate-token": "tok" } });
       expect(res.statusCode).toBe(401);
       expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_IMPERSONATION_TOKEN");
     } finally {
@@ -417,7 +404,7 @@ describe("auth plugin — user impersonation", () => {
   it("rejects old-format tokens without targetUserId with 401", async () => {
     await mockToken({ organizationId: "org-1", orgName: "Acme", issuedBy: "sa-1" });
     const app = await buildImpApp();
-    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { authorization: "Bearer x", "x-impersonate-token": "tok" } });
     expect(res.statusCode).toBe(401);
     expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_IMPERSONATION_TOKEN");
     await app.close();
@@ -426,7 +413,7 @@ describe("auth plugin — user impersonation", () => {
   it("keeps demo tokens (isDemo:true) working as org-scoped superAdmin without impersonation context", async () => {
     await mockToken({ organizationId: "demo-org", orgName: "Demo Account", isDemo: true });
     const app = await buildImpApp();
-    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { authorization: "Bearer x", "x-impersonate-token": "tok" } });
     expect(res.statusCode).toBe(200);
     const auth = res.json<{ auth: { role: string; organizationId: string; impersonation?: unknown } }>().auth;
     expect(auth.role).toBe("superAdmin");
@@ -438,7 +425,7 @@ describe("auth plugin — user impersonation", () => {
   it("rejects old org-level payloads that are not isDemo", async () => {
     await mockToken({ organizationId: "org-1", orgName: "Acme", issuedBy: "sa-1", isDemo: false });
     const app = await buildImpApp();
-    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { authorization: "Bearer x", "x-impersonate-token": "tok" } });
     expect(res.statusCode).toBe(401);
     await app.close();
   });
@@ -450,7 +437,7 @@ describe("auth plugin — user impersonation", () => {
     vi.mocked(prisma.organizationMember.findFirst).mockResolvedValueOnce(null);
     vi.mocked(prisma.vendorSetting.findUnique).mockResolvedValueOnce(null);
     const app = await buildImpApp();
-    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { authorization: "Bearer x", "x-impersonate-token": "tok" } });
     expect(res.json<{ auth: { impersonation: { mode: string } } }>().auth.impersonation.mode).toBe("readonly");
     await app.close();
   });
@@ -468,29 +455,25 @@ describe("auth plugin — user impersonation", () => {
     await mockToken({ organizationId: "org-1", targetUserId: "user-9", issuedBy: "sa-1", mode: "readonly" });
     vi.mocked(prisma.user.findFirst).mockResolvedValueOnce(null);
     const app = await buildImpApp();
-    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-impersonate-token": "tok" } });
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { authorization: "Bearer x", "x-impersonate-token": "tok" } });
     expect(res.statusCode).toBe(401);
     expect(res.json<{ error: { code: string } }>().error.code).toBe("INVALID_IMPERSONATION_TOKEN");
     await app.close();
   });
 });
 
-describe("auth plugin — AUTH_PROVIDER=wbmsg", () => {
-  const OLD = { p: process.env.AUTH_PROVIDER, m: process.env.AUTH_MIN_MOBILE_VERSION };
+describe("auth plugin — WBMSG session tokens", () => {
+  const OLD = { m: process.env.AUTH_MIN_MOBILE_VERSION };
   beforeEach(async () => {
-    process.env.AUTH_PROVIDER = "wbmsg";
     delete process.env.AUTH_MIN_MOBILE_VERSION;
     const { verifyAccessToken } = await import("../auth/tokens.js");
     const { isSessionRevoked } = await import("../auth/sessions.js");
     vi.mocked(verifyAccessToken).mockReset().mockResolvedValue({ sub: "user_123", sid: "sid-1", typ: "user" });
     vi.mocked(isSessionRevoked).mockReset().mockResolvedValue(false);
-    const { verifyClerkToken } = await import("../lib/clerk.js");
-    vi.mocked(verifyClerkToken).mockClear();
     const { redis } = await import("../lib/redis.js");
     vi.mocked(redis.get).mockReset().mockResolvedValue(null);
   });
   afterAll(() => {
-    if (OLD.p === undefined) delete process.env.AUTH_PROVIDER; else process.env.AUTH_PROVIDER = OLD.p;
     if (OLD.m === undefined) delete process.env.AUTH_MIN_MOBILE_VERSION; else process.env.AUTH_MIN_MOBILE_VERSION = OLD.m;
   });
 
@@ -515,8 +498,6 @@ describe("auth plugin — AUTH_PROVIDER=wbmsg", () => {
     expect(res.statusCode).toBe(200);
     const auth = res.json<{ auth: { userId: string; organizationId: string; role: string; sid: string } }>().auth;
     expect(auth).toMatchObject({ userId: "user_123", organizationId: "org-1", role: "agent", sid: "sid-1" });
-    const { verifyClerkToken } = await import("../lib/clerk.js");
-    expect(verifyClerkToken).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -588,14 +569,6 @@ describe("auth plugin — AUTH_PROVIDER=wbmsg", () => {
       expect((await app.inject({ method: "GET", url: "/probe", headers: h("1.2.0") })).statusCode).toBe(200);
       expect((await app.inject({ method: "GET", url: "/public", headers: { "x-app-client": "mobile" } })).statusCode).toBe(200);
       expect((await app.inject({ method: "GET", url: "/probe", headers: bearer })).statusCode).toBe(200);
-      await app.close();
-    });
-    it("never gates in clerk mode", async () => {
-      process.env.AUTH_MIN_MOBILE_VERSION = "1.2.0";
-      process.env.AUTH_PROVIDER = "clerk";
-      const app = await buildApp();
-      const res = await app.inject({ method: "GET", url: "/probe", headers: { ...bearer, "x-app-client": "mobile" } });
-      expect(res.statusCode).not.toBe(426);
       await app.close();
     });
   });

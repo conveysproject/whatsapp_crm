@@ -1,8 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { randomBytes } from "crypto";
-import { createClerkSuperAdmin, deleteClerkUser } from "../lib/clerk-admin.js";
 import { writeAdminAudit } from "../lib/audit.js";
-import { isWbmsgAuth } from "../auth/identity.js";
 import { revokeAllSessions } from "../auth/sessions.js";
 import { normalizeEmail } from "../auth/ids.js";
 import { assertNoUserForEmail, ensureSuperAdminAccount, isUniqueViolation, SuperAdminConflictError } from "../auth/admin-accounts.js";
@@ -67,7 +64,7 @@ export const superAdminsRouter: FastifyPluginAsync = async (fastify) => {
       }
 
       const { firstName, lastName } = request.body;
-      const email = isWbmsgAuth() ? normalizeEmail(request.body.email) : request.body.email;
+      const email = normalizeEmail(request.body.email);
 
       // Prevent duplicate
       const existing = await fastify.prisma.user.findFirst({
@@ -78,89 +75,45 @@ export const superAdminsRouter: FastifyPluginAsync = async (fastify) => {
         return reply.status(409).send({ error: { code: "CONFLICT", message: "A super admin with this email already exists" } });
       }
 
-      if (isWbmsgAuth()) {
-        // No Clerk: create the auth account (must set password via Forgot password) and the users row together.
-        try {
-          const created = await fastify.prisma.$transaction(async (tx) => {
-            await assertNoUserForEmail(tx, email);
-            const account = await ensureSuperAdminAccount(tx, { email, firstName, lastName });
-            const user = await tx.user.create({
-              data: {
-                id: account.id,
-                organizationId: "platform",
-                email,
-                fullName: `${firstName} ${lastName}`,
-                role: "superAdmin",
-                isActive: true,
-              },
-              select: { id: true, email: true, fullName: true, createdAt: true },
-            });
-            return { ...user, reused: !account.created };
-          });
-          if (created.reused) {
-            await revokeAllSessions(fastify.prisma, created.id, "promoted_to_super_admin").catch(() => undefined);
-          }
-          writeAdminAudit({
-            prisma: fastify.prisma,
-            actorId: request.auth.userId,
-            action: "superadmin.create",
-            targetType: "user",
-            targetId: created.id,
-            metadata: { email, createdBy: request.auth.userId },
-            request,
-          });
-          fastify.log.info({ userId: created.id, email, actorId: request.auth.userId }, "SuperAdmin created");
-          const { reused, ...publicUser } = created;
-          void reused; // internal flag, not part of the response
-          return reply.status(201).send({ data: { ...publicUser, setPassword: "forgot_password" } });
-        } catch (err) {
-          if (isUniqueViolation(err) || err instanceof SuperAdminConflictError) {
-            return reply.status(409).send({ error: { code: "CONFLICT", message: "A super admin with this email already exists" } });
-          }
-          fastify.log.error({ err }, "Super admin creation failed");
-          return reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "Failed to create super admin" } });
-        }
-      }
-
-      const tempPassword = randomBytes(24).toString("base64url") + "!Aa1";
-      let clerkUserId: string;
-
+      // Create the auth account (must set password via Forgot password) and the users row together.
       try {
-        const clerkUser = await createClerkSuperAdmin(email, firstName, lastName, tempPassword);
-        clerkUserId = clerkUser.id;
-      } catch (err) {
-        fastify.log.error({ err }, "Clerk user creation failed");
-        return reply.status(502).send({ error: { code: "UPSTREAM_ERROR", message: "Failed to create Clerk account" } });
-      }
-
-      try {
-        const user = await fastify.prisma.user.create({
-          data: {
-            id: clerkUserId,
-            organizationId: "platform",
-            email,
-            fullName: `${firstName} ${lastName}`,
-            role: "superAdmin",
-            isActive: true,
-          },
-          select: { id: true, email: true, fullName: true, createdAt: true },
+        const created = await fastify.prisma.$transaction(async (tx) => {
+          await assertNoUserForEmail(tx, email);
+          const account = await ensureSuperAdminAccount(tx, { email, firstName, lastName });
+          const user = await tx.user.create({
+            data: {
+              id: account.id,
+              organizationId: "platform",
+              email,
+              fullName: `${firstName} ${lastName}`,
+              role: "superAdmin",
+              isActive: true,
+            },
+            select: { id: true, email: true, fullName: true, createdAt: true },
+          });
+          return { ...user, reused: !account.created };
         });
-
+        if (created.reused) {
+          await revokeAllSessions(fastify.prisma, created.id, "promoted_to_super_admin").catch(() => undefined);
+        }
         writeAdminAudit({
           prisma: fastify.prisma,
           actorId: request.auth.userId,
           action: "superadmin.create",
           targetType: "user",
-          targetId: clerkUserId,
+          targetId: created.id,
           metadata: { email, createdBy: request.auth.userId },
           request,
         });
-
-        fastify.log.info({ clerkUserId, email, actorId: request.auth.userId }, "SuperAdmin created");
-        return reply.status(201).send({ data: user });
+        fastify.log.info({ userId: created.id, email, actorId: request.auth.userId }, "SuperAdmin created");
+        const { reused, ...publicUser } = created;
+        void reused; // internal flag, not part of the response
+        return reply.status(201).send({ data: { ...publicUser, setPassword: "forgot_password" } });
       } catch (err) {
-        try { await deleteClerkUser(clerkUserId); } catch { /* best-effort */ }
-        fastify.log.error({ err }, "DB user creation failed");
+        if (isUniqueViolation(err) || err instanceof SuperAdminConflictError) {
+          return reply.status(409).send({ error: { code: "CONFLICT", message: "A super admin with this email already exists" } });
+        }
+        fastify.log.error({ err }, "Super admin creation failed");
         return reply.status(500).send({ error: { code: "INTERNAL_ERROR", message: "Failed to create super admin" } });
       }
     }

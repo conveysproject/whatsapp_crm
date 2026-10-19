@@ -85,7 +85,7 @@ describe("session revoke disconnects", () => {
     expect(b.connected).toBe(true);
   });
 
-  it("never puts a clerk-mode socket (sid null) in a sid room", async () => {
+  it("never puts a socket with no session id (sid null) in a sid room", async () => {
     const c = connect("good-1");
     await up(c);
     await new Promise<void>((resolve) => c.emit("ping-test", () => resolve()));

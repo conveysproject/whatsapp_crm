@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import type * as IdentityModule from "../auth/identity.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
@@ -202,39 +202,6 @@ describe("invitations", () => {
     expect(callArg.data.teamId).toBeUndefined();
   });
 
-  it("accept route writes mobileNumber and team fields to new user", async () => {
-    const expiresAt = new Date(Date.now() + 60000);
-    mockPrisma.invitation.findUnique.mockResolvedValue({
-      id: "inv-1",
-      organizationId: "org-1",
-      email: "a@b.com",
-      role: "agent",
-      status: "pending",
-      expiresAt,
-      teamId: "team-1",
-      teamRole: "lead",
-    });
-    mockPrisma.user.create.mockResolvedValue({});
-    mockPrisma.invitation.update.mockResolvedValue({});
-
-    const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/invitations/some-token/accept",
-      payload: { clerkUserId: "clerk-1", fullName: "Alice", mobileNumber: "+919876543210" },
-    });
-    expect(res.statusCode).toBe(201);
-    expect(mockPrisma.user.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          mobileNumber: "+919876543210",
-          teamId: "team-1",
-          teamRole: "lead",
-        }),
-      })
-    );
-  });
-
   it.each([
     ["manager", "admin", 403],
     ["manager", "whatsappAdmin", 403],
@@ -269,7 +236,7 @@ describe("invitations", () => {
     expect(res.json().error.code).toBe("PLAN_LIMIT_REACHED");
   });
 
-  describe("wbmsg mode accept", () => {
+  describe("accept", () => {
     const invRow = () => ({
       id: "inv-1",
       organizationId: "org-1",
@@ -285,7 +252,6 @@ describe("invitations", () => {
       return app.inject({ method: "POST", url: "/v1/invitations/tok/accept", payload, headers: { authorization: "Bearer x" } });
     };
     beforeEach(() => {
-      process.env.AUTH_PROVIDER = "wbmsg";
       mockVerifyBearer.mockResolvedValue({ userId: "usr_1", sid: "s", typ: "user" });
       mockPrisma.invitation.findUnique.mockResolvedValue(invRow());
       mockPrisma.authAccount.findUnique.mockResolvedValue({ email: "a@b.com" });
@@ -294,10 +260,6 @@ describe("invitations", () => {
       mockPrisma.invitation.updateMany.mockResolvedValue({ count: 1 });
       mockCheckPlanLimit.mockResolvedValue({ allowed: true, limit: -1, current: 0 });
     });
-    afterEach(() => {
-      delete process.env.AUTH_PROVIDER;
-    });
-
     it("401 without a valid bearer", async () => {
       mockVerifyBearer.mockRejectedValue(new Error("bad"));
       const res = await call();
@@ -305,8 +267,8 @@ describe("invitations", () => {
       expect(res.json().error.code).toBe("UNAUTHORIZED");
     });
 
-    it("creates the user with the account id and ignores clerkUserId", async () => {
-      const res = await call({ fullName: "Alice", mobileNumber: "+1", clerkUserId: "clerk-evil" });
+    it("creates the user with the account id and ignores a body-supplied user id", async () => {
+      const res = await call({ fullName: "Alice", mobileNumber: "+1", userId: "evil-id" });
       expect(res.statusCode).toBe(201);
       expect(mockPrisma.user.create.mock.calls[0][0].data).toMatchObject({
         id: "usr_1",

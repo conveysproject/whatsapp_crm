@@ -25,7 +25,7 @@ vi.mock("../codes.js", () => ({ issueCode: m.issueCode, verifyCode: vi.fn(), ver
 vi.mock("../emails.js", () => ({ sendCodeEmail: m.sendCodeEmail }));
 vi.mock("../sessions.js", () => ({ createSession: m.createSession }));
 vi.mock("../devices.js", () => ({ isTrustedDevice: vi.fn(), trustDevice: m.trustDevice }));
-vi.mock("../identity.js", () => ({ isWbmsgAuth: () => true, verifyBearer: m.verifyBearer }));
+vi.mock("../identity.js", () => ({ verifyBearer: m.verifyBearer }));
 vi.mock("../oauth/registry.js", () => ({ getOAuthProvider: (id: string) => m.providers[id] ?? null }));
 vi.mock("../../lib/redis.js", () => ({
   redis: {

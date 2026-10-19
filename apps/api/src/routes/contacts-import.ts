@@ -278,7 +278,7 @@ export const contactsImportRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // SSE endpoint — EventSource cannot send auth headers, so Clerk auth is skipped
+  // SSE endpoint — EventSource cannot send auth headers, so bearer auth is skipped
   // via config.public and access is controlled by the short-lived HMAC token
   // issued by /start and passed as ?token= query param.
   fastify.get<{ Params: { jobId: string }; Querystring: { token?: string } }>(

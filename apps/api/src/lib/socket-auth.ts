@@ -4,11 +4,11 @@ import { verifyBearer } from "../auth/identity.js";
 export interface SocketIdentity {
   userId: string;
   organizationId: string;
-  /** Session id (own-auth only); null in Clerk mode. */
+  /** Session id of the access token. */
   sid: string | null;
 }
 
-/** Verifies the session token (per AUTH_PROVIDER) sent in the Socket.IO handshake (`auth.token`). Throws "unauthorized" on any failure. */
+/** Verifies the session token sent in the Socket.IO handshake (`auth.token`). Throws "unauthorized" on any failure. */
 export async function authenticateSocket(
   prisma: PrismaClient,
   token: unknown,

@@ -43,8 +43,6 @@ import { authRouter } from "./index.js";
 import { settleSigninWork } from "./signin.js";
 import { settlePasswordWork } from "./password.js";
 
-process.env.AUTH_PROVIDER = "wbmsg"; // the module is dark in clerk mode
-
 const prisma = {
   authAccount: { findUnique: vi.fn(), update: vi.fn() },
   user: { findUnique: vi.fn() },

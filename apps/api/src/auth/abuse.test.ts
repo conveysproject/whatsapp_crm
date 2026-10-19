@@ -213,12 +213,10 @@ describe("auth abuse suite", () => {
     r.store.clear();
     mail.codes.length = 0;
     db = makePrisma();
-    process.env.AUTH_PROVIDER = "wbmsg";
     resetTokenKeysForTests();
     app = await build();
   });
   afterEach(async () => {
-    delete process.env.AUTH_PROVIDER;
     await app.close();
   });
 

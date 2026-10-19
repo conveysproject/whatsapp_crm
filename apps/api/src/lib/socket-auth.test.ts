@@ -15,7 +15,7 @@ describe("authenticateSocket", () => {
     expect((prisma.user.findFirst as ReturnType<typeof vi.fn>).mock.calls[0][0].where).toEqual({ id: "u-1", isActive: true, deletedAt: null });
   });
 
-  it("rejects a missing or non-string token without calling Clerk", async () => {
+  it("rejects a missing or non-string token without calling the verifier", async () => {
     const verify = vi.fn();
     await expect(authenticateSocket(prismaWith(null), undefined, verify)).rejects.toThrow("unauthorized");
     await expect(authenticateSocket(prismaWith(null), 42, verify)).rejects.toThrow("unauthorized");
@@ -23,7 +23,7 @@ describe("authenticateSocket", () => {
     expect(verify).not.toHaveBeenCalled();
   });
 
-  it("rejects when Clerk rejects the token", async () => {
+  it("rejects when the verifier rejects the token", async () => {
     const verify = vi.fn().mockRejectedValue(new Error("expired"));
     await expect(authenticateSocket(prismaWith({ organizationId: "org-1" }), "tok", verify)).rejects.toThrow("unauthorized");
   });
@@ -45,18 +45,12 @@ describe("authenticateSocket sid", () => {
     vi.resetModules();
     vi.doMock("../auth/tokens.js", () => ({ verifyAccessToken: vi.fn(async () => ({ sub: "u-1", sid: "s-1", typ: "user" })) }));
     vi.doMock("../auth/sessions.js", () => ({ isSessionRevoked: vi.fn(async () => true) }));
-    vi.doMock("../lib/clerk.js", () => ({ verifyClerkToken: vi.fn() }));
-    const prev = process.env.AUTH_PROVIDER;
-    process.env.AUTH_PROVIDER = "wbmsg";
     try {
       const mod = await import("./socket-auth.js");
       await expect(mod.authenticateSocket(prismaWith({ organizationId: "org-1" }), "tok")).rejects.toThrow("unauthorized");
     } finally {
-      if (prev === undefined) delete process.env.AUTH_PROVIDER;
-      else process.env.AUTH_PROVIDER = prev;
       vi.doUnmock("../auth/tokens.js");
       vi.doUnmock("../auth/sessions.js");
-      vi.doUnmock("../lib/clerk.js");
     }
   });
 });

@@ -25,8 +25,6 @@ vi.mock("../../lib/plan-limits.js", () => ({ checkPlanLimit: m.checkPlanLimit })
 
 import { authRouter } from "./index.js";
 
-process.env.AUTH_PROVIDER = "wbmsg";
-
 const tx = {
   authAccount: { create: vi.fn() },
   user: { create: vi.fn() },

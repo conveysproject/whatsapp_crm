@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { isWbmsgAuth, verifyBearer } from "../auth/identity.js";
+import { verifyBearer } from "../auth/identity.js";
 import { BUSINESS_SCHEMA, createWorkspace } from "../lib/create-workspace.js";
 
 interface RegisterBody {
@@ -26,7 +26,7 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
           max: 5,
           timeWindow: "1 hour",
           // Keyed by IP (no auth on public route). Prevents mass org creation
-          // even if attacker rotates Clerk tokens from a single machine.
+          // even if attacker rotates tokens from a single machine.
           keyGenerator: (req) => `register:${req.ip}`,
         },
       },
@@ -58,21 +58,19 @@ export const registerRouter: FastifyPluginAsync = async (fastify) => {
       } = request.body;
       let { email = "", firstName = "", lastName = "" } = request.body;
 
-      if (isWbmsgAuth()) {
-        // Identity comes from the verified account, never from the request body.
-        const account = await fastify.prisma.authAccount.findUnique({
-          where: { id: userId },
-          select: { email: true, firstName: true, lastName: true, emailVerifiedAt: true },
+      // Identity comes from the verified account, never from the request body.
+      const account = await fastify.prisma.authAccount.findUnique({
+        where: { id: userId },
+        select: { email: true, firstName: true, lastName: true, emailVerifiedAt: true },
+      });
+      if (!account || !account.emailVerifiedAt) {
+        return reply.status(403).send({
+          error: { code: "EMAIL_NOT_VERIFIED", message: "Verify your email before setting up your business." },
         });
-        if (!account || !account.emailVerifiedAt) {
-          return reply.status(403).send({
-            error: { code: "EMAIL_NOT_VERIFIED", message: "Verify your email before setting up your business." },
-          });
-        }
-        email = account.email;
-        firstName = account.firstName ?? "";
-        lastName = account.lastName ?? "";
       }
+      email = account.email;
+      firstName = account.firstName ?? "";
+      lastName = account.lastName ?? "";
 
       const fullName = [firstName, lastName].filter(Boolean).join(" ") || email;
 

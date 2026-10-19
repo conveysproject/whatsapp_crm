@@ -5,7 +5,7 @@ export interface AuthContext {
   permissions: Record<string, string>;
   teamId: string | null;
   teamRole: "lead" | "member" | null;
-  /** Session id of the wbmsg access token; null (or absent in test fixtures) in clerk mode and for demo/impersonated contexts. */
+  /** Session id of the wbmsg access token; null (or absent in test fixtures) for demo/impersonated contexts. */
   sid?: string | null;
   /** Set only for super-admin impersonation sessions; auth then describes the target user. */
   impersonation?: { adminId: string; mode: "readonly" | "edit" };

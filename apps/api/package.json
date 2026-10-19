@@ -22,7 +22,6 @@
     "@WBMSG/shared": "workspace:*",
     "@anthropic-ai/sdk": "^0.106.0",
     "@aws-sdk/client-s3": "^3.600.0",
-    "@clerk/backend": "^3.4.1",
     "@fal-ai/client": "^1.10.1",
     "@fastify/cors": "^8.5.0",
     "@fastify/helmet": "11.1.1",
@@ -52,8 +51,7 @@
     "qrcode": "^1.5.4",
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.3",
-    "stripe": "^22.1.0",
-    "svix": "^1.92.2"
+    "stripe": "^22.1.0"
   },
   "devDependencies": {
     "@WBMSG/eslint-config": "workspace:*",

@@ -4,7 +4,7 @@ import type { Role, TeamRole } from "@prisma/client";
 import { checkPlanLimit } from "../lib/plan-limits.js";
 import { canAccessSub } from "../lib/permissions.js";
 import { canGrantRole } from "../lib/role-grants.js";
-import { isWbmsgAuth, verifyBearer } from "../auth/identity.js";
+import { verifyBearer } from "../auth/identity.js";
 import { normalizeEmail } from "../auth/ids.js";
 import { sendMail, isEmailConfigured } from "../lib/mail.js";
 import { buildInvitationEmail, invitationAcceptUrl, INVITATION_SUBJECT } from "../lib/invitation-email.js";
@@ -189,7 +189,7 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  fastify.post<{ Params: { token: string }; Body: { clerkUserId?: string; fullName: string; mobileNumber?: string } }>(
+  fastify.post<{ Params: { token: string }; Body: { fullName: string; mobileNumber?: string } }>(
     "/invitations/:token/accept",
     {
       config: { public: true },
@@ -199,7 +199,6 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
           type: "object",
           required: ["fullName"],
           properties: {
-            clerkUserId: { type: "string" },
             fullName: { type: "string" },
             mobileNumber: { type: "string" },
           },
@@ -207,42 +206,7 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      if (isWbmsgAuth()) return acceptSignedIn(request, reply);
-
-      if (!request.body.clerkUserId) {
-        return reply.status(400).send({
-          statusCode: 400,
-          error: "Bad Request",
-          message: "body must have required property 'clerkUserId'",
-        });
-      }
-      const invitation = await prisma.invitation.findUnique({
-        where: { token: request.params.token, status: "pending" },
-      });
-
-      if (!invitation || invitation.expiresAt < new Date()) {
-        return reply.status(400).send({ error: { code: "INVALID_TOKEN", message: "Invitation is invalid or expired" } });
-      }
-
-      await prisma.$transaction([
-        prisma.user.create({
-          data: {
-            id: request.body.clerkUserId,
-            organizationId: invitation.organizationId,
-            email: invitation.email,
-            fullName: request.body.fullName,
-            role: invitation.role,
-            ...(request.body.mobileNumber ? { mobileNumber: request.body.mobileNumber } : {}),
-            ...(invitation.teamId ? { teamId: invitation.teamId, teamRole: invitation.teamRole ?? "member" } : {}),
-          },
-        }),
-        prisma.invitation.update({
-          where: { id: invitation.id },
-          data: { status: "accepted" },
-        }),
-      ]);
-
-      return reply.status(201).send({ data: { organizationId: invitation.organizationId } });
+      return acceptSignedIn(request, reply);
     }
   );
 };

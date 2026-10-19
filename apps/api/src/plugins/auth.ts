@@ -1,6 +1,6 @@
 import fp from "fastify-plugin";
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { isWbmsgAuth, mobileUpgradeRequired, verifyBearer } from "../auth/identity.js";
+import { mobileUpgradeRequired, verifyBearer } from "../auth/identity.js";
 import { defaultsForRole, FIXED_PERMISSION_ROLES } from "../lib/default-role-permissions.js";
 import { isPlatformOnlyPath } from "../lib/demo-guard.js";
 import { redis } from "../lib/redis.js";
@@ -13,7 +13,7 @@ type ResolveOptions = {
 
 /**
  * Resolve a user's role, team and effective permissions. Single source of truth
- * for both the normal Clerk path and the impersonation path.
+ * for both the normal path and the impersonation path.
  * Returns null when the user does not exist / is inactive.
  */
 async function resolveAuthContext(
@@ -121,11 +121,11 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         return reply.status(401).send({ error: { code: "INVALID_IMPERSONATION_TOKEN", message: "Invalid or expired impersonation token" } });
       }
       // The bearer must belong to the super admin who issued the token: a leaked token is useless
-      // without that admin's live Clerk session.
+      // without that admin's live session.
       try {
         const bearer = await verifyBearer(request.headers.authorization);
         if (bearer.userId !== payload.issuedBy) throw new Error("bearer/issuer mismatch");
-        if (isWbmsgAuth() && (bearer.typ !== "admin" || !payload.issuedSid || bearer.sid !== payload.issuedSid)) {
+        if ((bearer.typ !== "admin" || !payload.issuedSid || bearer.sid !== payload.issuedSid)) {
           throw new Error("bearer session mismatch");
         }
       } catch {
@@ -154,7 +154,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     }
 
     // Stamp lastSignInAt at most once per hour per user — works in local dev
-    // without relying on Clerk webhooks reaching localhost.
+    // without a separate sign-in event.
     const stampKey = `last_sign_in:${userId}`;
     const alreadyStamped = await redis.exists(stampKey);
     if (!alreadyStamped) {

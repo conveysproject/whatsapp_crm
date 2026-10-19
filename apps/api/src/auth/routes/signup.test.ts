@@ -32,8 +32,6 @@ vi.mock("../../lib/create-workspace.js", async (orig) => ({
 import { authRouter } from "./index.js";
 import { settleSignupWork } from "./signup.js";
 
-process.env.AUTH_PROVIDER = "wbmsg"; // the module is dark in clerk mode
-
 const tx = { authAccount: { create: vi.fn() } };
 const prisma = {
   authAccount: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
