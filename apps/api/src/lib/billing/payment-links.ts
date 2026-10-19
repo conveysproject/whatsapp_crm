@@ -12,13 +12,28 @@ export function currencyForPhone(phone: string | null | undefined): StatementCur
 export interface OrgCurrencyHints {
   settings: unknown;
   location: string | null | undefined;
-  phone: string | null | undefined;
+  /** The organization's connected WhatsApp number (verified by Meta); null when none is connected. */
+  wabaPhone: string | null | undefined;
+}
+
+/** Vendor setting that holds the connected WhatsApp number's display form, e.g. "+91 98765 43210". */
+const WABA_PHONE_KEY = "current_phone_number_number";
+
+/** Organization fields needed to pick the billing currency (use as, or inside, a Prisma `select`). */
+export const ORG_CURRENCY_SELECT = {
+  settings: true,
+  location: true,
+  vendorSettings: { where: { key: WABA_PHONE_KEY }, select: { value: true }, take: 1 },
+} as const;
+
+export function orgCurrencyHints(org: { settings: unknown; location: string | null; vendorSettings?: Array<{ value: string | null }> }): OrgCurrencyHints {
+  return { settings: org.settings, location: org.location, wabaPhone: org.vendorSettings?.[0]?.value ?? null };
 }
 
 /**
- * The currency a customer is billed in: the owner's explicit choice (settings.billingCurrency) wins; otherwise a location
- * that mentions India, then an Indian phone number, then USD. Reliable only through the explicit choice, which the owner
- * can set per organization in Admin > Billing.
+ * The currency a customer is billed in: the owner's explicit choice (settings.billingCurrency) wins; otherwise the country
+ * of the connected WhatsApp number (+91 = INR, any other = USD), then a location that mentions India, then USD. The
+ * Account Details phone is typed by the customer and never used. The owner can set the choice per organization in Admin > Billing.
  */
 export function currencyForOrg(org: OrgCurrencyHints): StatementCurrency {
   const s = org.settings;
@@ -26,8 +41,9 @@ export function currencyForOrg(org: OrgCurrencyHints): StatementCurrency {
     const v = (s as Record<string, unknown>)["billingCurrency"];
     if (v === "INR" || v === "USD") return v;
   }
+  if ((org.wabaPhone ?? "").replace(/\D/g, "")) return currencyForPhone(org.wabaPhone);
   if (typeof org.location === "string" && /\bindia\b/i.test(org.location)) return "INR";
-  return currencyForPhone(org.phone);
+  return "USD";
 }
 
 export interface PaymentLinkInput {

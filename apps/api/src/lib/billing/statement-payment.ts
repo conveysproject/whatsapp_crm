@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { sendMail } from "../mail.js";
-import { createStatementPaymentLink, currencyForOrg, type PaymentProvider } from "./payment-links.js";
+import { createStatementPaymentLink, currencyForOrg, orgCurrencyHints, ORG_CURRENCY_SELECT, type PaymentProvider } from "./payment-links.js";
 import { readBillingDetails, statementRecipients } from "./billing-details.js";
 import { loadBillingConfig } from "./settings.js";
 import { clearStandingCache } from "./send-guard.js";
@@ -42,9 +42,9 @@ export async function ensurePaymentLinks(prisma: PrismaClient, now: Date = new D
   let created = 0;
   for (const st of pending) {
     try {
-      const org = await prisma.organization.findUnique({ where: { id: st.organizationId }, select: { name: true, phone: true, location: true, settings: true } });
+      const org = await prisma.organization.findUnique({ where: { id: st.organizationId }, select: { name: true, ...ORG_CURRENCY_SELECT } });
       if (!org) continue;
-      const currency = currencyForOrg(org);
+      const currency = currencyForOrg(orgCurrencyHints(org));
       const major = currency === "INR" ? st.amountInr : st.amountUsd;
       if (!major || major <= 0) continue;
       // GST applies to INR (domestic) statements only, and only when the owner has set a rate.

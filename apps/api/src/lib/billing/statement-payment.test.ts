@@ -84,7 +84,7 @@ describe("ensurePaymentLinks", () => {
   });
 
   it("creates an INR link for an organization located in India, sets a 7-day due date, stores the link and emails admins", async () => {
-    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Pune, India", settings: {} });
+    orgFindUnique.mockResolvedValue({ name: "Acme", location: "Pune, India", settings: {} });
     expect(await ensurePaymentLinks(prisma, now)).toBe(1);
     expect(createLink).toHaveBeenCalledWith(expect.objectContaining({ statementId: "s1", currency: "INR", amountMinor: 50000, customerEmail: "a@x.com" }));
     expect(updateMany).toHaveBeenCalledWith({
@@ -96,38 +96,45 @@ describe("ensurePaymentLinks", () => {
   });
   it("adds GST to an INR statement when the owner has set a rate, and stores the tax", async () => {
     settingFindUnique.mockResolvedValue({ value: { published: true, freeAllowance: 500, alertsEnabled: false, chargingStartDate: null, gstRatePercent: 18, bands: [{ upTo: 10000, inr: 500, usd: 5 }] } });
-    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Pune, India", settings: {} });
+    orgFindUnique.mockResolvedValue({ name: "Acme", location: "Pune, India", settings: {} });
     await ensurePaymentLinks(prisma, now);
     expect(createLink).toHaveBeenCalledWith(expect.objectContaining({ currency: "INR", amountMinor: 59000 }));
     expect(updateMany.mock.calls[0]![0].data).toMatchObject({ amountMinor: 59000, taxMinor: 9000 });
   });
   it("never adds GST to a USD statement", async () => {
     settingFindUnique.mockResolvedValue({ value: { published: true, freeAllowance: 500, alertsEnabled: false, chargingStartDate: null, gstRatePercent: 18, bands: [{ upTo: 10000, inr: 500, usd: 5 }] } });
-    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Dubai", settings: {} });
+    orgFindUnique.mockResolvedValue({ name: "Acme", location: "Dubai", settings: {} });
     createLink.mockResolvedValue({ provider: "razorpay", url: "https://rzp.io/l/usd", ref: "plink_usd" });
     await ensurePaymentLinks(prisma, now);
     expect(createLink).toHaveBeenCalledWith(expect.objectContaining({ currency: "USD", amountMinor: 500 }));
     expect(updateMany.mock.calls[0]![0].data.taxMinor).toBeNull();
   });
+  it("bills in USD when the connected WhatsApp number is not Indian, even if the location says India", async () => {
+    orgFindUnique.mockResolvedValue({ name: "Acme", location: "Pune, India", settings: {}, vendorSettings: [{ value: "+971 50 123 4567" }] });
+    createLink.mockResolvedValue({ provider: "razorpay", url: "https://rzp.io/l/usd", ref: "plink_usd" });
+    await ensurePaymentLinks(prisma, now);
+    expect(createLink).toHaveBeenCalledWith(expect.objectContaining({ currency: "USD" }));
+    expect(orgFindUnique.mock.calls[0]![0].select.vendorSettings).toEqual({ where: { key: "current_phone_number_number" }, select: { value: true }, take: 1 });
+  });
   it("emails the billing email instead of the admins when one is set", async () => {
-    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Pune, India", settings: { billing: { billingEmail: "accounts@acme.in" } } });
+    orgFindUnique.mockResolvedValue({ name: "Acme", location: "Pune, India", settings: { billing: { billingEmail: "accounts@acme.in" } } });
     await ensurePaymentLinks(prisma, now);
     expect(sendMail.mock.calls[0]![0].to).toEqual(["accounts@acme.in"]);
   });
-  it("an explicit billing currency set by the owner beats location and phone", async () => {
-    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Pune, India", settings: { billingCurrency: "USD" } });
+  it("an explicit billing currency set by the owner beats the WhatsApp number and the location", async () => {
+    orgFindUnique.mockResolvedValue({ name: "Acme", location: "Pune, India", settings: { billingCurrency: "USD" } });
     createLink.mockResolvedValue({ provider: "razorpay", url: "https://rzp.io/l/usd", ref: "plink_usd" });
     await ensurePaymentLinks(prisma, now);
     expect(createLink).toHaveBeenCalledWith(expect.objectContaining({ currency: "USD" }));
   });
   it("uses USD for a non-Indian or unknown location", async () => {
-    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null, location: "Dubai", settings: {} });
+    orgFindUnique.mockResolvedValue({ name: "Acme", location: "Dubai", settings: {} });
     createLink.mockResolvedValue({ provider: "razorpay", url: "https://rzp.io/l/usd", ref: "plink_usd" });
     await ensurePaymentLinks(prisma, now);
     expect(createLink).toHaveBeenCalledWith(expect.objectContaining({ currency: "USD", amountMinor: 500 }));
   });
   it("leaves a statement without a link (to be retried) when the gateway fails, and sends nothing", async () => {
-    orgFindUnique.mockResolvedValue({ name: "Acme", phone: "+919876543210" });
+    orgFindUnique.mockResolvedValue({ name: "Acme", vendorSettings: [{ value: "+91 98765 43210" }] });
     createLink.mockRejectedValue(new Error("Razorpay is not configured"));
     expect(await ensurePaymentLinks(prisma, now)).toBe(0);
     expect(updateMany).not.toHaveBeenCalled();
@@ -137,12 +144,12 @@ describe("ensurePaymentLinks", () => {
     orgFindUnique.mockResolvedValueOnce(null);
     expect(await ensurePaymentLinks(prisma, now)).toBe(0);
     stFindMany.mockResolvedValue([{ ...st, amountInr: 0, amountUsd: 0 }]);
-    orgFindUnique.mockResolvedValue({ name: "Acme", phone: "+919876543210" });
+    orgFindUnique.mockResolvedValue({ name: "Acme", vendorSettings: [{ value: "+91 98765 43210" }] });
     expect(await ensurePaymentLinks(prisma, now)).toBe(0);
     expect(createLink).not.toHaveBeenCalled();
   });
   it("only looks at issued statements without a link", async () => {
-    orgFindUnique.mockResolvedValue({ name: "Acme", phone: null });
+    orgFindUnique.mockResolvedValue({ name: "Acme" });
     await ensurePaymentLinks(prisma, now);
     expect(stFindMany.mock.calls[0]![0].where).toEqual({ status: "issued", paymentUrl: null });
   });

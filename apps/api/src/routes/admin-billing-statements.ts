@@ -4,7 +4,7 @@ import { parseMonth } from "../lib/billing/metering.js";
 import { parseCycleKey } from "../lib/billing/cycle.js";
 import { generateStatements, issueStatements, setStatementStatus } from "../lib/billing/statements.js";
 import { ensurePaymentLinks } from "../lib/billing/statement-payment.js";
-import { currencyForOrg } from "../lib/billing/payment-links.js";
+import { currencyForOrg, orgCurrencyHints, ORG_CURRENCY_SELECT } from "../lib/billing/payment-links.js";
 
 const FORBIDDEN = { error: { code: "FORBIDDEN", message: "Super admin access required" } };
 
@@ -27,10 +27,10 @@ export const adminBillingStatementsRouter: FastifyPluginAsync = async (fastify) 
       take: 1000,
     });
     const orgs = rows.length > 0
-      ? await fastify.prisma.organization.findMany({ where: { id: { in: rows.map((r) => r.organizationId) } }, select: { id: true, name: true, phone: true, location: true, settings: true } })
+      ? await fastify.prisma.organization.findMany({ where: { id: { in: rows.map((r) => r.organizationId) } }, select: { id: true, name: true, ...ORG_CURRENCY_SELECT } })
       : [];
     const nameById = new Map(orgs.map((o) => [o.id, o.name]));
-    const currencyById = new Map(orgs.map((o) => [o.id, currencyForOrg(o)]));
+    const currencyById = new Map(orgs.map((o) => [o.id, currencyForOrg(orgCurrencyHints(o))]));
     const includeInternal = request.query.includeInternal === "true";
     const data = rows
       .map(({ paymentUrl, ...r }) => ({ ...r, hasLink: paymentUrl !== null, name: nameById.get(r.organizationId) ?? "(deleted organization)", payCurrency: currencyById.get(r.organizationId) ?? "USD" }))

@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const { rzpCreate, rzpCancel } = vi.hoisted(() => ({ rzpCreate: vi.fn(), rzpCancel: vi.fn() }));
 vi.mock("razorpay", () => ({ default: vi.fn().mockImplementation(() => ({ paymentLink: { create: rzpCreate, cancel: rzpCancel } })) }));
 
-import { currencyForPhone, currencyForOrg, createStatementPaymentLink, cancelStatementPaymentLink } from "./payment-links.js";
+import { currencyForPhone, currencyForOrg, orgCurrencyHints, createStatementPaymentLink, cancelStatementPaymentLink } from "./payment-links.js";
 
 describe("currencyForPhone", () => {
   it("uses INR only for a complete Indian number", () => {
@@ -15,17 +15,26 @@ describe("currencyForPhone", () => {
 });
 
 describe("currencyForOrg", () => {
-  const base = { settings: {}, location: null, phone: null };
+  const base = { settings: {}, location: null, wabaPhone: null };
   it("the owner's explicit choice wins over everything else", () => {
-    expect(currencyForOrg({ settings: { billingCurrency: "INR" }, location: "London", phone: "+14155550100" })).toBe("INR");
-    expect(currencyForOrg({ settings: { billingCurrency: "USD" }, location: "Pune, India", phone: "+919876543210" })).toBe("USD");
+    expect(currencyForOrg({ settings: { billingCurrency: "INR" }, location: "London", wabaPhone: "+1 415 555 0100" })).toBe("INR");
+    expect(currencyForOrg({ settings: { billingCurrency: "USD" }, location: "Pune, India", wabaPhone: "+91 98765 43210" })).toBe("USD");
   });
-  it("falls back to a location that mentions India, then an Indian phone, then USD", () => {
+  it("then the connected WhatsApp number's country, even against the location", () => {
+    expect(currencyForOrg({ ...base, wabaPhone: "+91 98765 43210" })).toBe("INR");
+    expect(currencyForOrg({ ...base, wabaPhone: "+971 50 123 4567", location: "Pune, India" })).toBe("USD");
+    expect(currencyForOrg({ ...base, wabaPhone: "+91 98765 43210", location: "London" })).toBe("INR");
+  });
+  it("without a WhatsApp number: a location that mentions India, else USD", () => {
     expect(currencyForOrg({ ...base, location: "Mumbai, India" })).toBe("INR");
     expect(currencyForOrg({ ...base, location: "INDIA" })).toBe("INR");
-    expect(currencyForOrg({ ...base, phone: "+91 98765 43210" })).toBe("INR");
+    expect(currencyForOrg({ ...base, wabaPhone: "", location: "Mumbai, India" })).toBe("INR");
     expect(currencyForOrg({ ...base, location: "Indiana, USA" })).toBe("USD");
     expect(currencyForOrg(base)).toBe("USD");
+  });
+  it("reads the WhatsApp number from the organization's vendor setting", () => {
+    expect(orgCurrencyHints({ settings: {}, location: null, vendorSettings: [{ value: "+91 98765 43210" }] }).wabaPhone).toBe("+91 98765 43210");
+    expect(orgCurrencyHints({ settings: {}, location: null, vendorSettings: [] }).wabaPhone).toBeNull();
   });
   it("ignores an invalid stored currency or malformed settings", () => {
     for (const settings of [{ billingCurrency: "EUR" }, { billingCurrency: 5 }, null, "x", []]) {

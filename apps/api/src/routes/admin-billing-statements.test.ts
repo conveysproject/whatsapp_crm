@@ -56,6 +56,19 @@ describe("admin billing statements", () => {
     expect(body.statements.map((s) => s.name)).toEqual(["Acme"]);
     expect(body.totals).toMatchObject({ statements: 1, inr: 999 });
   });
+  it("shows the pay currency from the connected WhatsApp number", async () => {
+    mockPrisma.billingStatement.findMany.mockResolvedValue([
+      { organizationId: "a", month: "2026-10-14", messages: 5, bandName: "Band 1", amountInr: 500, amountUsd: 5, status: "draft" },
+      { organizationId: "b", month: "2026-10-15", messages: 4, bandName: "Band 1", amountInr: 500, amountUsd: 5, status: "draft" },
+    ]);
+    mockPrisma.organization.findMany.mockResolvedValue([
+      { id: "a", name: "Acme", settings: {}, location: null, vendorSettings: [{ value: "+91 98765 43210" }] },
+      { id: "b", name: "Beta", settings: {}, location: "Pune, India", vendorSettings: [{ value: "+1 415 555 0100" }] },
+    ]);
+    app = await buildAs("superAdmin");
+    const body = (await app.inject({ method: "GET", url: "/v1/admin/billing/statements?month=2026-10" })).json<{ data: { statements: Array<{ name: string; payCurrency: string }> } }>().data;
+    expect(body.statements.map((s) => [s.name, s.payCurrency])).toEqual([["Acme", "INR"], ["Beta", "USD"]]);
+  });
   it("tells the admin whether a statement has a payment link, without returning the link itself", async () => {
     mockPrisma.billingStatement.findMany.mockResolvedValue([
       { organizationId: "a", month: "2026-10-14", messages: 5, bandName: "Band 1", amountInr: 500, amountUsd: 5, status: "issued", paymentUrl: "https://rzp.io/l/secret" },

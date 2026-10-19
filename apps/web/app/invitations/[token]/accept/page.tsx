@@ -23,7 +23,6 @@ export default function AcceptInvitationPage(): JSX.Element {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [accountExists, setAccountExists] = useState(false);
-  const [mobileNumber, setMobileNumber] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -50,7 +49,7 @@ export default function AcceptInvitationPage(): JSX.Element {
       const res = await fetch(`${API_URL}/v1/invitations/${token}/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken ?? ""}` },
-        body: JSON.stringify({ fullName, mobileNumber: mobileNumber || undefined }),
+        body: JSON.stringify({ fullName }),
       });
       const step = signedInAcceptStep(res.status, await res.json().catch(() => null));
       if (step.kind === "error") { setError(step.message); return; }
@@ -73,7 +72,7 @@ export default function AcceptInvitationPage(): JSX.Element {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ firstName: firstName.trim(), lastName: lastName.trim(), password, mobileNumber: mobileNumber || undefined }),
+        body: JSON.stringify({ firstName: firstName.trim(), lastName: lastName.trim(), password }),
       });
       const step = invitationNextStep(res.status, await res.json().catch(() => null));
       if (step.kind === "account_exists") { setAccountExists(true); return; }
@@ -117,13 +116,6 @@ export default function AcceptInvitationPage(): JSX.Element {
             onChange={(e) => setFullName(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
-          <input
-            type="tel"
-            placeholder="Mobile number (optional)"
-            value={mobileNumber}
-            onChange={(e) => setMobileNumber(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button
             onClick={() => { void acceptWithCurrentUser(); }}
@@ -161,13 +153,6 @@ export default function AcceptInvitationPage(): JSX.Element {
             autoComplete="family-name"
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
-          <input
-            type="tel"
-            placeholder="Mobile number (optional)"
-            value={mobileNumber}
-            onChange={(e) => setMobileNumber(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           <input
