@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
 import { getIo } from "../lib/io-ref.js";
 import { checkPublicApiAccess } from "../lib/public-api/access.js";
-import { isChildOf } from "../lib/parent-orgs.js";
+import { parentSendStillAllowed } from "../lib/public-api/child-send.js";
 import { enqueueStatusCallback } from "../lib/public-api/callbacks.js";
 import { plivoErrorFromMeta } from "../lib/public-api/meta-errors.js";
 import { inferMediaKind } from "../lib/public-api/send-mapping.js";
@@ -23,7 +23,7 @@ async function fail(messageId: string, organizationId: string, errorCode: string
 }
 
 export async function processSendJob(job: Pick<Job<SendJob>, "data">): Promise<void> {
-  const { messageId, organizationId, viaParentOrgId, to, content } = job.data;
+  const { messageId, organizationId, viaParentOrgId, apiKeyId, to, content } = job.data;
 
   const message = await prisma.message.findFirst({
     where: { id: messageId, organizationId },
@@ -41,7 +41,7 @@ export async function processSendJob(job: Pick<Job<SendJob>, "data">): Promise<v
   // The kill switch / allow-list also covers work accepted before it was flipped. A thrown lookup propagates: fail closed.
   // A parent-key send is governed by the key owner's API access, and the link is re-checked at send time:
   // an unlink between accept and send fails the message instead of sending as a former child.
-  if (viaParentOrgId && !(await isChildOf(prisma, viaParentOrgId, organizationId))) {
+  if (viaParentOrgId && !(await parentSendStillAllowed(prisma, { apiKeyId, parentOrgId: viaParentOrgId, childOrgId: organizationId }))) {
     await prisma.message.updateMany({ where: { id: messageId, organizationId, status: "sending" }, data: { status: "failed" } });
     await enqueueStatusCallback(prisma, messageId, "failed", { errorCode: null });
     return;

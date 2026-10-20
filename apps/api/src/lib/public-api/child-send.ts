@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
-import { canBeParent, getChildOrgIds, parentOrgsEnabled } from "../parent-orgs.js";
+import { canBeParent, getChildOrgIds, isChildOf, parentOrgsEnabled } from "../parent-orgs.js";
+import { isOrgBlockedFromPublicApi } from "./access.js";
 
 export const SEND_FOR_CHILDREN_SCOPE = "send_for_children";
 const NUMBER_KEY = "current_phone_number_number";
@@ -22,7 +23,10 @@ export class ChildNotConnectedError extends Error {
 
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 
-/** Decides which organization a public-API send belongs to (PRD 6.1). Checks the link on every call; nothing is cached. */
+/**
+ * Decides which organization a public-API send belongs to (PRD 6.1).
+ * By design (6.1(3)): an entitled key that names its own number together with a wabaId, or that mistypes its own src,
+ * is not matched to itself and gets the generic "no_match" refusal; there is no fallback to the key's own org. Checks the link on every call; nothing is cached. */
 export async function resolveSendTarget(
   prisma: PrismaClient,
   key: { id: string; organizationId: string; scopes: string[] },
@@ -58,4 +62,21 @@ export async function resolveSendTarget(
   const child = matches[0]!;
   if (child.status !== "active" || !child.phoneNumberId || !child.wabaAccessToken || !numberOf.get(child.id)) throw new ChildNotConnectedError();
   return { organizationId: child.id, viaParentOrgId: key.organizationId };
+}
+
+/**
+ * Re-check at SEND time that a parent-key send is still allowed (PRD 6.1(9): unlinking, revoking or switching the
+ * feature off stops sends at once): key not revoked and owned by the parent, scope still present, flag on, org still a
+ * valid parent, child still linked, and the child org not blocked from the public API.
+ */
+export async function parentSendStillAllowed(
+  prisma: PrismaClient,
+  args: { apiKeyId: string | undefined; parentOrgId: string; childOrgId: string }
+): Promise<boolean> {
+  if (!args.apiKeyId || !parentOrgsEnabled()) return false;
+  const key = await prisma.apiKey.findUnique({ where: { id: args.apiKeyId }, select: { organizationId: true, revokedAt: true, scopes: true } });
+  if (!key || key.revokedAt || key.organizationId !== args.parentOrgId || !key.scopes.includes(SEND_FOR_CHILDREN_SCOPE)) return false;
+  if (!(await canBeParent(prisma, args.parentOrgId))) return false;
+  if (!(await isChildOf(prisma, args.parentOrgId, args.childOrgId))) return false;
+  return !(await isOrgBlockedFromPublicApi(prisma, args.childOrgId));
 }

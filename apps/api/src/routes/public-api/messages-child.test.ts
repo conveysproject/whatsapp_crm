@@ -40,6 +40,7 @@ describe("POST /Message/ with a parent key sending for a child", () => {
   let app: FastifyInstance;
   let n = 0;
   let table: Row[];
+  let blocked: Set<string>;
   const ORIG = process.env["PARENT_ORGS_ENABLED"];
 
   beforeEach(async () => {
@@ -47,6 +48,7 @@ describe("POST /Message/ with a parent key sending for a child", () => {
     process.env["PARENT_ORGS_ENABLED"] = "true";
     keyScopes = ["whatsapp", "send_for_children"];
     childRate.mockResolvedValue({ allowed: true, retryAfterSeconds: 0 });
+    blocked = new Set();
     table = [
       row("org-1", { isParent: true, number: "+1 415-555-2671" }),
       row("child-1", { parentOrganizationId: "org-1", number: "+1 415-555-1111" }),
@@ -56,7 +58,8 @@ describe("POST /Message/ with a parent key sending for a child", () => {
     mockPrisma.organization.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => table.find((o) => o.id === where.id) ?? null);
     mockPrisma.organization.findMany.mockImplementation(async ({ where }: { where: { id?: { in: string[] }; parentOrganizationId?: string } }) =>
       table.filter((o) => (!where.id || where.id.in.includes(o.id)) && (where.parentOrganizationId === undefined || o.parentOrganizationId === where.parentOrganizationId)));
-    mockPrisma.vendorSetting.findFirst.mockImplementation(async ({ where }: { where: { organizationId: string } }) => {
+    mockPrisma.vendorSetting.findFirst.mockImplementation(async ({ where }: { where: { organizationId: string; key?: string } }) => {
+      if (where.key === "plan_feature_public_api_blocked") return blocked.has(where.organizationId) ? { value: "true" } : null;
       const o = table.find((x) => x.id === where.organizationId);
       return o?.number ? { value: o.number } : null;
     });
@@ -84,7 +87,7 @@ describe("POST /Message/ with a parent key sending for a child", () => {
     expect(mockPrisma.apiMessageMeta.create.mock.calls[0]![0].data).toMatchObject({ apiKeyId: "k1", organizationId: "child-1", parentOrganizationId: "org-1" });
     expect(sendAdd.mock.calls[0]![1]).toMatchObject({ messageId: "msg-1", organizationId: "child-1", viaParentOrgId: "org-1" });
     expect(JSON.stringify(sendAdd.mock.calls)).not.toMatch(/TOKEN_/);
-    expect(childRate).toHaveBeenCalledWith("k1", "child-1");
+    expect(childRate).toHaveBeenCalledWith("k1", "child-1", 1);
   });
 
   it("template lookup uses the child org", async () => {
@@ -151,8 +154,8 @@ describe("POST /Message/ with a parent key sending for a child", () => {
     expect(sendAdd).not.toHaveBeenCalled();
   });
 
-  it("waba_id must be a string; a mismatching waba_id is the generic 403; a matching one sends", async () => {
-    expect((await post(app, { ...childBody, waba_id: 123 })).statusCode).toBe(400);
+  it("a malformed waba_id and a mismatching waba_id is the generic 403; a matching one sends", async () => {
+    expect((await post(app, { ...childBody, waba_id: 123 })).statusCode).toBe(403);
     expect((await post(app, { ...childBody, waba_id: "waba-other-child" })).statusCode).toBe(403);
     expect((await post(app, { ...childBody, waba_id: "waba-child-1" })).statusCode).toBe(202);
   });
@@ -164,5 +167,46 @@ describe("POST /Message/ with a parent key sending for a child", () => {
     expect(res.headers["retry-after"]).toBe("17");
     expect(res.json()).toMatchObject({ error_code: "RATE_LIMITED" });
     expect(mockPrisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it("a key without the scope ignores a malformed waba_id (still 202 on its own number)", async () => {
+    keyScopes = ["whatsapp"];
+    expect((await post(app, { ...body, waba_id: 123 })).statusCode).toBe(202);
+    expect((await post(app, { ...body, waba_id: "x".repeat(100) })).statusCode).toBe(202);
+  });
+
+  it("an entitled key with a malformed waba_id gets the generic 403", async () => {
+    const res = await post(app, { ...childBody, waba_id: 123 });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ error_code: "FORBIDDEN_CHILD" });
+    expect((await post(app, { ...childBody, waba_id: "x".repeat(100) })).statusCode).toBe(403);
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it("a child blocked from the public API cannot be sent for: generic 403, nothing written", async () => {
+    blocked.add("child-1");
+    const res = await post(app, childBody);
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ error_code: "FORBIDDEN_CHILD" });
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    expect(sendAdd).not.toHaveBeenCalled();
+  });
+
+  it("the limiter is charged per message, not per request", async () => {
+    const dsts = Array.from({ length: 20 }, (_, i) => `+1415555${String(3000 + i)}`).join("<");
+    await post(app, { ...childBody, dst: dsts });
+    expect(childRate).toHaveBeenCalledWith("k1", "child-1", 20);
+  });
+
+  it("the job carries the key id so the worker can re-check the key", async () => {
+    await post(app, childBody);
+    expect(sendAdd.mock.calls[0]![1]).toMatchObject({ apiKeyId: "k1", viaParentOrgId: "org-1" });
+  });
+
+  it("a scoped key whose org is itself a child is not entitled: old SRC_MISMATCH", async () => {
+    table.find((o) => o.id === "org-1")!.parentOrganizationId = "other-parent";
+    const res = await post(app, childBody);
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error_code: "SRC_MISMATCH" });
   });
 });

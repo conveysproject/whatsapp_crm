@@ -45,6 +45,8 @@ export interface ParsedSend {
   callbackMethod: "GET" | "POST";
   /** Optional `waba_id`: only honoured for keys with the send_for_children scope. */
   wabaId: string | null;
+  /** waba_id was present but not a string or too long; ignored unless the key may send for children. */
+  wabaMalformed: boolean;
   content: SendContent;
 }
 
@@ -129,11 +131,13 @@ export function parseSendBody(body: unknown): ParsedSend {
     if (!text?.trim()) throw new SendValidationError("text is required");
     content = { kind: "text", text: text.trim() };
   }
+  // Lenient on purpose: a malformed waba_id is ignored here so keys that cannot send for children behave exactly as before.
+  // The route enforces it strictly (generic 403) only for keys that are entitled to send for children.
   const wabaRaw = body["waba_id"];
-  if (wabaRaw != null && typeof wabaRaw !== "string") throw new SendValidationError("waba_id must be a string");
-  const wabaId = wabaRaw?.trim() ? wabaRaw.trim() : null;
-  if (wabaId && wabaId.length > 64) throw new SendValidationError("waba_id must be at most 64 characters");
-  return { src, dsts, callbackUrl, callbackMethod, wabaId, content };
+  const wabaTrimmed = typeof wabaRaw === "string" ? wabaRaw.trim() : "";
+  const wabaId = wabaTrimmed && wabaTrimmed.length <= 64 ? wabaTrimmed : null;
+  const wabaMalformed = wabaRaw != null && wabaRaw !== "" && (typeof wabaRaw !== "string" || wabaTrimmed.length > 64);
+  return { src, dsts, callbackUrl, callbackMethod, wabaId, wabaMalformed, content };
 }
 
 type MetaParam = NonNullable<WaTemplateComponent["parameters"]>[number];
