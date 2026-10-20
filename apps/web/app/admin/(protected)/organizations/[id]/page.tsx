@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth/client";
 import { toast } from "sonner";
 import { IMPERSONATION_STORAGE_KEY, setImpersonationCookie, type ImpersonationSession } from "@/lib/impersonation";
 import { sortUsersForSupport, roleHint } from "@/lib/support-users";
+import { ParentCapabilityCard } from "@/components/parent/ParentCapabilityCard";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -19,6 +20,7 @@ interface OrgDetail {
   createdAt: string;
   _count: { members: number; conversations: number };
   usage: { contacts: number; messages: number; campaigns: number };
+  isParent?: boolean;
 }
 
 interface OrgUser {
@@ -152,6 +154,8 @@ export default function AdminOrgDetailPage(): JSX.Element {
           </div>
         ))}
       </div>
+
+      <ParentCapabilityCard orgId={org.id} isParent={org.isParent === true} onChanged={() => { void refetch(); }} />
 
       <div className="border rounded-lg p-5 space-y-3">
         <h2 className="font-medium">Plan Management</h2>

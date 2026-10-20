@@ -8,6 +8,7 @@ import { formatCount, normalizeMessageUsage, periodLabel, resetLabel, type Messa
 import { isWhatsAppConnected, statusBadge, usagePercent, type BadgeTone } from "@/lib/account-details";
 import { CopyButton } from "./CopyButton";
 import { ProfileEditor } from "./ProfileEditor";
+import { ParentLinkCard } from "@/components/parent/ParentLinkCard";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -122,6 +123,8 @@ export default async function AccountDetailsPage(): Promise<JSX.Element> {
         <Row label="Organization ID"><IdValue value={org.id} label="Organization ID" /></Row>
         <Row label="Created">{formatDate(org.createdAt)}</Row>
       </Card>
+
+      <ParentLinkCard />
 
       <ProfileEditor
         profile={{ name: org.name, phone: org.phone, website: org.website, location: org.location, industry: org.industry, subCategory: org.subCategory }}

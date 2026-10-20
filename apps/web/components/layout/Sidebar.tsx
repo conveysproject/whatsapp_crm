@@ -5,7 +5,10 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { JSX, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useOrganization } from "@/hooks/useOrganization";
 import { canAccess } from "@/lib/can";
+import { showClientsNav } from "@/lib/parent-orgs";
+import { NewBadge } from "@/components/ui/NewBadge";
 import { WHATSAPP_ADMIN_HOME } from "@/lib/role-home";
 
 interface NavChild {
@@ -21,6 +24,7 @@ interface NavItem {
   icon: string;
   exact?: boolean;
   perm?: string;
+  isNew?: boolean;
   children?: NavChild[];
 }
 
@@ -61,6 +65,9 @@ const NAV: NavItem[] = [
   { href: "/settings",    label: "Settings",    icon: "⚙", perm: "settings_access" },
 ];
 
+// Shown only to the admin of a parent organization (see showClientsNav). The API enforces the same rule.
+const CLIENTS_ITEM: NavItem = { href: "/parent", label: "Clients", icon: "🏢", isNew: true };
+
 function isChildActive(children: NavChild[], pathname: string): boolean {
   return children.some((c) =>
     c.exact ? pathname === c.href : pathname === c.href || pathname.startsWith(c.href + "/")
@@ -70,6 +77,7 @@ function isChildActive(children: NavChild[], pathname: string): boolean {
 export function Sidebar(): JSX.Element {
   const pathname = usePathname();
   const { user, isLoading } = useCurrentUser();
+  const { org } = useOrganization();
 
   const [manualExpanded, setManualExpanded] = useState<Record<string, boolean>>({});
 
@@ -88,6 +96,10 @@ export function Sidebar(): JSX.Element {
         }
         return allowed(item.perm) ? [item] : [];
       });
+  if (showClientsNav(user, org)) {
+    const at = visibleNav.findIndex((i) => i.href === "/settings");
+    visibleNav.splice(at === -1 ? visibleNav.length : at, 0, CLIENTS_ITEM);
+  }
 
   function isOpen(item: NavItem): boolean {
     if (!item.children) return false;
@@ -173,6 +185,7 @@ export function Sidebar(): JSX.Element {
             >
               <span className="w-5 text-center">{item.icon}</span>
               {item.label}
+              {item.isNew && <NewBadge />}
             </Link>
           );
         })}

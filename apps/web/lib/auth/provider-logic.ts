@@ -19,6 +19,7 @@ const PUBLIC_AUTH_PATHS = [
   /^\/reset-password(\/|$)/,
   /^\/admin\/sign-in(\/|$)/,
   /^\/invitations\//,
+  /^\/client-invitations\//,
 ];
 
 export function isPublicAuthPath(pathname: string): boolean {

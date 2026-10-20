@@ -35,7 +35,7 @@ beforeEach(() => {
 
 describe("wbmsgMiddleware", () => {
   it("passes public routes without a session", async () => {
-    for (const p of ["/sign-in", "/sign-up/x", "/terms", "/docs/a", "/admin/sign-in", "/invitations/t/accept"]) {
+    for (const p of ["/sign-in", "/sign-up/x", "/terms", "/docs/a", "/admin/sign-in", "/invitations/t/accept", "/client-invitations/t/accept"]) {
       const r = await wbmsgMiddleware(req(p));
       expect(r.headers.get("x-middleware-next"), p).toBe("1");
     }
