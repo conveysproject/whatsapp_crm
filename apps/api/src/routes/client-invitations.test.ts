@@ -199,13 +199,14 @@ describe("POST /v1/client-invitations", () => {
     expect(mockPrisma.clientInvitation.create).not.toHaveBeenCalled();
   });
 
-  it("an email that already belongs to a user is rejected with 409", async () => {
+  it("does not query users at create (no cross-tenant email oracle): an email registered elsewhere still gets 201", async () => {
     mockPrisma.user.findFirst.mockResolvedValue({ id: "u-x" });
+    mockPrisma.user.findUnique.mockResolvedValue({ id: "u-x" });
     const app = await buildApp();
     const res = await post(app);
-    expect(res.statusCode).toBe(409);
-    expect(res.json().error.code).toBe("ALREADY_REGISTERED");
-    expect(mockPrisma.clientInvitation.create).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(201);
+    expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+    expect(mockPrisma.user.findUnique).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid email with 400", async () => {

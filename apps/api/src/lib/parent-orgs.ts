@@ -59,8 +59,9 @@ export async function canBeParent(prisma: PrismaClient, orgId: string): Promise<
 }
 
 /**
- * Accepts a PrismaClient (opens its own transaction) or a Prisma.TransactionClient
- * (already inside the caller's transaction, which cannot nest: runs directly on it).
+ * Accepts a PrismaClient or a Prisma.TransactionClient. An interactive-transaction client
+ * also exposes $transaction; a nested call becomes a savepoint, so the row locks taken here
+ * last until the outer commit and a ParentLinkError rolls back only the savepoint.
  */
 export async function linkChild(
   client: PrismaClient | Prisma.TransactionClient,
@@ -91,11 +92,7 @@ export async function linkChild(
       data: { parentOrganizationId: parentOrgId, childOrganizationId: childOrgId, actorUserId, action: "linked" },
     });
   };
-  if ("$transaction" in client && typeof client.$transaction === "function") {
-    await client.$transaction(run);
-  } else {
-    await run(client as Prisma.TransactionClient);
-  }
+  await client.$transaction(run);
 }
 
 export async function unlinkChild(

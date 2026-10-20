@@ -41,7 +41,7 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { email: string } }>(
     "/client-invitations",
     {
-      config: { rateLimit: { hook: "preHandler", max: 30, timeWindow: "1 hour", keyGenerator: (req) => `invite:${req.auth?.organizationId ?? req.ip}` } },
+      config: { rateLimit: { hook: "preHandler", max: 30, timeWindow: "1 hour", keyGenerator: (req) => `client-invite:${req.auth?.organizationId ?? req.ip}` } },
       preHandler: parentGuard,
       schema: {
         body: {
@@ -55,11 +55,8 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
       const parentOrganizationId = request.auth.organizationId;
       const email = normalizeEmail(request.body.email);
 
-      if (await prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true } })) {
-        return reply
-          .status(409)
-          .send({ error: { code: "ALREADY_REGISTERED", message: "This email already has an account." } });
-      }
+      // No user-by-email lookup here: it would reveal which emails have accounts in other tenants.
+      // An existing account is rejected at accept time (ALREADY_MEMBER).
       const existing = await prisma.clientInvitation.findFirst({
         where: { parentOrganizationId, email, status: "pending", expiresAt: { gt: new Date() } },
         select: { id: true },

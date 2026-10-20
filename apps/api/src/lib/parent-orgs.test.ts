@@ -135,9 +135,15 @@ describe("linkChild", () => {
     });
   });
 
-  it("runs directly on a transaction client (no nested $transaction), still locking and compare-and-set", async () => {
+  // Prisma's interactive-transaction client has $transaction (nested = savepoint); model it as
+  // a client whose $transaction runs the callback on itself.
+  function asTxClient(tx: Record<string, unknown>) {
+    return Object.assign(tx, { $transaction: vi.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)) });
+  }
+
+  it("works on a transaction client (nested $transaction), still locking and compare-and-set", async () => {
     const { tx } = makePrisma({ orgs: { p1: okParent, c1: freeChild } });
-    await linkChild(tx as unknown as Prisma.TransactionClient, "p1", "c1", "u1");
+    await linkChild(asTxClient(tx) as unknown as Prisma.TransactionClient, "p1", "c1", "u1");
     expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
     expect(tx.organization.updateMany).toHaveBeenCalledWith({
       where: { id: "c1", parentOrganizationId: null },
@@ -148,7 +154,7 @@ describe("linkChild", () => {
 
   it("transaction-client path still rejects an invalid link", async () => {
     const { tx } = makePrisma({ orgs: { p1: { isParent: false, parentOrganizationId: null }, c1: freeChild } });
-    await expect(linkChild(tx as unknown as Prisma.TransactionClient, "p1", "c1", "u1")).rejects.toMatchObject({
+    await expect(linkChild(asTxClient(tx) as unknown as Prisma.TransactionClient, "p1", "c1", "u1")).rejects.toMatchObject({
       code: "PARENT_NOT_ENABLED",
     });
   });
