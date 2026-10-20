@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from "vitest";
 import Fastify from "fastify";
 import type { Organization } from "@prisma/client";
 
@@ -52,6 +52,45 @@ describe("organizations routes", () => {
     expect(call.select).not.toHaveProperty("wabaAccessToken");
     expect(call.select).not.toHaveProperty("stripeId");
     expect(call.select!["id"]).toBe(true);
+  });
+
+  describe("isParent / hasParent flags", () => {
+    type OrgFlags = { isParent: boolean; hasParent: boolean };
+    async function getMe(row: Record<string, unknown>): Promise<Record<string, unknown>> {
+      const { prisma } = await import("../lib/prisma.js");
+      vi.mocked(prisma.organization.findUniqueOrThrow).mockResolvedValueOnce({ ...mockOrg, ...row } as unknown as Organization);
+      const res = await app.inject({ method: "GET", url: "/v1/organizations/me" });
+      return (res.json() as { data: Record<string, unknown> }).data;
+    }
+    afterEach(() => { delete process.env["PARENT_ORGS_ENABLED"]; });
+
+    it("isParent is true only for a top-level parent org while the flag is on", async () => {
+      process.env["PARENT_ORGS_ENABLED"] = "true";
+      const data = await getMe({ isParent: true, parentOrganizationId: null }) as unknown as OrgFlags;
+      expect(data.isParent).toBe(true);
+      expect(data.hasParent).toBe(false);
+    });
+
+    it("hasParent is true for a child org, and a child is never a parent", async () => {
+      process.env["PARENT_ORGS_ENABLED"] = "true";
+      const data = await getMe({ isParent: true, parentOrganizationId: "org_parent" }) as unknown as OrgFlags;
+      expect(data.isParent).toBe(false);
+      expect(data.hasParent).toBe(true);
+    });
+
+    it("both flags are false when PARENT_ORGS_ENABLED is off", async () => {
+      const data = await getMe({ isParent: true, parentOrganizationId: null }) as unknown as OrgFlags;
+      expect(data.isParent).toBe(false);
+      expect(data.hasParent).toBe(false);
+      const child = await getMe({ isParent: false, parentOrganizationId: "org_parent" }) as unknown as OrgFlags;
+      expect(child.hasParent).toBe(false);
+    });
+
+    it("does not leak the parent's id", async () => {
+      process.env["PARENT_ORGS_ENABLED"] = "true";
+      const data = await getMe({ isParent: false, parentOrganizationId: "org_parent" });
+      expect(data).not.toHaveProperty("parentOrganizationId");
+    });
   });
 
   it("PATCH /v1/organizations/me updates org name", async () => {

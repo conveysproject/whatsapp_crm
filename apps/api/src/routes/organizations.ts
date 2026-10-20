@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { parentOrgsEnabled } from "../lib/parent-orgs.js";
 import { PROFILE_FIELDS, PROFILE_MAX_LENGTH, normalizeProfileField, type ProfileField } from "../lib/org-profile.js";
 
 // Keys managed server-side only — never overwritable via PATCH /organizations/me
@@ -48,11 +49,19 @@ export const ORG_PUBLIC_SELECT = {
 
 export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/organizations/me", async (request) => {
-    const org = await prisma.organization.findUniqueOrThrow({
+    const { isParent, parentOrganizationId, ...org } = await prisma.organization.findUniqueOrThrow({
       where: { id: request.auth.organizationId },
-      select: ORG_PUBLIC_SELECT,
+      select: { ...ORG_PUBLIC_SELECT, isParent: true, parentOrganizationId: true },
     });
-    return { data: org };
+    // Parent/child flags for the web nav and settings. The parent's id is never returned.
+    const enabled = parentOrgsEnabled();
+    return {
+      data: {
+        ...org,
+        isParent: enabled && isParent === true && parentOrganizationId === null,
+        hasParent: enabled && parentOrganizationId !== null,
+      },
+    };
   });
 
   fastify.patch<{ Body: { name?: string; settings?: Record<string, unknown> } & Partial<Record<ProfileField, string | null>> }>(
