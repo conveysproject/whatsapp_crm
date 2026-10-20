@@ -67,8 +67,8 @@ export async function resolveSendTarget(
 }
 
 /**
- * Re-check at SEND time that a parent-key send is still allowed (PRD 6.1(9): unlinking, revoking or switching the
- * feature off stops sends at once): key not revoked and owned by the parent, scope still present, org still a
+ * Re-check at SEND time that a parent-key send is still allowed (PRD 6.1(9): unlinking, revoking the key or removing
+ * the parent capability stops sends at once): key not revoked and owned by the parent, scope still present, org still a
  * valid parent, child still linked, and the child org not blocked from the public API.
  */
 export async function parentSendStillAllowed(

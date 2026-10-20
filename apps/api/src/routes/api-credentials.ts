@@ -100,7 +100,7 @@ export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
     if (bodyError) return invalidBody(reply, bodyError);
     const { name, callbackUrl, inboundUrl, scopes: requestedScopes } = request.body ?? {};
     if (!name?.trim()) return reply.status(400).send({ error: { code: "MISSING_NAME", message: "name is required" } });
-    // The extra scope is only for a parent organization with the feature on; everyone else gets one generic refusal.
+    // The extra scope is only for a parent organization (a super admin enabled it); everyone else gets one generic refusal.
     const wantsChildren = requestedScopes?.includes(SEND_FOR_CHILDREN_SCOPE) ?? false;
     if (wantsChildren && !(isParentAdmin(request) && (await canBeParent(fastify.prisma, organizationId)))) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Not available" } });

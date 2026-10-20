@@ -91,7 +91,7 @@ async function resolveAuthContext(
  * A parent-issued impersonation token (payload has issuedByOrgId) is valid only while EVERY condition
  * still holds, re-checked on each request: the bearer is the issuer's own normal session (the one the
  * token was issued from), the issuer still sits in the parent org as an active admin with parent_access,
- * the feature is on, the org can still be a parent, and the target org is still its child.
+ * the org can still be a parent, and the target org is still its child.
  * Any throw or false means the caller answers the same 401 as every other token failure (no oracle).
  */
 async function parentSessionStillValid(
