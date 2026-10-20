@@ -1,7 +1,9 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import { randomBytes } from "crypto";
 import { prisma } from "../lib/prisma.js";
+import { redis } from "../lib/redis.js";
 import { canAccess } from "../lib/permissions.js";
-import { canBeParent, parentOrgsEnabled } from "../lib/parent-orgs.js";
+import { canBeParent, isChildOf, parentOrgsEnabled } from "../lib/parent-orgs.js";
 import {
   ChildNotFoundError,
   getChildMessages,
@@ -13,6 +15,7 @@ import {
 
 const DAY_MS = 86_400_000;
 const DEFAULT_RANGE_DAYS = 30;
+const IMPERSONATION_TTL_SECONDS = 900;
 const MAX_RANGE_DAYS = 366;
 
 const notFound = (reply: FastifyReply) =>
@@ -162,6 +165,220 @@ export const parentRoutes: FastifyPluginAsync = async (fastify) => {
         }
         throw err;
       }
+    },
+  );
+
+  // ── Parent admin opens a child as admin (impersonation) ───────────────────
+  // Same shape as the super-admin flow in admin.ts: ImpersonationLog FIRST, then the Redis token
+  // (15 min), then the parent audit row. The session is read-only until the issuer elevates it.
+  // The auth plugin re-checks the whole parent/child relationship on every request that uses the token.
+  fastify.post<{ Params: { childId: string }; Body: { userId?: string } }>(
+    "/parent/children/:childId/impersonate",
+    {
+      preHandler: parentGuard,
+      schema: {
+        params: childParams,
+        body: {
+          type: "object",
+          properties: { userId: { type: "string", minLength: 1, maxLength: 64 } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (request.auth.impersonation) return forbiddenChild(reply); // no nested sessions
+      const { childId } = request.params;
+      const actorId = request.auth.userId;
+      const parentOrganizationId = request.auth.organizationId;
+
+      // Per-actor rate limit: max 10 tokens per hour (same counter pattern as the super-admin route).
+      const actorKey = `impersonate:parent-actor:${actorId}`;
+      const count = await redis.incr(actorKey);
+      if (count === 1) await redis.expire(actorKey, 3600);
+      if (count > 10) {
+        return reply.status(429).send({ error: { code: "RATE_LIMITED", message: "Impersonation limit reached (10/hour)" } });
+      }
+
+      if (!(await isChildOf(prisma, parentOrganizationId, childId))) return forbiddenChild(reply);
+
+      // Target: inside THE CHILD only, active, not deleted, never a super admin. One generic 403 for every failure.
+      const requestedUserId = request.body?.userId;
+      const target = await prisma.user.findFirst({
+        where: requestedUserId
+          ? { id: requestedUserId, organizationId: childId, isActive: true, deletedAt: null }
+          : { organizationId: childId, role: "admin", isActive: true, deletedAt: null },
+        ...(requestedUserId ? {} : { orderBy: { createdAt: "asc" as const } }),
+        select: { id: true, role: true },
+      });
+      if (!target || target.role === "superAdmin") return forbiddenChild(reply);
+      const child = await prisma.organization.findUnique({ where: { id: childId }, select: { name: true } });
+      if (!child) return forbiddenChild(reply);
+
+      const token = randomBytes(32).toString("hex");
+      // Log FIRST: if it cannot be written, no token exists (no unlogged session).
+      await prisma.impersonationLog.create({
+        data: {
+          actorId,
+          organizationId: childId,
+          actorOrganizationId: parentOrganizationId,
+          orgName: child.name,
+          targetUserId: target.id,
+          mode: "readonly",
+          token,
+          ipAddress: request.ip,
+          userAgent: request.headers["user-agent"] ?? null,
+        },
+      });
+      await redis.set(
+        `impersonate:${token}`,
+        JSON.stringify({
+          organizationId: childId,
+          targetUserId: target.id,
+          issuedBy: actorId,
+          issuedSid: request.auth.sid ?? null,
+          issuedByOrgId: parentOrganizationId,
+          mode: "readonly",
+        }),
+        "EX",
+        IMPERSONATION_TTL_SECONDS,
+      );
+      try {
+        await prisma.parentAuditEvent.create({
+          data: {
+            parentOrganizationId,
+            childOrganizationId: childId,
+            actorUserId: actorId,
+            action: "impersonate_started",
+            metadata: { targetUserId: target.id, mode: "readonly", expiresIn: IMPERSONATION_TTL_SECONDS },
+          },
+        });
+      } catch (err) {
+        // Fail closed: no audit row, no live session.
+        await redis.del(`impersonate:${token}`);
+        await prisma.impersonationLog.updateMany({ where: { token, endedAt: null }, data: { endedAt: new Date() } });
+        throw err;
+      }
+      return reply.send({ data: { token, expiresIn: IMPERSONATION_TTL_SECONDS, mode: "readonly" } });
+    },
+  );
+
+  type ParentSessionPayload = {
+    organizationId?: string;
+    targetUserId?: string;
+    issuedBy?: string;
+    issuedSid?: string | null;
+    issuedByOrgId?: string;
+    mode?: string;
+  };
+  /** Live parent-issued session for this child, or null. Super-admin tokens (no issuedByOrgId) never match. */
+  async function loadParentSession(token: string, parentOrganizationId: string, childId: string) {
+    const raw = await redis.get(`impersonate:${token}`);
+    let payload: ParentSessionPayload | null = null;
+    try { payload = raw ? (JSON.parse(raw) as ParentSessionPayload) : null; } catch { payload = null; }
+    if (!payload || payload.issuedByOrgId !== parentOrganizationId || payload.organizationId !== childId || !payload.targetUserId) {
+      return null;
+    }
+    return payload;
+  }
+
+  // Elevate to edit mode: only the issuer, from their own (non-impersonation) session, with a reason.
+  // Remaining TTL is preserved; log first so a log failure never leaves an unlogged edit session.
+  fastify.post<{ Params: { childId: string }; Body: { token: string; reason: string } }>(
+    "/parent/children/:childId/impersonate/elevate",
+    {
+      preHandler: parentGuard,
+      schema: {
+        params: childParams,
+        body: {
+          type: "object",
+          required: ["token", "reason"],
+          properties: {
+            token: { type: "string", minLength: 1, maxLength: 200 },
+            reason: { type: "string", minLength: 10, maxLength: 500 },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (request.auth.impersonation) return forbiddenChild(reply);
+      const { childId } = request.params;
+      const { token, reason } = request.body;
+      const actorId = request.auth.userId;
+      const parentOrganizationId = request.auth.organizationId;
+      if (!(await isChildOf(prisma, parentOrganizationId, childId))) return forbiddenChild(reply);
+      const sessionNotFound = () =>
+        reply.status(404).send({ error: { code: "NOT_FOUND", message: "Impersonation session not found or expired" } });
+
+      const payload = await loadParentSession(token, parentOrganizationId, childId);
+      if (!payload) return sessionNotFound();
+      if (payload.issuedBy !== actorId || !payload.issuedSid || payload.issuedSid !== request.auth.sid) {
+        return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only the issuing admin can elevate this session" } });
+      }
+      if (payload.mode === "edit") {
+        return reply.status(409).send({ error: { code: "ALREADY_ELEVATED", message: "Session is already in edit mode" } });
+      }
+      const key = `impersonate:${token}`;
+      const ttlMs = await redis.pttl(key);
+      if (ttlMs <= 0) return sessionNotFound();
+
+      const logged = await prisma.impersonationLog.updateMany({
+        where: { token, actorId, endedAt: null },
+        data: { mode: "edit", elevationReason: reason },
+      });
+      if (logged.count === 0) return sessionNotFound();
+      await redis.set(key, JSON.stringify({ ...payload, mode: "edit" }), "PX", ttlMs);
+      await prisma.parentAuditEvent.create({
+        data: {
+          parentOrganizationId,
+          childOrganizationId: childId,
+          actorUserId: actorId,
+          action: "impersonate_elevated",
+          metadata: { targetUserId: payload.targetUserId, reason, remainingMs: ttlMs },
+        },
+      });
+      return reply.send({ data: { mode: "edit", expiresIn: Math.ceil(ttlMs / 1000) } });
+    },
+  );
+
+  // End a session early: only the issuer. Idempotent for an expired token.
+  fastify.delete<{ Params: { childId: string }; Body: { token: string } }>(
+    "/parent/children/:childId/impersonate",
+    {
+      preHandler: parentGuard,
+      schema: {
+        params: childParams,
+        body: {
+          type: "object",
+          required: ["token"],
+          properties: { token: { type: "string", minLength: 1, maxLength: 200 } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (request.auth.impersonation) return forbiddenChild(reply);
+      const { childId } = request.params;
+      const { token } = request.body;
+      const actorId = request.auth.userId;
+      const raw = await redis.get(`impersonate:${token}`);
+      if (raw) {
+        let parsed: ParentSessionPayload = {};
+        try { parsed = JSON.parse(raw) as ParentSessionPayload; } catch { parsed = {}; }
+        if (
+          parsed.issuedBy !== actorId ||
+          parsed.issuedByOrgId !== request.auth.organizationId ||
+          parsed.organizationId !== childId
+        ) {
+          return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only the issuing admin can end this session" } });
+        }
+        await redis.del(`impersonate:${token}`);
+      }
+      await prisma.impersonationLog.updateMany({
+        where: { token, actorId, endedAt: null },
+        data: { endedAt: new Date() },
+      });
+      return reply.status(204).send();
     },
   );
 };
