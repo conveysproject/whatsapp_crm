@@ -86,11 +86,17 @@ async function overviewFor(prisma: PrismaClient, ids: string[], range: DateRange
         AND m.is_system_message = false
         AND m.created_at >= ${range.from} AND m.created_at < ${range.to}
       GROUP BY m.organization_id`,
+    // Latest activity per child via LATERAL: each child is one index probe on messages_org_sent_at_idx
+    // (organization_id, sent_at) instead of an aggregate over every message. sent_at is NOT NULL.
     prisma.$queryRaw<ActivityRow[]>`
-      SELECT m.organization_id, max(m.created_at) AS last_activity_at
-      FROM messages m
-      WHERE m.organization_id = ANY(${ids}::text[]) AND m.is_system_message = false
-      GROUP BY m.organization_id`,
+      SELECT o.id AS organization_id, last.sent_at AS last_activity_at
+      FROM organizations o
+      LEFT JOIN LATERAL (
+        SELECT m.sent_at FROM messages m
+        WHERE m.organization_id = o.id AND m.is_system_message = false
+        ORDER BY m.sent_at DESC LIMIT 1
+      ) last ON true
+      WHERE o.id = ANY(${ids}::text[])`,
   ]);
   const countBy = new Map(counts.map((r) => [r.organization_id, r]));
   const activityBy = new Map(activity.map((r) => [r.organization_id, r.last_activity_at]));
@@ -136,6 +142,13 @@ export async function getChildStats(
   return row;
 }
 
+export class InvalidCursorError extends Error {
+  constructor() {
+    super("INVALID_CURSOR");
+    this.name = "InvalidCursorError";
+  }
+}
+
 export interface ChildMessage {
   id: string;
   direction: string;
@@ -156,8 +169,26 @@ export async function getChildMessages(
   opts: { cursor?: string; limit: number },
 ): Promise<{ items: ChildMessage[]; nextCursor: string | null }> {
   if (!(await isChildOf(prisma, parentOrgId, childOrgId))) throw new ChildNotFoundError();
+  // Scope check and read are one predicate: the child must still belong to this parent.
+  const where = {
+    organizationId: childOrgId,
+    // Message has no organization relation; the conversation's org carries the parent check.
+    conversation: { organization: { parentOrganizationId: parentOrgId }, contact: { deletedAt: null } },
+  };
+  if (opts.cursor) {
+    // A cursor is only a position inside this child's messages; foreign ids look the same as unknown ones.
+    const hit = await prisma.message.findFirst({
+      where: {
+        id: opts.cursor,
+        organizationId: childOrgId,
+        conversation: { organization: { parentOrganizationId: parentOrgId } },
+      },
+      select: { id: true },
+    });
+    if (!hit) throw new InvalidCursorError();
+  }
   const rows = await prisma.message.findMany({
-    where: { organizationId: childOrgId },
+    where,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: opts.limit + 1,
     ...(opts.cursor ? { cursor: { id: opts.cursor } } : {}),

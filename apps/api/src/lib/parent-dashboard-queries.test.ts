@@ -5,6 +5,7 @@ import {
   getChildStats,
   getChildMessages,
   ChildNotFoundError,
+  InvalidCursorError,
 } from "./parent-dashboard-queries.js";
 
 const range = { from: new Date("2026-10-01T00:00:00Z"), to: new Date("2026-10-10T00:00:00Z") };
@@ -12,10 +13,13 @@ const range = { from: new Date("2026-10-01T00:00:00Z"), to: new Date("2026-10-10
 function makePrisma(opts: { children: Array<{ id: string; parentOrganizationId: string | null }> }) {
   const queryRaw = vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const text = strings.join("?");
+    if (text.includes("LATERAL")) {
+      return (values[0] as string[]).map((id) => ({ organization_id: id, last_activity_at: new Date("2026-10-09T00:00:00Z") }));
+    }
     if (text.includes("FROM organizations")) {
       return (values[0] as string[]).map((id) => ({ id, name: `Name ${id}`, waba_connected: id === "c1" }));
     }
-    if (text.includes("max(m.created_at)")) {
+    if (text.includes("LATERAL")) {
       return (values[0] as string[]).map((id) => ({ organization_id: id, last_activity_at: new Date("2026-10-09T00:00:00Z") }));
     }
     if (text.includes("GROUP BY m.organization_id")) {
@@ -34,7 +38,7 @@ function makePrisma(opts: { children: Array<{ id: string; parentOrganizationId: 
         return c ? { parentOrganizationId: c.parentOrganizationId } : null;
       }),
     },
-    message: { findMany: vi.fn(async () => []) },
+    message: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => ({ id: "m0" }) as { id: string } | null) },
   };
   return { prisma: prisma as unknown as PrismaClient, queryRaw, raw: prisma };
 }
@@ -50,6 +54,7 @@ describe("getChildrenOverview", () => {
     const { prisma, queryRaw } = makePrisma({ children: kids });
     const out = await getChildrenOverview(prisma, "p1", range);
     expect(queryRaw).toHaveBeenCalledTimes(3);
+    expect(queryRaw.mock.calls.some((c) => (c[0] as TemplateStringsArray).join("?").includes("LEFT JOIN LATERAL"))).toBe(true);
     for (const call of queryRaw.mock.calls) {
       expect(call[1]).toEqual(["c1", "c2"]);
     }
@@ -110,12 +115,25 @@ describe("getChildMessages", () => {
     raw.message.findMany.mockResolvedValueOnce(rows as never);
     const out = await getChildMessages(prisma, "p1", "c1", { cursor: "m0", limit: 2 });
     const arg = (raw.message.findMany.mock.calls[0] as unknown as [Record<string, any>])[0];
-    expect(arg.where).toEqual({ organizationId: "c1" });
+    expect(arg.where).toEqual({
+      organizationId: "c1",
+      conversation: { organization: { parentOrganizationId: "p1" }, contact: { deletedAt: null } },
+    });
     expect(arg.take).toBe(3);
     expect(arg.cursor).toEqual({ id: "m0" });
     expect(out.items).toHaveLength(2);
     expect(out.nextCursor).toBe("m2");
     expect(out.items[0]).toMatchObject({ id: "m0", body: "hi", contactPhone: "+1", contactName: "A" });
+  });
+  it("rejects a cursor outside the child's messages before reading", async () => {
+    const { prisma, raw } = makePrisma({ children: kids });
+    raw.message.findFirst.mockResolvedValueOnce(null);
+    await expect(getChildMessages(prisma, "p1", "c1", { cursor: "foreign", limit: 10 })).rejects.toBeInstanceOf(InvalidCursorError);
+    expect(raw.message.findFirst).toHaveBeenCalledWith({
+      where: { id: "foreign", organizationId: "c1", conversation: { organization: { parentOrganizationId: "p1" } } },
+      select: { id: true },
+    });
+    expect(raw.message.findMany).not.toHaveBeenCalled();
   });
   it("throws for a non-child without touching messages", async () => {
     const { prisma, raw } = makePrisma({ children: kids });

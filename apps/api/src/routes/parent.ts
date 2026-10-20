@@ -7,6 +7,7 @@ import {
   getChildMessages,
   getChildrenOverview,
   getChildStats,
+  InvalidCursorError,
   type DateRange,
 } from "../lib/parent-dashboard-queries.js";
 
@@ -156,6 +157,9 @@ export const parentRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.send({ data: items, nextCursor });
       } catch (err) {
         if (err instanceof ChildNotFoundError) return forbiddenChild(reply);
+        if (err instanceof InvalidCursorError) {
+          return reply.status(400).send({ error: { code: "INVALID_CURSOR", message: "Invalid cursor" } });
+        }
         throw err;
       }
     },

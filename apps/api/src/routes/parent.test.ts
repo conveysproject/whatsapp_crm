@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({ children: [] as Array<{ id: string; parent: st
 const mockPrisma: Record<string, any> = vi.hoisted(() => ({
   $queryRaw: vi.fn(),
   organization: { findMany: vi.fn(), findUnique: vi.fn() },
-  message: { findMany: vi.fn() },
+  message: { findMany: vi.fn(), findFirst: vi.fn() },
   parentAuditEvent: { create: vi.fn() },
 }));
 vi.mock("../lib/prisma.js", () => ({ prisma: mockPrisma }));
@@ -61,13 +61,14 @@ beforeEach(async () => {
     const t = strings.join("?");
     const ids = values[0] as string[];
     if (t.includes("FROM organizations")) return ids.map((id) => ({ id, name: `N ${id}`, waba_connected: true }));
-    if (t.includes("max(m.created_at)")) return [];
+    if (t.includes("LATERAL")) return [];
     return ids.map((id) => ({ organization_id: id, sent: 1, delivered: 1, read: 1, failed: 0, received: 1 }));
   });
   mockPrisma.message.findMany.mockResolvedValue([
     { id: "m1", direction: "inbound", contentType: "text", body: "secret text", status: "read", isSystemMessage: false,
       sentAt: new Date(), createdAt: new Date(), conversation: { contact: { phoneNumber: "+1", name: "A" } } },
   ]);
+  mockPrisma.message.findFirst.mockResolvedValue({ id: "m0" });
   mockPrisma.parentAuditEvent.create.mockResolvedValue({});
   app = await buildApp();
 });
@@ -192,6 +193,29 @@ describe("GET /parent/children/:childId/messages", () => {
     expect(mockPrisma.message.findMany).not.toHaveBeenCalled();
     expect(mockPrisma.parentAuditEvent.create).not.toHaveBeenCalled();
   });
+  it("unknown id and the caller's own id give a byte-identical 403", async () => {
+    const foreign = await get("/v1/parent/children/x1/messages");
+    for (const id of ["nope", "p1"]) {
+      const res = await get(`/v1/parent/children/${id}/messages`);
+      expect(res.statusCode).toBe(403);
+      expect(res.body).toBe(foreign.body);
+    }
+    expect(mockPrisma.message.findMany).not.toHaveBeenCalled();
+    expect(mockPrisma.parentAuditEvent.create).not.toHaveBeenCalled();
+  });
+  it("a cursor from another org gives 400 INVALID_CURSOR, never reads, no audit row", async () => {
+    mockPrisma.message.findFirst.mockResolvedValue(null);
+    const res = await get("/v1/parent/children/c1/messages?cursor=foreign-msg");
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("INVALID_CURSOR");
+    expect(mockPrisma.message.findMany).not.toHaveBeenCalled();
+    expect(mockPrisma.parentAuditEvent.create).not.toHaveBeenCalled();
+  });
+  it("a childId over 64 chars is rejected by validation (400), nothing is read", async () => {
+    const res = await get(`/v1/parent/children/${"a".repeat(65)}/messages`);
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.message.findMany).not.toHaveBeenCalled();
+  });
   it("fails closed when the audit row cannot be written", async () => {
     mockPrisma.parentAuditEvent.create.mockRejectedValue(new Error("db down"));
     const res = await get("/v1/parent/children/c1/messages");
@@ -200,5 +224,25 @@ describe("GET /parent/children/:childId/messages", () => {
   });
   it("caps limit at 100 via schema", async () => {
     expect((await get("/v1/parent/children/c1/messages?limit=101")).statusCode).toBe(400);
+  });
+});
+
+describe("rate limit on messages", () => {
+  it("returns 429 on request 61 within the window", async () => {
+    const rl = Fastify({ logger: false });
+    const { default: rateLimit } = await import("@fastify/rate-limit");
+    await rl.register(rateLimit, { global: false });
+    rl.addHook("onRequest", async (request) => {
+      request.auth = auth;
+    });
+    const { parentRoutes } = await import("./parent.js");
+    await rl.register(parentRoutes, { prefix: "/v1" });
+    let last = 0;
+    for (let i = 0; i < 61; i++) {
+      last = (await rl.inject({ method: "GET", url: "/v1/parent/children/c1/messages" })).statusCode;
+      if (i < 60) expect(last).toBe(200);
+    }
+    expect(last).toBe(429);
+    await rl.close();
   });
 });
