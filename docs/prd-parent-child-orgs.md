@@ -1,5 +1,7 @@
 # PRD: Parent / child organizations
 
+Update 2026-10-20: the global flag PARENT_ORGS_ENABLED was removed; the per-organization capability (isParent) is the only gate.
+
 Status: APPROVED by the owner (2026-10-19). Next step: implementation plan.
 Evidence base: scan of `origin/main` (fe595ba2), read-only. Items marked **Unverified** were not read.
 

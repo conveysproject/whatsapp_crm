@@ -1,5 +1,7 @@
 # Parent / Child Organizations Implementation Plan
 
+Update 2026-10-20: the global flag PARENT_ORGS_ENABLED was removed; the per-organization capability (isParent) is the only gate.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A client (parent org) invites its customers as child orgs, monitors them on a new dashboard, sends for them through the API with one parent key, and can open a child as admin.
