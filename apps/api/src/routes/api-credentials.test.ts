@@ -311,4 +311,45 @@ describe("api-credentials: send_for_children scope", () => {
     expect((await create("send_for_children")).statusCode).toBe(400);
     expect(mockPrisma.apiKey.create).not.toHaveBeenCalled();
   });
+
+  describe("parent_access is required to manage scoped keys", () => {
+    const keyPerms = { settings_access: "allow", "settings_access@settings_api_key": "allow" };
+    const scoped = { id: "key-s", organizationId: "org-1", scopes: ["whatsapp", "send_for_children"], revokedAt: null };
+    const plain = { id: "key-p", organizationId: "org-1", scopes: ["whatsapp"], revokedAt: null };
+    let mgr: FastifyInstance;
+    beforeEach(async () => {
+      mockPrisma.apiKey.update.mockResolvedValue({ id: "key-s" });
+      mgr = await buildApp("manager", keyPerms);
+    });
+    afterEach(async () => { await mgr.close(); });
+
+    it("a manager with settings_api_key but no parent_access gets 403 creating a scoped key", async () => {
+      const res = await mgr.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: "P", scopes: ["send_for_children"] } });
+      expect(res.statusCode).toBe(403);
+      expect(mockPrisma.apiKey.create).not.toHaveBeenCalled();
+    });
+
+    it("...and 403 rotating or patching an existing scoped key; nothing is updated", async () => {
+      mockPrisma.apiKey.findFirst.mockResolvedValue(scoped);
+      expect((await mgr.inject({ method: "POST", url: "/v1/api-credentials/key-s/rotate" })).statusCode).toBe(403);
+      expect((await mgr.inject({ method: "PATCH", url: "/v1/api-credentials/key-s", payload: { callbackUrl: "https://x.example.com/h" } })).statusCode).toBe(403);
+      expect(mockPrisma.apiKey.update).not.toHaveBeenCalled();
+    });
+
+    it("with parent_access the same manager can create, rotate and patch it", async () => {
+      const m2 = await buildApp("manager", { ...keyPerms, parent_access: "allow" });
+      mockPrisma.apiKey.findFirst.mockResolvedValue(scoped);
+      expect((await m2.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: "P", scopes: ["send_for_children"] } })).statusCode).toBe(201);
+      expect((await m2.inject({ method: "POST", url: "/v1/api-credentials/key-s/rotate" })).statusCode).toBe(200);
+      await m2.close();
+    });
+
+    it("ordinary keys are unaffected for the same manager", async () => {
+      mockPrisma.apiKey.findFirst.mockResolvedValue(plain);
+      mockPrisma.apiKey.update.mockResolvedValue({ id: "key-p" });
+      expect((await mgr.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: "P" } })).statusCode).toBe(201);
+      expect((await mgr.inject({ method: "POST", url: "/v1/api-credentials/key-p/rotate" })).statusCode).toBe(200);
+      expect((await mgr.inject({ method: "PATCH", url: "/v1/api-credentials/key-p", payload: { name: "N" } })).statusCode).toBe(200);
+    });
+  });
 });
