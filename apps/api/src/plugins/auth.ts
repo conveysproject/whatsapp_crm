@@ -108,6 +108,8 @@ async function parentSessionStillValid(
     if (!parentOrgsEnabled()) return false;
     // strict lookup: the issuer's CURRENT org must be the parent org; inactive or deleted users fail.
     const issuer = await resolveAuthContext(fastify, payload.issuedBy, { strictOrganizationId: parentOrgId });
+    // The role check is the real gate (D15: only the parent's admin). canAccess always passes for admin,
+    // so it is kept only to stay aligned with parentGuard if admin ever stops being implicit.
     if (!issuer || issuer.role !== "admin" || !canAccess(issuer.role, issuer.permissions, "parent_access")) return false;
     if (!(await canBeParent(fastify.prisma, parentOrgId))) return false;
     return await isChildOf(fastify.prisma, parentOrgId, payload.organizationId);

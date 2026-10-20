@@ -187,14 +187,16 @@ export const parentRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       if (request.auth.impersonation) return forbiddenChild(reply); // no nested sessions
+      if (request.auth.role !== "admin") return forbiddenChild(reply); // D15: the parent's admin role only
       const { childId } = request.params;
       const actorId = request.auth.userId;
       const parentOrganizationId = request.auth.organizationId;
 
-      // Per-actor rate limit: max 10 tokens per hour (same counter pattern as the super-admin route).
+      // Per-actor rate limit: max 10 tokens per hour. Seed with SET NX EX so the counter always has a TTL
+      // (INCR then EXPIRE could leave an immortal counter if the process dies in between). Fails closed.
       const actorKey = `impersonate:parent-actor:${actorId}`;
+      await redis.set(actorKey, "0", "EX", 3600, "NX");
       const count = await redis.incr(actorKey);
-      if (count === 1) await redis.expire(actorKey, 3600);
       if (count > 10) {
         return reply.status(429).send({ error: { code: "RATE_LIMITED", message: "Impersonation limit reached (10/hour)" } });
       }
@@ -302,6 +304,7 @@ export const parentRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       if (request.auth.impersonation) return forbiddenChild(reply);
+      if (request.auth.role !== "admin") return forbiddenChild(reply);
       const { childId } = request.params;
       const { token, reason } = request.body;
       const actorId = request.auth.userId;
@@ -327,7 +330,7 @@ export const parentRoutes: FastifyPluginAsync = async (fastify) => {
         data: { mode: "edit", elevationReason: reason },
       });
       if (logged.count === 0) return sessionNotFound();
-      await redis.set(key, JSON.stringify({ ...payload, mode: "edit" }), "PX", ttlMs);
+      // Audit BEFORE the Redis write: if it throws, the session stays read-only (fail closed).
       await prisma.parentAuditEvent.create({
         data: {
           parentOrganizationId,
@@ -337,6 +340,12 @@ export const parentRoutes: FastifyPluginAsync = async (fastify) => {
           metadata: { targetUserId: payload.targetUserId, reason, remainingMs: ttlMs },
         },
       });
+      // XX: only overwrite a key that still exists, so an expired or concurrently ended session is never recreated.
+      const written = await redis.set(key, JSON.stringify({ ...payload, mode: "edit" }), "PX", ttlMs, "XX");
+      if (written !== "OK") {
+        await prisma.impersonationLog.updateMany({ where: { token, endedAt: null }, data: { endedAt: new Date() } });
+        return sessionNotFound();
+      }
       return reply.send({ data: { mode: "edit", expiresIn: Math.ceil(ttlMs / 1000) } });
     },
   );
@@ -358,6 +367,7 @@ export const parentRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       if (request.auth.impersonation) return forbiddenChild(reply);
+      if (request.auth.role !== "admin") return forbiddenChild(reply);
       const { childId } = request.params;
       const { token } = request.body;
       const actorId = request.auth.userId;

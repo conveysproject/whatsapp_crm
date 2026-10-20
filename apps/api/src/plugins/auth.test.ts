@@ -592,6 +592,7 @@ describe("auth plugin — parent impersonation of a child", () => {
     parentIsParent?: boolean;
     flag?: string;
     parentPerms?: Record<string, string>;
+    throwOn?: "child" | "parent";
   };
   let orgFindUnique: ReturnType<typeof vi.fn>;
   beforeAll(async () => {
@@ -627,8 +628,14 @@ describe("auth plugin — parent impersonation of a child", () => {
       return { teamId: null, teamRole: null, organizationId: org, ...row };
     }) as never);
     orgFindUnique.mockImplementation((async (args: { where: { id: string } }) => {
-      if (args.where.id === "p1") return { isParent: o.parentIsParent ?? true, parentOrganizationId: null };
-      if (args.where.id === "c1") return { parentOrganizationId: o.childParent === undefined ? "p1" : o.childParent };
+      if (args.where.id === "p1") {
+        if (o.throwOn === "parent") throw new Error("db error");
+        return { isParent: o.parentIsParent ?? true, parentOrganizationId: null };
+      }
+      if (args.where.id === "c1") {
+        if (o.throwOn === "child") throw new Error("db error");
+        return { parentOrganizationId: o.childParent === undefined ? "p1" : o.childParent };
+      }
       return null;
     }) as never);
     const prismaPlugin = (await import("./prisma.js")).default;
@@ -703,6 +710,16 @@ describe("auth plugin — parent impersonation of a child", () => {
   it("still rejects a superAdmin target and a target that left the child org", async () => {
     expect401(await run({ target: { role: "superAdmin" } }));
     expect401(await run({ target: null }));
+  });
+  it("a rejection inside the revalidation (isChildOf / canBeParent / issuer lookup throwing) is the same 401", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    // first make the helper wire up the happy path, then break one dependency per case
+    expect((await run()).statusCode).toBe(200);
+    for (const failing of ["child", "parent"] as const) {
+      const res = await run({ throwOn: failing });
+      expect401(res);
+    }
+    vi.mocked(prisma.user.findFirst).mockReset();
   });
   it("super-admin payloads (no issuedByOrgId) keep the super-admin rules: a normal user session is refused", async () => {
     const saPayload: Record<string, unknown> = { ...goodPayload };

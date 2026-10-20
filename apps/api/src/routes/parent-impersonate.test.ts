@@ -64,6 +64,9 @@ async function buildApp(): Promise<FastifyInstance> {
 }
 
 let app: FastifyInstance;
+/** Redis SETs that write a session key (the per-actor rate-limit seed is excluded). */
+const sessionSets = () =>
+  mockRedis.set.mock.calls.filter((c: unknown[]) => !String(c[0]).startsWith("impersonate:parent-actor:"));
 const impersonate = (childId: string, body: unknown = {}) =>
   app.inject({ method: "POST", url: `/v1/parent/children/${childId}/impersonate`, payload: body as object });
 
@@ -86,8 +89,9 @@ beforeEach(async () => {
     return {};
   });
   mockRedis.incr.mockResolvedValue(1);
-  mockRedis.set.mockImplementation(async () => {
-    calls.order.push("redis");
+  mockRedis.set.mockImplementation(async (key: string) => {
+    // the per-actor counter seed is not the session write
+    if (!String(key).startsWith("impersonate:parent-actor:")) calls.order.push("redis");
     return "OK";
   });
   mockRedis.pttl.mockResolvedValue(600_000);
@@ -125,7 +129,7 @@ describe("POST /v1/parent/children/:childId/impersonate", () => {
     expect(a.json()).toEqual({ error: { code: "FORBIDDEN_CHILD", message: "Not available" } });
     expect(b.json()).toEqual(a.json());
     expect(mockPrisma.impersonationLog.create).not.toHaveBeenCalled();
-    expect(mockRedis.set).not.toHaveBeenCalled();
+    expect(sessionSets()).toEqual([]);
   });
 
   it("refuses a superAdmin target with the generic 403 (the lookup also excludes them)", async () => {
@@ -133,7 +137,7 @@ describe("POST /v1/parent/children/:childId/impersonate", () => {
     const res = await impersonate("c1", { userId: "sa-9" });
     expect(res.statusCode).toBe(403);
     expect(mockPrisma.impersonationLog.create).not.toHaveBeenCalled();
-    expect(mockRedis.set).not.toHaveBeenCalled();
+    expect(sessionSets()).toEqual([]);
   });
 
   it("an explicit userId is looked up only inside the child org, active and not deleted", async () => {
@@ -176,7 +180,7 @@ describe("POST /v1/parent/children/:childId/impersonate", () => {
         token: body.token,
       }),
     });
-    const [key, value, ex, ttl] = mockRedis.set.mock.calls[0]!;
+    const [key, value, ex, ttl] = sessionSets()[0]!;
     expect(key).toBe(`impersonate:${body.token}`);
     expect(JSON.parse(value as string)).toEqual({
       organizationId: "c1",
@@ -202,7 +206,7 @@ describe("POST /v1/parent/children/:childId/impersonate", () => {
     mockPrisma.impersonationLog.create.mockRejectedValue(new Error("db down"));
     const res = await impersonate("c1");
     expect(res.statusCode).toBe(500);
-    expect(mockRedis.set).not.toHaveBeenCalled();
+    expect(sessionSets()).toEqual([]);
   });
 
   it("revokes the token and closes the log when the audit event cannot be written", async () => {
@@ -213,6 +217,35 @@ describe("POST /v1/parent/children/:childId/impersonate", () => {
     expect(mockPrisma.impersonationLog.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { endedAt: expect.any(Date) } }),
     );
+  });
+
+  it("seeds the per-actor counter atomically (SET NX EX) before INCR, never INCR-then-EXPIRE", async () => {
+    await impersonate("c1");
+    expect(mockRedis.set).toHaveBeenCalledWith("impersonate:parent-actor:pu-1", "0", "EX", 3600, "NX");
+    expect(mockRedis.expire).not.toHaveBeenCalled();
+    expect(mockRedis.incr).toHaveBeenCalledWith("impersonate:parent-actor:pu-1");
+  });
+
+  it("fails closed when the rate-limit counter is unavailable", async () => {
+    mockRedis.incr.mockRejectedValue(new Error("redis down"));
+    const res = await impersonate("c1");
+    expect(res.statusCode).toBe(500);
+    expect(mockPrisma.impersonationLog.create).not.toHaveBeenCalled();
+  });
+
+  it("only the parent's admin role may start: a manager with parent_access and a superAdmin get the generic 403 and no writes", async () => {
+    for (const role of ["manager", "superAdmin"] as const) {
+      vi.clearAllMocks();
+      calls.order = [];
+      auth = { ...baseAuth, role, permissions: { parent_access: "allow" } };
+      const res = await impersonate("c1");
+      expect(res.statusCode, role).toBe(403);
+      expect(res.json()).toEqual({ error: { code: "FORBIDDEN_CHILD", message: "Not available" } });
+      expect(mockRedis.incr).not.toHaveBeenCalled();
+      expect(sessionSets()).toEqual([]);
+      expect(mockPrisma.impersonationLog.create).not.toHaveBeenCalled();
+      expect(mockPrisma.parentAuditEvent.create).not.toHaveBeenCalled();
+    }
   });
 
   it("the 11th request in an hour is 429", async () => {
@@ -254,7 +287,7 @@ describe("parent session elevate and end", () => {
   it("rejects a reason outside 10-500 characters", async () => {
     expect((await elevate({ token: "t", reason: "short" })).statusCode).toBe(400);
     expect((await elevate({ token: "t", reason: "x".repeat(501) })).statusCode).toBe(400);
-    expect(mockRedis.set).not.toHaveBeenCalled();
+    expect(sessionSets()).toEqual([]);
   });
 
   it("elevates: log first, TTL preserved with PX, parent audit event", async () => {
@@ -264,37 +297,68 @@ describe("parent session elevate and end", () => {
     });
     const res = await elevate({ token: "t", reason });
     expect(res.statusCode).toBe(200);
-    expect(calls.order).toEqual(["log", "redis", "audit"]);
+    expect(calls.order).toEqual(["log", "audit", "redis"]);
     expect(mockPrisma.impersonationLog.updateMany).toHaveBeenCalledWith({
       where: { token: "t", actorId: "pu-1", endedAt: null },
       data: { mode: "edit", elevationReason: reason },
     });
-    const [key, value, px, ttl] = mockRedis.set.mock.calls[0]!;
+    const [key, value, px, ttl, xx] = sessionSets()[0]!;
     expect(key).toBe("impersonate:t");
     expect(JSON.parse(value as string)).toEqual({ ...livePayload, mode: "edit" });
-    expect([px, ttl]).toEqual(["PX", 600_000]);
+    expect([px, ttl, xx]).toEqual(["PX", 600_000, "XX"]);
     expect(mockPrisma.parentAuditEvent.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ action: "impersonate_elevated", childOrganizationId: "c1", actorUserId: "pu-1" }),
     });
+  });
+
+  it("a throwing audit write leaves the session read-only (Redis value untouched)", async () => {
+    mockPrisma.parentAuditEvent.create.mockRejectedValue(new Error("db down"));
+    const res = await elevate({ token: "t", reason });
+    expect(res.statusCode).toBe(500);
+    expect(sessionSets()).toEqual([]);
+  });
+
+  it("a key that expired or ended concurrently is never recreated (XX miss => session ended)", async () => {
+    mockRedis.set.mockResolvedValue(null);
+    const res = await elevate({ token: "t", reason });
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("NOT_FOUND");
+  });
+
+  it("elevate and end refuse a non-admin with parent_access and a superAdmin, with no writes", async () => {
+    for (const role of ["manager", "superAdmin"] as const) {
+      vi.clearAllMocks();
+      auth = { ...baseAuth, role, permissions: { parent_access: "allow" } };
+      const e = await elevate({ token: "t", reason });
+      const d = await end({ token: "t" });
+      expect(e.statusCode, role).toBe(403);
+      expect(d.statusCode, role).toBe(403);
+      expect(e.json()).toEqual({ error: { code: "FORBIDDEN_CHILD", message: "Not available" } });
+      expect(mockRedis.get).not.toHaveBeenCalled();
+      expect(sessionSets()).toEqual([]);
+      expect(mockRedis.del).not.toHaveBeenCalled();
+      expect(mockPrisma.impersonationLog.updateMany).not.toHaveBeenCalled();
+      expect(mockPrisma.parentAuditEvent.create).not.toHaveBeenCalled();
+    }
   });
 
   it("only the issuer can elevate (another admin of the same parent org gets 403)", async () => {
     auth = { ...baseAuth, userId: "pu-2" };
     const res = await elevate({ token: "t", reason });
     expect(res.statusCode).toBe(403);
-    expect(mockRedis.set).not.toHaveBeenCalled();
+    expect(sessionSets()).toEqual([]);
   });
 
   it("only the issuing session can elevate", async () => {
     auth = { ...baseAuth, sid: "sid-other" };
     expect((await elevate({ token: "t", reason })).statusCode).toBe(403);
-    expect(mockRedis.set).not.toHaveBeenCalled();
+    expect(sessionSets()).toEqual([]);
   });
 
   it("cannot elevate from inside an impersonation session", async () => {
     auth = { ...baseAuth, impersonation: { adminId: "pu-1", mode: "readonly", parentOrganizationId: "p1" } };
     expect((await elevate({ token: "t", reason })).statusCode).toBe(403);
-    expect(mockRedis.set).not.toHaveBeenCalled();
+    expect(sessionSets()).toEqual([]);
   });
 
   it("refuses a super-admin token (no issuedByOrgId) and a token for another child", async () => {
@@ -307,13 +371,13 @@ describe("parent session elevate and end", () => {
     mockRedis.get.mockResolvedValue(JSON.stringify(livePayload));
     mockIsChildOf.mockResolvedValue(false);
     expect((await elevate({ token: "t", reason })).statusCode).toBe(403);
-    expect(mockRedis.set).not.toHaveBeenCalled();
+    expect(sessionSets()).toEqual([]);
   });
 
   it("no Redis write when no open log row matches", async () => {
     mockPrisma.impersonationLog.updateMany.mockResolvedValue({ count: 0 });
     expect((await elevate({ token: "t", reason })).statusCode).toBe(404);
-    expect(mockRedis.set).not.toHaveBeenCalled();
+    expect(sessionSets()).toEqual([]);
   });
 
   it("already elevated is 409", async () => {

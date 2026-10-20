@@ -73,10 +73,11 @@ export const PARENT_SESSION_BLOCKED_PREFIXES: readonly string[] = [
   "/v1/client-invitations",
   "/v1/organization/parent-link",
   "/v1/api-credentials", // GETs list the child's public API keys
-  "/v1/users", // GETs expose the child's user list and permissions
   "/v1/invitations",
-  "/v1/vendor-settings", // holds the WhatsApp access token: a parent never sees a child's secrets
   "/v1/webhook-actions", // signing secrets and headers
+  // NOT here on purpose: /v1/users and /v1/vendor-settings GETs (the web app loads GET /v1/users/me and
+  // pickers; vendor-settings GET already strips whatsapp_access_token). Their writes stay blocked by
+  // BLOCKED_PREFIXES.
 ];
 
 /**

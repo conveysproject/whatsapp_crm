@@ -348,10 +348,16 @@ describe("parent-session guard rules", () => {
       "/v1/parent/children",
       "/v1/client-invitations",
       "/v1/organization/parent-link",
-      "/v1/vendor-settings",
+      "/v1/api-credentials",
       "/v1/webhook-actions",
+      "/v1/invitations",
     ]) {
       expect(classifyRoute("GET", p, true)).toBe("blocked");
+    }
+    // the app shell needs these reads in a parent session; their writes stay blocked
+    for (const p of ["/v1/users/me", "/v1/users", "/v1/vendor-settings"]) {
+      expect(classifyRoute("GET", p, true)).toBe("read-like");
+      for (const m of ["POST", "PUT", "PATCH", "DELETE"]) expect(classifyRoute(m, p, true)).toBe("blocked");
     }
     // super-admin sessions keep today's rules for these GETs
     expect(classifyRoute("GET", "/v1/parent/children")).toBe("read-like");
@@ -373,8 +379,14 @@ describe("parent-session guard rules", () => {
     const ok = async () => ({ ok: true });
     for (const url of [
       "/v1/contacts", "/v1/parent/children", "/v1/client-invitations", "/v1/organization/parent-link",
-      "/v1/api-credentials", "/v1/users", "/v1/admin/organizations", "/v1/vendor-settings", "/v1/webhook-actions",
+      "/v1/api-credentials", "/v1/users", "/v1/users/me", "/v1/admin/organizations", "/v1/vendor-settings",
+      "/v1/webhook-actions", "/v1/invitations",
     ]) app.get(url, ok);
+    app.put("/v1/users", ok);
+    app.put("/v1/vendor-settings", ok);
+    app.delete("/v1/users", ok);
+    app.delete("/v1/vendor-settings", ok);
+    app.post("/v1/vendor-settings", ok);
     for (const url of [
       "/v1/parent/children/c1/impersonate", "/v1/parent/children/c1/impersonate/elevate", "/v1/client-invitations",
       "/v1/api-credentials", "/v1/users", "/v1/invitations", "/v1/organizations", "/v1/admin/impersonation/elevate",
@@ -390,7 +402,7 @@ describe("parent-session guard rules", () => {
     const app = await build("edit");
     for (const url of [
       "/v1/parent/children", "/v1/client-invitations", "/v1/organization/parent-link", "/v1/api-credentials",
-      "/v1/users", "/v1/admin/organizations", "/v1/vendor-settings", "/v1/webhook-actions",
+      "/v1/admin/organizations", "/v1/webhook-actions", "/v1/invitations",
     ]) {
       const res = await app.inject({ method: "GET", url });
       expect(res.statusCode, url).toBe(403);
@@ -406,6 +418,24 @@ describe("parent-session guard rules", () => {
     }
     expect((await app.inject({ method: "DELETE", url: "/v1/parent/children/c1/impersonate" })).statusCode).toBe(403);
     await app.close();
+  });
+
+  it("parent session (read-only and edit): GET /v1/users/me, /v1/users and /v1/vendor-settings pass; their writes stay blocked", async () => {
+    for (const mode of ["readonly", "edit"] as const) {
+      const app = await build(mode);
+      for (const url of ["/v1/users/me", "/v1/users", "/v1/vendor-settings"]) {
+        expect((await app.inject({ method: "GET", url })).statusCode, `${mode} GET ${url}`).toBe(200);
+      }
+      for (const url of ["/v1/users", "/v1/vendor-settings"]) {
+        for (const method of ["POST", "PUT", "DELETE"] as const) {
+          const res = await app.inject({ method, url });
+          if (res.statusCode === 404) continue; // method not registered in this harness
+          expect(res.statusCode, `${mode} ${method} ${url}`).toBe(403);
+          expect(code(res)).toBe("IMPERSONATION_BLOCKED");
+        }
+      }
+      await app.close();
+    }
   });
 
   it("read-only parent session cannot write to a normal route, and reads pass", async () => {
