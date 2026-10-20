@@ -38,7 +38,7 @@ describe("retryDelayMs", () => {
 });
 
 describe("isPublicAuthPath", () => {
-  it.each(["/sign-in", "/sign-in/x", "/sign-up", "/forgot-password", "/reset-password", "/admin/sign-in", "/invitations/abc/accept"])(
+  it.each(["/sign-in", "/sign-in/x", "/sign-up", "/forgot-password", "/reset-password", "/admin/sign-in", "/invitations/abc/accept", "/client-invitations/abc/accept"])(
     "%s is public",
     (p) => expect(isPublicAuthPath(p)).toBe(true),
   );

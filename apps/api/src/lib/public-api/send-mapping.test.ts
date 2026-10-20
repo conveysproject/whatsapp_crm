@@ -6,6 +6,14 @@ const base = { src: "+14155552671", dst: "+14155552672", type: "whatsapp" };
 const bad = (b: unknown) => expect(() => parseSendBody(b)).toThrow(SendValidationError);
 
 describe("parseSendBody", () => {
+  it("waba_id is optional and trimmed; a malformed one is ignored and flagged", () => {
+    expect(parseSendBody({ ...base, text: "hi" }).wabaId).toBeNull();
+    expect(parseSendBody({ ...base, text: "hi", waba_id: " 123 " }).wabaId).toBe("123");
+    const bad = parseSendBody({ ...base, text: "hi", waba_id: 123 });
+    expect(bad.wabaId).toBeNull();
+    expect(bad.wabaMalformed).toBe(true);
+    expect(parseSendBody({ ...base, text: "hi", waba_id: "x".repeat(65) }).wabaMalformed).toBe(true);
+  });
   it("parses a text message", () => {
     const p = parseSendBody({ ...base, text: "hello", url: "https://c.example.com/cb", method: "get" });
     expect(p.src).toBe("14155552671");

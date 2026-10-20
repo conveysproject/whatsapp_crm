@@ -22,6 +22,7 @@ const PUBLIC: RegExp[] = [
   /^\/robots\.txt$/,
   /^\/llms\.txt$/,
   /^\/invitations\/[^/]+\/accept$/,
+  /^\/client-invitations\/[^/]+\/accept$/,
   /^\/api\/internal\/.*$/,
 ];
 const isPublic = (p: string) => PUBLIC.some((r) => r.test(p));

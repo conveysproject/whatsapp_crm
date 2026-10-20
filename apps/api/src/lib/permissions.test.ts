@@ -105,6 +105,16 @@ describe("DEFAULT_ROLE_PERMISSIONS", () => {
     expect(DEFAULT_ROLE_PERMISSIONS.agent["automation_access@automation_bot_flows"]).toBeUndefined();
   });
 
+  it("parent_access: admin yes; manager, agent, viewer, whatsappAdmin no", () => {
+    const can = (r: keyof typeof DEFAULT_ROLE_PERMISSIONS) =>
+      canAccess(r, DEFAULT_ROLE_PERMISSIONS[r], "parent_access");
+    expect(can("admin")).toBe(true);
+    expect(can("manager")).toBe(false);
+    expect(can("agent")).toBe(false);
+    expect(can("viewer")).toBe(false);
+    expect(can("whatsappAdmin")).toBe(false);
+  });
+
   it("whatsappAdmin gets WhatsApp Account settings and nothing else", () => {
     const perms = DEFAULT_ROLE_PERMISSIONS.whatsappAdmin;
     expect(perms).toEqual({ settings_access: "allow", "settings_access@settings_whatsapp": "allow" });

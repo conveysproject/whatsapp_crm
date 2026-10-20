@@ -15,4 +15,12 @@ describe("GET /api/impersonation/end", () => {
     expect(setCookie).toMatch(/imp_meta=;/);
     expect(setCookie).toMatch(/Max-Age=0/i);
   });
+
+  it("sends a parent-issued session back to /parent", async () => {
+    const { GET } = await import("./route");
+    const { NextRequest } = await import("next/server");
+    const meta = encodeURIComponent(JSON.stringify({ orgId: "c1", source: "parent" }));
+    const res = GET(new NextRequest("http://localhost:3000/api/impersonation/end", { headers: { cookie: `imp_meta=${meta}` } }));
+    expect(new URL(res.headers.get("location")!).pathname).toBe("/parent");
+  });
 });

@@ -109,6 +109,22 @@ describe("BFF auth routes", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("client-invitations/accept maps the token to the public auth route, sets cookies and validates it", async () => {
+    fetchMock.mockResolvedValue(json(201, { accessToken: "A", refreshToken: "R", deviceId: "D", organizationId: "o" }));
+    const res = await post("client-invitations/accept/abc-123", { firstName: "A", client: "mobile", accessToken: "x" });
+    expect(res.status).toBe(201);
+    expect(fetchMock.mock.calls[0]![0]).toBe("http://api.test/v1/auth/client-invitations/abc-123/accept");
+    const sent = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(sent["client"]).toBe("web");
+    expect(sent["accessToken"]).toBeUndefined();
+    expect(res.cookies.get("wb_rt")?.value).toBe("R");
+    expect(await res.json()).toEqual({ organizationId: "o" });
+    fetchMock.mockClear();
+    expect((await post("client-invitations/accept/bad%2Ftoken", {})).status).toBe(400);
+    expect((await post("client-invitations/accept/abc", {}, { origin: "https://evil.example" })).status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("sign-up never sets cookies", async () => {
     fetchMock.mockResolvedValue(json(200, { accessToken: "A", refreshToken: "R" }));
     const res = await post("sign-up", { email: "a@b.co" });

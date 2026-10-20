@@ -15,6 +15,12 @@ export interface ImpersonationSession {
   mode: "readonly" | "edit";
   /** epoch milliseconds */
   expiresAt: number;
+  /**
+   * Who issued the session. Absent = a platform super admin (/v1/admin/...).
+   * "parent" = a parent organization's admin opening a client org (/v1/parent/children/:orgId/...);
+   * `orgId` is then the child organization.
+   */
+  source?: "parent";
 }
 
 export interface InterceptorConfig {
@@ -26,7 +32,7 @@ export interface InterceptorConfig {
 
 /** Calls that must be made as the REAL super admin, never with the impersonation header. */
 const ADMIN_IMPERSONATION_PATH =
-  /^(?:\/api)?\/v1\/admin\/(?:impersonation(?:\/|$)|organizations\/[^/]+(?:\/users\/[^/]+)?\/impersonate\/?$)/;
+  /^(?:\/api)?\/v1\/(?:admin\/(?:impersonation(?:\/|$)|organizations\/[^/]+(?:\/users\/[^/]+)?\/impersonate\/?$)|parent\/children\/[^/]+\/impersonate(?:\/elevate)?\/?$)/;
 
 function resolveUrl(input: RequestInfo | URL, origin: string): URL | null {
   try {
@@ -74,6 +80,24 @@ export function parseSessionObject(value: unknown, now: number = Date.now()): Im
     userName: String(s.userName ?? "").slice(0, 200),
     mode: s.mode === "edit" ? "edit" : "readonly",
     expiresAt: s.expiresAt,
+    ...(s.source === "parent" ? { source: "parent" as const } : {}),
+  };
+}
+
+/** Where to go when a session ends: a parent returns to its Clients page, a super admin to the org list. */
+export function impersonationExitPath(session: Pick<ImpersonationSession, "source" | "orgId"> | null): string {
+  return session?.source === "parent" ? "/parent" : "/admin/organizations";
+}
+
+/** API paths used by the banner to elevate or end a session, by who issued it. */
+export function impersonationEndpoints(session: Pick<ImpersonationSession, "source" | "orgId">): { end: string; elevate: string } {
+  if (session.source === "parent") {
+    const base = `/v1/parent/children/${encodeURIComponent(session.orgId)}/impersonate`;
+    return { end: base, elevate: `${base}/elevate` };
+  }
+  return {
+    end: `/v1/admin/organizations/${session.orgId}/impersonate`,
+    elevate: "/v1/admin/impersonation/elevate",
   };
 }
 

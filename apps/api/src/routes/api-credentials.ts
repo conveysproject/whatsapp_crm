@@ -1,11 +1,15 @@
-import type { FastifyPluginAsync, FastifyReply } from "fastify";
-import { canAccessSub } from "../lib/permissions.js";
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import { canAccess, canAccessSub } from "../lib/permissions.js";
 import { writeAdminAudit } from "../lib/audit.js";
 import { assertSafeCallbackUrl, UnsafeUrlError } from "../lib/public-api/safe-url.js";
 import { checkPublicApiAccess, MAX_ACTIVE_CREDENTIALS } from "../lib/public-api/access.js";
+import { canBeParent, parentOrgsEnabled } from "../lib/parent-orgs.js";
+import { SEND_FOR_CHILDREN_SCOPE } from "../lib/public-api/child-send.js";
 import { encryptToken, hashToken, newAuthToken, TokenKeyError } from "../lib/public-api/credentials.js";
 
-interface CredentialBody { name?: string; callbackUrl?: string | null; inboundUrl?: string | null }
+interface CredentialBody { name?: string; callbackUrl?: string | null; inboundUrl?: string | null; scopes?: string[] }
+
+const ALLOWED_SCOPES: readonly string[] = ["whatsapp", SEND_FOR_CHILDREN_SCOPE];
 
 const MAX_NAME = 100;
 const MAX_URL = 2048;
@@ -25,6 +29,12 @@ function invalidCredentialBody(body: unknown): string | null {
     const len = name.trim().length;
     if (len < 1 || len > MAX_NAME) return `name must be 1 to ${MAX_NAME} characters`;
   }
+  const scopes = b["scopes"];
+  if (scopes !== undefined) {
+    if (!Array.isArray(scopes) || scopes.length > ALLOWED_SCOPES.length || scopes.some((x) => typeof x !== "string" || !ALLOWED_SCOPES.includes(x))) {
+      return `scopes must be an array containing only: ${ALLOWED_SCOPES.join(", ")}`;
+    }
+  }
   for (const field of ["callbackUrl", "inboundUrl"] as const) {
     const v = b[field];
     if (v === undefined || v === null) continue;
@@ -37,7 +47,7 @@ function invalidCredentialBody(body: unknown): string | null {
 const invalidBody = (reply: FastifyReply, message: string) => reply.status(400).send({ error: { code: "INVALID_BODY", message } });
 
 const LIST_SELECT = {
-  id: true, name: true, callbackUrl: true, inboundUrl: true, lastUsedAt: true, revokedAt: true, createdAt: true,
+  id: true, name: true, scopes: true, callbackUrl: true, inboundUrl: true, lastUsedAt: true, revokedAt: true, createdAt: true,
 } as const;
 
 async function validUrl(reply: FastifyReply, url: string | null | undefined, field: string): Promise<boolean> {
@@ -48,6 +58,16 @@ async function validUrl(reply: FastifyReply, url: string | null | undefined, fie
     await reply.status(400).send({ error: { code: "INVALID_URL", message: `${field}: ${err.message}` } });
     return false;
   }
+}
+
+/** Parent powers (D15): the admin role only, and it must also hold parent_access. */
+function isParentAdmin(request: FastifyRequest): boolean {
+  return request.auth.role === "admin" && canAccess(request.auth.role, request.auth.permissions, "parent_access");
+}
+
+/** A key that can send for children is managed (patched, rotated) only by a parent admin. */
+function mayManageKey(request: FastifyRequest, scopes: string[]): boolean {
+  return !(scopes ?? []).includes(SEND_FOR_CHILDREN_SCOPE) || isParentAdmin(request);
 }
 
 export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
@@ -78,8 +98,13 @@ export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId, userId } = request.auth;
     const bodyError = invalidCredentialBody(request.body);
     if (bodyError) return invalidBody(reply, bodyError);
-    const { name, callbackUrl, inboundUrl } = request.body ?? {};
+    const { name, callbackUrl, inboundUrl, scopes: requestedScopes } = request.body ?? {};
     if (!name?.trim()) return reply.status(400).send({ error: { code: "MISSING_NAME", message: "name is required" } });
+    // The extra scope is only for a parent organization with the feature on; everyone else gets one generic refusal.
+    const wantsChildren = requestedScopes?.includes(SEND_FOR_CHILDREN_SCOPE) ?? false;
+    if (wantsChildren && !(isParentAdmin(request) && parentOrgsEnabled() && (await canBeParent(fastify.prisma, organizationId)))) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Not available" } });
+    }
     if (!(await validUrl(reply, callbackUrl, "callbackUrl"))) return reply;
     if (!(await validUrl(reply, inboundUrl, "inboundUrl"))) return reply;
 
@@ -98,12 +123,12 @@ export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
     }
     const row = await fastify.prisma.apiKey.create({
       data: {
-        organizationId, name: name.trim(), keyHash: hashToken(token), tokenEnc, scopes: ["whatsapp"],
+        organizationId, name: name.trim(), keyHash: hashToken(token), tokenEnc, scopes: wantsChildren ? ["whatsapp", SEND_FOR_CHILDREN_SCOPE] : ["whatsapp"],
         createdBy: userId, callbackUrl: callbackUrl || null, inboundUrl: inboundUrl || null,
       },
       select: { id: true, name: true, createdAt: true },
     });
-    writeAdminAudit({ prisma: fastify.prisma, actorId: userId, action: "api_credential.create", targetType: "api_credential", targetId: row.id, metadata: { organizationId }, request });
+    writeAdminAudit({ prisma: fastify.prisma, actorId: userId, action: "api_credential.create", targetType: "api_credential", targetId: row.id, metadata: { organizationId, scopes: wantsChildren ? ["whatsapp", SEND_FOR_CHILDREN_SCOPE] : ["whatsapp"] }, request });
     return reply.status(201).send({ data: { authId: row.id, authToken: token, name: row.name, createdAt: row.createdAt } });
   });
 
@@ -111,6 +136,7 @@ export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId, userId } = request.auth;
     const existing = await fastify.prisma.apiKey.findFirst({ where: { id: request.params.id, organizationId, revokedAt: null } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Credential not found" } });
+    if (!mayManageKey(request, existing.scopes)) return reply.status(403).send({ error: { code: "FORBIDDEN", message: "parent_access permission required" } });
     const bodyError = invalidCredentialBody(request.body);
     if (bodyError) return invalidBody(reply, bodyError);
     const { name, callbackUrl, inboundUrl } = request.body ?? {};
@@ -133,6 +159,7 @@ export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId, userId } = request.auth;
     const existing = await fastify.prisma.apiKey.findFirst({ where: { id: request.params.id, organizationId, revokedAt: null } });
     if (!existing) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Credential not found" } });
+    if (!mayManageKey(request, existing.scopes)) return reply.status(403).send({ error: { code: "FORBIDDEN", message: "parent_access permission required" } });
     const token = newAuthToken();
     let tokenEnc: string;
     try { tokenEnc = encryptToken(token); }

@@ -6,6 +6,7 @@ import { sessionRoutes } from "./session.js";
 import { jwksRoutes } from "./jwks.js";
 import { securityRoutes } from "./security.js";
 import { invitationAcceptRoutes } from "./invitations.js";
+import { clientInvitationAcceptRoutes } from "./client-invitations.js";
 import { passwordChangeRoutes, passwordRoutes } from "./password.js";
 import { phoneRoutes, whatsappSigninRoutes } from "./whatsapp.js";
 import { methodsRoutes, oauthAccountRoutes, oauthRoutes } from "./oauth.js";
@@ -24,6 +25,7 @@ const credentialRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(signinRoutes);
   await fastify.register(passwordRoutes);
   await fastify.register(invitationAcceptRoutes);
+  await fastify.register(clientInvitationAcceptRoutes);
   await fastify.register(whatsappSigninRoutes);
   await fastify.register(oauthRoutes);
 };

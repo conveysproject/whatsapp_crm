@@ -21,12 +21,17 @@ function allowedOrgs(): string[] {
  * 2. Per-org kill switch: vendor setting `plan_feature_public_api_blocked` = "1" | "true" blocks the org.
  * Callers must return the same response for both reasons so the reason is not an oracle.
  */
+/** Per-org kill switch only (no platform flag, no rollout allow-list). Used for the child org of a parent-key send. */
+export async function isOrgBlockedFromPublicApi(prisma: PrismaClient, organizationId: string): Promise<boolean> {
+  const row = await prisma.vendorSetting.findFirst({ where: { organizationId, key: BLOCK_KEY }, select: { value: true } });
+  const v = row?.value?.trim().toLowerCase();
+  return v === "1" || v === "true";
+}
+
 export async function checkPublicApiAccess(prisma: PrismaClient, organizationId: string): Promise<PublicApiAccess> {
   if (process.env["PUBLIC_API_ENABLED"] !== "true") return { allowed: false, reason: "not_allowed" };
   const list = allowedOrgs();
   if (list.length > 0 && !list.includes(organizationId)) return { allowed: false, reason: "not_allowed" };
-  const row = await prisma.vendorSetting.findFirst({ where: { organizationId, key: BLOCK_KEY }, select: { value: true } });
-  const v = row?.value?.trim().toLowerCase();
-  if (v === "1" || v === "true") return { allowed: false, reason: "blocked" };
+  if (await isOrgBlockedFromPublicApi(prisma, organizationId)) return { allowed: false, reason: "blocked" };
   return { allowed: true };
 }

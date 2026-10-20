@@ -1,10 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const { prisma, enqueueCb, wa, workerCtor, checkAccess } = vi.hoisted(() => ({
+const { prisma, enqueueCb, wa, workerCtor, checkAccess, isBlocked } = vi.hoisted(() => ({
   checkAccess: vi.fn(),
+  isBlocked: vi.fn(),
   prisma: {
     message: { findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     organization: { findUnique: vi.fn() },
+    apiKey: { findUnique: vi.fn() },
+    vendorSetting: { findFirst: vi.fn() },
     conversation: { update: vi.fn() },
   },
   enqueueCb: vi.fn(),
@@ -19,7 +22,7 @@ vi.mock("bullmq", () => {
 });
 vi.mock("../lib/prisma.js", () => ({ prisma }));
 vi.mock("../lib/public-api/callbacks.js", () => ({ enqueueStatusCallback: (...a: unknown[]) => enqueueCb(...a) }));
-vi.mock("../lib/public-api/access.js", () => ({ checkPublicApiAccess: (...a: unknown[]) => checkAccess(...a) }));
+vi.mock("../lib/public-api/access.js", () => ({ checkPublicApiAccess: (...a: unknown[]) => checkAccess(...a), isOrgBlockedFromPublicApi: (...a: unknown[]) => isBlocked(...a) }));
 vi.mock("../lib/public-api/queues.js", () => ({ publicApiSendQueue: {}, publicApiCallbackQueue: {} }));
 vi.mock("../lib/queue.js", () => ({ redisConnection: {} }));
 vi.mock("../lib/io-ref.js", () => ({ getIo: () => null }));
@@ -212,5 +215,67 @@ describe("handleSendJobFailed", () => {
     expect(logged).not.toContain("14155552672");
     expect(logged).not.toContain("secret");
     errSpy.mockRestore();
+  });
+});
+
+describe("processSendJob for a parent-key send", () => {
+  const viaJob = () => ({ data: { messageId: "m1", organizationId: "child-1", viaParentOrgId: "parent-1", apiKeyId: "k1", to: "14155552672", content: { kind: "text", text: "hi" } } }) as never;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma.message.findFirst.mockResolvedValue({ id: "m1", status: "sending", conversationId: "conv-1" });
+    prisma.message.update.mockResolvedValue({});
+    prisma.message.updateMany.mockResolvedValue({ count: 1 });
+    prisma.conversation.update.mockResolvedValue({});
+    checkAccess.mockResolvedValue({ allowed: true });
+    wa.sendTextMessage.mockResolvedValue({ messageId: "wamid.1" });
+    enqueueCb.mockResolvedValue(undefined);
+    process.env["PARENT_ORGS_ENABLED"] = "true";
+    prisma.apiKey.findUnique.mockResolvedValue({ organizationId: "parent-1", revokedAt: null, scopes: ["whatsapp", "send_for_children"] });
+    isBlocked.mockResolvedValue(false);
+  });
+  afterEach(() => { delete process.env["PARENT_ORGS_ENABLED"]; });
+
+  const orgsOk = () => prisma.organization.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+    where.id === "child-1" ? { parentOrganizationId: "parent-1", phoneNumberId: "pn-child", wabaAccessToken: "tok-child" } : { isParent: true, parentOrganizationId: null });
+  const expectFailedUnsent = () => {
+    expect(wa.sendTextMessage).not.toHaveBeenCalled();
+    expect(enqueueCb).toHaveBeenCalledWith(prisma, "m1", "failed", { errorCode: null });
+  };
+
+  it.each([
+    ["key revoked", () => prisma.apiKey.findUnique.mockResolvedValue({ organizationId: "parent-1", revokedAt: new Date(), scopes: ["send_for_children"] })],
+    ["scope removed", () => prisma.apiKey.findUnique.mockResolvedValue({ organizationId: "parent-1", revokedAt: null, scopes: ["whatsapp"] })],
+    ["key gone", () => prisma.apiKey.findUnique.mockResolvedValue(null)],
+    ["flag off", () => { delete process.env["PARENT_ORGS_ENABLED"]; }],
+    ["parent no longer a parent", () => prisma.organization.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === "child-1" ? { parentOrganizationId: "parent-1", phoneNumberId: "p", wabaAccessToken: "t" } : { isParent: false, parentOrganizationId: null })],
+    ["child blocked from the API", () => isBlocked.mockResolvedValue(true)],
+  ])("fails without sending when %s", async (_n, arrange) => {
+    orgsOk();
+    arrange();
+    await processSendJob(viaJob());
+    expectFailedUnsent();
+  });
+
+  it("a job without apiKeyId (old payload) fails closed", async () => {
+    orgsOk();
+    await processSendJob({ data: { messageId: "m1", organizationId: "child-1", viaParentOrgId: "parent-1", to: "1", content: { kind: "text", text: "hi" } } } as never);
+    expectFailedUnsent();
+  });
+
+  it("sends with the CHILD's phone number id and token while the link holds", async () => {
+    prisma.organization.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === "child-1" ? { parentOrganizationId: "parent-1", phoneNumberId: "pn-child", wabaAccessToken: "tok-child" } : { isParent: true, parentOrganizationId: null, phoneNumberId: "pn-parent", wabaAccessToken: "tok-parent" });
+    await processSendJob(viaJob());
+    expect(wa.sendTextMessage).toHaveBeenCalledWith("pn-child", "14155552672", "hi", "tok-child");
+    expect(checkAccess).toHaveBeenCalledWith(prisma, "parent-1");
+  });
+
+  it("fails the message without sending when the child was unlinked after acceptance", async () => {
+    prisma.organization.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === "child-1" ? { parentOrganizationId: null, phoneNumberId: "pn-child", wabaAccessToken: "tok-child" } : { isParent: true, parentOrganizationId: null });
+    await processSendJob(viaJob());
+    expect(wa.sendTextMessage).not.toHaveBeenCalled();
+    expect(enqueueCb).toHaveBeenCalledWith(prisma, "m1", "failed", { errorCode: null });
   });
 });

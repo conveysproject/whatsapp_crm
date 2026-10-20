@@ -6,6 +6,11 @@ import { defaultsForRole } from "../lib/default-role-permissions.js";
 const VALID_ROLES = ["superAdmin", "admin", "manager", "agent", "viewer"] as const;
 type RoleKey = (typeof VALID_ROLES)[number];
 
+/** parent_access and any future parent_* key (also as a parent of sub-keys, "parent_x@y"). */
+function isParentPermissionKey(key: string): boolean {
+  return key.startsWith("parent_");
+}
+
 function settingKey(role: string): string {
   return `role_permissions_${role}`;
 }
@@ -88,6 +93,14 @@ export const rolesRouter: FastifyPluginAsync = async (fastify) => {
       // Hierarchy guard: can only modify roles strictly below your own (no self-modify).
       if (!editableRolesFor(authRole).includes(request.params.role as RoleKey)) {
         return reply.status(403).send({ error: { code: "FORBIDDEN", message: `You cannot modify the ${request.params.role} role` } });
+      }
+
+      // D15: parent powers belong to the admin role only and can never be granted to a lower role.
+      // (On the admin role itself the key is inert: admin always passes canAccess.)
+      if (request.params.role !== "admin" && Object.keys(request.body.permissions).some(isParentPermissionKey)) {
+        return reply.status(400).send({
+          error: { code: "PERMISSION_NOT_GRANTABLE", message: "Parent account permissions belong to the admin role only" },
+        });
       }
 
       const key = settingKey(request.params.role);

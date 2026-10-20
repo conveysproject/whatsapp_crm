@@ -6,6 +6,8 @@ import {
   parseSessionObject,
   decideResync,
   isImpersonationAdminPath,
+  impersonationEndpoints,
+  impersonationExitPath,
   shouldRunImpersonationRuntime,
   startResyncListeners,
 } from "./impersonation";
@@ -211,5 +213,43 @@ describe("impersonation runtime gating", () => {
     cleanup();
     expect(win.removeEventListener).toHaveBeenCalledWith("focus", resync);
     expect(doc.removeEventListener).toHaveBeenCalledWith("visibilitychange", onVisible);
+  });
+});
+
+describe("parent-issued sessions", () => {
+  const base = { token: "t".repeat(16), orgId: "child1", orgName: "Client", userId: "u", userName: "A", mode: "readonly", expiresAt: Date.now() + 60_000 };
+
+  it("keeps source=parent and drops any other source value", () => {
+    expect(parseSessionObject({ ...base, source: "parent" })?.source).toBe("parent");
+    expect(parseSessionObject({ ...base, source: "admin" })?.source).toBeUndefined();
+    expect(parseSessionObject(base)?.source).toBeUndefined();
+  });
+
+  it("never attaches the token to the parent start, elevate or end calls", () => {
+    for (const p of ["/api/v1/parent/children/c1/impersonate", "/api/v1/parent/children/c1/impersonate/elevate", "http://localhost:4000/v1/parent/children/c1/impersonate"]) {
+      expect(shouldAttachImpersonationToken(p, config)).toBe(false);
+    }
+    expect(shouldAttachImpersonationToken("/api/v1/parent/children/c1/stats", config)).toBe(true);
+    expect(isImpersonationAdminPath("/v1/parent/children/c1/impersonate")).toBe(true);
+    expect(isImpersonationAdminPath("/v1/parent/children/c1/messages")).toBe(false);
+  });
+
+  it("ends and elevates through the parent routes, and exits to /parent", () => {
+    const parent = { source: "parent" as const, orgId: "child1" };
+    expect(impersonationEndpoints(parent)).toEqual({
+      end: "/v1/parent/children/child1/impersonate",
+      elevate: "/v1/parent/children/child1/impersonate/elevate",
+    });
+    expect(impersonationExitPath(parent)).toBe("/parent");
+  });
+
+  it("super-admin sessions keep the admin routes and exit to the org list", () => {
+    const admin = { orgId: "o1" };
+    expect(impersonationEndpoints(admin)).toEqual({
+      end: "/v1/admin/organizations/o1/impersonate",
+      elevate: "/v1/admin/impersonation/elevate",
+    });
+    expect(impersonationExitPath(admin)).toBe("/admin/organizations");
+    expect(impersonationExitPath(null)).toBe("/admin/organizations");
   });
 });

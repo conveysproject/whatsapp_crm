@@ -116,7 +116,7 @@ describe("public API usage hook", () => {
   it("the hook function never throws when recording throws (the response is already sent when onResponse runs)", async () => {
     const { recordUsageOnResponse } = await import("./index.js");
     h.record.mockImplementation(() => { throw new Error("recorder down"); });
-    const request = { method: "GET", routeOptions: { url: "/x" }, id: "r1", publicApi: { organizationId: "o", apiKeyId: "k" } };
+    const request = { method: "GET", routeOptions: { url: "/x" }, id: "r1", publicApi: { organizationId: "o", apiKeyId: "k", scopes: ["whatsapp"] } };
     const reply = { statusCode: 200, elapsedTime: 3.2 };
     expect(() => recordUsageOnResponse(request as never, reply as never)).not.toThrow();
     expect(h.record).toHaveBeenCalledTimes(1);

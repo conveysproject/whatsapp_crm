@@ -16,6 +16,7 @@ export const ERROR_CATALOG = {
   AUTH_ID_MISMATCH: { message: "The auth_id in the URL does not match the username in the Authorization header.", hint: "Use the same auth_id in /v1/Account/{auth_id}/ and as the Basic-auth username." },
   AUTH_INVALID: { message: "The auth_id or auth token is invalid, or the credential was revoked.", hint: "Check both values, or create a new credential in WBMSG under Settings > API Credentials." },
   ACCOUNT_INACTIVE: { message: "This account is not active.", hint: "Contact WBMSG support." },
+  FORBIDDEN_CHILD: { message: "Not available." },
   API_NOT_AVAILABLE: { message: "API access is not available for this account.", hint: "Contact WBMSG support to enable it." },
   NOT_FOUND: { message: "The requested resource was not found.", hint: "Check the URL path and the id in it." },
   MESSAGE_NOT_FOUND: { message: "Message not found.", hint: "Check the message_uuid; it must belong to this account." },
