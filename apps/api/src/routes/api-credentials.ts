@@ -3,9 +3,13 @@ import { canAccessSub } from "../lib/permissions.js";
 import { writeAdminAudit } from "../lib/audit.js";
 import { assertSafeCallbackUrl, UnsafeUrlError } from "../lib/public-api/safe-url.js";
 import { checkPublicApiAccess, MAX_ACTIVE_CREDENTIALS } from "../lib/public-api/access.js";
+import { canBeParent, parentOrgsEnabled } from "../lib/parent-orgs.js";
+import { SEND_FOR_CHILDREN_SCOPE } from "../lib/public-api/child-send.js";
 import { encryptToken, hashToken, newAuthToken, TokenKeyError } from "../lib/public-api/credentials.js";
 
-interface CredentialBody { name?: string; callbackUrl?: string | null; inboundUrl?: string | null }
+interface CredentialBody { name?: string; callbackUrl?: string | null; inboundUrl?: string | null; scopes?: string[] }
+
+const ALLOWED_SCOPES: readonly string[] = ["whatsapp", SEND_FOR_CHILDREN_SCOPE];
 
 const MAX_NAME = 100;
 const MAX_URL = 2048;
@@ -24,6 +28,12 @@ function invalidCredentialBody(body: unknown): string | null {
     if (typeof name !== "string") return "name must be a string";
     const len = name.trim().length;
     if (len < 1 || len > MAX_NAME) return `name must be 1 to ${MAX_NAME} characters`;
+  }
+  const scopes = b["scopes"];
+  if (scopes !== undefined) {
+    if (!Array.isArray(scopes) || scopes.length > ALLOWED_SCOPES.length || scopes.some((x) => typeof x !== "string" || !ALLOWED_SCOPES.includes(x))) {
+      return `scopes must be an array containing only: ${ALLOWED_SCOPES.join(", ")}`;
+    }
   }
   for (const field of ["callbackUrl", "inboundUrl"] as const) {
     const v = b[field];
@@ -78,8 +88,13 @@ export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
     const { organizationId, userId } = request.auth;
     const bodyError = invalidCredentialBody(request.body);
     if (bodyError) return invalidBody(reply, bodyError);
-    const { name, callbackUrl, inboundUrl } = request.body ?? {};
+    const { name, callbackUrl, inboundUrl, scopes: requestedScopes } = request.body ?? {};
     if (!name?.trim()) return reply.status(400).send({ error: { code: "MISSING_NAME", message: "name is required" } });
+    // The extra scope is only for a parent organization with the feature on; everyone else gets one generic refusal.
+    const wantsChildren = requestedScopes?.includes(SEND_FOR_CHILDREN_SCOPE) ?? false;
+    if (wantsChildren && !(parentOrgsEnabled() && (await canBeParent(fastify.prisma, organizationId)))) {
+      return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Not available" } });
+    }
     if (!(await validUrl(reply, callbackUrl, "callbackUrl"))) return reply;
     if (!(await validUrl(reply, inboundUrl, "inboundUrl"))) return reply;
 
@@ -98,7 +113,7 @@ export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
     }
     const row = await fastify.prisma.apiKey.create({
       data: {
-        organizationId, name: name.trim(), keyHash: hashToken(token), tokenEnc, scopes: ["whatsapp"],
+        organizationId, name: name.trim(), keyHash: hashToken(token), tokenEnc, scopes: wantsChildren ? ["whatsapp", SEND_FOR_CHILDREN_SCOPE] : ["whatsapp"],
         createdBy: userId, callbackUrl: callbackUrl || null, inboundUrl: inboundUrl || null,
       },
       select: { id: true, name: true, createdAt: true },
