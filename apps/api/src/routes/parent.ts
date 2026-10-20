@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { randomBytes } from "crypto";
 import { prisma } from "../lib/prisma.js";
 import { redis } from "../lib/redis.js";
+import { incrWithTtl } from "../lib/redis-counter.js";
 import { canAccess } from "../lib/permissions.js";
 import { canBeParent, isChildOf, ParentLinkError, parentOrgsEnabled, unlinkChild } from "../lib/parent-orgs.js";
 import {
@@ -216,11 +217,10 @@ export const parentRoutes: FastifyPluginAsync = async (fastify) => {
       const actorId = request.auth.userId;
       const parentOrganizationId = request.auth.organizationId;
 
-      // Per-actor rate limit: max 10 tokens per hour. Seed with SET NX EX so the counter always has a TTL
-      // (INCR then EXPIRE could leave an immortal counter if the process dies in between). Fails closed.
+      // Per-actor rate limit: max 10 tokens per hour. INCR and EXPIRE run in one script, so the counter
+      // always has a TTL (SET NX then INCR could recreate an expired key without one). Fails closed.
       const actorKey = `impersonate:parent-actor:${actorId}`;
-      await redis.set(actorKey, "0", "EX", 3600, "NX");
-      const count = await redis.incr(actorKey);
+      const count = await incrWithTtl(redis, actorKey, 3600);
       if (count > 10) {
         return reply.status(429).send({ error: { code: "RATE_LIMITED", message: "Impersonation limit reached (10/hour)" } });
       }

@@ -23,6 +23,7 @@ vi.mock("../lib/prisma.js", () => ({ prisma: mockPrisma }));
 
 const mockRedis = vi.hoisted(() => ({
   incr: vi.fn(),
+  eval: vi.fn(),
   expire: vi.fn(),
   set: vi.fn(),
   get: vi.fn(),
@@ -88,7 +89,7 @@ beforeEach(async () => {
     calls.order.push("audit");
     return {};
   });
-  mockRedis.incr.mockResolvedValue(1);
+  mockRedis.eval.mockResolvedValue(1);
   mockRedis.set.mockImplementation(async (key: string) => {
     // the per-actor counter seed is not the session write
     if (!String(key).startsWith("impersonate:parent-actor:")) calls.order.push("redis");
@@ -219,15 +220,20 @@ describe("POST /v1/parent/children/:childId/impersonate", () => {
     );
   });
 
-  it("seeds the per-actor counter atomically (SET NX EX) before INCR, never INCR-then-EXPIRE", async () => {
+  it("counts per actor with one atomic INCR+EXPIRE script (never a counter without a TTL)", async () => {
     await impersonate("c1");
-    expect(mockRedis.set).toHaveBeenCalledWith("impersonate:parent-actor:pu-1", "0", "EX", 3600, "NX");
+    expect(mockRedis.eval).toHaveBeenCalledTimes(1);
+    const [script, numKeys, key, by, ttl] = mockRedis.eval.mock.calls[0]!;
+    expect(String(script)).toContain("INCRBY");
+    expect(String(script)).toContain("EXPIRE");
+    expect([numKeys, key, by, ttl]).toEqual([1, "impersonate:parent-actor:pu-1", 1, 3600]);
+    expect(mockRedis.incr).not.toHaveBeenCalled();
     expect(mockRedis.expire).not.toHaveBeenCalled();
-    expect(mockRedis.incr).toHaveBeenCalledWith("impersonate:parent-actor:pu-1");
+    expect(mockRedis.set).not.toHaveBeenCalledWith("impersonate:parent-actor:pu-1", expect.anything(), expect.anything(), expect.anything(), expect.anything());
   });
 
   it("fails closed when the rate-limit counter is unavailable", async () => {
-    mockRedis.incr.mockRejectedValue(new Error("redis down"));
+    mockRedis.eval.mockRejectedValue(new Error("redis down"));
     const res = await impersonate("c1");
     expect(res.statusCode).toBe(500);
     expect(mockPrisma.impersonationLog.create).not.toHaveBeenCalled();
@@ -242,7 +248,7 @@ describe("POST /v1/parent/children/:childId/impersonate", () => {
       expect(res.statusCode, role).toBe(403);
       // The guard refuses before the handler (D15): same body as a role without parent_access.
       expect(res.json()).toEqual({ error: { code: "FORBIDDEN", message: "parent_access permission required" } });
-      expect(mockRedis.incr).not.toHaveBeenCalled();
+      expect(mockRedis.eval).not.toHaveBeenCalled();
       expect(sessionSets()).toEqual([]);
       expect(mockPrisma.impersonationLog.create).not.toHaveBeenCalled();
       expect(mockPrisma.parentAuditEvent.create).not.toHaveBeenCalled();
@@ -250,11 +256,11 @@ describe("POST /v1/parent/children/:childId/impersonate", () => {
   });
 
   it("the 11th request in an hour is 429", async () => {
-    mockRedis.incr.mockResolvedValue(11);
+    mockRedis.eval.mockResolvedValue(11);
     const res = await impersonate("c1");
     expect(res.statusCode).toBe(429);
     expect(mockPrisma.impersonationLog.create).not.toHaveBeenCalled();
-    mockRedis.incr.mockResolvedValue(10);
+    mockRedis.eval.mockResolvedValue(10);
     expect((await impersonate("c1")).statusCode).toBe(200);
   });
 
