@@ -42,6 +42,7 @@ const ACTIONS: Record<string, Spec> = {
   "password/reset": { api: "/v1/auth/password/reset", client: true, cookies: true },
 };
 const INVITE = /^invitations\/accept\/([A-Za-z0-9-]{1,100})$/;
+const CLIENT_INVITE = /^client-invitations\/accept\/([A-Za-z0-9-]{1,100})$/;
 
 async function readBody(req: NextRequest): Promise<Record<string, unknown>> {
   try {
@@ -228,10 +229,13 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
   const key = action.join("/");
   const spec = ACTIONS[key];
   const invite = INVITE.exec(key);
+  const clientInvite = CLIENT_INVITE.exec(key);
   const oauth = matchOAuthKey(key);
   const oauthStart = oauth?.step === "start" ? oauth.provider : null;
   const pending = key === "oauth/pending/send" ? "send" : key === "oauth/pending/verify" ? "verify" : null;
-  const known = key === "sign-out" || spec || invite || key.startsWith("invitations/accept/") || oauthStart || pending;
+  const known =
+    key === "sign-out" || spec || invite || key.startsWith("invitations/accept/") ||
+    clientInvite || key.startsWith("client-invitations/accept/") || oauthStart || pending;
   if (!known) return notFound();
   if (!requireSameOrigin(req)) {
     return NextResponse.json({ error: { code: "FORBIDDEN", message: "Bad origin" } }, { status: 403 });
@@ -240,6 +244,9 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
   if (oauthStart) return handleOAuthStart(req, oauthStart);
   if (pending) return handleOAuthPending(req, pending);
   if (spec) return forward(req, spec);
+  if (clientInvite) {
+    return forward(req, { api: `/v1/auth/client-invitations/${clientInvite[1]}/accept`, client: true, cookies: true });
+  }
   if (!invite) {
     return NextResponse.json({ error: { code: "BAD_REQUEST", message: "Invalid invitation" } }, { status: 400 });
   }

@@ -5,8 +5,8 @@ import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/client";
 import { ClientAcceptMessage, ClientAcceptView } from "@/components/parent/ClientAcceptView";
 import {
-  NOT_AVAILABLE_MESSAGE, ParentApiError, acceptClientInvitation, fetchClientInvitation,
-  type AcceptForm, type ClientInvitationMeta,
+  NOT_AVAILABLE_MESSAGE, ParentApiError, acceptClientInvitation, acceptClientInvitationNewAccount, acceptViewMode,
+  fetchClientInvitation, type AcceptForm, type ClientInvitationMeta, type NewAccountForm,
 } from "@/lib/parent-orgs";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -30,6 +30,7 @@ export default function AcceptClientInvitationPage(): JSX.Element {
       });
   }, [token]);
 
+  // Signed in (an account without a workspace yet): bearer call to the existing accept route.
   async function accept(form: AcceptForm) {
     setBusy(true);
     setError(null);
@@ -44,17 +45,41 @@ export default function AcceptClientInvitationPage(): JSX.Element {
     }
   }
 
+  // New person: the auth proxy creates the account, organization and link, and sets the session cookies
+  // (same flow as the team-invite page).
+  async function createAccount(form: NewAccountForm) {
+    setBusy(true);
+    setError(null);
+    try {
+      const step = await acceptClientInvitationNewAccount(token, form);
+      if (step.kind === "done") {
+        window.location.assign("/dashboard");
+        return;
+      }
+      if (step.kind === "account_exists") {
+        setMeta((m) => (m ? { ...m, accountExists: true } : m));
+        setError("You already have an account. Sign in to accept this invitation.");
+      } else {
+        setError(step.message);
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    }
+    setBusy(false);
+  }
+
   if (metaError) return <ClientAcceptMessage message={metaError} />;
   if (!meta || !isLoaded) return <ClientAcceptMessage message="Loading invitation..." />;
 
   return (
     <ClientAcceptView
       meta={meta}
-      signedIn={isSignedIn}
+      mode={acceptViewMode(meta, isSignedIn)}
       busy={busy}
       error={error}
       redirectPath={`/client-invitations/${encodeURIComponent(token)}/accept`}
       onSubmit={(form) => { void accept(form); }}
+      onCreateAccount={(form) => { void createAccount(form); }}
     />
   );
 }

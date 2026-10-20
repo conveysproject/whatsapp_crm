@@ -54,24 +54,44 @@ describe("InviteClientForm", () => {
 
 describe("ClientAcceptView", () => {
   const meta = { parentName: "Acme Agency", email: "me@client.io" };
-  const base = { meta, busy: false, error: null, redirectPath: "/client-invitations/tk/accept", onSubmit: noop };
-  it("names the inviter and states the full read access plainly", () => {
-    const html = renderToStaticMarkup(h(ClientAcceptView, { ...base, signedIn: true }));
-    expect(html).toContain("Acme Agency invited you to WBMSG");
-    expect(html).toContain(FULL_READ_ACCESS_SENTENCE);
-    expect(html).toContain("can open it as an admin");
+  const base = { meta, busy: false, error: null, redirectPath: "/client-invitations/tk/accept", onSubmit: noop, onCreateAccount: noop };
+  it("names the inviter and states the full read access plainly in every mode", () => {
+    for (const mode of ["signedIn", "signIn", "newAccount"] as const) {
+      const html = renderToStaticMarkup(h(ClientAcceptView, { ...base, mode }));
+      expect(html).toContain("Acme Agency invited you to WBMSG");
+      expect(html).toContain(FULL_READ_ACCESS_SENTENCE);
+      expect(html).toContain("can open it as an admin");
+    }
   });
   it("signed in: asks for full name, organization name and an optional mobile", () => {
-    const html = renderToStaticMarkup(h(ClientAcceptView, { ...base, signedIn: true }));
+    const html = renderToStaticMarkup(h(ClientAcceptView, { ...base, mode: "signedIn" }));
     expect(html).toContain("Your full name");
     expect(html).toContain("Organization name");
     expect(html).toContain("Mobile number (optional)");
+    expect(html).not.toContain('type="password"');
   });
-  it("signed out: sends the person to sign in and back to this page", () => {
-    const html = renderToStaticMarkup(h(ClientAcceptView, { ...base, signedIn: false }));
+  it("existing account, signed out: sends the person to sign in and back to this page", () => {
+    const html = renderToStaticMarkup(h(ClientAcceptView, { ...base, mode: "signIn" }));
     expect(html).toContain("/sign-in?redirect_url=%2Fclient-invitations%2Ftk%2Faccept");
     expect(html).not.toContain("Organization name");
-    expect(html).toContain(FULL_READ_ACCESS_SENTENCE);
+    expect(html).not.toContain('type="password"');
+  });
+  it("new person: shows the set-password form with the policy hint, organization and optional mobile", () => {
+    const html = renderToStaticMarkup(h(ClientAcceptView, { ...base, mode: "newAccount" }));
+    expect(html).toContain("First name");
+    expect(html).toContain("Last name");
+    expect(html).toContain('type="password"');
+    expect(html).toContain("Password (min 8 characters)");
+    expect(html).toContain('minLength="8"');
+    expect(html).toContain('maxLength="128"');
+    expect(html).toContain("Organization name");
+    expect(html).toContain("Mobile number (optional)");
+    expect(html).toContain('value="me@client.io"');
+  });
+  it("never links to the generic sign-up page (it would create an unlinked workspace)", () => {
+    for (const mode of ["signedIn", "signIn", "newAccount"] as const) {
+      expect(renderToStaticMarkup(h(ClientAcceptView, { ...base, mode }))).not.toContain("/sign-up");
+    }
   });
 });
 

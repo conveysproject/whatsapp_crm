@@ -286,12 +286,29 @@ describe("GET /v1/client-invitations/:token (public)", () => {
   const get = (app: FastifyInstance, token = "tok-1") =>
     app.inject({ method: "GET", url: `/v1/client-invitations/${token}` });
 
-  it("returns only parentName and email", async () => {
-    mockPrisma.clientInvitation.findUnique.mockResolvedValue(invite);
+  it("returns only parentName, email and whether an account exists for the invited email", async () => {
+    mockPrisma.clientInvitation.findUnique.mockResolvedValue({ ...invite, email: "Client@Example.com" });
+    mockPrisma.authAccount.findUnique.mockResolvedValue(null);
     const app = await buildApp();
     const res = await get(app);
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ data: { parentName: "Acme Agency", email: "client@example.com" } });
+    expect(res.json()).toEqual({ data: { parentName: "Acme Agency", email: "Client@Example.com", accountExists: false } });
+    expect(mockPrisma.authAccount.findUnique).toHaveBeenCalledWith({ where: { email: "client@example.com" }, select: { id: true } });
+  });
+
+  it("accountExists is true when an account for the invited email exists (nothing else about it)", async () => {
+    mockPrisma.clientInvitation.findUnique.mockResolvedValue(invite);
+    mockPrisma.authAccount.findUnique.mockResolvedValue({ id: "acct-9" });
+    const app = await buildApp();
+    const res = await get(app);
+    expect(res.json()).toEqual({ data: { parentName: "Acme Agency", email: "client@example.com", accountExists: true } });
+  });
+
+  it("does not look up accounts for a bad token", async () => {
+    mockPrisma.clientInvitation.findUnique.mockResolvedValue(null);
+    const app = await buildApp();
+    expect((await get(app)).statusCode).toBe(404);
+    expect(mockPrisma.authAccount.findUnique).not.toHaveBeenCalled();
   });
 
   it("unknown, used, revoked and expired tokens all give the identical 404", async () => {

@@ -145,7 +145,12 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
         select: { name: true },
       });
       if (!parent) return invalidToken404(reply);
-      return reply.send({ data: { parentName: parent.name, email: invitation.email } });
+      // Only the holder of the emailed token sees this: it picks "set a password" vs "sign in" on the accept page.
+      const account = await prisma.authAccount.findUnique({
+        where: { email: normalizeEmail(invitation.email) },
+        select: { id: true },
+      });
+      return reply.send({ data: { parentName: parent.name, email: invitation.email, accountExists: account !== null } });
     },
   );
 

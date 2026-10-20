@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { CurrentUser } from "./can";
 import {
-  FULL_READ_ACCESS_SENTENCE, NOT_AVAILABLE_MESSAGE, ParentApiError, acceptClientInvitation, buildAcceptBody, capabilityErrorMessage,
+  FULL_READ_ACCESS_SENTENCE, NOT_AVAILABLE_MESSAGE, ParentApiError, acceptClientInvitation, acceptClientInvitationNewAccount,
+  acceptViewMode, buildAcceptBody, buildNewAccountAcceptBody, capabilityErrorMessage,
   confirmReducer, describeError, fetchParentDashboard, inviteClient, leaveParent, lastDaysRange, openChildAsAdmin, removeChild,
   revokeInvite, runConfirmed, setParentCapability, showClientsNav, showParentLinkCard, totalsFailureRate,
 } from "./parent-orgs";
@@ -124,6 +125,42 @@ describe("accept page", () => {
     expect(url).toBe("http://api.test/v1/client-invitations/tk%201/accept");
     expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer access-tok");
     expect(JSON.parse(init.body as string)).toEqual({ fullName: "Ann", organizationName: "Acme" });
+  });
+  it("chooses the branch: signed in -> accept form; signed out -> new-account form unless an account exists", () => {
+    const meta = { parentName: "P", email: "e@x.io" };
+    expect(acceptViewMode({ ...meta, accountExists: false }, true)).toBe("signedIn");
+    expect(acceptViewMode({ ...meta, accountExists: true }, true)).toBe("signedIn");
+    expect(acceptViewMode({ ...meta, accountExists: false }, false)).toBe("newAccount");
+    expect(acceptViewMode({ ...meta, accountExists: true }, false)).toBe("signIn");
+    // Unknown (older API): never offer a password form that could not work; fall back to sign in.
+    expect(acceptViewMode(meta, false)).toBe("signIn");
+  });
+  it("new account: builds a trimmed body with the password untouched and mobile only when given", () => {
+    expect(buildNewAccountAcceptBody({ firstName: " Ann ", lastName: " Lee ", password: " pw with spaces ", organizationName: " Acme ", mobileNumber: " " }))
+      .toEqual({ firstName: "Ann", lastName: "Lee", password: " pw with spaces ", organizationName: "Acme" });
+    expect(buildNewAccountAcceptBody({ firstName: "A", lastName: "B", password: "p", organizationName: "C", mobileNumber: " +44 1 " }))
+      .toEqual({ firstName: "A", lastName: "B", password: "p", organizationName: "C", mobileNumber: "+44 1" });
+  });
+  it("new account: posts to the same-origin auth proxy (cookies set there), no bearer", async () => {
+    const f = stubFetch(201, { organizationId: "o9" });
+    const step = await acceptClientInvitationNewAccount("tk 1", { firstName: "Ann", lastName: "Lee", password: "correct horse", organizationName: "Acme" });
+    expect(step).toEqual({ kind: "done" });
+    const [url, init] = f.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/auth/client-invitations/accept/tk%201");
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("same-origin");
+    expect((init.headers as Record<string, string>)["Authorization"]).toBeUndefined();
+    expect(JSON.parse(init.body as string)).toEqual({ firstName: "Ann", lastName: "Lee", password: "correct horse", organizationName: "Acme" });
+  });
+  it("new account: maps ACCOUNT_EXISTS, WEAK_PASSWORD and an invalid link", async () => {
+    stubFetch(409, { error: { code: "ACCOUNT_EXISTS", message: "x" } });
+    expect(await acceptClientInvitationNewAccount("t", { firstName: "A", lastName: "B", password: "p", organizationName: "C" })).toEqual({ kind: "account_exists" });
+    stubFetch(400, { error: { code: "WEAK_PASSWORD", message: "Use 8 to 128 characters." } });
+    expect(await acceptClientInvitationNewAccount("t", { firstName: "A", lastName: "B", password: "p", organizationName: "C" })).toEqual({ kind: "error", message: "Use 8 to 128 characters." });
+    stubFetch(400, { error: { code: "INVALID_INVITATION", message: "x" } });
+    expect(await acceptClientInvitationNewAccount("t", { firstName: "A", lastName: "B", password: "p", organizationName: "C" })).toEqual({ kind: "error", message: "This invitation link is invalid or has expired." });
+    stubFetch(409, { error: { code: "PARENT_UNAVAILABLE", message: "x" } });
+    expect(await acceptClientInvitationNewAccount("t", { firstName: "A", lastName: "B", password: "p", organizationName: "C" })).toEqual({ kind: "error", message: "The inviting company can no longer accept client accounts." });
   });
   it("explains an email mismatch in plain words", async () => {
     stubFetch(403, { error: { code: "EMAIL_MISMATCH", message: "x" } });

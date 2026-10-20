@@ -8,25 +8,25 @@ import { createSession } from "../sessions.js";
 
 const MIN_DURATION_MS = 300;
 
-const INVALID_INVITATION = {
+export const INVALID_INVITATION = {
   error: { code: "INVALID_INVITATION", message: "This invitation link is invalid or has expired." },
 };
-const ACCOUNT_EXISTS = {
+export const ACCOUNT_EXISTS = {
   error: { code: "ACCOUNT_EXISTS", message: "You already have an account. Sign in to accept this invitation." },
 };
-const WEAK_PASSWORD = { error: { code: "WEAK_PASSWORD", message: "Use 8 to 128 characters." } };
+export const WEAK_PASSWORD = { error: { code: "WEAK_PASSWORD", message: "Use 8 to 128 characters." } };
 const SEAT_LIMIT = {
   error: { code: "SEAT_LIMIT", message: "This workspace has no free seats. Ask your admin." },
 };
 
 class InvitationGone extends Error {}
 
-async function padTo(startedAt: number): Promise<void> {
+export async function padTo(startedAt: number): Promise<void> {
   const left = MIN_DURATION_MS - (Date.now() - startedAt);
   if (left > 0) await new Promise((r) => setTimeout(r, left));
 }
 
-function isUniqueViolation(err: unknown): boolean {
+export function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "P2002";
 }
 

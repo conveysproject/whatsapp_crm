@@ -3,6 +3,7 @@
 // only decides what to show and shapes requests. No UI, so it is unit-testable.
 import { isAdmin, type CurrentUser } from "./can";
 import { IMPERSONATION_STORAGE_KEY, type ImpersonationSession } from "./impersonation";
+import { invitationNextStep, type InvitationStep } from "./auth/invitation";
 
 /** D12: shown wherever a client is invited or linked. Keep the wording identical on every surface. */
 export const FULL_READ_ACCESS_SENTENCE =
@@ -183,7 +184,18 @@ export async function leaveParent(): Promise<void> {
 }
 
 // ── Public accept page ─────────────────────────────────────────────────────────────────────
-export interface ClientInvitationMeta { parentName: string; email: string }
+export interface ClientInvitationMeta { parentName: string; email: string; accountExists?: boolean }
+
+/**
+ * Which accept screen to show. Signed in: the existing accept form (account, no workspace yet).
+ * Signed out: a brand-new person sets a password here (the generic sign-up would create an unlinked
+ * workspace); someone who already has an account signs in first. Unknown accountExists falls back to sign in.
+ */
+export type AcceptViewMode = "signedIn" | "signIn" | "newAccount";
+export function acceptViewMode(meta: ClientInvitationMeta, signedIn: boolean): AcceptViewMode {
+  if (signedIn) return "signedIn";
+  return meta.accountExists === false ? "newAccount" : "signIn";
+}
 export async function fetchClientInvitation(apiBase: string, token: string): Promise<ClientInvitationMeta> {
   const res = await fetch(`${apiBase.replace(/\/$/, "")}/v1/client-invitations/${encodeURIComponent(token)}`);
   if (!res.ok) throw await readError(res);
@@ -212,6 +224,41 @@ export async function acceptClientInvitation(apiBase: string, token: string, acc
     const e = await readError(res);
     throw new ParentApiError(e.status, e.code, ACCEPT_ERRORS[e.code] ?? e.message);
   }
+}
+
+export interface NewAccountForm {
+  firstName: string;
+  lastName: string;
+  password: string;
+  organizationName: string;
+  mobileNumber?: string;
+}
+/** Body for the public new-account accept: trimmed names, password as typed, mobile only when given. */
+export function buildNewAccountAcceptBody(f: NewAccountForm): NewAccountForm {
+  const mobile = f.mobileNumber?.trim();
+  return {
+    firstName: f.firstName.trim(),
+    lastName: f.lastName.trim(),
+    password: f.password,
+    organizationName: f.organizationName.trim(),
+    ...(mobile ? { mobileNumber: mobile } : {}),
+  };
+}
+/**
+ * New person accepts a client invitation: same-origin auth proxy (like the team-invite page), which
+ * forwards to POST /v1/auth/client-invitations/:token/accept and stores the session in httpOnly cookies.
+ */
+export async function acceptClientInvitationNewAccount(token: string, form: NewAccountForm): Promise<InvitationStep> {
+  const res = await fetch(`/api/auth/client-invitations/accept/${encodeURIComponent(token)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(buildNewAccountAcceptBody(form)),
+  });
+  const body: unknown = await res.json().catch(() => null);
+  const code = (body as { error?: { code?: unknown } } | null)?.error?.code;
+  if (!res.ok && typeof code === "string" && ACCEPT_ERRORS[code]) return { kind: "error", message: ACCEPT_ERRORS[code] };
+  return invitationNextStep(res.status, body);
 }
 
 // ── Display helpers (existing metrics only) ────────────────────────────────────────────────
