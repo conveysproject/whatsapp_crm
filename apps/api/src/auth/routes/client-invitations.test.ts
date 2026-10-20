@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
+import type { PrismaClient } from "@prisma/client";
 import type * as ParentOrgsModule from "../../lib/parent-orgs.js";
 import type * as CreateWorkspaceModule from "../../lib/create-workspace.js";
 
@@ -57,8 +58,8 @@ const prisma = {
 
 async function build(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
-  app.decorate("prisma", prisma as any);
-  app.decorateRequest("auth", null as any);
+  app.decorate("prisma", prisma as unknown as PrismaClient);
+  app.decorateRequest("auth", null as never);
   await app.register(authRouter, { prefix: "/v1/auth" });
   return app;
 }
@@ -164,7 +165,8 @@ describe("POST /v1/auth/client-invitations/:token/accept (new account)", () => {
   });
 
   it("skips the mobile update when no mobile number is given", async () => {
-    const { mobileNumber: _m, ...rest } = body();
+    const rest: Record<string, unknown> = body();
+    delete rest["mobileNumber"];
     expect((await accept(app, rest)).statusCode).toBe(201);
     expect(tx.user.update).not.toHaveBeenCalled();
   });
@@ -259,7 +261,8 @@ describe("POST /v1/auth/client-invitations/:token/accept (new account)", () => {
   });
 
   it("validates the body (missing org name, long mobile, bad client, long token)", async () => {
-    const { organizationName: _o, ...noOrg } = body();
+    const noOrg: Record<string, unknown> = body();
+    delete noOrg["organizationName"];
     expect((await accept(app, noOrg)).statusCode).toBe(400);
     expect((await accept(app, body({ mobileNumber: "1".repeat(31) }))).statusCode).toBe(400);
     expect((await accept(app, body({ client: "tv" }))).statusCode).toBe(400);
