@@ -283,3 +283,26 @@ describe("deliverCallback for a parent key and a child message", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("callback attempt rows for a parent-key send belong to the key owner", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env["PUBLIC_API_TOKEN_KEY"] = Buffer.alloc(32, 5).toString("base64");
+    process.env["API_PAYLOAD_LOGGING_ENABLED"] = "true";
+    prisma.apiCallbackAttempt.create.mockResolvedValue({});
+    prisma.apiKey.findUnique.mockResolvedValue({ tokenEnc: encryptToken("secret-token"), revokedAt: null, organizationId: "parent-1" });
+    prisma.organization.findUnique.mockResolvedValue({ parentOrganizationId: "parent-1" });
+    checkAccess.mockResolvedValue({ allowed: true });
+  });
+  afterEach(() => { delete process.env["API_PAYLOAD_LOGGING_ENABLED"]; });
+
+  it("delivered, http_error and dropped attempts are stored under the parent org, never the child", async () => {
+    await deliverCallback(data({ organizationId: "child-1" }), vi.fn().mockResolvedValue({ ok: true, status: 200 }) as unknown as typeof fetch);
+    await deliverCallback(data({ organizationId: "child-1" }), vi.fn().mockResolvedValue({ ok: false, status: 500 }) as unknown as typeof fetch).catch(() => undefined);
+    checkAccess.mockResolvedValue({ allowed: false, reason: "blocked" });
+    await deliverCallback(data({ organizationId: "child-1" })).catch(() => undefined);
+    const orgs = prisma.apiCallbackAttempt.create.mock.calls.map((c) => (c[0] as { data: { organizationId: string } }).data.organizationId);
+    expect(orgs.length).toBe(3);
+    expect(orgs.every((o) => o === "parent-1")).toBe(true);
+  });
+});

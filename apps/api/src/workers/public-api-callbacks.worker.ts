@@ -21,14 +21,18 @@ export async function deliverCallback(job: Pick<Job<CallbackJob>, "data"> & { at
   const attempt = (job.attemptsMade ?? 0) + 1;
   const started = Date.now();
   // Audit row per attempt (no-op unless payload logging is on; never throws). `reason` is always fixed text or an error name.
+  // Attempt rows (which hold the URL and payload) belong to the KEY OWNER once the key is known: for a parent-key send
+  // the job's organizationId is the child, and the child must never read the parent's webhook URL or payloads.
+  let logOrganizationId = organizationId;
   const log = (outcome: CallbackAttempt["outcome"], extra: { httpStatus?: number; reason?: string } = {}) =>
-    recordCallbackAttempt(prisma, { organizationId, apiKeyId, url, method, fields, attempt, outcome, durationMs: Date.now() - started, ...extra });
+    recordCallbackAttempt(prisma, { organizationId: logOrganizationId, apiKeyId, url, method, fields, attempt, outcome, durationMs: Date.now() - started, ...extra });
   const drop = async (reason: string, message = reason): Promise<never> => {
     await log("dropped", { reason });
     throw new UnrecoverableError(message);
   };
 
   const key = await prisma.apiKey.findUnique({ where: { id: apiKeyId }, select: { tokenEnc: true, revokedAt: true, organizationId: true } });
+  if (key) logOrganizationId = key.organizationId;
   if (!key || key.revokedAt || !key.tokenEnc) return drop("credential unavailable");
   // The message belongs to the key's own org, or to a child the key's org (a parent) sent for. Anything else is dropped.
   // The link is checked now, so a child unlinked in the meantime stops receiving callbacks at the parent.
