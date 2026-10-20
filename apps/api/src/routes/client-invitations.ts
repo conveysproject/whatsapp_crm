@@ -35,7 +35,12 @@ async function parentGuard(request: FastifyRequest, reply: FastifyReply): Promis
   return undefined;
 }
 
-const tokenParams = { type: "object", properties: { token: { type: "string" } }, required: ["token"] } as const;
+export const tokenParamsSchema = {
+  type: "object",
+  properties: { token: { type: "string", maxLength: 200 } },
+  required: ["token"],
+} as const;
+const tokenParams = tokenParamsSchema;
 
 export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: { email: string } }>(
@@ -166,7 +171,7 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
           properties: {
             fullName: { type: "string", minLength: 1, maxLength: 255 },
             organizationName: { type: "string", minLength: 1, maxLength: 255 },
-            mobileNumber: { type: "string" },
+            mobileNumber: { type: "string", maxLength: 30 },
           },
         },
       },

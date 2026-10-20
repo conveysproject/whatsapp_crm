@@ -463,6 +463,27 @@ describe("POST /v1/client-invitations/:token/accept (public, signed in)", () => 
     expect((await accept(app, { fullName: "x" })).statusCode).toBe(400);
   });
 
+  it("400 for a mobile number over 30 characters, nothing created", async () => {
+    const app = await buildApp();
+    const res = await accept(app, { ...body, mobileNumber: "1".repeat(31) });
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.clientInvitation.findUnique).not.toHaveBeenCalled();
+    expect((await accept(app, { ...body, mobileNumber: "1".repeat(30) })).statusCode).toBe(201);
+  });
+
+  it("an over-long token never reaches a lookup (public GET and accept)", async () => {
+    const app = await buildApp();
+    const t = "x".repeat(201);
+    expect((await app.inject({ method: "GET", url: `/v1/client-invitations/${t}` })).statusCode).toBeGreaterThanOrEqual(400);
+    expect((await app.inject({ method: "POST", url: `/v1/client-invitations/${t}/accept`, payload: body })).statusCode).toBeGreaterThanOrEqual(400);
+    expect(mockPrisma.clientInvitation.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("the token schema caps length at 200", async () => {
+    const { tokenParamsSchema } = await import("./client-invitations.js");
+    expect(tokenParamsSchema.properties.token.maxLength).toBe(200);
+  });
+
   it("flag off returns 404 before anything runs", async () => {
     delete process.env["PARENT_ORGS_ENABLED"];
     const app = await buildApp();
