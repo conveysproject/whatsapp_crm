@@ -16,9 +16,17 @@ async function childAdminGuard(request: FastifyRequest, reply: FastifyReply): Pr
   return undefined;
 }
 
+/** Number of messages a content read returned; anything else in the audit metadata stays private. */
+function readCount(metadata: unknown): number | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const count = (metadata as Record<string, unknown>)["count"];
+  return typeof count === "number" && Number.isFinite(count) ? count : null;
+}
+
 export const orgLinkRoutes: FastifyPluginAsync = async (fastify) => {
-  // Who is my parent, and when did parent users open my account. Name only: never the parent's id,
-  // settings, tokens or users, and never a session's token, ip, user agent or elevation reason.
+  // Who is my parent, when did parent users open my account, and when did they read my messages (D13).
+  // Name only: never the parent's id, settings, tokens or users, never a session's token, ip, user agent
+  // or elevation reason, and never a content read's cursor or message ids.
   fastify.get("/organization/parent-link", { preHandler: childAdminGuard }, async (request, reply) => {
     const organizationId = request.auth.organizationId;
     const parent = await getParentOf(prisma, organizationId);
@@ -28,7 +36,15 @@ export const orgLinkRoutes: FastifyPluginAsync = async (fastify) => {
       take: SESSION_LIMIT,
       select: { id: true, actorId: true, startedAt: true, endedAt: true, mode: true },
     });
-    const actorIds = [...new Set(logs.map((l) => l.actorId))];
+    const reads = await prisma.parentAuditEvent.findMany({
+      where: { childOrganizationId: organizationId, action: "content_read" },
+      orderBy: { createdAt: "desc" },
+      take: SESSION_LIMIT,
+      select: { createdAt: true, actorUserId: true, metadata: true },
+    });
+    const actorIds = [
+      ...new Set([...logs.map((l) => l.actorId), ...reads.map((r) => r.actorUserId).filter((id): id is string => !!id)]),
+    ];
     const actors = actorIds.length
       ? await prisma.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, fullName: true } })
       : [];
@@ -42,6 +58,11 @@ export const orgLinkRoutes: FastifyPluginAsync = async (fastify) => {
           endedAt: l.endedAt,
           mode: l.mode,
           actorName: names.get(l.actorId) || "Parent user",
+        })),
+        contentReads: reads.map((r) => ({
+          at: r.createdAt,
+          actorName: (r.actorUserId && names.get(r.actorUserId)) || "Parent user",
+          count: readCount(r.metadata),
         })),
       },
     });

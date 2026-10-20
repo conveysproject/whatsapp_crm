@@ -39,6 +39,7 @@ export function ParentLinkCard(): JSX.Element | null {
     <ParentLinkCardView
       parentName={data.parent.name}
       sessions={data.sessions}
+      contentReads={data.contentReads}
       gate={gate}
       error={error}
       onLeave={() => { setError(null); dispatch("request"); }}

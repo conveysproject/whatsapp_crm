@@ -100,7 +100,22 @@ describe("ParentLinkCardView", () => {
     { id: "s1", startedAt: "2026-10-18T09:00:00.000Z", endedAt: null, mode: "readonly", actorName: "Sam Parent" },
     { id: "s2", startedAt: "2026-10-17T09:00:00.000Z", endedAt: "2026-10-17T09:10:00.000Z", mode: "edit", actorName: "Pat Parent" },
   ];
-  const props = { parentName: "Acme Agency", sessions, gate: "idle" as const, error: null, onLeave: noop, onConfirm: noop, onCancel: noop };
+  const contentReads = [
+    { at: "2026-10-19T08:00:00.000Z", actorName: "Rita Reader", count: 25 },
+    { at: "2026-10-18T08:00:00.000Z", actorName: "Parent user", count: null },
+  ];
+  const props = { parentName: "Acme Agency", sessions, contentReads, gate: "idle" as const, error: null, onLeave: noop, onConfirm: noop, onCancel: noop };
+  it("D13: lists the parent's recent message reads under the sessions", () => {
+    const html = renderToStaticMarkup(h(ParentLinkCardView, props));
+    expect(html).toContain("Recent message reads by Acme Agency");
+    expect(html).toContain("Rita Reader");
+    expect(html).toContain("25 messages");
+    expect(html).toContain("19 Oct 2026");
+    expect(html.indexOf("Recent sessions by")).toBeLessThan(html.indexOf("Recent message reads by"));
+  });
+  it("shows an empty state without message reads", () => {
+    expect(renderToStaticMarkup(h(ParentLinkCardView, { ...props, contentReads: [] }))).toContain("No message reads yet.");
+  });
   it("shows the parent name, the access statement and the session list", () => {
     const html = renderToStaticMarkup(h(ParentLinkCardView, props));
     expect(html).toContain("Linked to Acme Agency");

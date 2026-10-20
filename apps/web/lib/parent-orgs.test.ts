@@ -3,7 +3,7 @@ import type { CurrentUser } from "./can";
 import {
   FULL_READ_ACCESS_SENTENCE, NOT_AVAILABLE_MESSAGE, ParentApiError, acceptClientInvitation, acceptClientInvitationNewAccount,
   acceptViewMode, buildAcceptBody, buildNewAccountAcceptBody, capabilityErrorMessage,
-  confirmReducer, describeError, fetchParentDashboard, inviteClient, leaveParent, lastDaysRange, openChildAsAdmin, removeChild,
+  confirmReducer, describeError, fetchParentDashboard, fetchParentLink, inviteClient, leaveParent, lastDaysRange, openChildAsAdmin, removeChild,
   revokeInvite, runConfirmed, setParentCapability, showClientsNav, showParentLinkCard, totalsFailureRate,
 } from "./parent-orgs";
 
@@ -125,6 +125,12 @@ describe("accept page", () => {
     expect(url).toBe("http://api.test/v1/client-invitations/tk%201/accept");
     expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer access-tok");
     expect(JSON.parse(init.body as string)).toEqual({ fullName: "Ann", organizationName: "Acme" });
+  });
+  it("fetchParentLink defaults contentReads to an empty list for an older API", async () => {
+    stubFetch(200, { data: { parent: { name: "P" }, sessions: [] } });
+    expect((await fetchParentLink()).contentReads).toEqual([]);
+    stubFetch(200, { data: { parent: { name: "P" }, sessions: [], contentReads: [{ at: "2026-10-19T08:00:00.000Z", actorName: "A", count: 3 }] } });
+    expect((await fetchParentLink()).contentReads).toEqual([{ at: "2026-10-19T08:00:00.000Z", actorName: "A", count: 3 }]);
   });
   it("chooses the branch: signed in -> accept form; signed out -> new-account form unless an account exists", () => {
     const meta = { parentName: "P", email: "e@x.io" };

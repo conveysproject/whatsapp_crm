@@ -270,6 +270,14 @@ describe("GET /parent/children/:childId/messages", () => {
     expect(res.statusCode).toBe(500);
     expect(res.body).not.toContain("secret text");
   });
+  it("refuses while impersonating (a super admin acting as the parent admin): generic 403, no read, no audit row", async () => {
+    auth = { ...adminAuth, impersonation: { adminId: "sa-1", mode: "readonly" } } as typeof adminAuth;
+    const res = await get("/v1/parent/children/c1/messages");
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: { code: "FORBIDDEN_CHILD", message: "Not available" } });
+    expect(mockPrisma.message.findMany).not.toHaveBeenCalled();
+    expect(mockPrisma.parentAuditEvent.create).not.toHaveBeenCalled();
+  });
   it("caps limit at 100 via schema", async () => {
     expect((await get("/v1/parent/children/c1/messages?limit=101")).statusCode).toBe(400);
   });

@@ -1,14 +1,15 @@
 import type { JSX } from "react";
-import { formatWhen, modeLabel, type ConfirmState, type ParentSession } from "@/lib/parent-orgs";
+import { formatWhen, modeLabel, type ConfirmState, type ParentContentRead, type ParentSession } from "@/lib/parent-orgs";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { NewBadge } from "@/components/ui/NewBadge";
 
-/** Child side: who the parent is, what they can do, and when they opened this account. */
+/** Child side: who the parent is, what they can do, when they opened this account and read its messages. */
 export function ParentLinkCardView({
-  parentName, sessions, gate, error, onLeave, onConfirm, onCancel,
+  parentName, sessions, contentReads, gate, error, onLeave, onConfirm, onCancel,
 }: {
   parentName: string;
   sessions: ParentSession[];
+  contentReads: ParentContentRead[];
   gate: ConfirmState;
   error: string | null;
   onLeave: () => void;
@@ -25,7 +26,7 @@ export function ParentLinkCardView({
       <div className="space-y-4 px-5 py-4 text-sm text-gray-600">
         <p>
           {name} has full read access to this account, including its conversations, contacts and settings,
-          and can open it as an admin. Each time they do, it is listed below.
+          and can open it as an admin. Each time they open it or read its messages, it is listed below.
         </p>
         <div>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Recent sessions by {name}</h3>
@@ -38,6 +39,24 @@ export function ParentLinkCardView({
                   <span className="font-medium text-gray-900">{s.actorName}</span>
                   <span>{formatWhen(s.startedAt)}</span>
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs">{modeLabel(s.mode)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Recent message reads by {name}</h3>
+          {contentReads.length === 0 ? (
+            <p className="text-gray-500">No message reads yet.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100 rounded-lg border border-gray-100">
+              {contentReads.map((r, i) => (
+                <li key={`${r.at}-${i}`} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                  <span className="font-medium text-gray-900">{r.actorName}</span>
+                  <span>{formatWhen(r.at)}</span>
+                  {r.count !== null && (
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs">{r.count} {r.count === 1 ? "message" : "messages"}</span>
+                  )}
                 </li>
               ))}
             </ul>

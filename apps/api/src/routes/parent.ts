@@ -140,6 +140,8 @@ export const parentRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
+      // A super admin impersonating the parent admin must not create content reads in the parent user's name.
+      if (request.auth.impersonation) return forbiddenChild(reply);
       const parentOrganizationId = request.auth.organizationId;
       const { childId } = request.params;
       const { cursor } = request.query;

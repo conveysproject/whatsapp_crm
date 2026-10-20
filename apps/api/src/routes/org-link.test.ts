@@ -8,7 +8,7 @@ const mockPrisma: Record<string, any> = vi.hoisted(() => ({
   organization: { findUnique: vi.fn(), updateMany: vi.fn() },
   impersonationLog: { findMany: vi.fn() },
   user: { findMany: vi.fn() },
-  parentAuditEvent: { create: vi.fn() },
+  parentAuditEvent: { create: vi.fn(), findMany: vi.fn() },
 }));
 vi.mock("../lib/prisma.js", () => ({ prisma: mockPrisma }));
 
@@ -52,6 +52,7 @@ beforeEach(async () => {
   });
   mockPrisma.parentAuditEvent.create.mockResolvedValue({});
   mockPrisma.impersonationLog.findMany.mockResolvedValue([]);
+  mockPrisma.parentAuditEvent.findMany.mockResolvedValue([]);
   mockPrisma.user.findMany.mockResolvedValue([]);
   app = Fastify({ logger: false });
   app.decorate("prisma", mockPrisma as unknown as PrismaClient);
@@ -147,6 +148,46 @@ describe("GET /organization/parent-link", () => {
     expect(res.body).not.toMatch(/test-token|9\.9\.9\.9|UA-X|fix their template|elevation/i);
     const sel = mockPrisma.impersonationLog.findMany.mock.calls[0][0].select;
     expect(Object.keys(sel).sort()).toEqual(["actorId", "endedAt", "id", "mode", "startedAt"]);
+  });
+
+  it("D13: lists the parent's message reads for the caller's org only (exact query)", async () => {
+    await get();
+    expect(mockPrisma.parentAuditEvent.findMany).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.parentAuditEvent.findMany).toHaveBeenCalledWith({
+      where: { childOrganizationId: "child-1", action: "content_read" },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: { createdAt: true, actorUserId: true, metadata: true },
+    });
+    auth = { ...baseAuth, organizationId: "orgB" };
+    await get();
+    expect(mockPrisma.parentAuditEvent.findMany.mock.calls[1][0].where).toEqual({ childOrganizationId: "orgB", action: "content_read" });
+  });
+
+  it("content reads: actor name, numeric count only, never the cursor, message ids or the parent id", async () => {
+    mockPrisma.parentAuditEvent.findMany.mockResolvedValue([
+      { createdAt: new Date("2026-10-03T00:00:00Z"), actorUserId: "pu1", metadata: { count: 12, cursor: "msg-cursor-id", messageIds: ["m-1"] },
+        parentOrganizationId: "parent-1", id: "ev-1" },
+      { createdAt: new Date("2026-10-02T00:00:00Z"), actorUserId: null, metadata: { count: "7" } },
+      { createdAt: new Date("2026-10-01T00:00:00Z"), actorUserId: "gone", metadata: null },
+    ]);
+    mockPrisma.user.findMany.mockResolvedValue([{ id: "pu1", fullName: "Ann Parent" }]);
+    const res = await get();
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.contentReads).toEqual([
+      { at: "2026-10-03T00:00:00.000Z", actorName: "Ann Parent", count: 12 },
+      { at: "2026-10-02T00:00:00.000Z", actorName: "Parent user", count: null },
+      { at: "2026-10-01T00:00:00.000Z", actorName: "Parent user", count: null },
+    ]);
+    expect(res.body).not.toMatch(/msg-cursor-id|m-1|ev-1|parent-1/);
+    // One user lookup for sessions and reads together, and only for ids that exist.
+    expect(mockPrisma.user.findMany).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.user.findMany.mock.calls[0][0].where.id.in.sort()).toEqual(["gone", "pu1"]);
+  });
+
+  it("contentReads is an empty list when there are none", async () => {
+    auth = { ...baseAuth, organizationId: "orgB" };
+    expect((await get()).json().data.contentReads).toEqual([]);
   });
 });
 

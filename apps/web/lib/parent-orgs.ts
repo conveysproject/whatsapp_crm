@@ -109,7 +109,9 @@ export interface ChildMessage {
 }
 export interface ClientInvite { id: string; email: string; status: string; expiresAt: string; createdAt: string }
 export interface ParentSession { id: string; startedAt: string; endedAt: string | null; mode: string; actorName: string }
-export interface ParentLink { parent: { name: string } | null; sessions: ParentSession[] }
+/** D13: one parent message read (when, who, how many messages); never the messages themselves. */
+export interface ParentContentRead { at: string; actorName: string; count: number | null }
+export interface ParentLink { parent: { name: string } | null; sessions: ParentSession[]; contentReads: ParentContentRead[] }
 
 export interface DateRange { from: string; to: string }
 export const DEFAULT_RANGE_DAYS = 30;
@@ -177,7 +179,8 @@ export async function openChildAsAdmin(child: { orgId: string; name: string }, d
 
 // ── Child side ─────────────────────────────────────────────────────────────────────────────
 export async function fetchParentLink(): Promise<ParentLink> {
-  return (await call<{ data: ParentLink }>("/organization/parent-link")).data;
+  const data = (await call<{ data: Omit<ParentLink, "contentReads"> & { contentReads?: ParentContentRead[] } }>("/organization/parent-link")).data;
+  return { ...data, contentReads: data.contentReads ?? [] };
 }
 export async function leaveParent(): Promise<void> {
   await call("/organization/leave-parent", { method: "POST" });
