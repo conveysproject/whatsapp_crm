@@ -15,6 +15,7 @@ const mockPrisma: Record<string, any> = vi.hoisted(() => ({
   organization: { findMany: vi.fn(), findUnique: vi.fn() },
   message: { findMany: vi.fn(), findFirst: vi.fn() },
   parentAuditEvent: { create: vi.fn() },
+  $transaction: vi.fn(),
 }));
 vi.mock("../lib/prisma.js", () => ({ prisma: mockPrisma }));
 
@@ -78,6 +79,53 @@ afterEach(async () => {
 });
 
 const get = (url: string) => app.inject({ method: "GET", url });
+
+describe("DELETE /parent/children/:childId", () => {
+  const del = (id: string) => app.inject({ method: "DELETE", url: `/v1/parent/children/${id}` });
+  beforeEach(() => {
+    mockPrisma.organization.updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    mockPrisma.$transaction.mockImplementation(async (fn: (t: unknown) => unknown) =>
+      fn({ $queryRaw: vi.fn().mockResolvedValue([]), organization: mockPrisma.organization, parentAuditEvent: mockPrisma.parentAuditEvent }),
+    );
+  });
+  it("removes an own child and writes unlinked_by_parent", async () => {
+    const res = await del("c1");
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ data: { removed: true } });
+    expect(mockPrisma.organization.updateMany).toHaveBeenCalledWith({
+      where: { id: "c1", parentOrganizationId: "p1" },
+      data: { parentOrganizationId: null },
+    });
+    expect(mockPrisma.parentAuditEvent.create).toHaveBeenCalledWith({
+      data: { parentOrganizationId: "p1", childOrganizationId: "c1", actorUserId: "user-1", action: "unlinked_by_parent" },
+    });
+  });
+  it("another parent's child, an unknown id and yourself all get the identical generic 403", async () => {
+    const bodies = [];
+    for (const id of ["x1", "nope", "p1"]) {
+      const res = await del(id);
+      expect(res.statusCode).toBe(403);
+      bodies.push(res.body);
+    }
+    expect(new Set(bodies).size).toBe(1);
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+  it("manager => 403, nothing changed", async () => {
+    auth = { ...adminAuth, role: "manager" };
+    expect((await del("c1")).statusCode).toBe(403);
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+  it("flag off => 404", async () => {
+    delete process.env["PARENT_ORGS_ENABLED"];
+    expect((await del("c1")).statusCode).toBe(404);
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+  it("non-parent org => 403", async () => {
+    mockCanBeParent.mockResolvedValue(false);
+    expect((await del("c1")).statusCode).toBe(403);
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+});
 const rawCallIds = () => mockPrisma.$queryRaw.mock.calls.map((c: unknown[]) => c[1]);
 
 describe("gates", () => {

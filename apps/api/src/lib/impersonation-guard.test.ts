@@ -341,6 +341,7 @@ describe("parent-session guard rules", () => {
     expect(classifyRoute("POST", "/v1/parent/children/:childId/impersonate")).toBe("blocked");
     expect(classifyRoute("POST", "/v1/parent/children/:childId/impersonate/elevate")).toBe("blocked");
     expect(classifyRoute("PATCH", "/v1/organization/parent-link")).toBe("blocked");
+    expect(classifyRoute("POST", "/v1/organization/leave-parent")).toBe("blocked");
   });
 
   it("parent sessions also lose GETs on parent, client-invitation, parent-link and secret families", () => {
@@ -348,6 +349,7 @@ describe("parent-session guard rules", () => {
       "/v1/parent/children",
       "/v1/client-invitations",
       "/v1/organization/parent-link",
+      "/v1/organization/leave-parent",
       "/v1/api-credentials",
       "/v1/webhook-actions",
       "/v1/invitations",
@@ -393,10 +395,20 @@ describe("parent-session guard rules", () => {
     ]) app.post(url, ok);
     app.delete("/v1/parent/children/c1/impersonate", ok);
     app.post("/v1/contacts", ok);
+    app.post("/v1/organization/leave-parent", ok);
     await app.ready();
     return app;
   }
   const code = (r: { json: () => unknown }) => (r.json() as { error: { code: string } }).error.code;
+
+  it("a parent session (any mode) can never leave-parent: POST is blocked", async () => {
+    for (const mode of ["readonly", "edit"] as const) {
+      const app = await build(mode);
+      const res = await app.inject({ method: "POST", url: "/v1/organization/leave-parent" });
+      expect(res.statusCode, mode).toBe(403);
+      expect(code(res)).toBe("IMPERSONATION_BLOCKED");
+    }
+  });
 
   it("edit-mode parent session: every parent-only and platform prefix stays blocked", async () => {
     const app = await build("edit");

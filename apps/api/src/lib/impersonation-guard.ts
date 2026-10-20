@@ -61,6 +61,7 @@ export const BLOCKED_PREFIXES: readonly string[] = [
   "/v1/parent",
   "/v1/client-invitations",
   "/v1/organization/parent-link",
+  "/v1/organization/leave-parent", // an impersonator must never unlink the child
 ];
 
 /**
@@ -72,6 +73,7 @@ export const PARENT_SESSION_BLOCKED_PREFIXES: readonly string[] = [
   "/v1/parent",
   "/v1/client-invitations",
   "/v1/organization/parent-link",
+  "/v1/organization/leave-parent",
   "/v1/api-credentials", // GETs list the child's public API keys
   "/v1/invitations",
   "/v1/webhook-actions", // signing secrets and headers

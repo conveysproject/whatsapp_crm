@@ -3,7 +3,7 @@ import { randomBytes } from "crypto";
 import { prisma } from "../lib/prisma.js";
 import { redis } from "../lib/redis.js";
 import { canAccess } from "../lib/permissions.js";
-import { canBeParent, isChildOf, parentOrgsEnabled } from "../lib/parent-orgs.js";
+import { canBeParent, isChildOf, ParentLinkError, parentOrgsEnabled, unlinkChild } from "../lib/parent-orgs.js";
 import {
   ChildNotFoundError,
   getChildMessages,
@@ -165,6 +165,28 @@ export const parentRoutes: FastifyPluginAsync = async (fastify) => {
         }
         throw err;
       }
+    },
+  );
+
+  // Parent admin removes a child link (D12). Same generic 403 as every other child route for unknown,
+  // foreign or already-unlinked ids. unlinkChild writes the audit event.
+  fastify.delete<{ Params: { childId: string } }>(
+    "/parent/children/:childId",
+    { preHandler: parentGuard, schema: { params: childParams } },
+    async (request, reply) => {
+      if (request.auth.impersonation) return forbiddenChild(reply);
+      if (request.auth.role !== "admin") return forbiddenChild(reply);
+      const { childId } = request.params;
+      if (!(await isChildOf(prisma, request.auth.organizationId, childId))) return forbiddenChild(reply);
+      try {
+        await unlinkChild(prisma, childId, "parent", request.auth.userId);
+      } catch (err) {
+        if (err instanceof ParentLinkError && (err.code === "NOT_A_CHILD" || err.code === "ORG_NOT_FOUND")) {
+          return forbiddenChild(reply);
+        }
+        throw err;
+      }
+      return reply.send({ data: { removed: true } });
     },
   );
 
