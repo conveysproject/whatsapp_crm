@@ -147,7 +147,9 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: invitation.parentOrganizationId },
         select: { name: true },
       });
-      if (!parent) return invalidToken404(reply);
+      // A parent that lost the capability looks exactly like a bad token: the accept routes already refuse such
+      // invitations, so the preview must not advertise one.
+      if (!parent || !(await canBeParent(prisma, invitation.parentOrganizationId))) return invalidToken404(reply);
       // Only the holder of the emailed token sees this: it picks "set a password" vs "sign in" on the accept page.
       const account = await prisma.authAccount.findUnique({
         where: { email: normalizeEmail(invitation.email) },

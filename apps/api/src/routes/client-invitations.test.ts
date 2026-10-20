@@ -298,6 +298,19 @@ describe("GET /v1/client-invitations/:token (public)", () => {
     expect(mockPrisma.authAccount.findUnique).not.toHaveBeenCalled();
   });
 
+  it("a pending invite whose parent lost the capability gets the same 404 as any bad token and no account lookup", async () => {
+    const app = await buildApp();
+    mockPrisma.clientInvitation.findUnique.mockResolvedValue(null);
+    const unknown = await get(app);
+    mockPrisma.clientInvitation.findUnique.mockResolvedValue(invite);
+    mockCanBeParent.mockResolvedValue(false);
+    const res = await get(app);
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toBe(unknown.body);
+    expect(mockCanBeParent).toHaveBeenCalledWith(mockPrisma, "org-1");
+    expect(mockPrisma.authAccount.findUnique).not.toHaveBeenCalled();
+  });
+
   it("unknown, used, revoked and expired tokens all give the identical 404", async () => {
     const app = await buildApp();
     const bodies: string[] = [];
