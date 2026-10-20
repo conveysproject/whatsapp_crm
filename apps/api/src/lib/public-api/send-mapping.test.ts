@@ -6,6 +6,11 @@ const base = { src: "+14155552671", dst: "+14155552672", type: "whatsapp" };
 const bad = (b: unknown) => expect(() => parseSendBody(b)).toThrow(SendValidationError);
 
 describe("parseSendBody", () => {
+  it("waba_id is optional, trimmed, and must be a string", () => {
+    expect(parseSendBody({ ...base, text: "hi" }).wabaId).toBeNull();
+    expect(parseSendBody({ ...base, text: "hi", waba_id: " 123 " }).wabaId).toBe("123");
+    expect(() => parseSendBody({ ...base, text: "hi", waba_id: 123 })).toThrow("waba_id must be a string");
+  });
   it("parses a text message", () => {
     const p = parseSendBody({ ...base, text: "hello", url: "https://c.example.com/cb", method: "get" });
     expect(p.src).toBe("14155552671");

@@ -11,6 +11,7 @@ vi.mock("../../lib/public-api/callbacks.js", () => ({ enqueueStatusCallback: (..
     return (r?.value ?? "").replace(/\D/g, "");
   },
 }));
+vi.mock("../../lib/public-api/child-rate-limit.js", () => ({ checkChildSendRate: vi.fn() }));
 vi.mock("../../lib/public-api/safe-url.js", async (orig) => {
   const real = await orig<typeof SafeUrlModule>();
   return { ...real, assertSafeCallbackUrl: vi.fn(async (u: string) => { if (u.includes("bad")) throw new real.UnsafeUrlError("unsafe"); return new URL(u); }) };
@@ -31,7 +32,7 @@ const logLines: string[] = [];
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: "error", stream: { write: (line: string) => { logLines.push(line); } } } });
   app.decorate("prisma", mockPrisma as unknown as PrismaClient);
-  app.addHook("onRequest", async (r) => { r.publicApi = { apiKeyId: "k1", organizationId: "org-1" }; });
+  app.addHook("onRequest", async (r) => { r.publicApi = { apiKeyId: "k1", organizationId: "org-1", scopes: ["whatsapp"] }; });
   const { publicApiMessagesRouter } = await import("./messages.js");
   await app.register(publicApiMessagesRouter, { prefix: "/v1/Account/:authId" });
   return app;

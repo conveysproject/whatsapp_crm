@@ -44,5 +44,5 @@ export async function publicApiAuth(
       .update({ where: { id: row.id }, data: { lastUsedAt: new Date() } })
       .catch(() => undefined);
   }
-  request.publicApi = { apiKeyId: row.id, organizationId: row.organizationId };
+  request.publicApi = { apiKeyId: row.id, organizationId: row.organizationId, scopes: row.scopes };
 }

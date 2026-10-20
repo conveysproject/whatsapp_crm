@@ -43,6 +43,8 @@ export interface ParsedSend {
   dsts: string[];
   callbackUrl: string | null;
   callbackMethod: "GET" | "POST";
+  /** Optional `waba_id`: only honoured for keys with the send_for_children scope. */
+  wabaId: string | null;
   content: SendContent;
 }
 
@@ -127,7 +129,11 @@ export function parseSendBody(body: unknown): ParsedSend {
     if (!text?.trim()) throw new SendValidationError("text is required");
     content = { kind: "text", text: text.trim() };
   }
-  return { src, dsts, callbackUrl, callbackMethod, content };
+  const wabaRaw = body["waba_id"];
+  if (wabaRaw != null && typeof wabaRaw !== "string") throw new SendValidationError("waba_id must be a string");
+  const wabaId = wabaRaw?.trim() ? wabaRaw.trim() : null;
+  if (wabaId && wabaId.length > 64) throw new SendValidationError("waba_id must be at most 64 characters");
+  return { src, dsts, callbackUrl, callbackMethod, wabaId, content };
 }
 
 type MetaParam = NonNullable<WaTemplateComponent["parameters"]>[number];

@@ -17,7 +17,7 @@ declare module "fastify" {
     /** Set by requireAccountSession on account-level auth routes (no organization needed). */
     account?: { accountId: string; sid: string; typ: "user" | "admin" };
     /** Set by the public API Basic-auth preHandler. */
-    publicApi?: { apiKeyId: string; organizationId: string };
+    publicApi?: { apiKeyId: string; organizationId: string; scopes: string[] };
     /** Set as soon as the public API credential row is found (before the token check); used only for usage attribution. */
     publicApiAttempt?: { apiKeyId: string; organizationId: string };
     /** One id per public API request; used in every response body. */

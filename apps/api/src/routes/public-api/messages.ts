@@ -10,6 +10,8 @@ import { enqueueStatusCallback, businessNumberDigits } from "../../lib/public-ap
 import { resolveTemplate, validateAgainstTemplate } from "../../lib/public-api/template-validation.js";
 import { safeErr } from "../../lib/public-api/safe-err.js";
 import { errorMessageForCode } from "../../lib/public-api/meta-errors.js";
+import { resolveSendTarget, ChildForbiddenError, ChildNotConnectedError } from "../../lib/public-api/child-send.js";
+import { checkChildSendRate } from "../../lib/public-api/child-rate-limit.js";
 
 const PUBLIC = { config: { public: true } } as const;
 const both = (p: string) => [p, p.replace(/\/$/, "")];
@@ -71,7 +73,9 @@ function toMessageObject(
 export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
   for (const path of both("/Message/")) {
     fastify.post<{ Params: { authId: string }; Body: unknown }>(path, PUBLIC, async (request, reply) => {
-      const { organizationId, apiKeyId } = request.publicApi!;
+      // `keyOrganizationId` owns the credential (usage attribution stays with it); `organizationId` is the org the
+      // message belongs to: the key's own org, or a linked child when a parent key sends for it.
+      const { organizationId: keyOrganizationId, apiKeyId, scopes } = request.publicApi!;
 
       let parsed;
       try { parsed = parseSendBody(request.body); }
@@ -82,6 +86,30 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
           return apiError(reply, 400, err.code, { message: err.message, ...(hint ? { hint } : {}) });
         }
         throw err;
+      }
+
+      let organizationId = keyOrganizationId;
+      let viaParentOrgId: string | null = null;
+      try {
+        ({ organizationId, viaParentOrgId } = await resolveSendTarget(
+          fastify.prisma,
+          { id: apiKeyId, organizationId: keyOrganizationId, scopes },
+          { src: parsed.src, ...(parsed.wabaId ? { wabaId: parsed.wabaId } : {}) }
+        ));
+      } catch (err) {
+        // A key that is not entitled to send for children behaves exactly as before: the own-number checks below decide
+        // (SRC_MISMATCH / WHATSAPP_NOT_CONNECTED), so the scope's existence is never revealed.
+        if (err instanceof ChildForbiddenError && err.reason === "not_entitled") { /* fall through with the key's own org */ }
+        else if (err instanceof ChildForbiddenError) return apiError(reply, 403, "FORBIDDEN_CHILD");
+        else if (err instanceof ChildNotConnectedError) return apiError(reply, 400, "WHATSAPP_NOT_CONNECTED");
+        else throw err;
+      }
+      if (viaParentOrgId) {
+        const rate = await checkChildSendRate(apiKeyId, organizationId);
+        if (!rate.allowed) {
+          reply.header("retry-after", String(rate.retryAfterSeconds));
+          return apiError(reply, 429, "RATE_LIMITED", { hint: `Wait ${rate.retryAfterSeconds} second(s) and retry.` });
+        }
       }
 
       const [org, numberRow] = await Promise.all([
@@ -158,13 +186,13 @@ export const publicApiMessagesRouter: FastifyPluginAsync = async (fastify) => {
           });
           messageId = message.id;
           await fastify.prisma.apiMessageMeta.create({
-            data: { messageId: message.id, apiKeyId, organizationId, dst, callbackUrl, callbackMethod: parsed.callbackMethod },
+            data: { messageId: message.id, apiKeyId, organizationId, parentOrganizationId: viaParentOrgId, dst, callbackUrl, callbackMethod: parsed.callbackMethod },
           });
           // The queued callback goes BEFORE the send job so the worker's `sent` can never race ahead of it.
           // Best-effort: a failure here must not fail the accepted message.
           try { await enqueueStatusCallback(fastify.prisma, message.id, "queued"); }
           catch (err) { request.log.error({ error: safeErr(err), messageId: message.id }, "public API queued-callback enqueue failed"); }
-          await publicApiSendQueue.add("send", { messageId: message.id, organizationId, to: dst, content }, { jobId: `pubsend-${message.id}` });
+          await publicApiSendQueue.add("send", { messageId: message.id, organizationId, ...(viaParentOrgId ? { viaParentOrgId } : {}), to: dst, content },{ jobId: `pubsend-${message.id}` });
         } catch (err) {
           // Never log the error object or message: Prisma validation errors echo the query (phone numbers, text).
           request.log.error({ error: safeErr(err), messageId, organizationId }, "public API send failed for a destination");

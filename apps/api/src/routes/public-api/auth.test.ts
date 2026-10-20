@@ -29,7 +29,7 @@ describe("publicApiAuth", () => {
   let app: FastifyInstance;
   beforeEach(async () => {
     vi.clearAllMocks();
-    mockPrisma.apiKey.findUnique.mockResolvedValue({ id: ID, organizationId: "org-1", keyHash: hashToken("good-token"), revokedAt: null, lastUsedAt: null });
+    mockPrisma.apiKey.findUnique.mockResolvedValue({ id: ID, organizationId: "org-1", keyHash: hashToken("good-token"), revokedAt: null, lastUsedAt: null, scopes: ["whatsapp"] });
     mockPrisma.apiKey.update.mockResolvedValue({});
     mockPrisma.organization.findUnique.mockResolvedValue({ status: "active" });
     delete process.env["PUBLIC_API_ALLOWED_ORGS"];
@@ -48,7 +48,7 @@ describe("publicApiAuth", () => {
   it("accepts valid credentials and exposes the org", async () => {
     const res = await get(basic(ID, "good-token"));
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ apiKeyId: ID, organizationId: "org-1" });
+    expect(res.json()).toEqual({ apiKeyId: ID, organizationId: "org-1", scopes: ["whatsapp"] });
   });
 
   it.each([

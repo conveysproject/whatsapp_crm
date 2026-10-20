@@ -9,7 +9,8 @@ export type SendContentForWorker =
   | { kind: "location"; latitude: string; longitude: string; name: string; address: string }
   | { kind: "interactive"; interactive: WaInteractivePayload };
 
-export interface SendJob { messageId: string; organizationId: string; to: string; content: SendContentForWorker }
+/** `viaParentOrgId` is set when a parent key sends for a linked child (`organizationId` is then the child). */
+export interface SendJob { messageId: string; organizationId: string; viaParentOrgId?: string; to: string; content: SendContentForWorker }
 
 export interface CallbackJob {
   apiKeyId: string;

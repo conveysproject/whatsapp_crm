@@ -64,7 +64,7 @@ const logLines: string[] = [];
 async function buildApp(orgId = "org-1"): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: "error", stream: { write: (l: string) => { logLines.push(l); } } } });
   app.decorate("prisma", mockPrisma as unknown as PrismaClient);
-  app.addHook("onRequest", async (r) => { r.publicApi = { apiKeyId: "k1", organizationId: orgId }; });
+  app.addHook("onRequest", async (r) => { r.publicApi = { apiKeyId: "k1", organizationId: orgId, scopes: ["whatsapp"] }; });
   const { publicApiTemplatesRouter } = await import("./templates.js");
   await app.register(publicApiTemplatesRouter, { prefix: "/v1/Account/:authId" });
   return app;
