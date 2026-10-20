@@ -334,3 +334,101 @@ describe("impersonation guard hook", () => {
     expect(classifyRoute("POST", "/v1/contact-groups/build")).toBe("edit");
   });
 });
+
+describe("parent-session guard rules", () => {
+  it("global lists classify the parent and client-invitation write routes (no unclassified route)", () => {
+    expect(classifyRoute("POST", "/v1/client-invitations")).toBe("blocked");
+    expect(classifyRoute("POST", "/v1/parent/children/:childId/impersonate")).toBe("blocked");
+    expect(classifyRoute("POST", "/v1/parent/children/:childId/impersonate/elevate")).toBe("blocked");
+    expect(classifyRoute("PATCH", "/v1/organization/parent-link")).toBe("blocked");
+  });
+
+  it("parent sessions also lose GETs on parent, client-invitation, parent-link and secret families", () => {
+    for (const p of [
+      "/v1/parent/children",
+      "/v1/client-invitations",
+      "/v1/organization/parent-link",
+      "/v1/vendor-settings",
+      "/v1/webhook-actions",
+    ]) {
+      expect(classifyRoute("GET", p, true)).toBe("blocked");
+    }
+    // super-admin sessions keep today's rules for these GETs
+    expect(classifyRoute("GET", "/v1/parent/children")).toBe("read-like");
+    expect(classifyRoute("GET", "/v1/vendor-settings")).toBe("read-like");
+    expect(classifyRoute("GET", "/v1/contacts", true)).toBe("read-like");
+  });
+
+  async function build(mode: "readonly" | "edit", auditCreate: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue({})) {
+    const guard = (await import("./impersonation-guard.js")).default;
+    const app = Fastify({ logger: false });
+    app.decorate("prisma", { adminAuditLog: { create: auditCreate } } as never);
+    app.addHook("preHandler", async (req) => {
+      req.auth = {
+        userId: "cu", organizationId: "c1", role: "admin", permissions: {}, teamId: null, teamRole: null,
+        impersonation: { adminId: "pu", mode, parentOrganizationId: "p1" },
+      };
+    });
+    await app.register(guard);
+    const ok = async () => ({ ok: true });
+    for (const url of [
+      "/v1/contacts", "/v1/parent/children", "/v1/client-invitations", "/v1/organization/parent-link",
+      "/v1/api-credentials", "/v1/users", "/v1/admin/organizations", "/v1/vendor-settings", "/v1/webhook-actions",
+    ]) app.get(url, ok);
+    for (const url of [
+      "/v1/parent/children/c1/impersonate", "/v1/parent/children/c1/impersonate/elevate", "/v1/client-invitations",
+      "/v1/api-credentials", "/v1/users", "/v1/invitations", "/v1/organizations", "/v1/admin/impersonation/elevate",
+    ]) app.post(url, ok);
+    app.delete("/v1/parent/children/c1/impersonate", ok);
+    app.post("/v1/contacts", ok);
+    await app.ready();
+    return app;
+  }
+  const code = (r: { json: () => unknown }) => (r.json() as { error: { code: string } }).error.code;
+
+  it("edit-mode parent session: every parent-only and platform prefix stays blocked", async () => {
+    const app = await build("edit");
+    for (const url of [
+      "/v1/parent/children", "/v1/client-invitations", "/v1/organization/parent-link", "/v1/api-credentials",
+      "/v1/users", "/v1/admin/organizations", "/v1/vendor-settings", "/v1/webhook-actions",
+    ]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.statusCode, url).toBe(403);
+      expect(code(res)).toBe("IMPERSONATION_BLOCKED");
+    }
+    for (const url of [
+      "/v1/parent/children/c1/impersonate", "/v1/parent/children/c1/impersonate/elevate", "/v1/client-invitations",
+      "/v1/api-credentials", "/v1/users", "/v1/invitations", "/v1/organizations", "/v1/admin/impersonation/elevate",
+    ]) {
+      const res = await app.inject({ method: "POST", url });
+      expect(res.statusCode, url).toBe(403);
+      expect(code(res)).toBe("IMPERSONATION_BLOCKED");
+    }
+    expect((await app.inject({ method: "DELETE", url: "/v1/parent/children/c1/impersonate" })).statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("read-only parent session cannot write to a normal route, and reads pass", async () => {
+    const app = await build("readonly");
+    const w = await app.inject({ method: "POST", url: "/v1/contacts" });
+    expect(w.statusCode).toBe(403);
+    expect(code(w)).toBe("IMPERSONATION_READ_ONLY");
+    expect((await app.inject({ method: "GET", url: "/v1/contacts" })).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("edit-mode parent writes are audited with the parent user and org", async () => {
+    const create = vi.fn().mockResolvedValue({});
+    const app = await build("edit", create);
+    expect((await app.inject({ method: "POST", url: "/v1/contacts" })).statusCode).toBe(200);
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorId: "pu",
+        action: "impersonation.request",
+        targetId: "cu",
+        metadata: { method: "POST", route: "/v1/contacts", organizationId: "c1", parentOrganizationId: "p1" },
+      }),
+    });
+    await app.close();
+  });
+});

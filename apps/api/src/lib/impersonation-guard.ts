@@ -57,6 +57,26 @@ export const BLOCKED_PREFIXES: readonly string[] = [
   "/v1/onboarding",
   "/v1/notifications", // marking notifications read is visible to the tenant
   "/v1/register",
+  // Parent/child organizations: managing links and client invitations is never an impersonation action.
+  "/v1/parent",
+  "/v1/client-invitations",
+  "/v1/organization/parent-link",
+];
+
+/**
+ * Extra families that are off-limits for sessions started by a PARENT organization admin (any method,
+ * even in edit mode). A parent must never reach other parent features through a child (no nested
+ * sessions, no invitations, no link changes) and never read a child's stored secrets.
+ */
+export const PARENT_SESSION_BLOCKED_PREFIXES: readonly string[] = [
+  "/v1/parent",
+  "/v1/client-invitations",
+  "/v1/organization/parent-link",
+  "/v1/api-credentials", // GETs list the child's public API keys
+  "/v1/users", // GETs expose the child's user list and permissions
+  "/v1/invitations",
+  "/v1/vendor-settings", // holds the WhatsApp access token: a parent never sees a child's secrets
+  "/v1/webhook-actions", // signing secrets and headers
 ];
 
 /**
@@ -218,8 +238,9 @@ function isBlockedPrefix(pattern: string): boolean {
 }
 
 /** Classify a registered route (method + full pattern). Safe methods are "read-like". */
-export function classifyRoute(method: string, pattern: string): RouteClass {
+export function classifyRoute(method: string, pattern: string, parentSession = false): RouteClass {
   const m = method.toUpperCase();
+  if (parentSession && matchesPrefix(PARENT_SESSION_BLOCKED_PREFIXES, pattern)) return "blocked";
   if (SAFE_METHODS.has(m)) return matchesPrefix(BLOCKED_GET_PREFIXES, pattern) ? "blocked" : "read-like";
   const key = `${m} ${pattern}`;
   // Blocked wins over everything: all DELETEs, blocked families and routes.
@@ -239,6 +260,7 @@ const impersonationGuardPlugin: FastifyPluginAsync = async (fastify) => {
     adminId: string,
     action: string,
     pattern: string,
+    parentOrganizationId?: string,
   ): Promise<boolean> {
     try {
       if (!fastify.prisma) throw new Error("prisma unavailable");
@@ -249,7 +271,12 @@ const impersonationGuardPlugin: FastifyPluginAsync = async (fastify) => {
           action,
           targetType: "user",
           targetId: request.auth.userId,
-          metadata: { method: request.method, route: pattern, organizationId: request.auth.organizationId },
+          metadata: {
+            method: request.method,
+            route: pattern,
+            organizationId: request.auth.organizationId,
+            ...(parentOrganizationId ? { parentOrganizationId } : {}),
+          },
           ipAddress: request.ip ?? null,
           userAgent: request.headers["user-agent"] ?? null,
         },
@@ -271,12 +298,13 @@ const impersonationGuardPlugin: FastifyPluginAsync = async (fastify) => {
     const pattern = request.routeOptions?.url;
     if (!pattern) return; // unmatched route: 404 handler, nothing to guard
 
-    const cls = classifyRoute(request.method, pattern);
+    const parentOrgId = imp.parentOrganizationId;
+    const cls = classifyRoute(request.method, pattern, parentOrgId !== undefined);
     if (cls === "read-like") {
       if (isSecretRead(request.method, pattern)) {
-        if (!(await auditOrRefuse(request, reply, imp.adminId, "impersonation.secret_read", pattern))) return reply;
+        if (!(await auditOrRefuse(request, reply, imp.adminId, "impersonation.secret_read", pattern, parentOrgId))) return reply;
       } else if (AUDITED_READ_LIKE_POST.has(`${request.method.toUpperCase()} ${pattern}`)) {
-        if (!(await auditOrRefuse(request, reply, imp.adminId, "impersonation.sync", pattern))) return reply;
+        if (!(await auditOrRefuse(request, reply, imp.adminId, "impersonation.sync", pattern, parentOrgId))) return reply;
       }
       return;
     }
@@ -296,7 +324,7 @@ const impersonationGuardPlugin: FastifyPluginAsync = async (fastify) => {
       });
     }
     // Edit-mode write: audited before the handler runs.
-    if (!(await auditOrRefuse(request, reply, imp.adminId, "impersonation.request", pattern))) return reply;
+    if (!(await auditOrRefuse(request, reply, imp.adminId, "impersonation.request", pattern, parentOrgId))) return reply;
   });
 };
 
