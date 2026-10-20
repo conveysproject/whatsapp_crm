@@ -97,7 +97,7 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
         request.log.error({ err }, "client invitation email failed");
       }
       // The token only travels by email; never return it to the caller.
-      const { token: _token, ...data } = invitation;
+      const data = { ...invitation, token: undefined };
       return reply.status(201).send({ data, emailSent });
     },
   );
