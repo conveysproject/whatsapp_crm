@@ -63,7 +63,8 @@ export function clientInvitationAcceptUrl(token: string): string {
 // Each replacement must change the string, so a reworded base template fails loudly instead of
 // silently dropping the read-access notice.
 function mustReplace(html: string, from: RegExp | string, to: string): string {
-  const out = html.replace(from, to);
+  // Function replacer: `to` carries the parent's name, so "$&", "$1", "$`" in it must stay literal.
+  const out = html.replace(from, () => to);
   if (out === html) throw new Error("buildClientInvitationEmail: base invitation template changed");
   return out;
 }

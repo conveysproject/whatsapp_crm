@@ -25,6 +25,14 @@ describe("invitation email", () => {
     expect(html).toContain("&lt;i&gt;Acme");
     expect(html).toContain("&quot;");
   });
+  it("inserts a parent name literally: $&, $1, $` and $' are not expanded as replacement patterns", () => {
+    const name = "Cash $& Co $1 $` $' $$";
+    const html = buildClientInvitationEmail({ parentName: name, acceptUrl: "https://x/accept" });
+    const escaped = "Cash $&amp; Co $1 $` $' $$"; // only & is HTML-escaped
+    expect(html).toContain(`<strong>${escaped}</strong> has invited you`);
+    expect(html).toContain(`Important: ${escaped} will have full read access`);
+    expect(html).not.toContain("You've been invited to join as");
+  });
   it("builds the client accept url", () => {
     vi.stubEnv("WEB_URL", "https://app.example.com/");
     expect(clientInvitationAcceptUrl("a b")).toBe("https://app.example.com/client-invitations/a%20b/accept");
