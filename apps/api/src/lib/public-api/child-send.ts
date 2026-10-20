@@ -3,6 +3,8 @@ import { canBeParent, getChildOrgIds, isChildOf, parentOrgsEnabled } from "../pa
 import { isOrgBlockedFromPublicApi } from "./access.js";
 
 export const SEND_FOR_CHILDREN_SCOPE = "send_for_children";
+/** wabaId the route passes for a malformed waba_id: contains a NUL, so it can never equal a real WABA id. */
+export const MALFORMED_WABA = "\u0000malformed";
 const NUMBER_KEY = "current_phone_number_number";
 
 /**
