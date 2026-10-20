@@ -10,6 +10,7 @@ import {
   impersonationExitPath,
   shouldRunImpersonationRuntime,
   startResyncListeners,
+  setImpersonationCookie,
 } from "./impersonation";
 
 const config = { apiBase: "http://localhost:4000/", origin: "https://app.example.com" };
@@ -251,5 +252,41 @@ describe("parent-issued sessions", () => {
     });
     expect(impersonationExitPath(admin)).toBe("/admin/organizations");
     expect(impersonationExitPath(null)).toBe("/admin/organizations");
+  });
+});
+
+describe("setImpersonationCookie keeps who issued the session", () => {
+  const base = {
+    token: "t-1",
+    orgId: "child-1",
+    orgName: "Client",
+    userId: "u-1",
+    userName: "Admin",
+    mode: "readonly" as const,
+    expiresAt: Date.now() + 60_000,
+  };
+  const sent = (fetchMock: ReturnType<typeof vi.fn>) =>
+    JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body) as Record<string, unknown>;
+
+  it("sends source=parent so the cookie (the source of truth after a reload) still routes end/elevate to the parent routes", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await setImpersonationCookie({ ...base, source: "parent" })).toBe(true);
+    expect(sent(fetchMock)["source"]).toBe("parent");
+    // the server stores the body as the meta cookie; reading it back must still be a parent session
+    const { token, ...meta } = parseSessionObject({ ...sent(fetchMock) })!;
+    const restored = parseSessionObject({ ...meta, token });
+    expect(restored?.source).toBe("parent");
+    expect(impersonationEndpoints(restored!).end).toBe("/v1/parent/children/child-1/impersonate");
+    expect(impersonationExitPath(restored)).toBe("/parent");
+    vi.unstubAllGlobals();
+  });
+
+  it("does not add a source for a super-admin session", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+    await setImpersonationCookie(base);
+    expect("source" in sent(fetchMock)).toBe(false);
+    vi.unstubAllGlobals();
   });
 });

@@ -184,11 +184,12 @@ export function createImpersonatingFetch(
 /** Persist the session in the httpOnly cookies used by server-rendered pages and other tabs. */
 export async function setImpersonationCookie(session: ImpersonationSession): Promise<boolean> {
   try {
-    const { token, expiresAt, orgId, orgName, userId, userName, mode } = session;
+    const { token, expiresAt, orgId, orgName, userId, userName, mode, source } = session;
     const res = await fetch("/api/impersonation", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, expiresAt, orgId, orgName, userId, userName, mode }),
+      // `source` must reach the cookie: it is the source of truth after a reload and picks the parent vs super-admin routes.
+      body: JSON.stringify({ token, expiresAt, orgId, orgName, userId, userName, mode, ...(source ? { source } : {}) }),
     });
     return res.ok;
   } catch {
