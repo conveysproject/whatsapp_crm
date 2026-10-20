@@ -25,11 +25,11 @@ const notFound = (reply: FastifyReply) =>
 const forbiddenChild = (reply: FastifyReply) =>
   reply.status(403).send({ error: { code: "FORBIDDEN_CHILD", message: "Not available" } });
 
-/** Flag, permission and parent-capability gate. Same order as client-invitations. */
+/** Flag, permission and parent-capability gate. Same order as client-invitations. D15: the admin role only. */
 async function parentGuard(request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> {
   if (!parentOrgsEnabled()) return notFound(reply);
   const { role, permissions, organizationId } = request.auth;
-  if (!canAccess(role, permissions, "parent_access")) {
+  if (role !== "admin" || !canAccess(role, permissions, "parent_access")) {
     return reply.status(403).send({ error: { code: "FORBIDDEN", message: "parent_access permission required" } });
   }
   if (!(await canBeParent(prisma, organizationId))) {

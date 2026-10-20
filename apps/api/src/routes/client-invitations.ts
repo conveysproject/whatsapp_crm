@@ -20,11 +20,11 @@ const notFound = (reply: FastifyReply) =>
 const invalidToken404 = (reply: FastifyReply) =>
   reply.status(404).send({ error: { code: "INVALID_TOKEN", message: "Invitation not found or expired" } });
 
-/** Flag, permission and parent-capability gate for the parent-side (authenticated) routes. */
+/** Flag, permission and parent-capability gate for the parent-side (authenticated) routes. D15: the admin role only. */
 async function parentGuard(request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> {
   if (!parentOrgsEnabled()) return notFound(reply);
   const { role, permissions, organizationId } = request.auth;
-  if (!canAccess(role, permissions, "parent_access")) {
+  if (role !== "admin" || !canAccess(role, permissions, "parent_access")) {
     return reply.status(403).send({ error: { code: "FORBIDDEN", message: "parent_access permission required" } });
   }
   if (!(await canBeParent(prisma, organizationId))) {

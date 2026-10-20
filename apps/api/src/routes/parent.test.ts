@@ -148,6 +148,22 @@ describe("gates", () => {
     expect(mockPrisma.parentAuditEvent.create).not.toHaveBeenCalled();
     expect(mockPrisma.message.findMany).not.toHaveBeenCalled();
   });
+  it.each(urls)("D15 admin only: manager WITH parent_access granted => 403 for %s, nothing read", async (u) => {
+    auth = { ...adminAuth, role: "manager", permissions: { parent_access: "allow" } };
+    const res = await get(u);
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe("FORBIDDEN");
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+    expect(mockPrisma.message.findMany).not.toHaveBeenCalled();
+    expect(mockPrisma.parentAuditEvent.create).not.toHaveBeenCalled();
+    expect(mockCanBeParent).not.toHaveBeenCalled();
+  });
+  it("D15 admin only: manager WITH parent_access granted cannot remove a child", async () => {
+    auth = { ...adminAuth, role: "manager", permissions: { parent_access: "allow" } };
+    const res = await app.inject({ method: "DELETE", url: "/v1/parent/children/c1" });
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
   it.each(urls)("non-parent org => 403 for %s", async (u) => {
     mockCanBeParent.mockResolvedValue(false);
     expect((await get(u)).statusCode).toBe(403);

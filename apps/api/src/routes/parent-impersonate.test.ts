@@ -240,7 +240,8 @@ describe("POST /v1/parent/children/:childId/impersonate", () => {
       auth = { ...baseAuth, role, permissions: { parent_access: "allow" } };
       const res = await impersonate("c1");
       expect(res.statusCode, role).toBe(403);
-      expect(res.json()).toEqual({ error: { code: "FORBIDDEN_CHILD", message: "Not available" } });
+      // The guard refuses before the handler (D15): same body as a role without parent_access.
+      expect(res.json()).toEqual({ error: { code: "FORBIDDEN", message: "parent_access permission required" } });
       expect(mockRedis.incr).not.toHaveBeenCalled();
       expect(sessionSets()).toEqual([]);
       expect(mockPrisma.impersonationLog.create).not.toHaveBeenCalled();
@@ -333,7 +334,7 @@ describe("parent session elevate and end", () => {
       const d = await end({ token: "t" });
       expect(e.statusCode, role).toBe(403);
       expect(d.statusCode, role).toBe(403);
-      expect(e.json()).toEqual({ error: { code: "FORBIDDEN_CHILD", message: "Not available" } });
+      expect(e.json()).toEqual({ error: { code: "FORBIDDEN", message: "parent_access permission required" } });
       expect(mockRedis.get).not.toHaveBeenCalled();
       expect(sessionSets()).toEqual([]);
       expect(mockRedis.del).not.toHaveBeenCalled();

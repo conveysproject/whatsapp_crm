@@ -172,10 +172,18 @@ describe("POST /v1/client-invitations", () => {
     expect(mockPrisma.clientInvitation.create).not.toHaveBeenCalled();
   });
 
-  it("role with parent_access allow is accepted", async () => {
+  it("D15 admin only: a manager WITH parent_access granted still gets 403 on create, list and revoke", async () => {
     auth = { ...adminAuth, role: "manager" as never, permissions: { parent_access: "allow" } };
     const app = await buildApp();
-    expect((await post(app)).statusCode).toBe(201);
+    const res = await post(app);
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe("FORBIDDEN");
+    expect((await app.inject({ method: "GET", url: "/v1/client-invitations" })).statusCode).toBe(403);
+    expect((await app.inject({ method: "DELETE", url: "/v1/client-invitations/inv-1" })).statusCode).toBe(403);
+    expect(mockPrisma.clientInvitation.create).not.toHaveBeenCalled();
+    expect(mockPrisma.clientInvitation.findMany).not.toHaveBeenCalled();
+    expect(mockPrisma.clientInvitation.updateMany).not.toHaveBeenCalled();
+    expect(mockCanBeParent).not.toHaveBeenCalled();
   });
 
   it("org that is not a parent gets 403", async () => {

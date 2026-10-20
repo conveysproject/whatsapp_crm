@@ -222,6 +222,44 @@ describe("PUT /roles/:role/permissions", () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it.each([
+    ["manager", { parent_access: "allow" }],
+    ["agent", { inbox_access: "allow", parent_access: "allow" }],
+    ["viewer", { parent_access: "deny" }],
+    ["manager", { parent_anything: "allow" }],
+  ])("D15: parent_* keys can never be granted to %s (400, nothing stored)", async (role, permissions) => {
+    const app = await buildApp();
+    mockPrisma.vendorSetting.upsert.mockResolvedValue({});
+    const res = await app.inject({ method: "PUT", url: `/roles/${role}/permissions`, payload: { permissions } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("PERMISSION_NOT_GRANTABLE");
+    expect(mockPrisma.vendorSetting.upsert).not.toHaveBeenCalled();
+    expect(mockRedis.del).not.toHaveBeenCalled();
+  });
+
+  it("superAdmin can still save the admin role's defaults (admin always has parent_access; the key is inert there)", async () => {
+    const app = await buildApp({ role: "superAdmin" as const satisfies typeof mockAuth.role });
+    mockPrisma.vendorSetting.upsert.mockResolvedValue({});
+    const res = await app.inject({
+      method: "PUT",
+      url: "/roles/admin/permissions",
+      payload: { permissions: { contacts_access: "allow", parent_access: "allow" } },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("other keys are unaffected (a key merely containing 'parent' is fine)", async () => {
+    const app = await buildApp();
+    mockPrisma.vendorSetting.upsert.mockResolvedValue({});
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    const res = await app.inject({
+      method: "PUT",
+      url: "/roles/manager/permissions",
+      payload: { permissions: { inbox_access: "allow", "contacts_access@show_parent_company": "allow" } },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
   it("invalidates auth caches for users with the affected role", async () => {
     const app = await buildApp();
     mockPrisma.vendorSetting.upsert.mockResolvedValue({});

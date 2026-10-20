@@ -60,9 +60,14 @@ async function validUrl(reply: FastifyReply, url: string | null | undefined, fie
   }
 }
 
-/** A key that can send for children is managed (patched, rotated) only by someone who also holds parent_access. */
+/** Parent powers (D15): the admin role only, and it must also hold parent_access. */
+function isParentAdmin(request: FastifyRequest): boolean {
+  return request.auth.role === "admin" && canAccess(request.auth.role, request.auth.permissions, "parent_access");
+}
+
+/** A key that can send for children is managed (patched, rotated) only by a parent admin. */
 function mayManageKey(request: FastifyRequest, scopes: string[]): boolean {
-  return !(scopes ?? []).includes(SEND_FOR_CHILDREN_SCOPE) || canAccess(request.auth.role, request.auth.permissions, "parent_access");
+  return !(scopes ?? []).includes(SEND_FOR_CHILDREN_SCOPE) || isParentAdmin(request);
 }
 
 export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
@@ -97,7 +102,7 @@ export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
     if (!name?.trim()) return reply.status(400).send({ error: { code: "MISSING_NAME", message: "name is required" } });
     // The extra scope is only for a parent organization with the feature on; everyone else gets one generic refusal.
     const wantsChildren = requestedScopes?.includes(SEND_FOR_CHILDREN_SCOPE) ?? false;
-    if (wantsChildren && !(canAccess(request.auth.role, request.auth.permissions, "parent_access") && parentOrgsEnabled() && (await canBeParent(fastify.prisma, organizationId)))) {
+    if (wantsChildren && !(isParentAdmin(request) && parentOrgsEnabled() && (await canBeParent(fastify.prisma, organizationId)))) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Not available" } });
     }
     if (!(await validUrl(reply, callbackUrl, "callbackUrl"))) return reply;

@@ -336,12 +336,24 @@ describe("api-credentials: send_for_children scope", () => {
       expect(mockPrisma.apiKey.update).not.toHaveBeenCalled();
     });
 
-    it("with parent_access the same manager can create, rotate and patch it", async () => {
+    it("D15 admin only: even WITH parent_access granted, a manager gets 403 on create, rotate and PATCH of a scoped key", async () => {
       const m2 = await buildApp("manager", { ...keyPerms, parent_access: "allow" });
       mockPrisma.apiKey.findFirst.mockResolvedValue(scoped);
-      expect((await m2.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: "P", scopes: ["send_for_children"] } })).statusCode).toBe(201);
-      expect((await m2.inject({ method: "POST", url: "/v1/api-credentials/key-s/rotate" })).statusCode).toBe(200);
+      expect((await m2.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: "P", scopes: ["send_for_children"] } })).statusCode).toBe(403);
+      expect((await m2.inject({ method: "POST", url: "/v1/api-credentials/key-s/rotate" })).statusCode).toBe(403);
+      expect((await m2.inject({ method: "PATCH", url: "/v1/api-credentials/key-s", payload: { name: "N" } })).statusCode).toBe(403);
+      expect(mockPrisma.apiKey.create).not.toHaveBeenCalled();
+      expect(mockPrisma.apiKey.update).not.toHaveBeenCalled();
       await m2.close();
+    });
+
+    it("the parent admin can still create, rotate and patch a scoped key", async () => {
+      const adm = await buildApp("admin", {});
+      mockPrisma.apiKey.findFirst.mockResolvedValue(scoped);
+      expect((await adm.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: "P", scopes: ["send_for_children"] } })).statusCode).toBe(201);
+      expect((await adm.inject({ method: "POST", url: "/v1/api-credentials/key-s/rotate" })).statusCode).toBe(200);
+      expect((await adm.inject({ method: "PATCH", url: "/v1/api-credentials/key-s", payload: { name: "N" } })).statusCode).toBe(200);
+      await adm.close();
     });
 
     it("ordinary keys are unaffected for the same manager", async () => {
