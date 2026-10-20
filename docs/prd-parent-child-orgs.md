@@ -79,7 +79,7 @@ child; a child seeing parent data; impersonation without an audit row; a unlinke
   parent, makes the invitee a user of the child org. **Open Q1: which role.**
 - `GET /v1/parent/children`, `GET /v1/parent/dashboard`, `GET /v1/parent/children/:id/stats`:
   parent only; all queries scoped to the parent's current children.
-- `DELETE /v1/parent/children/:id` (parent) and `POST /v1/organizations/leave-parent` (child admin): unlink.
+- `DELETE /v1/parent/children/:id` (parent) and `POST /v1/organization/leave-parent` (child admin): unlink.
 - `POST /v1/parent/children/:id/impersonate`: parent admin only; returns the same kind of token as today.
 - Public API send: optional child identifier on the existing send call. Recommended default: the existing
   `src` field already carries the sender number and must match the org's number
