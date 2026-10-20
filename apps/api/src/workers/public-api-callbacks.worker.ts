@@ -1,6 +1,7 @@
 import { Worker, UnrecoverableError, type Job } from "bullmq";
 import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
+import { isChildOf } from "../lib/parent-orgs.js";
 import { checkPublicApiAccess } from "../lib/public-api/access.js";
 import { decryptToken } from "../lib/public-api/credentials.js";
 import { newNonce, signV2 } from "../lib/public-api/plivo-signature.js";
@@ -28,11 +29,15 @@ export async function deliverCallback(job: Pick<Job<CallbackJob>, "data"> & { at
   };
 
   const key = await prisma.apiKey.findUnique({ where: { id: apiKeyId }, select: { tokenEnc: true, revokedAt: true, organizationId: true } });
-  if (!key || key.organizationId !== organizationId || key.revokedAt || !key.tokenEnc) {
+  if (!key || key.revokedAt || !key.tokenEnc) return drop("credential unavailable");
+  // The message belongs to the key's own org, or to a child the key's org (a parent) sent for. Anything else is dropped.
+  // The link is checked now, so a child unlinked in the meantime stops receiving callbacks at the parent.
+  if (key.organizationId !== organizationId && !(await isChildOf(prisma, key.organizationId, organizationId))) {
     return drop("credential unavailable");
   }
   // Queued callbacks of a blocked / not-allowed org are dropped without retries. A thrown lookup is retried (fail closed).
-  if (!(await checkPublicApiAccess(prisma, organizationId)).allowed) return drop("access disabled");
+  // Access is the key owner's (equal to organizationId unless a parent key sent for a child).
+  if (!(await checkPublicApiAccess(prisma, key.organizationId)).allowed) return drop("access disabled");
   try { await assertSafeCallbackUrl(url); }
   catch (err) {
     if (err instanceof UnsafeUrlError) return drop("unsafe callback URL", `unsafe callback URL: ${err.message}`);

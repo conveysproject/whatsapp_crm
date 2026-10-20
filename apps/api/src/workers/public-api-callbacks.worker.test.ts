@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type * as SafeUrlModule from "../lib/public-api/safe-url.js";
 
-const { prisma, checkAccess } = vi.hoisted(() => ({ prisma: { apiKey: { findUnique: vi.fn() }, apiCallbackAttempt: { create: vi.fn() } }, checkAccess: vi.fn() }));
+const { prisma, checkAccess } = vi.hoisted(() => ({ prisma: { apiKey: { findUnique: vi.fn() }, organization: { findUnique: vi.fn() }, apiCallbackAttempt: { create: vi.fn() } }, checkAccess: vi.fn() }));
 vi.mock("../lib/prisma.js", () => ({ prisma }));
 vi.mock("../lib/public-api/access.js", () => ({ checkPublicApiAccess: (...a: unknown[]) => checkAccess(...a) }));
 vi.mock("../lib/queue.js", () => ({ redisConnection: {} }));
@@ -246,5 +246,40 @@ describe("deliverCallback attempt logging", () => {
 describe("callbackBackoff", () => {
   it("is 60s, 120s, 240s for the three retries", () => {
     expect([1, 2, 3].map(callbackBackoff)).toEqual([60000, 120000, 240000]);
+  });
+});
+
+describe("deliverCallback for a parent key and a child message", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env["PUBLIC_API_TOKEN_KEY"] = Buffer.alloc(32, 5).toString("base64");
+    prisma.apiKey.findUnique.mockResolvedValue({ tokenEnc: encryptToken("secret-token"), revokedAt: null, organizationId: "parent-1" });
+    checkAccess.mockResolvedValue({ allowed: true });
+  });
+
+  it("delivers a child message's status callback to the parent key's URL, signed with the parent key's token", async () => {
+    prisma.organization.findUnique.mockResolvedValue({ parentOrganizationId: "parent-1" });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    await deliverCallback(data({ organizationId: "child-1", url: "https://parent.example.com/hook" }), fetchMock as unknown as typeof fetch);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]! as [string, RequestInit & { headers: Record<string, string> }];
+    expect(url).toBe("https://parent.example.com/hook");
+    expect(init.headers["X-Plivo-Signature-V2"]).toBe(signV2("https://parent.example.com/hook", init.headers["X-Plivo-Signature-V2-Nonce"]!, "secret-token"));
+    expect(checkAccess).toHaveBeenCalledWith(prisma, "parent-1"); // the key owner's access governs
+  });
+
+  it("drops a message of an unrelated org (no fetch, no retries)", async () => {
+    prisma.organization.findUnique.mockResolvedValue({ parentOrganizationId: "someone-else" });
+    const fetchMock = vi.fn();
+    const err = await deliverCallback(data({ organizationId: "stranger" }), fetchMock as unknown as typeof fetch).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(UnrecoverableError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("drops it once the child has been unlinked", async () => {
+    prisma.organization.findUnique.mockResolvedValue({ parentOrganizationId: null });
+    const fetchMock = vi.fn();
+    await expect(deliverCallback(data({ organizationId: "child-1" }), fetchMock as unknown as typeof fetch)).rejects.toBeInstanceOf(UnrecoverableError);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

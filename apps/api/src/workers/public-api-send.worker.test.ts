@@ -214,3 +214,32 @@ describe("handleSendJobFailed", () => {
     errSpy.mockRestore();
   });
 });
+
+describe("processSendJob for a parent-key send", () => {
+  const viaJob = () => ({ data: { messageId: "m1", organizationId: "child-1", viaParentOrgId: "parent-1", to: "14155552672", content: { kind: "text", text: "hi" } } }) as never;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma.message.findFirst.mockResolvedValue({ id: "m1", status: "sending", conversationId: "conv-1" });
+    prisma.message.update.mockResolvedValue({});
+    prisma.message.updateMany.mockResolvedValue({ count: 1 });
+    prisma.conversation.update.mockResolvedValue({});
+    checkAccess.mockResolvedValue({ allowed: true });
+    wa.sendTextMessage.mockResolvedValue({ messageId: "wamid.1" });
+    enqueueCb.mockResolvedValue(undefined);
+  });
+
+  it("sends with the CHILD's phone number id and token while the link holds", async () => {
+    prisma.organization.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === "child-1" ? { parentOrganizationId: "parent-1", phoneNumberId: "pn-child", wabaAccessToken: "tok-child" } : { parentOrganizationId: null, phoneNumberId: "pn-parent", wabaAccessToken: "tok-parent" });
+    await processSendJob(viaJob());
+    expect(wa.sendTextMessage).toHaveBeenCalledWith("pn-child", "14155552672", "hi", "tok-child");
+    expect(checkAccess).toHaveBeenCalledWith(prisma, "parent-1");
+  });
+
+  it("fails the message without sending when the child was unlinked after acceptance", async () => {
+    prisma.organization.findUnique.mockResolvedValue({ parentOrganizationId: null, phoneNumberId: "pn-child", wabaAccessToken: "tok-child" });
+    await processSendJob(viaJob());
+    expect(wa.sendTextMessage).not.toHaveBeenCalled();
+    expect(enqueueCb).toHaveBeenCalledWith(prisma, "m1", "failed", { errorCode: null });
+  });
+});
