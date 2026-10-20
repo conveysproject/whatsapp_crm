@@ -3,6 +3,8 @@ import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { mobileUpgradeRequired, verifyBearer } from "../auth/identity.js";
 import { defaultsForRole, FIXED_PERMISSION_ROLES } from "../lib/default-role-permissions.js";
 import { isPlatformOnlyPath } from "../lib/demo-guard.js";
+import { canAccess } from "../lib/permissions.js";
+import { canBeParent, isChildOf, parentOrgsEnabled } from "../lib/parent-orgs.js";
 import { redis } from "../lib/redis.js";
 import type { AuthContext } from "../types/fastify.js";
 
@@ -85,6 +87,35 @@ async function resolveAuthContext(
   return { userId, organizationId: user.organizationId, role: user.role, permissions, teamId: user.teamId, teamRole: user.teamRole, sid: null };
 }
 
+/**
+ * A parent-issued impersonation token (payload has issuedByOrgId) is valid only while EVERY condition
+ * still holds, re-checked on each request: the bearer is the issuer's own normal session (the one the
+ * token was issued from), the issuer still sits in the parent org as an active admin with parent_access,
+ * the feature is on, the org can still be a parent, and the target org is still its child.
+ * Any throw or false means the caller answers the same 401 as every other token failure (no oracle).
+ */
+async function parentSessionStillValid(
+  fastify: FastifyInstance,
+  authorization: string | undefined,
+  payload: { organizationId: string; issuedBy: string; issuedSid?: string | null; issuedByOrgId?: unknown },
+): Promise<boolean> {
+  try {
+    const parentOrgId = payload.issuedByOrgId;
+    if (typeof parentOrgId !== "string" || parentOrgId === "") return false;
+    if (!payload.issuedSid) return false;
+    const bearer = await verifyBearer(authorization);
+    if (bearer.typ !== "user" || bearer.userId !== payload.issuedBy || bearer.sid !== payload.issuedSid) return false;
+    if (!parentOrgsEnabled()) return false;
+    // strict lookup: the issuer's CURRENT org must be the parent org; inactive or deleted users fail.
+    const issuer = await resolveAuthContext(fastify, payload.issuedBy, { strictOrganizationId: parentOrgId });
+    if (!issuer || issuer.role !== "admin" || !canAccess(issuer.role, issuer.permissions, "parent_access")) return false;
+    if (!(await canBeParent(fastify.prisma, parentOrgId))) return false;
+    return await isChildOf(fastify.prisma, parentOrgId, payload.organizationId);
+  } catch {
+    return false;
+  }
+}
+
 const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.addHook("preHandler", async (request, reply) => {
     const routeConfig = request.routeOptions?.config as unknown as Record<string, unknown> | undefined;
@@ -101,7 +132,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       if (!raw) {
         return reply.status(401).send({ error: { code: "INVALID_IMPERSONATION_TOKEN", message: "Invalid or expired impersonation token" } });
       }
-      const payload = JSON.parse(raw) as { organizationId?: string; targetUserId?: string; issuedBy?: string; issuedSid?: string | null; mode?: string; isDemo?: boolean };
+      const payload = JSON.parse(raw) as { organizationId?: string; targetUserId?: string; issuedBy?: string; issuedSid?: string | null; issuedByOrgId?: unknown; mode?: string; isDemo?: boolean };
       // Demo login (POST /demo/login) issues org-scoped tokens with isDemo:true. Preserve that
       // behavior only for such payloads: superAdmin scoped to the demo org, no impersonation
       // context. Every other payload without targetUserId is rejected below.
@@ -120,6 +151,19 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       if (!payload.targetUserId || !payload.organizationId || !payload.issuedBy) {
         return reply.status(401).send({ error: { code: "INVALID_IMPERSONATION_TOKEN", message: "Invalid or expired impersonation token" } });
       }
+      // Parent-issued token: its own rules (normal session, parent org and child link re-checked now).
+      const parentIssued = payload.issuedByOrgId !== undefined;
+      if (parentIssued) {
+        const ok = await parentSessionStillValid(fastify, request.headers.authorization, {
+          organizationId: payload.organizationId,
+          issuedBy: payload.issuedBy,
+          issuedSid: payload.issuedSid ?? null,
+          issuedByOrgId: payload.issuedByOrgId,
+        });
+        if (!ok) {
+          return reply.status(401).send({ error: { code: "INVALID_IMPERSONATION_TOKEN", message: "Invalid or expired impersonation token" } });
+        }
+      } else {
       // The bearer must belong to the super admin who issued the token: a leaked token is useless
       // without that admin's live session.
       try {
@@ -131,6 +175,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       } catch {
         return reply.status(401).send({ error: { code: "INVALID_IMPERSONATION_TOKEN", message: "Invalid or expired impersonation token" } });
       }
+      }
       // Stealth: no lastSignInAt stamp, no presence change on the impersonation path.
       const target = await resolveAuthContext(fastify, payload.targetUserId, { strictOrganizationId: payload.organizationId });
       if (!target || target.role === "superAdmin") {
@@ -138,7 +183,11 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       }
       request.auth = {
         ...target,
-        impersonation: { adminId: payload.issuedBy, mode: payload.mode === "edit" ? "edit" : "readonly" },
+        impersonation: {
+          adminId: payload.issuedBy,
+          mode: payload.mode === "edit" ? "edit" : "readonly",
+          ...(parentIssued ? { parentOrganizationId: payload.issuedByOrgId as string } : {}),
+        },
       };
       return;
     }

@@ -573,3 +573,140 @@ describe("auth plugin — WBMSG session tokens", () => {
     });
   });
 });
+
+describe("auth plugin — parent impersonation of a child", () => {
+  const goodPayload = {
+    organizationId: "c1",
+    targetUserId: "cu-1",
+    issuedBy: "pu-1",
+    issuedSid: "sid-P",
+    issuedByOrgId: "p1",
+    mode: "readonly",
+  };
+  type Opts = {
+    payload?: Record<string, unknown> | null;
+    claims?: { sub: string; sid: string; typ: "user" | "admin" } | null;
+    issuer?: { role: string; organizationId: string } | null;
+    target?: { role: string } | null;
+    childParent?: string | null;
+    parentIsParent?: boolean;
+    flag?: string;
+    parentPerms?: Record<string, string>;
+  };
+  let orgFindUnique: ReturnType<typeof vi.fn>;
+  beforeAll(async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    orgFindUnique = vi.fn();
+    (prisma as unknown as { organization: unknown }).organization = { findUnique: orgFindUnique };
+  });
+  afterAll(async () => {
+    const { verifyAccessToken } = await import("../auth/tokens.js");
+    vi.mocked(verifyAccessToken).mockResolvedValue({ sub: "user_123", sid: "sid-1", typ: "user" });
+    delete process.env["PARENT_ORGS_ENABLED"];
+  });
+
+  async function run(o: Opts = {}) {
+    const { prisma } = await import("../lib/prisma.js");
+    const { redis } = await import("../lib/redis.js");
+    const { verifyAccessToken } = await import("../auth/tokens.js");
+    process.env["PARENT_ORGS_ENABLED"] = o.flag ?? "true";
+    const payload = o.payload === undefined ? goodPayload : o.payload;
+    vi.mocked(redis.get).mockImplementation((async (k: string) =>
+      k === "impersonate:tok" && payload ? JSON.stringify(payload) : null) as never);
+    const claims = o.claims === undefined ? { sub: "pu-1", sid: "sid-P", typ: "user" as const } : o.claims;
+    if (claims) vi.mocked(verifyAccessToken).mockResolvedValue(claims);
+    else vi.mocked(verifyAccessToken).mockRejectedValue(new Error("no bearer"));
+    const issuer = o.issuer === undefined ? { role: "admin", organizationId: "p1" } : o.issuer;
+    const target = o.target === undefined ? { role: "admin" } : o.target;
+    vi.mocked(prisma.user.findFirst).mockImplementation((async (args: { where: { id: string; organizationId?: string } }) => {
+      const row = args.where.id === "pu-1" ? issuer : args.where.id === "cu-1" ? target : null;
+      if (!row) return null;
+      // strict lookups only match inside the named org
+      const org = args.where.id === "pu-1" ? (row as unknown as { organizationId: string }).organizationId : "c1";
+      if (args.where.organizationId && args.where.organizationId !== org) return null;
+      return { teamId: null, teamRole: null, organizationId: org, ...row };
+    }) as never);
+    orgFindUnique.mockImplementation((async (args: { where: { id: string } }) => {
+      if (args.where.id === "p1") return { isParent: o.parentIsParent ?? true, parentOrganizationId: null };
+      if (args.where.id === "c1") return { parentOrganizationId: o.childParent === undefined ? "p1" : o.childParent };
+      return null;
+    }) as never);
+    const prismaPlugin = (await import("./prisma.js")).default;
+    const authPlugin = (await import("./auth.js")).default;
+    const app = Fastify({ logger: false });
+    await app.register(prismaPlugin);
+    await app.register(authPlugin);
+    app.get("/probe", async (req) => ({ auth: req.auth }));
+    await app.ready();
+    const res = await app.inject({
+      method: "GET",
+      url: "/probe",
+      headers: { ...(claims ? { authorization: "Bearer x" } : {}), "x-impersonate-token": "tok" },
+    });
+    await app.close();
+    return res;
+  }
+  const code = (r: { json: () => unknown }) => (r.json() as { error: { code: string } }).error.code;
+  const expect401 = (r: { statusCode: number; json: () => unknown }) => {
+    expect(r.statusCode).toBe(401);
+    expect(code(r)).toBe("INVALID_IMPERSONATION_TOKEN");
+  };
+
+  it("accepts the issuing parent admin's own session and marks the parent org", async () => {
+    const res = await run();
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ auth: { userId: string; organizationId: string; sid: unknown; impersonation: unknown } }>().auth;
+    expect(body.userId).toBe("cu-1");
+    expect(body.organizationId).toBe("c1");
+    expect(body.impersonation).toEqual({ adminId: "pu-1", mode: "readonly", parentOrganizationId: "p1" });
+  });
+
+  it("rejects a leaked token used with a different user's session", async () => {
+    expect401(await run({ claims: { sub: "pu-2", sid: "sid-P", typ: "user" } }));
+  });
+  it("rejects another session of the issuer", async () => {
+    expect401(await run({ claims: { sub: "pu-1", sid: "sid-other", typ: "user" } }));
+  });
+  it("rejects a super-admin (typ admin) session, even with the same user and sid", async () => {
+    expect401(await run({ claims: { sub: "pu-1", sid: "sid-P", typ: "admin" } }));
+  });
+  it("rejects a request with no bearer", async () => {
+    expect401(await run({ claims: null }));
+  });
+  it("rejects a parent payload with no issuedSid", async () => {
+    expect401(await run({ payload: { ...goodPayload, issuedSid: null } }));
+  });
+  it("rejects an empty issuedByOrgId", async () => {
+    expect401(await run({ payload: { ...goodPayload, issuedByOrgId: "" } }));
+  });
+  it("stops working once the child is unlinked", async () => {
+    expect401(await run({ childParent: null }));
+  });
+  it("stops working when the child is re-linked under another parent", async () => {
+    expect401(await run({ childParent: "p2" }));
+  });
+  it("stops working when the issuer loses the admin role", async () => {
+    expect401(await run({ issuer: { role: "manager", organizationId: "p1" } }));
+  });
+  it("stops working when the issuer moved to another org", async () => {
+    expect401(await run({ issuer: { role: "admin", organizationId: "other-org" } }));
+  });
+  it("stops working when the issuer is deactivated or deleted", async () => {
+    expect401(await run({ issuer: null }));
+  });
+  it("stops working when the feature flag is turned off", async () => {
+    expect401(await run({ flag: "false" }));
+  });
+  it("stops working when the org is no longer a parent", async () => {
+    expect401(await run({ parentIsParent: false }));
+  });
+  it("still rejects a superAdmin target and a target that left the child org", async () => {
+    expect401(await run({ target: { role: "superAdmin" } }));
+    expect401(await run({ target: null }));
+  });
+  it("super-admin payloads (no issuedByOrgId) keep the super-admin rules: a normal user session is refused", async () => {
+    const saPayload: Record<string, unknown> = { ...goodPayload };
+    delete saPayload["issuedByOrgId"];
+    expect401(await run({ payload: saPayload }));
+  });
+});
