@@ -179,6 +179,8 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         ...orgFields,
         _count: { members: _count.users, conversations: _count.conversations },
         usage: { contacts: contactCount, messages: messageCount, campaigns: campaignCount },
+        // The web shows the parent-capability toggle only when the feature is on (it 404s otherwise).
+        parentFeatureEnabled: parentOrgsEnabled(),
       },
     });
   });

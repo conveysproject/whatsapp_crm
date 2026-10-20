@@ -22,6 +22,11 @@ export function showClientsNav(user: CurrentUser | null | undefined, org: OrgFla
   return !!user && !!org && org.isParent === true && isAdmin(user);
 }
 
+/** Super-admin org page: the parent-capability toggle only when the feature flag is on (the API says so). */
+export function showParentCapabilityCard(org: { parentFeatureEnabled?: boolean } | null | undefined): boolean {
+  return org?.parentFeatureEnabled === true;
+}
+
 /** The "Linked to" card on the child side: org admins only (the API allows only the admin role). */
 export function showParentLinkCard(user: CurrentUser | null | undefined, org: OrgFlags | null | undefined): boolean {
   return !!user && !!org && org.hasParent === true && user.role === "admin";

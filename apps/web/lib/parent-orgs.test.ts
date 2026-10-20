@@ -4,7 +4,7 @@ import {
   FULL_READ_ACCESS_SENTENCE, NOT_AVAILABLE_MESSAGE, ParentApiError, acceptClientInvitation, acceptClientInvitationNewAccount,
   acceptViewMode, buildAcceptBody, buildNewAccountAcceptBody, capabilityErrorMessage,
   confirmReducer, describeError, fetchParentDashboard, fetchParentLink, inviteClient, leaveParent, lastDaysRange, openChildAsAdmin, removeChild,
-  revokeInvite, runConfirmed, setParentCapability, showClientsNav, showParentLinkCard, totalsFailureRate,
+  revokeInvite, runConfirmed, setParentCapability, showClientsNav, showParentCapabilityCard, showParentLinkCard, totalsFailureRate,
 } from "./parent-orgs";
 
 const user = (role: string): CurrentUser => ({ id: "u", organizationId: "o", fullName: "U", email: "u@x.io", role, permissions: {} });
@@ -15,6 +15,15 @@ function stubFetch(status: number, body: unknown) {
   return f;
 }
 afterEach(() => vi.unstubAllGlobals());
+
+describe("showParentCapabilityCard (super-admin org page)", () => {
+  it("shows only when the API says the feature is on", () => {
+    expect(showParentCapabilityCard({ parentFeatureEnabled: true })).toBe(true);
+    expect(showParentCapabilityCard({ parentFeatureEnabled: false })).toBe(false);
+    expect(showParentCapabilityCard({})).toBe(false);
+    expect(showParentCapabilityCard(null)).toBe(false);
+  });
+});
 
 describe("showClientsNav", () => {
   it("shows for the admin of a parent org", () => {

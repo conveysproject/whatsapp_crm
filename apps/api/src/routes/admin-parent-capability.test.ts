@@ -12,6 +12,9 @@ const mockPrisma = {
     count: vi.fn(),
     update: vi.fn(),
   },
+  contact: { count: vi.fn() },
+  message: { count: vi.fn() },
+  campaign: { count: vi.fn() },
   $queryRaw: vi.fn(),
   $transaction: vi.fn(),
   adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
@@ -132,5 +135,38 @@ describe("PATCH /v1/admin/organizations/:orgId/parent-capability", () => {
     expect(lock).toBeLessThan(mockPrisma.organization.count.mock.invocationCallOrder[0]!);
     expect(lock).toBeLessThan(mockPrisma.organization.update.mock.invocationCallOrder[0]!);
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("GET /v1/admin/organizations/:id parentFeatureEnabled", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      id: "org-1", name: "Org", isParent: false, _count: { users: 2, conversations: 3 },
+    });
+    mockPrisma.contact.count.mockResolvedValue(1);
+    mockPrisma.message.count.mockResolvedValue(1);
+    mockPrisma.campaign.count.mockResolvedValue(1);
+    app = await buildApp("superAdmin");
+  });
+  afterEach(async () => {
+    delete process.env["PARENT_ORGS_ENABLED"];
+    await app.close();
+  });
+
+  it("is true when the flag is on, so the web shows the parent capability card", async () => {
+    process.env["PARENT_ORGS_ENABLED"] = "true";
+    const res = await app.inject({ method: "GET", url: "/v1/admin/organizations/org-1" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.parentFeatureEnabled).toBe(true);
+  });
+
+  it("is false when the flag is off (the toggle would 404), the rest of the response unchanged", async () => {
+    delete process.env["PARENT_ORGS_ENABLED"];
+    const res = await app.inject({ method: "GET", url: "/v1/admin/organizations/org-1" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toMatchObject({ id: "org-1", parentFeatureEnabled: false, _count: { members: 2, conversations: 3 } });
   });
 });
