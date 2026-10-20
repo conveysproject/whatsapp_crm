@@ -4,7 +4,6 @@ import { redis } from "../lib/redis.js";
 import { activatePlan } from "../lib/billing/activation.js";
 import { writeAdminAudit } from "../lib/audit.js";
 import { sendMail, isEmailConfigured } from "../lib/mail.js";
-import { parentOrgsEnabled } from "../lib/parent-orgs.js";
 
 const SENSITIVE_CONFIG_KEYS = new Set([
   "smtp_password", "stripe_secret", "stripe_webhook_secret",
@@ -179,8 +178,6 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         ...orgFields,
         _count: { members: _count.users, conversations: _count.conversations },
         usage: { contacts: contactCount, messages: messageCount, campaigns: campaignCount },
-        // The web shows the parent-capability toggle only when the feature is on (it 404s otherwise).
-        parentFeatureEnabled: parentOrgsEnabled(),
       },
     });
   });
@@ -257,9 +254,6 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      if (!parentOrgsEnabled()) {
-        return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Not found" } });
-      }
       if (!requireSuperAdmin(request.auth.role, reply)) return;
       const { orgId } = request.params;
       const { enabled } = request.body;

@@ -590,7 +590,6 @@ describe("auth plugin — parent impersonation of a child", () => {
     target?: { role: string } | null;
     childParent?: string | null;
     parentIsParent?: boolean;
-    flag?: string;
     parentPerms?: Record<string, string>;
     throwOn?: "child" | "parent";
   };
@@ -603,14 +602,12 @@ describe("auth plugin — parent impersonation of a child", () => {
   afterAll(async () => {
     const { verifyAccessToken } = await import("../auth/tokens.js");
     vi.mocked(verifyAccessToken).mockResolvedValue({ sub: "user_123", sid: "sid-1", typ: "user" });
-    delete process.env["PARENT_ORGS_ENABLED"];
   });
 
   async function run(o: Opts = {}) {
     const { prisma } = await import("../lib/prisma.js");
     const { redis } = await import("../lib/redis.js");
     const { verifyAccessToken } = await import("../auth/tokens.js");
-    process.env["PARENT_ORGS_ENABLED"] = o.flag ?? "true";
     const payload = o.payload === undefined ? goodPayload : o.payload;
     vi.mocked(redis.get).mockImplementation((async (k: string) =>
       k === "impersonate:tok" && payload ? JSON.stringify(payload) : null) as never);
@@ -700,9 +697,6 @@ describe("auth plugin — parent impersonation of a child", () => {
   });
   it("stops working when the issuer is deactivated or deleted", async () => {
     expect401(await run({ issuer: null }));
-  });
-  it("stops working when the feature flag is turned off", async () => {
-    expect401(await run({ flag: "false" }));
   });
   it("stops working when the org is no longer a parent", async () => {
     expect401(await run({ parentIsParent: false }));

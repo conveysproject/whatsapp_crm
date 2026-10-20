@@ -40,7 +40,6 @@ describe("PATCH /v1/admin/organizations/:orgId/parent-capability", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-    process.env["PARENT_ORGS_ENABLED"] = "true";
     mockPrisma.organization.findUnique.mockResolvedValue({ id: "org-1", parentOrganizationId: null, isParent: false });
     mockPrisma.organization.count.mockResolvedValue(0);
     mockPrisma.$queryRaw.mockResolvedValue([]);
@@ -48,7 +47,6 @@ describe("PATCH /v1/admin/organizations/:orgId/parent-capability", () => {
     mockPrisma.organization.update.mockImplementation(async (a: { data: { isParent: boolean } }) => ({ id: "org-1", isParent: a.data.isParent }));
   });
   afterEach(async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
     await app.close();
   });
 
@@ -89,15 +87,6 @@ describe("PATCH /v1/admin/organizations/:orgId/parent-capability", () => {
     expect(res.json()).toEqual({ data: { organizationId: "org-1", isParent: false } });
   });
 
-  it("returns 404 when the feature flag is off", async () => {
-    app = await buildApp("superAdmin");
-    delete process.env["PARENT_ORGS_ENABLED"];
-    const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled: true } });
-    expect(res.statusCode).toBe(404);
-    expect(mockPrisma.organization.findUnique).not.toHaveBeenCalled();
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
-  });
-
   it("returns 409 IS_CHILD when enabling an org that is itself a child", async () => {
     app = await buildApp("superAdmin");
     mockPrisma.organization.findUnique.mockResolvedValue({ id: "org-1", parentOrganizationId: "p-1", isParent: false });
@@ -121,13 +110,6 @@ describe("PATCH /v1/admin/organizations/:orgId/parent-capability", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("returns 404 for a non-super-admin when the flag is off", async () => {
-    app = await buildApp("admin");
-    delete process.env["PARENT_ORGS_ENABLED"];
-    const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled: true } });
-    expect(res.statusCode).toBe(404);
-  });
-
   it("locks the org row before counting children and before updating", async () => {
     app = await buildApp("superAdmin");
     await app.inject({ method: "PATCH", url: URL, payload: { enabled: false } });
@@ -138,7 +120,7 @@ describe("PATCH /v1/admin/organizations/:orgId/parent-capability", () => {
   });
 });
 
-describe("GET /v1/admin/organizations/:id parentFeatureEnabled", () => {
+describe("GET /v1/admin/organizations/:id", () => {
   let app: FastifyInstance;
   beforeEach(async () => {
     vi.resetModules();
@@ -152,21 +134,12 @@ describe("GET /v1/admin/organizations/:id parentFeatureEnabled", () => {
     app = await buildApp("superAdmin");
   });
   afterEach(async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
     await app.close();
   });
 
-  it("is true when the flag is on, so the web shows the parent capability card", async () => {
-    process.env["PARENT_ORGS_ENABLED"] = "true";
+  it("returns the org details without any feature-flag field", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/admin/organizations/org-1" });
     expect(res.statusCode).toBe(200);
-    expect(res.json().data.parentFeatureEnabled).toBe(true);
-  });
-
-  it("is false when the flag is off (the toggle would 404), the rest of the response unchanged", async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
-    const res = await app.inject({ method: "GET", url: "/v1/admin/organizations/org-1" });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data).toMatchObject({ id: "org-1", parentFeatureEnabled: false, _count: { members: 2, conversations: 3 } });
+    expect(res.json().data).toMatchObject({ id: "org-1", _count: { members: 2, conversations: 3 } });
   });
 });

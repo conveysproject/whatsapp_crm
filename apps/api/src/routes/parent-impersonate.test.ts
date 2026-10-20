@@ -74,7 +74,6 @@ const impersonate = (childId: string, body: unknown = {}) =>
 beforeEach(async () => {
   vi.clearAllMocks();
   calls.order = [];
-  process.env["PARENT_ORGS_ENABLED"] = "true";
   auth = baseAuth;
   mockCanBeParent.mockResolvedValue(true);
   mockIsChildOf.mockImplementation(async (_p: unknown, parent: string, child: string) => parent === "p1" && child === "c1");
@@ -100,15 +99,9 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await app.close();
-  delete process.env["PARENT_ORGS_ENABLED"];
 });
 
 describe("POST /v1/parent/children/:childId/impersonate", () => {
-  it("404 when the feature flag is off", async () => {
-    process.env["PARENT_ORGS_ENABLED"] = "false";
-    expect((await impersonate("c1")).statusCode).toBe(404);
-  });
-
   it("403 for a parent user without parent_access", async () => {
     auth = { ...baseAuth, role: "manager" };
     const res = await impersonate("c1");

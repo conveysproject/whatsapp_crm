@@ -1,7 +1,6 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import {
-  parentOrgsEnabled,
   getChildOrgIds,
   isChildOf,
   getParentOf,
@@ -35,22 +34,6 @@ function makePrisma(
   };
   return { prisma: prisma as unknown as PrismaClient, tx, raw: prisma };
 }
-
-afterEach(() => {
-  delete process.env["PARENT_ORGS_ENABLED"];
-});
-
-describe("parentOrgsEnabled", () => {
-  it("is false unless env is exactly 'true'", () => {
-    expect(parentOrgsEnabled()).toBe(false);
-    process.env["PARENT_ORGS_ENABLED"] = "1";
-    expect(parentOrgsEnabled()).toBe(false);
-    process.env["PARENT_ORGS_ENABLED"] = "TRUE";
-    expect(parentOrgsEnabled()).toBe(false);
-    process.env["PARENT_ORGS_ENABLED"] = "true";
-    expect(parentOrgsEnabled()).toBe(true);
-  });
-});
 
 describe("getChildOrgIds", () => {
   it("filters by parentOrganizationId and returns ids", async () => {

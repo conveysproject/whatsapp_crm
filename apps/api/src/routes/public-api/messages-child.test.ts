@@ -41,11 +41,9 @@ describe("POST /Message/ with a parent key sending for a child", () => {
   let n = 0;
   let table: Row[];
   let blocked: Set<string>;
-  const ORIG = process.env["PARENT_ORGS_ENABLED"];
 
   beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks(); n = 0;
-    process.env["PARENT_ORGS_ENABLED"] = "true";
     keyScopes = ["whatsapp", "send_for_children"];
     childRate.mockResolvedValue({ allowed: true, retryAfterSeconds: 0 });
     blocked = new Set();
@@ -75,7 +73,6 @@ describe("POST /Message/ with a parent key sending for a child", () => {
   });
   afterEach(async () => {
     await app.close();
-    if (ORIG === undefined) delete process.env["PARENT_ORGS_ENABLED"]; else process.env["PARENT_ORGS_ENABLED"] = ORIG;
   });
 
   it("sends for the child: every row is in the child org, meta records key + child + parent, no token in the queue", async () => {
@@ -138,8 +135,8 @@ describe("POST /Message/ with a parent key sending for a child", () => {
     expect(mockPrisma.message.create).not.toHaveBeenCalled();
   });
 
-  it("flag off: same old 400 SRC_MISMATCH even with the scope", async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
+  it("org without the parent capability: same old 400 SRC_MISMATCH even with the scope", async () => {
+    table.find((o) => o.id === "org-1")!.isParent = false;
     const res = await post(app, childBody);
     expect(res.statusCode).toBe(400);
     expect(res.json()).toMatchObject({ error_code: "SRC_MISMATCH" });

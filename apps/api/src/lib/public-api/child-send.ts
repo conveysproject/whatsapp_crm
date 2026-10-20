@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import { canBeParent, getChildOrgIds, isChildOf, parentOrgsEnabled } from "../parent-orgs.js";
+import { canBeParent, getChildOrgIds, isChildOf } from "../parent-orgs.js";
 import { isOrgBlockedFromPublicApi } from "./access.js";
 
 export const SEND_FOR_CHILDREN_SCOPE = "send_for_children";
@@ -9,7 +9,7 @@ const NUMBER_KEY = "current_phone_number_number";
 
 /**
  * The key may not send for this number. `reason`:
- * - "not_entitled": the key lacks the scope, the feature flag is off or the org cannot be a parent. The route treats
+ * - "not_entitled": the key lacks the scope, the org cannot be a parent. The route treats
  *   this exactly like today's behaviour (own number only, SRC_MISMATCH on a different src), so the scope stays invisible.
  * - "no_match": an entitled key named a number / WABA that is not exactly one of its own linked children. Unknown,
  *   unlinked, ambiguous and someone else's child are indistinguishable (one 403 body).
@@ -41,7 +41,7 @@ export async function resolveSendTarget(
   const ownDigits = digits(own?.value);
   if (!wabaId && src !== "" && ownDigits === src) return { organizationId: key.organizationId, viaParentOrgId: null };
 
-  if (!key.scopes.includes(SEND_FOR_CHILDREN_SCOPE) || !parentOrgsEnabled() || !(await canBeParent(prisma, key.organizationId))) {
+  if (!key.scopes.includes(SEND_FOR_CHILDREN_SCOPE) || !(await canBeParent(prisma, key.organizationId))) {
     throw new ChildForbiddenError("not_entitled");
   }
   if (src === "" && !wabaId) throw new ChildForbiddenError("no_match");
@@ -68,14 +68,14 @@ export async function resolveSendTarget(
 
 /**
  * Re-check at SEND time that a parent-key send is still allowed (PRD 6.1(9): unlinking, revoking or switching the
- * feature off stops sends at once): key not revoked and owned by the parent, scope still present, flag on, org still a
+ * feature off stops sends at once): key not revoked and owned by the parent, scope still present, org still a
  * valid parent, child still linked, and the child org not blocked from the public API.
  */
 export async function parentSendStillAllowed(
   prisma: PrismaClient,
   args: { apiKeyId: string | undefined; parentOrgId: string; childOrgId: string }
 ): Promise<boolean> {
-  if (!args.apiKeyId || !parentOrgsEnabled()) return false;
+  if (!args.apiKeyId) return false;
   const key = await prisma.apiKey.findUnique({ where: { id: args.apiKeyId }, select: { organizationId: true, revokedAt: true, scopes: true } });
   if (!key || key.revokedAt || key.organizationId !== args.parentOrgId || !key.scopes.includes(SEND_FOR_CHILDREN_SCOPE)) return false;
   if (!(await canBeParent(prisma, args.parentOrgId))) return false;

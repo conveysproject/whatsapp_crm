@@ -261,13 +261,11 @@ describe("api-credentials", () => {
 
 describe("api-credentials: send_for_children scope", () => {
   let app: FastifyInstance;
-  const ORIG_PARENT = process.env["PARENT_ORGS_ENABLED"];
   beforeEach(async () => {
     vi.resetModules(); vi.clearAllMocks();
     process.env["PUBLIC_API_TOKEN_KEY"] = Buffer.alloc(32, 9).toString("base64");
     delete process.env["PUBLIC_API_ALLOWED_ORGS"];
     process.env["PUBLIC_API_ENABLED"] = "true";
-    process.env["PARENT_ORGS_ENABLED"] = "true";
     mockPrisma.vendorSetting.findFirst.mockResolvedValue(null);
     mockPrisma.apiKey.count.mockResolvedValue(0);
     mockPrisma.organization.findUnique.mockResolvedValue({ isParent: true, parentOrganizationId: null });
@@ -276,7 +274,6 @@ describe("api-credentials: send_for_children scope", () => {
   });
   afterEach(async () => {
     await app.close();
-    if (ORIG_PARENT === undefined) delete process.env["PARENT_ORGS_ENABLED"]; else process.env["PARENT_ORGS_ENABLED"] = ORIG_PARENT;
     if (ORIG_FLAG === undefined) delete process.env["PUBLIC_API_ENABLED"]; else process.env["PUBLIC_API_ENABLED"] = ORIG_FLAG;
   });
   const create = (scopes?: unknown) => app.inject({ method: "POST", url: "/v1/api-credentials", payload: { name: "Prod", ...(scopes === undefined ? {} : { scopes }) } });
@@ -297,11 +294,8 @@ describe("api-credentials: send_for_children scope", () => {
     expect(mockPrisma.apiKey.create).not.toHaveBeenCalled();
   });
 
-  it("403 for a child org (has a parent) and when the feature flag is off", async () => {
+  it("403 for a child org (has a parent)", async () => {
     mockPrisma.organization.findUnique.mockResolvedValue({ isParent: true, parentOrganizationId: "p-1" });
-    expect((await create(["send_for_children"])).statusCode).toBe(403);
-    mockPrisma.organization.findUnique.mockResolvedValue({ isParent: true, parentOrganizationId: null });
-    delete process.env["PARENT_ORGS_ENABLED"];
     expect((await create(["send_for_children"])).statusCode).toBe(403);
     expect(mockPrisma.apiKey.create).not.toHaveBeenCalled();
   });

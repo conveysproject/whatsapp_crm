@@ -3,7 +3,7 @@ import { canAccess, canAccessSub } from "../lib/permissions.js";
 import { writeAdminAudit } from "../lib/audit.js";
 import { assertSafeCallbackUrl, UnsafeUrlError } from "../lib/public-api/safe-url.js";
 import { checkPublicApiAccess, MAX_ACTIVE_CREDENTIALS } from "../lib/public-api/access.js";
-import { canBeParent, parentOrgsEnabled } from "../lib/parent-orgs.js";
+import { canBeParent } from "../lib/parent-orgs.js";
 import { SEND_FOR_CHILDREN_SCOPE } from "../lib/public-api/child-send.js";
 import { encryptToken, hashToken, newAuthToken, TokenKeyError } from "../lib/public-api/credentials.js";
 
@@ -102,7 +102,7 @@ export const apiCredentialsRouter: FastifyPluginAsync = async (fastify) => {
     if (!name?.trim()) return reply.status(400).send({ error: { code: "MISSING_NAME", message: "name is required" } });
     // The extra scope is only for a parent organization with the feature on; everyone else gets one generic refusal.
     const wantsChildren = requestedScopes?.includes(SEND_FOR_CHILDREN_SCOPE) ?? false;
-    if (wantsChildren && !(isParentAdmin(request) && parentOrgsEnabled() && (await canBeParent(fastify.prisma, organizationId)))) {
+    if (wantsChildren && !(isParentAdmin(request) && (await canBeParent(fastify.prisma, organizationId)))) {
       return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Not available" } });
     }
     if (!(await validUrl(reply, callbackUrl, "callbackUrl"))) return reply;

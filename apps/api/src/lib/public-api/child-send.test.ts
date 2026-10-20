@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { resolveSendTarget, ChildForbiddenError, ChildNotConnectedError } from "./child-send.js";
 
@@ -30,11 +30,9 @@ const fakePrisma = {
 
 const KEY = { id: "key-1", organizationId: "parent-1", scopes: ["whatsapp", "send_for_children"] };
 const NO_SCOPE = { ...KEY, scopes: ["whatsapp"] };
-const ORIG = process.env["PARENT_ORGS_ENABLED"];
 const byId = (id: string) => orgs.find((o) => o.id === id)!;
 
 beforeEach(() => {
-  process.env["PARENT_ORGS_ENABLED"] = "true";
   orgs = [
     org("parent-1", { isParent: true, number: "+1 415-555-0001" }),
     org("child-a", { parentOrganizationId: "parent-1", number: "+1 415-555-1111" }),
@@ -43,11 +41,9 @@ beforeEach(() => {
     org("other-child", { parentOrganizationId: "other-parent", number: "+1 415-555-3333" }),
   ];
 });
-afterEach(() => { if (ORIG === undefined) delete process.env["PARENT_ORGS_ENABLED"]; else process.env["PARENT_ORGS_ENABLED"] = ORIG; });
 
 describe("resolveSendTarget", () => {
-  it("own number returns the key org, no flag or scope needed", async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
+  it("own number returns the key org, no scope needed", async () => {
     expect(await resolveSendTarget(fakePrisma, NO_SCOPE, { src: "14155550001" })).toEqual({ organizationId: "parent-1", viaParentOrgId: null });
   });
 
@@ -89,12 +85,6 @@ describe("resolveSendTarget", () => {
     await resolveSendTarget(fakePrisma, KEY, { src: "14155551111" });
     byId("child-a").parentOrganizationId = null;
     await expect(resolveSendTarget(fakePrisma, KEY, { src: "14155551111" })).rejects.toBeInstanceOf(ChildForbiddenError);
-  });
-
-  it("flag off: a child number is not_entitled (behaves as today)", async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
-    const err = await resolveSendTarget(fakePrisma, KEY, { src: "14155551111" }).catch((e: unknown) => e);
-    expect((err as ChildForbiddenError).reason).toBe("not_entitled");
   });
 
   it("an org that cannot be a parent is not_entitled even with the scope", async () => {

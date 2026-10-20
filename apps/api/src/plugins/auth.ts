@@ -4,7 +4,7 @@ import { mobileUpgradeRequired, verifyBearer } from "../auth/identity.js";
 import { defaultsForRole, FIXED_PERMISSION_ROLES } from "../lib/default-role-permissions.js";
 import { isPlatformOnlyPath } from "../lib/demo-guard.js";
 import { canAccess } from "../lib/permissions.js";
-import { canBeParent, isChildOf, parentOrgsEnabled } from "../lib/parent-orgs.js";
+import { canBeParent, isChildOf } from "../lib/parent-orgs.js";
 import { redis } from "../lib/redis.js";
 import type { AuthContext } from "../types/fastify.js";
 
@@ -105,7 +105,6 @@ async function parentSessionStillValid(
     if (!payload.issuedSid) return false;
     const bearer = await verifyBearer(authorization);
     if (bearer.typ !== "user" || bearer.userId !== payload.issuedBy || bearer.sid !== payload.issuedSid) return false;
-    if (!parentOrgsEnabled()) return false;
     // strict lookup: the issuer's CURRENT org must be the parent org; inactive or deleted users fail.
     const issuer = await resolveAuthContext(fastify, payload.issuedBy, { strictOrganizationId: parentOrgId });
     // The role check is the real gate (D15: only the parent's admin). canAccess always passes for admin,

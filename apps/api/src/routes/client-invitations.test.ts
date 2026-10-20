@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import type * as IdentityModule from "../auth/identity.js";
 import type * as ParentOrgsModule from "../lib/parent-orgs.js";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -82,7 +82,6 @@ const invite = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  process.env["PARENT_ORGS_ENABLED"] = "true";
   auth = adminAuth;
   db.pending = [];
   db.committed = [];
@@ -105,10 +104,6 @@ beforeEach(() => {
   mockPrisma.user.findFirst.mockResolvedValue(null);
   mockPrisma.organization.findUnique.mockResolvedValue({ name: "Acme Agency" });
 });
-afterEach(() => {
-  delete process.env["PARENT_ORGS_ENABLED"];
-});
-
 describe("POST /v1/client-invitations", () => {
   const post = (app: FastifyInstance, body: unknown = { email: "Client@Example.com" }) =>
     app.inject({ method: "POST", url: "/v1/client-invitations", payload: body as object });
@@ -155,14 +150,6 @@ describe("POST /v1/client-invitations", () => {
     expect(res.statusCode).toBe(201);
     expect(res.json().emailSent).toBe(false);
     expect(mockSendMail).not.toHaveBeenCalled();
-  });
-
-  it("flag off returns 404 and does nothing", async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
-    const app = await buildApp();
-    const res = await post(app);
-    expect(res.statusCode).toBe(404);
-    expect(mockPrisma.clientInvitation.create).not.toHaveBeenCalled();
   });
 
   it("role without parent_access gets 403", async () => {
@@ -240,13 +227,9 @@ describe("GET /v1/client-invitations", () => {
     expect(rows[1].status).toBe("expired");
   });
 
-  it("flag off 404, no parent_access 403, not a parent 403", async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
-    let app = await buildApp();
-    expect((await app.inject({ method: "GET", url: "/v1/client-invitations" })).statusCode).toBe(404);
-    process.env["PARENT_ORGS_ENABLED"] = "true";
+  it("no parent_access 403, not a parent 403", async () => {
     auth = { ...adminAuth, role: "viewer" as never };
-    app = await buildApp();
+    let app = await buildApp();
     expect((await app.inject({ method: "GET", url: "/v1/client-invitations" })).statusCode).toBe(403);
     auth = adminAuth;
     mockCanBeParent.mockResolvedValue(false);
@@ -274,13 +257,9 @@ describe("DELETE /v1/client-invitations/:id", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("flag off 404 without touching the DB; no parent_access 403; not a parent 403", async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
-    let app = await buildApp();
-    expect((await app.inject({ method: "DELETE", url: "/v1/client-invitations/inv-1" })).statusCode).toBe(404);
-    process.env["PARENT_ORGS_ENABLED"] = "true";
+  it("no parent_access 403; not a parent 403 (nothing touched in the DB)", async () => {
     auth = { ...adminAuth, role: "agent" as never };
-    app = await buildApp();
+    let app = await buildApp();
     expect((await app.inject({ method: "DELETE", url: "/v1/client-invitations/inv-1" })).statusCode).toBe(403);
     auth = adminAuth;
     mockCanBeParent.mockResolvedValue(false);
@@ -334,14 +313,6 @@ describe("GET /v1/client-invitations/:token (public)", () => {
       bodies.push(res.body);
     }
     expect(new Set(bodies).size).toBe(1);
-  });
-
-  it("flag off returns 404", async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
-    mockPrisma.clientInvitation.findUnique.mockResolvedValue(invite);
-    const app = await buildApp();
-    expect((await get(app)).statusCode).toBe(404);
-    expect(mockPrisma.clientInvitation.findUnique).not.toHaveBeenCalled();
   });
 });
 
@@ -495,12 +466,5 @@ describe("POST /v1/client-invitations/:token/accept (public, signed in)", () => 
   it("the token schema caps length at 200", async () => {
     const { tokenParamsSchema } = await import("./client-invitations.js");
     expect(tokenParamsSchema.properties.token.maxLength).toBe(200);
-  });
-
-  it("flag off returns 404 before anything runs", async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
-    const app = await buildApp();
-    expect((await accept(app)).statusCode).toBe(404);
-    expect(mockVerifyBearer).not.toHaveBeenCalled();
   });
 });

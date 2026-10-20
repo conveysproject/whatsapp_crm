@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { redis } from "../lib/redis.js";
 import { incrWithTtl } from "../lib/redis-counter.js";
 import { canAccess } from "../lib/permissions.js";
-import { canBeParent, isChildOf, ParentLinkError, parentOrgsEnabled, unlinkChild } from "../lib/parent-orgs.js";
+import { canBeParent, isChildOf, ParentLinkError, unlinkChild } from "../lib/parent-orgs.js";
 import {
   ChildNotFoundError,
   getChildMessages,
@@ -19,16 +19,12 @@ const DEFAULT_RANGE_DAYS = 30;
 const IMPERSONATION_TTL_SECONDS = 900;
 const MAX_RANGE_DAYS = 366;
 
-const notFound = (reply: FastifyReply) =>
-  reply.status(404).send({ error: { code: "NOT_FOUND", message: "Not found" } });
-
 // One body for "unknown", "someone else's" and "yourself": callers cannot probe org ids.
 const forbiddenChild = (reply: FastifyReply) =>
   reply.status(403).send({ error: { code: "FORBIDDEN_CHILD", message: "Not available" } });
 
-/** Flag, permission and parent-capability gate. Same order as client-invitations. D15: the admin role only. */
+/** Permission and parent-capability gate. Same order as client-invitations. D15: the admin role only. */
 async function parentGuard(request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> {
-  if (!parentOrgsEnabled()) return notFound(reply);
   const { role, permissions, organizationId } = request.auth;
   if (role !== "admin" || !canAccess(role, permissions, "parent_access")) {
     return reply.status(403).send({ error: { code: "FORBIDDEN", message: "parent_access permission required" } });

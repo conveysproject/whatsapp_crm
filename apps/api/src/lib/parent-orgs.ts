@@ -18,10 +18,6 @@ export class ParentLinkError extends Error {
   }
 }
 
-export function parentOrgsEnabled(): boolean {
-  return process.env["PARENT_ORGS_ENABLED"] === "true";
-}
-
 export async function getChildOrgIds(prisma: PrismaClient, parentOrgId: string): Promise<string[]> {
   const rows = await prisma.organization.findMany({
     where: { parentOrganizationId: parentOrgId },

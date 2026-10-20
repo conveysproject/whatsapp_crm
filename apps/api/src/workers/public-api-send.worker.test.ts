@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const { prisma, enqueueCb, wa, workerCtor, checkAccess, isBlocked } = vi.hoisted(() => ({
   checkAccess: vi.fn(),
@@ -229,11 +229,9 @@ describe("processSendJob for a parent-key send", () => {
     checkAccess.mockResolvedValue({ allowed: true });
     wa.sendTextMessage.mockResolvedValue({ messageId: "wamid.1" });
     enqueueCb.mockResolvedValue(undefined);
-    process.env["PARENT_ORGS_ENABLED"] = "true";
     prisma.apiKey.findUnique.mockResolvedValue({ organizationId: "parent-1", revokedAt: null, scopes: ["whatsapp", "send_for_children"] });
     isBlocked.mockResolvedValue(false);
   });
-  afterEach(() => { delete process.env["PARENT_ORGS_ENABLED"]; });
 
   const orgsOk = () => prisma.organization.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
     where.id === "child-1" ? { parentOrganizationId: "parent-1", phoneNumberId: "pn-child", wabaAccessToken: "tok-child" } : { isParent: true, parentOrganizationId: null });
@@ -246,7 +244,6 @@ describe("processSendJob for a parent-key send", () => {
     ["key revoked", () => prisma.apiKey.findUnique.mockResolvedValue({ organizationId: "parent-1", revokedAt: new Date(), scopes: ["send_for_children"] })],
     ["scope removed", () => prisma.apiKey.findUnique.mockResolvedValue({ organizationId: "parent-1", revokedAt: null, scopes: ["whatsapp"] })],
     ["key gone", () => prisma.apiKey.findUnique.mockResolvedValue(null)],
-    ["flag off", () => { delete process.env["PARENT_ORGS_ENABLED"]; }],
     ["parent no longer a parent", () => prisma.organization.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
       where.id === "child-1" ? { parentOrganizationId: "parent-1", phoneNumberId: "p", wabaAccessToken: "t" } : { isParent: false, parentOrganizationId: null })],
     ["child blocked from the API", () => isBlocked.mockResolvedValue(true)],

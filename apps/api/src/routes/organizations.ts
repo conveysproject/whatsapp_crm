@@ -1,7 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import { parentOrgsEnabled } from "../lib/parent-orgs.js";
 import { PROFILE_FIELDS, PROFILE_MAX_LENGTH, normalizeProfileField, type ProfileField } from "../lib/org-profile.js";
 
 // Keys managed server-side only — never overwritable via PATCH /organizations/me
@@ -54,12 +53,11 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
       select: { ...ORG_PUBLIC_SELECT, isParent: true, parentOrganizationId: true },
     });
     // Parent/child flags for the web nav and settings. The parent's id is never returned.
-    const enabled = parentOrgsEnabled();
     return {
       data: {
         ...org,
-        isParent: enabled && isParent === true && parentOrganizationId === null,
-        hasParent: enabled && parentOrganizationId !== null,
+        isParent: isParent === true && parentOrganizationId === null,
+        hasParent: parentOrganizationId !== null,
       },
     };
   });

@@ -43,7 +43,6 @@ async function buildApp(): Promise<FastifyInstance> {
 let app: FastifyInstance;
 beforeEach(async () => {
   vi.clearAllMocks();
-  process.env["PARENT_ORGS_ENABLED"] = "true";
   auth = adminAuth;
   state.children = [
     { id: "c1", parent: "p1" },
@@ -75,7 +74,6 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await app.close();
-  delete process.env["PARENT_ORGS_ENABLED"];
 });
 
 const get = (url: string) => app.inject({ method: "GET", url });
@@ -115,11 +113,6 @@ describe("DELETE /parent/children/:childId", () => {
     expect((await del("c1")).statusCode).toBe(403);
     expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
-  it("flag off => 404", async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
-    expect((await del("c1")).statusCode).toBe(404);
-    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
-  });
   it("non-parent org => 403", async () => {
     mockCanBeParent.mockResolvedValue(false);
     expect((await del("c1")).statusCode).toBe(403);
@@ -135,10 +128,10 @@ describe("gates", () => {
     "/v1/parent/children/c1/stats",
     "/v1/parent/children/c1/messages",
   ];
-  it.each(urls)("flag off => 404 for %s", async (u) => {
-    delete process.env["PARENT_ORGS_ENABLED"];
+  it.each(urls)("org that is not a parent => 403 for %s", async (u) => {
+    mockCanBeParent.mockResolvedValue(false);
     const res = await get(u);
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(403);
     expect(mockPrisma.organization.findMany).not.toHaveBeenCalled();
   });
   it.each(urls)("manager => 403 for %s, no audit row", async (u) => {

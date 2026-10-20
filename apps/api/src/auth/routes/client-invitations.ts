@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { createWorkspace } from "../../lib/create-workspace.js";
-import { canBeParent, linkChild, parentOrgsEnabled, ParentLinkError } from "../../lib/parent-orgs.js";
+import { canBeParent, linkChild, ParentLinkError } from "../../lib/parent-orgs.js";
 import { trustDevice } from "../devices.js";
 import { newAccountId, normalizeEmail } from "../ids.js";
 import { authClientIp } from "../limits.js";
@@ -8,7 +8,6 @@ import { checkPasswordPolicy, hashPassword } from "../password.js";
 import { createSession } from "../sessions.js";
 import { ACCOUNT_EXISTS, INVALID_INVITATION, isUniqueViolation, padTo, WEAK_PASSWORD } from "./invitations.js";
 
-const NOT_FOUND = { error: { code: "NOT_FOUND", message: "Not found" } };
 const PARENT_UNAVAILABLE = {
   error: { code: "PARENT_UNAVAILABLE", message: "The inviting company can no longer accept client accounts." },
 };
@@ -55,7 +54,6 @@ export const clientInvitationAcceptRoutes: FastifyPluginAsync = async (fastify) 
       },
     },
     async (request, reply) => {
-      if (!parentOrgsEnabled()) return reply.status(404).send(NOT_FOUND);
       const startedAt = Date.now();
       const db = fastify.prisma;
       const { firstName, lastName, password, organizationName, mobileNumber, client } = request.body;

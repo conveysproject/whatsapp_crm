@@ -4,7 +4,7 @@ import {
   FULL_READ_ACCESS_SENTENCE, NOT_AVAILABLE_MESSAGE, ParentApiError, acceptClientInvitation, acceptClientInvitationNewAccount,
   acceptViewMode, buildAcceptBody, buildNewAccountAcceptBody, capabilityErrorMessage,
   confirmReducer, describeError, fetchParentDashboard, fetchParentLink, inviteClient, leaveParent, lastDaysRange, openChildAsAdmin, removeChild,
-  revokeInvite, runConfirmed, setParentCapability, showClientsNav, showParentCapabilityCard, showParentLinkCard, totalsFailureRate,
+  revokeInvite, runConfirmed, setParentCapability, showClientsNav, showParentLinkCard, totalsFailureRate,
 } from "./parent-orgs";
 
 const user = (role: string): CurrentUser => ({ id: "u", organizationId: "o", fullName: "U", email: "u@x.io", role, permissions: {} });
@@ -15,15 +15,6 @@ function stubFetch(status: number, body: unknown) {
   return f;
 }
 afterEach(() => vi.unstubAllGlobals());
-
-describe("showParentCapabilityCard (super-admin org page)", () => {
-  it("shows only when the API says the feature is on", () => {
-    expect(showParentCapabilityCard({ parentFeatureEnabled: true })).toBe(true);
-    expect(showParentCapabilityCard({ parentFeatureEnabled: false })).toBe(false);
-    expect(showParentCapabilityCard({})).toBe(false);
-    expect(showParentCapabilityCard(null)).toBe(false);
-  });
-});
 
 describe("showClientsNav", () => {
   it("shows for the admin of a parent org", () => {
@@ -61,7 +52,7 @@ describe("overview data", () => {
     expect(totalsFailureRate({ sent: 90, delivered: 0, read: 0, failed: 10, received: 0 })).toBe(0.1);
     expect(totalsFailureRate({ sent: 0, delivered: 0, read: 0, failed: 0, received: 5 })).toBe(0);
   });
-  it("maps a 404 (flag off) to the same not-available text", async () => {
+  it("maps a 404 to the same not-available text", async () => {
     stubFetch(404, { error: { code: "NOT_FOUND", message: "Not found" } });
     await expect(fetchParentDashboard(lastDaysRange(7))).rejects.toSatisfy((e: unknown) => describeError(e) === NOT_AVAILABLE_MESSAGE);
   });
@@ -228,7 +219,7 @@ describe("setParentCapability", () => {
     stubFetch(409, { error: { code: "IS_CHILD", message: "x" } });
     await expect(setParentCapability("http://api.test", "a", "o1", true)).rejects.toMatchObject({ message: expect.stringContaining("client of another organization") });
   });
-  it("says not available when the feature is off (404)", async () => {
+  it("says not available on a 404", async () => {
     stubFetch(404, { error: { code: "NOT_FOUND", message: "Not found" } });
     await expect(setParentCapability("http://api.test", "a", "o1", true)).rejects.toMatchObject({ message: NOT_AVAILABLE_MESSAGE });
   });

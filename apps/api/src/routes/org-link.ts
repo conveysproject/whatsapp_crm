@@ -1,15 +1,14 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { prisma } from "../lib/prisma.js";
-import { getParentOf, parentOrgsEnabled, ParentLinkError, unlinkChild } from "../lib/parent-orgs.js";
+import { getParentOf, ParentLinkError, unlinkChild } from "../lib/parent-orgs.js";
 
 const SESSION_LIMIT = 50;
 
 const notFound = (reply: FastifyReply) =>
   reply.status(404).send({ error: { code: "NOT_FOUND", message: "Not found" } });
 
-/** Flag first (404), then child-admin only. Both routes live under impersonation-guard blocked prefixes. */
+/** Child-admin only. Both routes live under impersonation-guard blocked prefixes. */
 async function childAdminGuard(request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> {
-  if (!parentOrgsEnabled()) return notFound(reply);
   if (request.auth.role !== "admin") {
     return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only an organization admin can do this" } });
   }

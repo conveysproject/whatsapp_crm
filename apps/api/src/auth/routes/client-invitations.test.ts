@@ -89,7 +89,6 @@ describe("POST /v1/auth/client-invitations/:token/accept (new account)", () => {
   let app: FastifyInstance;
   beforeEach(async () => {
     vi.clearAllMocks();
-    process.env["PARENT_ORGS_ENABLED"] = "true";
     db.pending = [];
     db.committed = [];
     m.hitLimit.mockResolvedValue(false);
@@ -122,7 +121,6 @@ describe("POST /v1/auth/client-invitations/:token/accept (new account)", () => {
   });
   afterEach(async () => {
     await app.close();
-    delete process.env["PARENT_ORGS_ENABLED"];
   });
 
   it("creates account, child org, admin user, link and claim in ONE transaction, then a session", async () => {
@@ -196,14 +194,6 @@ describe("POST /v1/auth/client-invitations/:token/accept (new account)", () => {
     expect(Date.now() - t).toBeGreaterThanOrEqual(280);
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe("INVALID_INVITATION");
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-  });
-
-  it("flag off: 404 before any lookup", async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
-    const res = await accept(app, body());
-    expect(res.statusCode).toBe(404);
-    expect(prisma.clientInvitation.findUnique).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 

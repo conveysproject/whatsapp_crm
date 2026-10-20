@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { canAccess } from "../lib/permissions.js";
-import { canBeParent, linkChild, parentOrgsEnabled, ParentLinkError } from "../lib/parent-orgs.js";
+import { canBeParent, linkChild, ParentLinkError } from "../lib/parent-orgs.js";
 import { createWorkspace } from "../lib/create-workspace.js";
 import { verifyBearer } from "../auth/identity.js";
 import { normalizeEmail } from "../auth/ids.js";
@@ -20,9 +20,8 @@ const notFound = (reply: FastifyReply) =>
 const invalidToken404 = (reply: FastifyReply) =>
   reply.status(404).send({ error: { code: "INVALID_TOKEN", message: "Invitation not found or expired" } });
 
-/** Flag, permission and parent-capability gate for the parent-side (authenticated) routes. D15: the admin role only. */
+/** Permission and parent-capability gate for the parent-side (authenticated) routes. D15: the admin role only. */
 async function parentGuard(request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> {
-  if (!parentOrgsEnabled()) return notFound(reply);
   const { role, permissions, organizationId } = request.auth;
   if (role !== "admin" || !canAccess(role, permissions, "parent_access")) {
     return reply.status(403).send({ error: { code: "FORBIDDEN", message: "parent_access permission required" } });
@@ -140,7 +139,6 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
     "/client-invitations/:token",
     { config: { public: true }, schema: { params: tokenParams } },
     async (request, reply) => {
-      if (!parentOrgsEnabled()) return notFound(reply);
       const invitation = await prisma.clientInvitation.findUnique({ where: { token: request.params.token } });
       if (!invitation || invitation.status !== "pending" || invitation.expiresAt < new Date()) {
         return invalidToken404(reply);
@@ -177,7 +175,6 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      if (!parentOrgsEnabled()) return notFound(reply);
       let userId: string;
       try {
         ({ userId } = await verifyBearer(request.headers.authorization));

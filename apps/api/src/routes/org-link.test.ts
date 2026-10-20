@@ -29,7 +29,6 @@ const orgs = new Map<string, { parentOrganizationId: string | null; parentName?:
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  process.env["PARENT_ORGS_ENABLED"] = "true";
   auth = baseAuth;
   orgs.clear();
   orgs.set("child-1", { parentOrganizationId: "parent-1", parentName: "Agency Co" });
@@ -64,20 +63,12 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await app.close();
-  delete process.env["PARENT_ORGS_ENABLED"];
 });
 
 const get = () => app.inject({ method: "GET", url: "/v1/organization/parent-link" });
 const post = () => app.inject({ method: "POST", url: "/v1/organization/leave-parent" });
 
 describe("gates", () => {
-  it("flag off => 404 on both routes, nothing queried", async () => {
-    delete process.env["PARENT_ORGS_ENABLED"];
-    expect((await get()).statusCode).toBe(404);
-    expect((await post()).statusCode).toBe(404);
-    expect(mockPrisma.organization.findUnique).not.toHaveBeenCalled();
-    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
-  });
   it("non-admin => 403 on both routes, nothing queried or changed", async () => {
     auth = { ...baseAuth, role: "manager" };
     const g = await get();
