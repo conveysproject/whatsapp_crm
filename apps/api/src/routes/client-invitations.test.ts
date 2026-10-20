@@ -373,7 +373,7 @@ describe("POST /v1/client-invitations/:token/accept (public, signed in)", () => 
     );
     expect(mockLinkChild).toHaveBeenCalledWith(mockPrisma, "org-1", "child-1", "acct-1");
     expect(mockPrisma.clientInvitation.updateMany).toHaveBeenCalledWith({
-      where: { id: "inv-1", status: "pending" },
+      where: { id: "inv-1", status: "pending", expiresAt: { gt: expect.any(Date) } },
       data: { status: "accepted", acceptedOrgId: "child-1" },
     });
     expect(mockPrisma.user.update).toHaveBeenCalledWith({ where: { id: "acct-1" }, data: { mobileNumber: "+15550001" } });
@@ -423,6 +423,19 @@ describe("POST /v1/client-invitations/:token/accept (public, signed in)", () => 
 
   it("losing a concurrent accept (claim count 0) rolls back the org and user", async () => {
     mockPrisma.clientInvitation.updateMany.mockResolvedValue({ count: 0 });
+    const app = await buildApp();
+    const res = await accept(app);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe("INVALID_TOKEN");
+    expect(db.committed).toEqual([]);
+  });
+
+  it("an invite that expires between the lookup and the claim is not claimed: rolled back, generic 400", async () => {
+    // The row in the database has expired by the time the claim runs (the lookup saw it as valid).
+    const storedExpiresAt = new Date(Date.now() - 1);
+    mockPrisma.clientInvitation.updateMany.mockImplementation(async ({ where }: { where: { expiresAt?: { gt: Date } } }) =>
+      ({ count: where.expiresAt && storedExpiresAt <= where.expiresAt.gt ? 0 : 1 }),
+    );
     const app = await buildApp();
     const res = await accept(app);
     expect(res.statusCode).toBe(400);

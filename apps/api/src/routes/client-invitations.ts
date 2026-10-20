@@ -217,9 +217,9 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
           });
           if (mobileNumber) await tx.user.update({ where: { id: userId }, data: { mobileNumber } });
           await linkChild(tx, invitation.parentOrganizationId, childId, userId);
-          // Single use: only one of two concurrent accepts can flip pending -> accepted.
+          // Single use: only one of two concurrent accepts can flip pending -> accepted, and never after expiry.
           const claimed = await tx.clientInvitation.updateMany({
-            where: { id: invitation.id, status: "pending" },
+            where: { id: invitation.id, status: "pending", expiresAt: { gt: new Date() } },
             data: { status: "accepted", acceptedOrgId: childId },
           });
           if (claimed.count !== 1) throw new InvitationGone();
