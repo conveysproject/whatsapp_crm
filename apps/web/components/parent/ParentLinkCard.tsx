@@ -3,7 +3,7 @@
 import { useReducer, useState, type JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useOrganization } from "@/hooks/useOrganization";
+import { ORG_FLAGS_QUERY_KEY, useOrganization } from "@/hooks/useOrganization";
 import { confirmReducer, describeError, fetchParentLink, leaveParent, runConfirmed, showParentLinkCard } from "@/lib/parent-orgs";
 import { ParentLinkCardView } from "./ParentLinkCardView";
 
@@ -25,6 +25,8 @@ export function ParentLinkCard(): JSX.Element | null {
     dispatch("confirm");
     try {
       await runConfirmed(current, leaveParent);
+      await qc.invalidateQueries({ queryKey: ORG_FLAGS_QUERY_KEY });
+      // Legacy envelope cache used by other screens also reflects the org; refresh it too.
       await qc.invalidateQueries({ queryKey: ["org-me"] });
       await qc.invalidateQueries({ queryKey: ["parent-link"] });
     } catch (err) {

@@ -53,7 +53,7 @@ function Overview(): JSX.Element {
       await openChildAsAdmin(child, { setCookie: setImpersonationCookie, storage: sessionStorage });
       window.location.href = "/dashboard";
     } catch (err) {
-      toast.error(err instanceof ParentApiError && err.status === 429 ? "Limit reached (10 sessions per hour)." : describeError(err));
+      toast.error(err instanceof ParentApiError && err.status === 429 ? "Too many sessions started recently, try again later." : describeError(err));
       setBusyId(null);
     }
   }

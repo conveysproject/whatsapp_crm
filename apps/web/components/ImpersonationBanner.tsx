@@ -23,7 +23,7 @@ export function ImpersonationBanner({ impersonating }: { impersonating: boolean 
   const [state, setState] = useState<ImpersonationSession | null>(null);
   // Last known session: after the session ends elsewhere we still need to know who issued it (where to go back to).
   const lastSession = useRef<ImpersonationSession | null>(null);
-  if (state) lastSession.current = state;
+  useEffect(() => { if (state) lastSession.current = state; }, [state]);
   const [askingReason, setAskingReason] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
