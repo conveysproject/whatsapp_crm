@@ -1,11 +1,13 @@
 "use client";
 
-import { JSX, useEffect, useState } from "react";
+import { JSX, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth/client";
 import { toast } from "sonner";
 import {
   IMPERSONATION_STORAGE_KEY,
   clearImpersonation,
+  impersonationEndpoints,
+  impersonationExitPath,
   parseImpersonationSession,
   shouldRunImpersonationRuntime,
   startResyncListeners,
@@ -19,6 +21,9 @@ const API_URL = (process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000").
 export function ImpersonationBanner({ impersonating }: { impersonating: boolean }): JSX.Element | null {
   const { getToken } = useAuth();
   const [state, setState] = useState<ImpersonationSession | null>(null);
+  // Last known session: after the session ends elsewhere we still need to know who issued it (where to go back to).
+  const lastSession = useRef<ImpersonationSession | null>(null);
+  if (state) lastSession.current = state;
   const [askingReason, setAskingReason] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,7 +37,7 @@ export function ImpersonationBanner({ impersonating }: { impersonating: boolean 
         setState(session);
         if (ended) {
           toast.info("Impersonation ended.");
-          window.location.href = "/admin/organizations";
+          window.location.href = impersonationExitPath(lastSession.current);
         }
       });
     }
@@ -44,16 +49,18 @@ export function ImpersonationBanner({ impersonating }: { impersonating: boolean 
     }
     // Present but unusable: distinguish expired from malformed.
     let expired = false;
+    let exitPath = impersonationExitPath(null);
     try {
-      const parsed = JSON.parse(raw) as { token?: unknown; expiresAt?: unknown };
+      const parsed = JSON.parse(raw) as { token?: unknown; expiresAt?: unknown; source?: unknown; orgId?: unknown };
       expired = typeof parsed.token === "string" && typeof parsed.expiresAt === "number";
+      exitPath = impersonationExitPath({ source: parsed.source === "parent" ? "parent" : undefined, orgId: "" });
     } catch {
       expired = false;
     }
     void clearImpersonation().then(() => {
       if (expired) {
         toast.info("Impersonation session expired.");
-        window.location.href = "/admin/organizations";
+        window.location.href = exitPath;
       } else {
         toast.error("Invalid impersonation session was cleared.");
       }
@@ -68,13 +75,14 @@ export function ImpersonationBanner({ impersonating }: { impersonating: boolean 
     const timer = setTimeout(() => {
       setState(null);
       toast.info("Impersonation session expired.");
-      void clearImpersonation().finally(() => { window.location.href = "/admin/organizations"; });
+      const exitPath = impersonationExitPath(state);
+      void clearImpersonation().finally(() => { window.location.href = exitPath; });
     }, Math.max(0, Math.min(ms, 2_147_000_000)));
     return () => clearTimeout(timer);
   }, [state]);
 
-  // These calls are made as the real super admin (access token only). The fetch
-  // interceptor never adds the impersonation header to these paths.
+  // These calls are made as the real issuer (a super admin, or the parent org admin): access token only.
+  // The fetch interceptor never adds the impersonation header to these paths.
   async function adminCall(path: string, method: "POST" | "DELETE", body: unknown): Promise<Response> {
     const token = await getToken();
     return fetch(`${API_URL}${path}`, {
@@ -88,14 +96,14 @@ export function ImpersonationBanner({ impersonating }: { impersonating: boolean 
     if (!state || busy) return;
     setBusy(true);
     try {
-      const res = await adminCall(`/v1/admin/organizations/${state.orgId}/impersonate`, "DELETE", { token: state.token });
+      const res = await adminCall(impersonationEndpoints(state).end, "DELETE", { token: state.token });
       if (!res.ok && res.status !== 404) toast.error("Could not revoke the token on the server; it will expire on its own.");
     } catch {
       toast.error("Could not revoke the token on the server; it will expire on its own.");
     }
     await clearImpersonation();
     setState(null);
-    window.location.href = "/admin/organizations";
+    window.location.href = impersonationExitPath(state);
   }
 
   async function enableEdit() {
@@ -107,7 +115,7 @@ export function ImpersonationBanner({ impersonating }: { impersonating: boolean 
     }
     setBusy(true);
     try {
-      const res = await adminCall("/v1/admin/impersonation/elevate", "POST", { token: state.token, reason: trimmed });
+      const res = await adminCall(impersonationEndpoints(state).elevate, "POST", { token: state.token, reason: trimmed });
       if (res.ok || res.status === 409) {
         // 409 = already in edit mode on the server; sync the UI.
         const next: ImpersonationSession = { ...state, mode: "edit" };
