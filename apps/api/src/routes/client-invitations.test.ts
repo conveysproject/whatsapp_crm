@@ -133,8 +133,41 @@ describe("POST /v1/client-invitations", () => {
     const mail = mockSendMail.mock.calls[0][0];
     expect(mail.to).toBe("client@example.com");
     expect(mail.html).toContain("full read access");
+    // Not an approved white-label parent: today's options, nothing extra.
+    expect(Object.keys(mail).sort()).toEqual(["html", "subject", "to"]);
     expect(mail.html).toContain(data.token);
     expect(res.json().emailSent).toBe(true);
+  });
+
+  it("brands the email with the approved parent's own brand, from-name and reply-to", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      name: "Acme Agency",
+      isParent: true,
+      whiteLabelEnabled: true,
+      brandName: "Acme Msgs",
+      brandColor: "#112233",
+      brandSupportEmail: "help@acme.test",
+      brandHidePoweredBy: true,
+      slug: "acme",
+      logoImage: null,
+      smallLogoImage: null,
+      favicon: null,
+      darkLogoImage: null,
+      darkSmallLogoImage: null,
+      darkFavicon: null,
+      parentOrganization: null,
+    });
+    const app = await buildApp();
+    const res = await post(app);
+    expect(res.json().emailSent).toBe(true);
+    const mail = mockSendMail.mock.calls[0][0];
+    expect(mail.fromName).toBe("Acme Msgs");
+    expect(mail.replyTo).toBe("help@acme.test");
+    expect(mail.subject).toBe("You've been invited to create a Acme Msgs account");
+    expect(mail.html).toContain("create your own Acme Msgs account");
+    expect(mail.html).toContain("full read access");
+    expect(mail.html).not.toContain("WBMSG");
+    expect(mail.html).not.toContain(`href="https://wbmsg.com"`);
   });
 
   it("returns the created invite", async () => {

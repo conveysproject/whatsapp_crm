@@ -7,7 +7,8 @@ import { canGrantRole } from "../lib/role-grants.js";
 import { verifyBearer } from "../auth/identity.js";
 import { normalizeEmail } from "../auth/ids.js";
 import { sendMail, isEmailConfigured } from "../lib/mail.js";
-import { buildInvitationEmail, invitationAcceptUrl, INVITATION_SUBJECT } from "../lib/invitation-email.js";
+import { buildInvitationEmail, invitationAcceptUrl, invitationSubject } from "../lib/invitation-email.js";
+import { activeBrand, brandForOrg, brandMailExtras } from "../lib/email-brand.js";
 
 class InvitationGone extends Error {}
 
@@ -145,10 +146,17 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
       let emailSent = false;
       try {
         if (isEmailConfigured()) {
+          // The invitee sees the inviting organization's effective brand (its own if approved, else its parent's).
+          const brand = activeBrand(await brandForOrg(prisma, request.auth.organizationId));
           await sendMail({
-          to: invitation.email,
-          subject: INVITATION_SUBJECT,
-          html: buildInvitationEmail({ role: invitation.role, acceptUrl: invitationAcceptUrl(invitation.token) }),
+            to: invitation.email,
+            subject: invitationSubject(brand),
+            html: buildInvitationEmail({
+              role: invitation.role,
+              acceptUrl: invitationAcceptUrl(invitation.token),
+              ...(brand ? { brand } : {}),
+            }),
+            ...brandMailExtras(brand),
           });
           emailSent = true;
         } else {

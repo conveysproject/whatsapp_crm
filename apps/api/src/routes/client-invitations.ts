@@ -10,8 +10,9 @@ import { sendMail, isEmailConfigured } from "../lib/mail.js";
 import {
   buildClientInvitationEmail,
   clientInvitationAcceptUrl,
-  CLIENT_INVITATION_SUBJECT,
+  clientInvitationSubject,
 } from "../lib/invitation-email.js";
+import { activeBrand, brandForOrg, brandMailExtras } from "../lib/email-brand.js";
 
 class InvitationGone extends Error {}
 
@@ -85,13 +86,17 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
       let emailSent = false;
       try {
         if (isEmailConfigured()) {
+          // The invitee sees the inviting parent's brand when it is approved, else the WBMSG default.
+          const brand = activeBrand(await brandForOrg(prisma, parentOrganizationId));
           await sendMail({
             to: invitation.email,
-            subject: CLIENT_INVITATION_SUBJECT,
+            subject: clientInvitationSubject(brand),
             html: buildClientInvitationEmail({
-              parentName: parent?.name ?? "A WBMSG customer",
+              parentName: parent?.name ?? (brand ? brand.name : "A WBMSG customer"),
               acceptUrl: clientInvitationAcceptUrl(invitation.token),
+              ...(brand ? { brand } : {}),
             }),
+            ...brandMailExtras(brand),
           });
           emailSent = true;
         } else {

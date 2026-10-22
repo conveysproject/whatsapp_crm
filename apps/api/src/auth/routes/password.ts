@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { issueCode, verifyCode } from "../codes.js";
 import { trustDevice } from "../devices.js";
-import { sendCodeEmail, sendPasswordChangedEmail } from "../emails.js";
+import { sendCodeEmailToAccount, sendPasswordChangedToAccount } from "../brand-mail.js";
 import { normalizeEmail } from "../ids.js";
 import { authClientIp, clearPasswordFailures, hitLimit, isLocked, recordPasswordFailure } from "../limits.js";
 import { checkPasswordPolicy, hashPassword, verifyPassword } from "../password.js";
@@ -32,7 +32,7 @@ function track(work: Promise<void>): void {
 
 function mailChanged(fastify: FastifyInstance, to: string): void {
   track(
-    sendPasswordChangedEmail(to).catch((err: unknown) => {
+    sendPasswordChangedToAccount(fastify.prisma, to).catch((err: unknown) => {
       fastify.log.warn({ err: err instanceof Error ? err.name : "unknown" }, "password changed email failed");
     }),
   );
@@ -97,7 +97,7 @@ export const passwordRoutes: FastifyPluginAsync = async (fastify) => {
               accountId: account.id,
             });
             if ("error" in issued) return;
-            await sendCodeEmail(account.email, "password_reset", issued.code);
+            await sendCodeEmailToAccount(fastify.prisma, account.email, "password_reset", issued.code);
           } catch (err) {
             fastify.log.warn({ err: err instanceof Error ? err.name : "unknown" }, "password forgot failed");
           }

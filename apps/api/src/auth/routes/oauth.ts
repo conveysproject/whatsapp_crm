@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest 
 import type { AuthAccount } from "@prisma/client";
 import { requireAccountSession } from "../account-auth.js";
 import { issueCode, verifyCodeById } from "../codes.js";
-import { sendCodeEmail } from "../emails.js";
+import { sendCodeEmailToAccount } from "../brand-mail.js";
 import { newAccountId, normalizeEmail } from "../ids.js";
 import { hitLimit, isLocked } from "../limits.js";
 import { lockAccount } from "../account-lock.js";
@@ -353,7 +353,8 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify) => {
           const issued = await issueCode(fastify.prisma, { purpose: "email_verify", target });
           if ("error" in issued) return;
           await updatePendingOAuth(pendingId, { ...pending, target, codeId: issued.codeId });
-          await sendCodeEmail(
+          await sendCodeEmailToAccount(
+            fastify.prisma,
             target,
             "email_verify",
             issued.code,
