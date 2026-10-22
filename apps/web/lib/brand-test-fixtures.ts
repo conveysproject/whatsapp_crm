@@ -14,7 +14,7 @@ export const HOSTILE_NAME = '"><img src=x onerror=alert(1)>';
 export const FORBIDDEN_LITERALS = ["WBMSG", "wbmsg.com", "info@conveys.in"] as const;
 
 export function inBrand(brand: Brand, el: ReactElement): ReactElement {
-  return h(BrandProvider, { brand }, el);
+  return h(BrandProvider, { brand, children: el });
 }
 
 export function inQuery(el: ReactElement, seed?: (qc: QueryClient) => void): ReactElement {
