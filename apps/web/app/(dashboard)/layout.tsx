@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { JSX, ReactNode } from "react";
 import { serverApiHeaders, getImpersonationCookie } from "@/lib/server-api";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -14,6 +15,9 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { sessionExpiredRedirect } from "@/lib/auth/session-expired";
 import { Toaster } from "sonner";
+import { BrandProvider } from "@/components/brand/BrandProvider";
+import { brandCssText, brandMetadata } from "@/lib/brand";
+import { loadRequestBrand } from "@/lib/brand-server";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
@@ -76,6 +80,18 @@ async function fetchOrgStatus(token: string): Promise<OrgStatus | null> {
   }
 }
 
+// Title template and favicon for a branded org; {} for the default brand so the root metadata stays as it is.
+// Next replaces `icons` as a whole when a nested layout sets it, which is what a branded favicon needs.
+export async function generateMetadata(): Promise<Metadata> {
+  try {
+    const { getToken, userId } = await auth();
+    if (!userId) return {};
+    return brandMetadata(await loadRequestBrand((await getToken()) ?? ""));
+  } catch {
+    return {};
+  }
+}
+
 export default async function DashboardLayout({ children }: { children: ReactNode }): Promise<JSX.Element> {
   const { getToken, userId } = await auth.protect();
   const token = await getToken();
@@ -85,6 +101,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   // makes getOrgStatus return provisioned=false and falls through to the redirect below,
   // so the cookie never bypasses a check on its own.
   const impersonating = (await getImpersonationCookie()) !== null;
+
+  // Started now so it runs while the org status loads. Never rejects: any failure is the default brand.
+  const brandPromise = loadRequestBrand(token ?? "");
 
   let status: OrgStatus;
   try {
@@ -103,7 +122,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     redirect("/business-details");
   }
 
+  const brand = await brandPromise;
+  const brandCss = brandCssText(brand);
+
   return (
+    <BrandProvider brand={brand}>
+      {/* First child, so portals and toasts get the colors from the first paint. Null for the default brand. */}
+      {brandCss ? <style dangerouslySetInnerHTML={{ __html: brandCss }} /> : null}
     <OnboardingProvider status={status}>
       <ImpersonationProvider impersonating={impersonating} />
       <RoleRouteGuard />
@@ -123,5 +148,6 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         </div>
       </div>
     </OnboardingProvider>
+    </BrandProvider>
   );
 }
