@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { isAuthorized } from "../../../../lib/internal-email-auth";
 import { sendMail, type MailOptions } from "../../../../lib/mail";
+import { isPlainEmail, isValidFromName } from "../../../../lib/mail-from";
 
 // Generic transactional email bridge — Vercel can reach GoDaddy SMTP, Railway cannot.
 //
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { to, subject, html, replyTo } = body as Partial<MailOptions>;
+  const { to, subject, html, replyTo, fromName } = body as Partial<MailOptions>;
 
   if (!to || !subject || !html) {
     return NextResponse.json({ error: "Missing required fields: to, subject, html" }, { status: 400 });
@@ -36,8 +37,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "html too large" }, { status: 400 });
   }
 
+  if (fromName !== undefined && !isValidFromName(fromName)) {
+    return NextResponse.json({ error: "Invalid fromName" }, { status: 400 });
+  }
+  if (replyTo !== undefined && replyTo !== "" && !isPlainEmail(replyTo)) {
+    return NextResponse.json({ error: "Invalid replyTo" }, { status: 400 });
+  }
+
   try {
-    await sendMail({ to, subject, html, ...(replyTo ? { replyTo } : {}) });
+    await sendMail({
+      to,
+      subject,
+      html,
+      ...(replyTo ? { replyTo } : {}),
+      ...(fromName !== undefined ? { fromName } : {}),
+    });
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

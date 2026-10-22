@@ -7,6 +7,8 @@ export interface MailOptions {
   subject: string;
   html: string;
   replyTo?: string;
+  /** Display name for the From header; the web relay validates and sanitizes it. Defaults to WBMSG there. */
+  fromName?: string;
 }
 
 export function isEmailConfigured(): boolean {

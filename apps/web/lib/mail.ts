@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { buildFrom } from "./mail-from";
 
 const SMTP_USER = process.env["SMTP_USER"];
 const SMTP_PASS = process.env["SMTP_PASS"];
@@ -18,6 +19,8 @@ export interface MailOptions {
   subject: string;
   html: string;
   replyTo?: string;
+  /** Display name for the From header (sanitized here); defaults to WBMSG. */
+  fromName?: string;
 }
 
 export async function sendMail(options: MailOptions): Promise<void> {
@@ -25,7 +28,7 @@ export async function sendMail(options: MailOptions): Promise<void> {
     throw new Error("SMTP not configured (SMTP_USER/SMTP_PASS missing)");
   }
   await transporter.sendMail({
-    from: `WBMSG <${SMTP_USER}>`,
+    from: buildFrom(options.fromName, SMTP_USER as string),
     to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
     subject: options.subject,
     html: options.html,
