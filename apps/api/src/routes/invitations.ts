@@ -194,7 +194,7 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
       if (!invitation || invitation.expiresAt < new Date()) {
         return reply.status(404).send({ error: { code: "INVALID_TOKEN", message: "Invitation not found or expired" } });
       }
-      return reply.send({ data: { ...invitation, brand: await previewBrandPayload(prisma, invitation.organizationId) } });
+      return reply.send({ data: { ...invitation, brand: await previewBrandPayload(prisma, invitation.organizationId, request.log) } });
     }
   );
 

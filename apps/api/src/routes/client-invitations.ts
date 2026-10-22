@@ -161,7 +161,7 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
         where: { email: normalizeEmail(invitation.email) },
         select: { id: true },
       });
-      const brand = await previewBrandPayload(prisma, invitation.parentOrganizationId);
+      const brand = await previewBrandPayload(prisma, invitation.parentOrganizationId, request.log);
       return reply.send({ data: { parentName: parent.name, email: invitation.email, accountExists: account !== null, brand } });
     },
   );

@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { writeAdminAudit } from "../lib/audit.js";
-import { brandPayload, isAllowedAssetUrl, resolveBrand, validateBrandInput, validateSlug } from "../lib/brand.js";
+import { brandPayload, isAllowedAssetUrl, isBrandServerKey, resolveBrand, validateBrandInput, validateSlug } from "../lib/brand.js";
 import { canBeParent } from "../lib/parent-orgs.js";
 import { clientIp } from "../lib/public-api/client-ip.js";
 import { deleteFromR2, R2_PUBLIC_URL, uploadToR2 } from "../lib/r2.js";
@@ -378,9 +378,14 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
         public: true,
         rateLimit: {
           hook: "preHandler",
-          max: 30,
+          // The web server reaches this route from a few shared egress IPs. With its key (PUBLIC_BRAND_SERVER_KEY) it
+          // gets its own bucket and a high limit; everyone else keeps 30 per minute per real client IP.
+          max: (req: FastifyRequest) => (isBrandServerKey(req.headers["x-brand-server-key"]) ? 1000 : 30),
           timeWindow: "1 minute",
-          keyGenerator: (req) => `public-brand:${clientIp(req.ip, req.headers["x-forwarded-for"], req.headers["x-real-ip"])}`,
+          keyGenerator: (req: FastifyRequest) =>
+            isBrandServerKey(req.headers["x-brand-server-key"])
+              ? "public-brand:server"
+              : `public-brand:${clientIp(req.ip, req.headers["x-forwarded-for"], req.headers["x-real-ip"])}`,
         },
       },
       attachValidation: true,

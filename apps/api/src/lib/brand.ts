@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 
 export interface Brand {
@@ -236,10 +237,32 @@ export async function resolveBrand(prisma: PrismaClient, orgId: string): Promise
  * The brand payload an invitation preview shows for the inviting org. Never throws: a failed lookup is the
  * default brand, so the preview itself keeps working. Carries no ids.
  */
-export async function previewBrandPayload(prisma: PrismaClient, orgId: string): Promise<BrandPayload> {
+export async function previewBrandPayload(
+  prisma: PrismaClient,
+  orgId: string,
+  log?: { warn: (obj: object, msg: string) => void },
+): Promise<BrandPayload> {
   try {
     return brandPayload(await resolveBrand(prisma, orgId));
-  } catch {
+  } catch (err) {
+    log?.warn({ err }, "invitation preview: brand lookup failed, using the default brand");
     return brandPayload(DEFAULT_BRAND);
   }
+}
+
+const MIN_SERVER_KEY_LENGTH = 32;
+
+/**
+ * True when the request header carries the web server's key (env PUBLIC_BRAND_SERVER_KEY, at least 32 characters; unset or
+ * shorter turns the feature off, so nothing bypasses). Constant-time comparison over equal-length digests. The key is
+ * never logged or returned.
+ */
+export function isBrandServerKey(header: unknown): boolean {
+  const key = process.env["PUBLIC_BRAND_SERVER_KEY"];
+  if (!key || key.length < MIN_SERVER_KEY_LENGTH) return false;
+  const given = Array.isArray(header) ? header[0] : header;
+  if (typeof given !== "string" || given.length === 0) return false;
+  const a = createHash("sha256").update(given).digest();
+  const b = createHash("sha256").update(key).digest();
+  return timingSafeEqual(a, b);
 }

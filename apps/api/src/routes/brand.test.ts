@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 
@@ -756,7 +756,9 @@ describe("route config", () => {
     const found: Found[] = [];
     const app = await buildApp(found);
     const pub = found.find((r) => r.method === "GET" && r.url === "/v1/public/brand/:slug")!;
-    expect(pub.config).toMatchObject({ public: true, rateLimit: { max: 30, timeWindow: "1 minute" } });
+    expect(pub.config).toMatchObject({ public: true, rateLimit: { timeWindow: "1 minute" } });
+    const pubMax = (pub.config as { rateLimit: { max: (r: unknown) => number } }).rateLimit.max;
+    expect(pubMax({ headers: {} })).toBe(30);
     const up = found.find((r) => r.method === "POST" && r.url === "/v1/organizations/brand/assets/:slot")!;
     expect(up.config).toMatchObject({ rateLimit: { max: 20, timeWindow: "1 hour" } });
     const keyGen = (up.config as { rateLimit: { keyGenerator: (r: unknown) => string } }).rateLimit.keyGenerator;
@@ -767,6 +769,72 @@ describe("route config", () => {
     expect(viaProxy("203.0.113.7")).not.toBe(viaProxy("198.51.100.9"));
     expect(viaProxy("203.0.113.7")).toBe(viaProxy("203.0.113.7"));
     expect(viaProxy("203.0.113.7")).toContain("203.0.113.7");
+    await app.close();
+  });
+});
+
+describe("public brand route: server key", () => {
+  const KEY = "k".repeat(40);
+  const limits = async () => {
+    const found: Found[] = [];
+    const app = await buildApp(found);
+    const pub = found.find((r) => r.method === "GET" && r.url === "/v1/public/brand/:slug")!;
+    const rl = (pub.config as { rateLimit: { max: (r: unknown) => number; keyGenerator: (r: unknown) => string } }).rateLimit;
+    await app.close();
+    return rl;
+  };
+  const req = (key?: unknown) => ({ ip: "100.64.0.5", headers: { "x-forwarded-for": "203.0.113.7", ...(key === undefined ? {} : { "x-brand-server-key": key }) } });
+
+  afterEach(() => {
+    delete process.env["PUBLIC_BRAND_SERVER_KEY"];
+  });
+
+  it("the correct key gets its own bucket and 1000 per minute", async () => {
+    process.env["PUBLIC_BRAND_SERVER_KEY"] = KEY;
+    const rl = await limits();
+    expect(rl.max(req(KEY))).toBe(1000);
+    expect(rl.keyGenerator(req(KEY))).toBe("public-brand:server");
+  });
+
+  it("a wrong, missing, empty, short-env or array key keeps 30 per minute per real client IP", async () => {
+    process.env["PUBLIC_BRAND_SERVER_KEY"] = KEY;
+    const rl = await limits();
+    for (const k of ["wrong", KEY + "x", KEY.slice(1), "", undefined, 5]) {
+      expect(rl.max(req(k)), String(k)).toBe(30);
+      expect(rl.keyGenerator(req(k)), String(k)).toContain("203.0.113.7");
+    }
+  });
+
+  it("with the env unset or shorter than 32 characters the header is ignored, even if it matches", async () => {
+    const rl = await limits();
+    expect(rl.max(req(KEY))).toBe(30);
+    process.env["PUBLIC_BRAND_SERVER_KEY"] = "short-key";
+    expect(rl.max(req("short-key"))).toBe(30);
+    process.env["PUBLIC_BRAND_SERVER_KEY"] = "x".repeat(31);
+    expect(rl.max(req("x".repeat(31)))).toBe(30);
+    process.env["PUBLIC_BRAND_SERVER_KEY"] = "x".repeat(32);
+    expect(rl.max(req("x".repeat(32)))).toBe(1000);
+  });
+
+  it("compares in constant time over digests: keys of different lengths never throw", async () => {
+    process.env["PUBLIC_BRAND_SERVER_KEY"] = KEY;
+    const { isBrandServerKey } = await import("../lib/brand.js");
+    expect(() => isBrandServerKey("a")).not.toThrow();
+    expect(() => isBrandServerKey("a".repeat(5000))).not.toThrow();
+    expect(isBrandServerKey("a")).toBe(false);
+    expect(isBrandServerKey(KEY)).toBe(true);
+    expect(isBrandServerKey([KEY])).toBe(true);
+  });
+
+  it("the response never contains the key, with or without it", async () => {
+    process.env["PUBLIC_BRAND_SERVER_KEY"] = KEY;
+    mockPrisma.organization.findUnique.mockResolvedValue(null);
+    const app = await buildApp();
+    for (const headers of [{ "x-brand-server-key": KEY }, {}]) {
+      const res = await app.inject({ method: "GET", url: "/v1/public/brand/acme-cloud", headers });
+      expect(res.body).not.toContain(KEY);
+      expect(JSON.stringify(res.headers)).not.toContain(KEY);
+    }
     await app.close();
   });
 });

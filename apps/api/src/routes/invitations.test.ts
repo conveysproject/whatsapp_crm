@@ -318,6 +318,17 @@ describe("invitations", () => {
       expect(res.json().data.brand.isDefault).toBe(true);
     });
 
+    it("logs a failed brand lookup at warn level without the invitation token", async () => {
+      mockPrisma.invitation.findUnique.mockResolvedValue(row);
+      mockPrisma.organization.findUnique.mockRejectedValue(new Error("db down"));
+      const { previewBrandPayload } = await import("../lib/brand.js");
+      const warn = vi.fn();
+      const out = await previewBrandPayload(mockPrisma as never, "org-9", { warn });
+      expect(out.isDefault).toBe(true);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]![1])).not.toContain("tok");
+    });
+
     it("bad tokens keep the same 404 and never look up a brand", async () => {
       mockPrisma.invitation.findUnique.mockResolvedValue(null);
       const a = await get();
