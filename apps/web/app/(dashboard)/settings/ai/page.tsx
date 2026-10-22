@@ -106,7 +106,7 @@ export default function AISettingsPage(): JSX.Element {
             <div>
               <p className="font-medium text-sm">Anthropic Claude (Default)</p>
               <p className="text-xs text-gray-500 mt-0.5">
-                Uses TrustCRM&apos;s built-in Claude Haiku for intelligent, context-aware responses. No extra configuration needed.
+                Uses the built-in Claude Haiku for intelligent, context-aware responses. No extra configuration needed.
               </p>
             </div>
           </div>
@@ -176,7 +176,7 @@ export default function AISettingsPage(): JSX.Element {
         <div
           className={`border rounded-lg p-4 transition-colors ${
             backend === "openai"
-              ? "border-green-500 bg-green-50"
+              ? "border-brand-500 bg-brand-50"
               : "border-gray-200"
           }`}
         >
@@ -189,7 +189,7 @@ export default function AISettingsPage(): JSX.Element {
               <span
                 className={`mt-0.5 h-4 w-4 rounded-full border-2 flex-shrink-0 ${
                   backend === "openai"
-                    ? "border-green-600 bg-green-600"
+                    ? "border-brand-600 bg-brand-600"
                     : "border-gray-300"
                 }`}
               />
@@ -212,7 +212,7 @@ export default function AISettingsPage(): JSX.Element {
                 value={openAiKey}
                 onChange={(e) => setOpenAiKey(e.target.value)}
                 placeholder="sk-..."
-                className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400"
+                className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
             </div>
           )}
@@ -224,7 +224,7 @@ export default function AISettingsPage(): JSX.Element {
           type="button"
           onClick={() => saveMutation.mutate()}
           disabled={saveMutation.isPending}
-          className="px-5 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-5 py-2 text-sm font-medium text-white bg-brand-600 rounded-md hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {saveMutation.isPending ? "Saving..." : "Save"}
         </button>

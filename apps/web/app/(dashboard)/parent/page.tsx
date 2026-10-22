@@ -80,7 +80,7 @@ function Overview(): JSX.Element {
           >
             {RANGES.map((r) => <option key={r.days} value={r.days}>{r.label}</option>)}
           </select>
-          <button type="button" onClick={() => setInviting(true)} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+          <button type="button" onClick={() => setInviting(true)} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
             Invite client
           </button>
         </div>

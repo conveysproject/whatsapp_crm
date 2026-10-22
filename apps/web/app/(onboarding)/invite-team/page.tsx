@@ -57,7 +57,7 @@ export default function InviteTeamPage(): JSX.Element {
           placeholder="colleague@company.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
         <select
           value={role}
@@ -73,7 +73,7 @@ export default function InviteTeamPage(): JSX.Element {
         <button
           type="submit"
           disabled={loading}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+          className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
         >
           {loading ? "Sending…" : "Invite"}
         </button>

@@ -67,7 +67,7 @@ export default function WebhookActionsPage(): JSX.Element {
           <h1 className="text-2xl font-semibold">Webhook Actions</h1>
           <p className="text-sm text-gray-500 mt-1">When an inbound webhook payload matches a condition, auto-send a WhatsApp template to the contact.</p>
         </div>
-        <button onClick={() => setCreating(true)} className="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700">
+        <button onClick={() => setCreating(true)} className="px-4 py-2 bg-brand-600 text-white text-sm rounded hover:bg-brand-700">
           New Rule
         </button>
       </div>
@@ -99,7 +99,7 @@ export default function WebhookActionsPage(): JSX.Element {
             </div>
           </div>
           <div className="flex gap-3">
-            <button onClick={() => create.mutate()} disabled={!form.title || !form.conditionKey || !form.conditionValue || create.isPending} className="px-4 py-2 bg-green-600 text-white text-sm rounded disabled:opacity-50">
+            <button onClick={() => create.mutate()} disabled={!form.title || !form.conditionKey || !form.conditionValue || create.isPending} className="px-4 py-2 bg-brand-600 text-white text-sm rounded disabled:opacity-50">
               {create.isPending ? "Saving..." : "Save Rule"}
             </button>
             <button onClick={() => setCreating(false)} className="px-4 py-2 border text-sm rounded">Cancel</button>
@@ -123,7 +123,7 @@ export default function WebhookActionsPage(): JSX.Element {
               <a href={`/settings/webhook-actions/${action.id}/logs`} className="text-xs text-blue-600 hover:underline">Logs</a>
               <button
                 onClick={() => toggle.mutate({ id: action.id, isActive: !action.isActive })}
-                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${action.isActive ? "bg-green-500" : "bg-gray-200"}`}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${action.isActive ? "bg-brand-500" : "bg-gray-200"}`}
               >
                 <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${action.isActive ? "translate-x-4" : "translate-x-0.5"}`} />
               </button>

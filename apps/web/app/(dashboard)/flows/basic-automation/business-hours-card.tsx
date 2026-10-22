@@ -222,7 +222,7 @@ export function BusinessHoursCard(): JSX.Element {
                     type="button"
                     onClick={() => toggleDay(row.dayOfWeek)}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 mt-0.5 ${
-                      row.enabled ? "bg-green-500" : "bg-gray-200"
+                      row.enabled ? "bg-brand-500" : "bg-gray-200"
                     }`}
                     aria-label={`Toggle ${row.label}`}
                   >

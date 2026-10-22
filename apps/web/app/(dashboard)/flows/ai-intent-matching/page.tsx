@@ -132,7 +132,7 @@ export default function AiIntentMatchingPage(): JSX.Element {
             disabled={saving || settings === null}
             className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 ${
               enabled
-                ? "bg-green-500 text-white border-green-500 hover:bg-green-600"
+                ? "bg-brand-500 text-white border-brand-500 hover:bg-brand-600"
                 : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
             }`}
           >

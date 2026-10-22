@@ -22,7 +22,7 @@ import {
 import { listCredentials, type ApiCredential } from "@/lib/api-credentials";
 import { useBrand } from "@/hooks/useBrand";
 
-const selectCls = "border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500";
+const selectCls = "border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-500";
 
 function GettingStarted({ rangeLabel }: { rangeLabel: string }): JSX.Element {
   const brandName = useBrand().name;

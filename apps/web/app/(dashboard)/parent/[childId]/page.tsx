@@ -100,7 +100,7 @@ function ChildDetail(): JSX.Element {
           <p className="text-sm text-gray-500">Last {DEFAULT_RANGE_DAYS} days</p>
         </div>
         <div className="flex gap-2">
-          <button type="button" disabled={!s || opening} onClick={() => { void openAsAdmin(); }} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">
+          <button type="button" disabled={!s || opening} onClick={() => { void openAsAdmin(); }} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
             {opening ? "Opening..." : "Open as admin"}
           </button>
           <button type="button" disabled={!s} onClick={() => { setRemoveError(null); dispatch("request"); }} className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50">

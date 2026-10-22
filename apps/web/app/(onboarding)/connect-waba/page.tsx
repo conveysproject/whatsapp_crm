@@ -21,7 +21,7 @@ export default function ConnectWabaPage(): JSX.Element {
       />
       <p className="mt-4 text-center text-xs text-gray-400">
         Already connected?{" "}
-        <Link href="/checklist" className="text-green-600 hover:underline">
+        <Link href="/checklist" className="text-brand-600 hover:underline">
           Skip to checklist
         </Link>
       </p>

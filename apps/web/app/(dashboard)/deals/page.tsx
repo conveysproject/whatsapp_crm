@@ -85,7 +85,7 @@ export default function DealsPage(): JSX.Element {
           <p className="text-sm text-gray-400 mb-5">Create a pipeline to start tracking your deals through stages.</p>
           <button
             onClick={() => setShowCreatePipeline(true)}
-            className="px-5 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
+            className="px-5 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700"
           >
             Create Pipeline
           </button>
@@ -115,7 +115,7 @@ export default function DealsPage(): JSX.Element {
             {pipeline && (
               <button
                 onClick={() => setShowAddDeal(true)}
-                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
+                className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700"
               >
                 Add Deal
               </button>
@@ -132,7 +132,7 @@ export default function DealsPage(): JSX.Element {
                 className={[
                   "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
                   pipeline?.id === p.id
-                    ? "border-green-600 text-green-600"
+                    ? "border-brand-600 text-brand-600"
                     : "border-transparent text-gray-500 hover:text-gray-700",
                 ].join(" ")}
               >
