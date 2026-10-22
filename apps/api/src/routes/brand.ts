@@ -25,6 +25,7 @@ const BRAND_FIELDS = {
   brandColor: true,
   brandSupportEmail: true,
   brandHidePoweredBy: true,
+  brandRevision: true,
   whiteLabelEnabled: true,
   slug: true,
   logoImage: true,
@@ -40,6 +41,7 @@ interface BrandSettingsRow {
   brandColor: string | null;
   brandSupportEmail: string | null;
   brandHidePoweredBy: boolean;
+  brandRevision: number;
   whiteLabelEnabled: boolean;
   slug: string | null;
   logoImage: string | null;
@@ -59,6 +61,7 @@ function toSettings(o: BrandSettingsRow) {
     slug: o.slug,
     hidePoweredBy: o.brandHidePoweredBy,
     whiteLabelEnabled: o.whiteLabelEnabled,
+    brandRevision: o.brandRevision,
     logoUrl: o.logoImage,
     smallLogoUrl: o.smallLogoImage,
     faviconUrl: o.favicon,
@@ -125,51 +128,96 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data });
   });
 
+  type Current = Record<string, unknown> & { whiteLabelEnabled: boolean };
+  type Decision = { data: Record<string, unknown>; resets: boolean } | { stop: (reply: FastifyReply) => FastifyReply };
+  type Outcome =
+    | { kind: "ok"; row: BrandSettingsRow; cur: Current; resets: boolean }
+    | { kind: "stop"; send: (reply: FastifyReply) => FastifyReply }
+    | { kind: "conflict" };
+
+  /**
+   * The one place brand rows are written. Every write bumps brandRevision (approval is bound to a revision).
+   * - Live brand and the change needs re-approval: ONE update that also switches the brand off.
+   * - Otherwise a conditional updateMany that only applies while the flag still has the value that was read, so a
+   *   concurrent approval can never slip an unreviewed change in. On a miss the decision is redone once.
+   */
+  async function commitBrand(
+    organizationId: string,
+    extraSelect: Record<string, true>,
+    decide: (cur: Current) => Decision,
+  ): Promise<Outcome> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const cur = (await fastify.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { ...extraSelect, whiteLabelEnabled: true },
+      })) as Current | null;
+      if (!cur) return { kind: "stop", send: forbidden };
+      const d = decide(cur);
+      if ("stop" in d) return { kind: "stop", send: d.stop };
+      const data = { ...d.data, brandRevision: { increment: 1 } };
+      if (d.resets) {
+        const row = await fastify.prisma.organization.update({
+          where: { id: organizationId },
+          data: { ...data, whiteLabelEnabled: false },
+          select: BRAND_FIELDS,
+        });
+        return { kind: "ok", row, cur, resets: true };
+      }
+      const res = await fastify.prisma.organization.updateMany({
+        where: { id: organizationId, whiteLabelEnabled: cur.whiteLabelEnabled },
+        data,
+      });
+      if (res.count === 0) continue;
+      const row = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: BRAND_FIELDS });
+      if (!row) return { kind: "stop", send: forbidden };
+      return { kind: "ok", row, cur, resets: false };
+    }
+    return { kind: "conflict" };
+  }
+
+  const conflict = (reply: FastifyReply) =>
+    reply.status(409).send({ error: { code: "CONFLICT", message: "The brand changed while saving; please try again" } });
+
   fastify.put<{ Body: unknown }>("/organizations/brand", { preHandler: brandGuard }, async (request, reply) => {
     if (request.auth.impersonation) return forbidden(reply);
     const { organizationId, userId } = request.auth;
     const parsed = validateBrandInput(request.body);
     if (!parsed.ok) return validationFailed(reply, parsed.field, parsed.message);
     const input = parsed.value;
-    const supportEmailRequired = () =>
-      validationFailed(reply, "supportEmail", "A support email is required while your brand is live");
 
-    const current = await fastify.prisma.organization.findUnique({
-      where: { id: organizationId },
-      select: { whiteLabelEnabled: true, brandName: true, slug: true, brandSupportEmail: true },
-    });
-    if (!current) return forbidden(reply);
-    // D8: once approved, the public brand must always have a way to reach support.
-    if (current.whiteLabelEnabled && !input.supportEmail) return supportEmailRequired();
-
-    // A new name or web address on a live brand needs a fresh approval: switch it off in the SAME write.
-    const reapprovalRequired = current.whiteLabelEnabled && (current.brandName !== input.name || current.slug !== input.slug);
-    const data = {
-      brandName: input.name,
-      brandColor: input.color,
-      brandSupportEmail: input.supportEmail,
-      slug: input.slug,
-      brandHidePoweredBy: input.hidePoweredBy,
-      ...(reapprovalRequired ? { whiteLabelEnabled: false } : {}),
-    };
-
-    let row: BrandSettingsRow | null;
+    let outcome: Outcome;
     try {
-      if (input.supportEmail) {
-        row = await fastify.prisma.organization.update({ where: { id: organizationId }, data, select: BRAND_FIELDS });
-      } else {
-        // No support email: only write while the brand is not live (closes the race with an approval).
-        const res = await fastify.prisma.organization.updateMany({ where: { id: organizationId, whiteLabelEnabled: false }, data });
-        if (res.count === 0) return supportEmailRequired();
-        row = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: BRAND_FIELDS });
-      }
+      outcome = await commitBrand(
+        organizationId,
+        { brandName: true, slug: true, brandSupportEmail: true },
+        (cur) => {
+          // D8: once approved, the public brand must always have a way to reach support.
+          if (cur.whiteLabelEnabled && !input.supportEmail) {
+            return { stop: (r) => validationFailed(r, "supportEmail", "A support email is required while your brand is live") };
+          }
+          // A new name or web address on a live brand needs a fresh approval.
+          const resets = cur.whiteLabelEnabled && (cur.brandName !== input.name || cur.slug !== input.slug);
+          return {
+            resets,
+            data: {
+              brandName: input.name,
+              brandColor: input.color,
+              brandSupportEmail: input.supportEmail,
+              slug: input.slug,
+              brandHidePoweredBy: input.hidePoweredBy,
+            },
+          };
+        },
+      );
     } catch (err) {
       if ((err as { code?: string } | null)?.code === "P2002") {
         return reply.status(409).send({ error: { code: "SLUG_TAKEN", message: "That web address is already taken" } });
       }
       throw err;
     }
-    if (!row) return forbidden(reply);
+    if (outcome.kind === "stop") return outcome.send(reply);
+    if (outcome.kind === "conflict") return conflict(reply);
+    const { row, cur, resets } = outcome;
     writeAdminAudit({
       prisma: fastify.prisma,
       actorId: userId,
@@ -177,13 +225,14 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
       targetType: "organization",
       targetId: organizationId,
       metadata: {
-        before: { name: current.brandName, slug: current.slug, supportEmail: current.brandSupportEmail },
+        before: { name: cur["brandName"], slug: cur["slug"], supportEmail: cur["brandSupportEmail"] },
         after: { name: input.name, slug: input.slug, supportEmail: input.supportEmail },
-        approvalReset: reapprovalRequired,
+        approvalReset: resets,
+        revision: row.brandRevision,
       },
       request,
     });
-    return reply.send({ data: toSettings(row), reapprovalRequired });
+    return reply.send({ data: toSettings(row), reapprovalRequired: resets });
   });
 
   fastify.post<{ Params: { slot: Slot } }>(
@@ -242,43 +291,39 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const prefix = `brand/${organizationId}`;
-      const previous = await fastify.prisma.organization.findUnique({
-        where: { id: organizationId },
-        select: { [slot.column]: true, whiteLabelEnabled: true },
-      });
-      const oldUrl = (previous as Record<string, string | null> | null)?.[slot.column] ?? null;
-      const wasLive = Boolean((previous as { whiteLabelEnabled?: boolean } | null)?.whiteLabelEnabled);
-
-      const { key, url } = await uploadToR2(file, organizationId, mime, prefix);
+      const { key, url } = await uploadToR2(file, organizationId, mime, `brand/${organizationId}`);
       // Defense in depth: only a URL the public pages are allowed to render may be stored.
       if (!isAllowedAssetUrl(url)) {
         await deleteFromR2(key).catch(() => undefined);
         return reply.status(500).send({ error: { code: "UPLOAD_FAILED", message: "Upload failed" } });
       }
-      let row: BrandSettingsRow;
+      let outcome: Outcome;
       try {
-        // Any image change on a live brand needs a fresh approval: switch it off in the SAME write.
-        row = await fastify.prisma.organization.update({
-          where: { id: organizationId },
-          data: { [slot.column]: url, ...(wasLive ? { whiteLabelEnabled: false } : {}) },
-          select: BRAND_FIELDS,
-        });
+        // Any image change on a live brand needs a fresh approval.
+        outcome = await commitBrand(organizationId, { [slot.column]: true }, (cur) => ({
+          resets: cur.whiteLabelEnabled,
+          data: { [slot.column]: url },
+        }));
       } catch (err) {
         await deleteFromR2(key).catch(() => undefined);
         throw err;
       }
-      await removeOldAsset(organizationId, oldUrl);
+      if (outcome.kind !== "ok") {
+        await deleteFromR2(key).catch(() => undefined);
+        return outcome.kind === "stop" ? outcome.send(reply) : conflict(reply);
+      }
+      const { row, cur, resets } = outcome;
+      await removeOldAsset(organizationId, (cur[slot.column] as string | null | undefined) ?? null);
       writeAdminAudit({
         prisma: fastify.prisma,
         actorId: userId,
         action: "org.brand_asset",
         targetType: "organization",
         targetId: organizationId,
-        metadata: { slot: request.params.slot, op: "upload", url, bytes: size, approvalReset: wasLive },
+        metadata: { slot: request.params.slot, op: "upload", url, bytes: size, approvalReset: resets, revision: row.brandRevision },
         request,
       });
-      return reply.send({ data: toSettings(row), reapprovalRequired: wasLive });
+      return reply.send({ data: toSettings(row), reapprovalRequired: resets });
     },
   );
 
@@ -289,28 +334,25 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
       if (request.auth.impersonation) return forbidden(reply);
       const { organizationId, userId } = request.auth;
       const slot = SLOTS[request.params.slot];
-      const previous = await fastify.prisma.organization.findUnique({
-        where: { id: organizationId },
-        select: { [slot.column]: true, whiteLabelEnabled: true },
-      });
-      const oldUrl = (previous as Record<string, string | null> | null)?.[slot.column] ?? null;
-      const reset = Boolean((previous as { whiteLabelEnabled?: boolean } | null)?.whiteLabelEnabled) && oldUrl !== null;
-      await fastify.prisma.organization.update({
-        where: { id: organizationId },
-        data: { [slot.column]: null, ...(reset ? { whiteLabelEnabled: false } : {}) },
-        select: { id: true },
-      });
-      await removeOldAsset(organizationId, oldUrl);
+      // Re-approval only when the slot actually held an image.
+      const outcome = await commitBrand(organizationId, { [slot.column]: true }, (cur) => ({
+        resets: cur.whiteLabelEnabled && ((cur[slot.column] as string | null | undefined) ?? null) !== null,
+        data: { [slot.column]: null },
+      }));
+      if (outcome.kind === "stop") return outcome.send(reply);
+      if (outcome.kind === "conflict") return conflict(reply);
+      const { row, cur, resets } = outcome;
+      await removeOldAsset(organizationId, (cur[slot.column] as string | null | undefined) ?? null);
       writeAdminAudit({
         prisma: fastify.prisma,
         actorId: userId,
         action: "org.brand_asset",
         targetType: "organization",
         targetId: organizationId,
-        metadata: { slot: request.params.slot, op: "delete", url: null, approvalReset: reset },
+        metadata: { slot: request.params.slot, op: "delete", url: null, approvalReset: resets, revision: row.brandRevision },
         request,
       });
-      return reply.status(204).send();
+      return reply.send({ data: toSettings(row), reapprovalRequired: resets });
     },
   );
 

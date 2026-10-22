@@ -86,6 +86,7 @@ const storedRow = {
   slug: "acme-cloud",
   brandHidePoweredBy: true,
   whiteLabelEnabled: false,
+  brandRevision: 3,
   logoImage: null,
   smallLogoImage: null,
   favicon: null,
@@ -93,6 +94,13 @@ const storedRow = {
   darkSmallLogoImage: null,
   darkFavicon: null,
 };
+
+/** The first brand write, whichever way it was made (single update when resetting, conditional updateMany otherwise). */
+const written = () =>
+  (mockPrisma.organization.update.mock.calls[0] ?? mockPrisma.organization.updateMany.mock.calls[0])![0] as {
+    where: Record<string, unknown>;
+    data: Record<string, unknown>;
+  };
 
 beforeEach(() => {
   vi.resetModules();
@@ -156,6 +164,7 @@ describe("GET /v1/organizations/brand", () => {
         slug: "acme-cloud",
         hidePoweredBy: true,
         whiteLabelEnabled: false,
+        brandRevision: 3,
         logoUrl: null,
         smallLogoUrl: null,
         faviconUrl: null,
@@ -178,14 +187,16 @@ describe("PUT /v1/organizations/brand", () => {
     const app = await buildApp();
     const res = await put(app, { ...goodBody, organizationId: "org-B", logoImage: "https://evil.test/x.png", id: "org-B" });
     expect(res.statusCode).toBe(200);
-    const arg = mockPrisma.organization.update.mock.calls[0]![0] as { where: unknown; data: Record<string, unknown> };
-    expect(arg.where).toEqual({ id: "org-A" });
+    const arg = written();
+    // Not live: a conditional write bound to the flag value that was read, bumping the revision.
+    expect(arg.where).toEqual({ id: "org-A", whiteLabelEnabled: false });
     expect(arg.data).toEqual({
       brandName: "Acme Cloud",
       brandColor: "#1a2b3c",
       brandSupportEmail: "help@acme.test",
       slug: "acme-cloud",
       brandHidePoweredBy: true,
+      brandRevision: { increment: 1 },
     });
     await vi.waitFor(() => expect(mockPrisma.adminAuditLog.create).toHaveBeenCalledTimes(1));
     const audit = mockPrisma.adminAuditLog.create.mock.calls[0]![0] as { data: Record<string, unknown> };
@@ -216,7 +227,7 @@ describe("PUT /v1/organizations/brand", () => {
 
   it("returns 409 SLUG_TAKEN on a unique violation", async () => {
     const app = await buildApp();
-    mockPrisma.organization.update.mockRejectedValue(Object.assign(new Error("dup"), { code: "P2002", meta: { target: ["slug"] } }));
+    mockPrisma.organization.updateMany.mockRejectedValue(Object.assign(new Error("dup"), { code: "P2002", meta: { target: ["slug"] } }));
     const res = await put(app, goodBody);
     expect(res.statusCode).toBe(409);
     expect(res.json<{ error: { code: string } }>().error.code).toBe("SLUG_TAKEN");
@@ -241,15 +252,47 @@ describe("PUT /v1/organizations/brand", () => {
       expect.objectContaining({ where: { id: "org-A", whiteLabelEnabled: false } }),
     );
     expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(written().data).toMatchObject({ brandRevision: { increment: 1 } });
     await app.close();
   });
 
-  it("race: approval lands between the read and a no-email write => D8 400, nothing written", async () => {
+  it("race: approval lands between the read and a no-email write => redone once, D8 400, nothing written", async () => {
     const app = await buildApp();
     mockPrisma.organization.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.organization.findUnique
+      .mockResolvedValueOnce({ ...storedRow })
+      .mockResolvedValueOnce({ ...storedRow, whiteLabelEnabled: true });
     const res = await put(app, { ...goodBody, supportEmail: null });
     expect(res.statusCode).toBe(400);
     expect(res.json<{ error: { field: string } }>().error.field).toBe("supportEmail");
+    expect(mockPrisma.organization.updateMany).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("race: an enable lands between the read and a rename => the retry sees it and resets approval", async () => {
+    const app = await buildApp();
+    mockPrisma.organization.updateMany.mockResolvedValueOnce({ count: 0 });
+    mockPrisma.organization.findUnique
+      .mockResolvedValueOnce({ ...storedRow })
+      .mockResolvedValueOnce({ ...storedRow, whiteLabelEnabled: true });
+    mockPrisma.organization.update.mockResolvedValue({ ...storedRow, brandName: "Renamed", whiteLabelEnabled: false, brandRevision: 4 });
+    const res = await put(app, { ...goodBody, name: "Renamed" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ reapprovalRequired: true, data: { whiteLabelEnabled: false, brandRevision: 4 } });
+    expect(mockPrisma.organization.updateMany.mock.calls[0]![0]).toMatchObject({ where: { whiteLabelEnabled: false } });
+    expect(mockPrisma.organization.update.mock.calls[0]![0]).toMatchObject({
+      data: { brandName: "Renamed", whiteLabelEnabled: false, brandRevision: { increment: 1 } },
+    });
+    await app.close();
+  });
+
+  it("gives up with 409 CONFLICT when the flag keeps flipping", async () => {
+    const app = await buildApp();
+    mockPrisma.organization.updateMany.mockResolvedValue({ count: 0 });
+    const res = await put(app, goodBody);
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("CONFLICT");
     await app.close();
   });
 
@@ -263,7 +306,7 @@ describe("PUT /v1/organizations/brand", () => {
 
   describe("re-approval", () => {
     const live = { ...storedRow, whiteLabelEnabled: true };
-    const lastUpdateData = () => (mockPrisma.organization.update.mock.calls[0]![0] as { data: Record<string, unknown> }).data;
+    const lastUpdateData = () => written().data;
     const lastAudit = async (action = "org.brand_update") => {
       let found: Record<string, unknown> | undefined;
       await vi.waitFor(() => {
@@ -326,20 +369,33 @@ describe("PUT /v1/organizations/brand", () => {
       const app = await buildApp();
       const res = await app.inject({ method: "POST", url: "/v1/organizations/brand/assets/logo", ...multipart(PNG, "image/png", "a.png") });
       expect(res.json()).toMatchObject({ reapprovalRequired: true });
-      expect(lastUpdateData()).toEqual({ logoImage: `${R2_BASE}/brand/org-A/uuid-1.png`, whiteLabelEnabled: false });
+      expect(lastUpdateData()).toEqual({ logoImage: `${R2_BASE}/brand/org-A/uuid-1.png`, whiteLabelEnabled: false, brandRevision: { increment: 1 } });
       expect(await lastAudit("org.brand_asset")).toMatchObject({ slot: "logo", url: `${R2_BASE}/brand/org-A/uuid-1.png`, approvalReset: true });
       await app.close();
     });
 
-    it("deleting an image on a live brand switches it off; deleting an empty slot does not", async () => {
+    it("deleting an image on a live brand switches it off and says so; deleting an empty slot does not", async () => {
       mockPrisma.organization.findUnique.mockResolvedValue({ ...live, logoImage: `${R2_BASE}/brand/org-A/old.png` });
       const app = await buildApp();
-      expect((await app.inject({ method: "DELETE", url: "/v1/organizations/brand/assets/logo" })).statusCode).toBe(204);
-      expect(lastUpdateData()).toEqual({ logoImage: null, whiteLabelEnabled: false });
+      const first = await app.inject({ method: "DELETE", url: "/v1/organizations/brand/assets/logo" });
+      expect(first.statusCode).toBe(200);
+      expect(first.json()).toMatchObject({ reapprovalRequired: true, data: { logoUrl: null } });
+      expect(lastUpdateData()).toEqual({ logoImage: null, whiteLabelEnabled: false, brandRevision: { increment: 1 } });
       mockPrisma.organization.update.mockClear();
+      mockPrisma.organization.updateMany.mockClear();
       mockPrisma.organization.findUnique.mockResolvedValue(live);
-      await app.inject({ method: "DELETE", url: "/v1/organizations/brand/assets/logo" });
-      expect(lastUpdateData()).toEqual({ logoImage: null });
+      const second = await app.inject({ method: "DELETE", url: "/v1/organizations/brand/assets/logo" });
+      expect(second.statusCode).toBe(200);
+      expect(second.json()).toMatchObject({ reapprovalRequired: false });
+      expect(lastUpdateData()).toEqual({ logoImage: null, brandRevision: { increment: 1 } });
+      await app.close();
+    });
+
+    it("a delete on a brand that is not live reports no re-approval", async () => {
+      mockPrisma.organization.findUnique.mockResolvedValue({ ...storedRow, logoImage: `${R2_BASE}/brand/org-A/old.png` });
+      const app = await buildApp();
+      const res = await app.inject({ method: "DELETE", url: "/v1/organizations/brand/assets/logo" });
+      expect(res.json()).toMatchObject({ reapprovalRequired: false });
       await app.close();
     });
 
@@ -377,7 +433,7 @@ describe("PUT /v1/organizations/brand", () => {
     auth.organizationId = "org-B";
     const app = await buildApp();
     await put(app, { ...goodBody, organizationId: "org-A" });
-    expect(mockPrisma.organization.update.mock.calls[0]![0]).toMatchObject({ where: { id: "org-B" } });
+    expect(written()).toMatchObject({ where: { id: "org-B" } });
     expect(mockCanBeParent).toHaveBeenCalledWith(mockPrisma, "org-B");
     await app.close();
   });
@@ -457,7 +513,7 @@ describe("POST /v1/organizations/brand/assets/:slot", () => {
 
   it("deletes the new object and rethrows when the database update fails after the upload", async () => {
     const app = await buildApp();
-    mockPrisma.organization.update.mockRejectedValue(new Error("db down"));
+    mockPrisma.organization.updateMany.mockRejectedValue(new Error("db down"));
     const res = await post(app, "logo", PNG, "image/png");
     expect(res.statusCode).toBe(500);
     expect(mockDelete).toHaveBeenCalledWith("brand/org-A/uuid-1.png");
@@ -534,9 +590,9 @@ describe("POST /v1/organizations/brand/assets/:slot", () => {
       const res = await post(app, slot, PNG, "application/octet-stream");
       expect(res.statusCode).toBe(200);
       expect(mockUpload).toHaveBeenCalledWith(expect.any(Buffer), "org-A", "image/png", "brand/org-A");
-      const arg = mockPrisma.organization.update.mock.calls[0]![0] as { where: unknown; data: Record<string, string> };
-      expect(arg.where).toEqual({ id: "org-A" });
-      expect(arg.data).toEqual({ [column]: `${R2_BASE}/brand/org-A/uuid-1.png` });
+      const arg = written();
+      expect(arg.where).toEqual({ id: "org-A", whiteLabelEnabled: false });
+      expect(arg.data).toEqual({ [column]: `${R2_BASE}/brand/org-A/uuid-1.png`, brandRevision: { increment: 1 } });
       await app.close();
     });
   }
@@ -569,13 +625,15 @@ describe("POST /v1/organizations/brand/assets/:slot", () => {
     await app.close();
   });
 
-  it("DELETE sets the column to null for the caller's org (204)", async () => {
+  it("DELETE sets the column to null for the caller's org, bumps the revision and returns the stored brand", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "DELETE", url: "/v1/organizations/brand/assets/darkFavicon" });
-    expect(res.statusCode).toBe(204);
-    expect(mockPrisma.organization.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: "org-A" }, data: { darkFavicon: null } }),
-    );
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ reapprovalRequired: false, data: { darkFaviconUrl: null, brandRevision: 3 } });
+    expect(mockPrisma.organization.updateMany).toHaveBeenCalledWith({
+      where: { id: "org-A", whiteLabelEnabled: false },
+      data: { darkFavicon: null, brandRevision: { increment: 1 } },
+    });
     await app.close();
   });
 });

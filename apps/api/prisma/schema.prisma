@@ -78,6 +78,7 @@ model Organization {
   brandColor             String?   @map("brand_color")
   brandSupportEmail      String?   @map("brand_support_email")
   whiteLabelEnabled      Boolean   @default(false) @map("white_label_enabled")
+  brandRevision          Int       @default(0) @map("brand_revision")
   brandHidePoweredBy     Boolean   @default(false) @map("brand_hide_powered_by")
   parentOrganization     Organization?  @relation("OrgParentChild", fields: [parentOrganizationId], references: [id], onDelete: SetNull)
   childOrganizations     Organization[] @relation("OrgParentChild")
