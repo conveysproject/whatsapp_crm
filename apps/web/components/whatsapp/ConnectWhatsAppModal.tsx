@@ -39,7 +39,7 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "moda
           <span className="text-xs text-gray-400">{STEP_LABELS[step]}</span>
           <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-green-500 rounded-full transition-all"
+              className="h-full bg-brand-500 rounded-full transition-all"
               style={{ width: step === "choose" ? "50%" : "100%" }}
             />
           </div>
@@ -272,7 +272,7 @@ function VerifyStep({ flow, isSMB, errorMsg, onBack, onSuccess, onError }: Verif
           type="checkbox"
           checked={alreadyVerified}
           onChange={(e) => setAlreadyVerified(e.target.checked)}
-          className="mt-0.5 accent-green-600"
+          className="mt-0.5 accent-brand-600"
         />
         <div>
           <p className="text-sm font-medium text-gray-800">My business is already verified by Meta</p>

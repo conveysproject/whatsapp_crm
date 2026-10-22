@@ -126,7 +126,7 @@ export function VoicePlayer({ mediaUrl, messageId, duration }: Props): JSX.Eleme
         {/* Play/pause button */}
         <button
           onClick={handlePlayPause}
-          className="flex-shrink-0 w-8 h-8 rounded-full bg-green-500 flex items-center justify-center hover:bg-green-600 transition-colors"
+          className="flex-shrink-0 w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center hover:bg-brand-600 transition-colors"
           aria-label={isPlaying ? "Pause" : "Play"}
           type="button"
         >
@@ -160,7 +160,7 @@ export function VoicePlayer({ mediaUrl, messageId, duration }: Props): JSX.Eleme
             onClick={handleProgressClick}
           >
             <div
-              className="absolute inset-y-0 left-0 bg-green-500 rounded-full transition-all"
+              className="absolute inset-y-0 left-0 bg-brand-500 rounded-full transition-all"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -176,7 +176,7 @@ export function VoicePlayer({ mediaUrl, messageId, duration }: Props): JSX.Eleme
       <button
         type="button"
         onClick={() => { setShowTranscript((prev) => !prev); }}
-        className="text-[10px] text-green-600 hover:text-green-700 self-start underline"
+        className="text-[10px] text-brand-600 hover:text-brand-700 self-start underline"
       >
         {showTranscript ? "Hide transcript" : "Show transcript"}
       </button>

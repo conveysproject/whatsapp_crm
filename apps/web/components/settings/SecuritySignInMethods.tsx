@@ -20,8 +20,8 @@ export interface SignInMethodsInfo {
   oauth: { provider: string }[];
 }
 
-const inputCls = "w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500";
-const btnCls = "px-3 py-2 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50";
+const inputCls = "w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
+const btnCls = "px-3 py-2 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50";
 const outlineCls = "px-3 py-2 text-sm font-medium rounded-lg border text-gray-800 hover:bg-gray-50 disabled:opacity-50";
 
 const PHONE_ERRORS: Record<string, string> = {

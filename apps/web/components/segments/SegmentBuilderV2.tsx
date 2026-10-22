@@ -382,7 +382,7 @@ function EventsRowContent({
       <button
         type="button"
         onClick={addSub}
-        className="flex items-center gap-2 text-sm text-[#1D4B3E] hover:text-green-700 pl-8"
+        className="flex items-center gap-2 text-sm text-[#1D4B3E] hover:text-brand-700 pl-8"
       >
         <PlusCircle className="h-4 w-4" />
         Add Condition within Event
@@ -575,7 +575,7 @@ export function SegmentBuilderV2({
       <button
         type="button"
         onClick={addRow}
-        className="flex items-center gap-2 text-sm text-[#1D4B3E] hover:text-green-700 mt-3"
+        className="flex items-center gap-2 text-sm text-[#1D4B3E] hover:text-brand-700 mt-3"
       >
         <PlusCircle className="h-5 w-5" />
         Add Condition

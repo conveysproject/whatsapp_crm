@@ -21,7 +21,7 @@ export function HeadsUpCard({ usage }: { usage: MessageUsage }): JSX.Element | n
           <li key={l.key}>{l.text}{l.date ? ` (${l.date})` : ""}</li>
         ))}
       </ul>
-      <Link href="/settings/billing" className="mt-3 inline-block text-sm font-medium text-green-800 underline underline-offset-2 dark:text-green-400">
+      <Link href="/settings/billing" className="mt-3 inline-block text-sm font-medium text-brand-800 underline underline-offset-2 dark:text-brand-400">
         See what was counted
       </Link>
     </section>

@@ -111,7 +111,7 @@ export function CallbackAttempts(): JSX.Element {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             aria-invalid={inputError !== null}
-            className="border rounded px-3 py-1.5 text-sm w-80 max-w-full bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="border rounded px-3 py-1.5 text-sm w-80 max-w-full bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
         <button type="submit" className="px-4 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-800">Search</button>

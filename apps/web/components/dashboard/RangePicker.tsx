@@ -20,7 +20,7 @@ export function RangePicker({ value, onChange }: { value: DashRange; onChange: (
             onClick={() => onChange(o.value)}
             className={`px-3 py-1.5 text-sm font-medium ${
               active
-                ? "bg-green-600 text-white"
+                ? "bg-brand-600 text-white"
                 : "bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
             }`}
           >

@@ -112,8 +112,8 @@ export function ConversationHeader({
     <div className="flex items-center justify-between px-4 py-2.5 bg-white border-b border-gray-200 shrink-0">
       <div className="flex items-center gap-2 min-w-0">
         {/* Avatar */}
-        <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-          <span className="text-xs font-semibold text-green-700">
+        <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
+          <span className="text-xs font-semibold text-brand-700">
             {(contactName)[0]?.toUpperCase() ?? "?"}
           </span>
         </div>

@@ -135,7 +135,7 @@ export function PermissionsGrid({ permissions, onChange }: Props): JSX.Element {
               type="button"
               onClick={() => toggle(group.key)}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                permissions[group.key] === "allow" ? "bg-green-500" : "bg-gray-200"
+                permissions[group.key] === "allow" ? "bg-brand-500" : "bg-gray-200"
               }`}
             >
               <span

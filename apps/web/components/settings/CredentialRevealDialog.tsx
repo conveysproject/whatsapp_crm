@@ -50,7 +50,7 @@ export function CopyButton({
           setTimeout(() => setState("idle"), 2000);
         });
       }}
-      className="px-2.5 py-1 border border-gray-300 dark:border-gray-600 text-xs rounded hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500"
+      className="px-2.5 py-1 border border-gray-300 dark:border-gray-600 text-xs rounded hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-500"
     >
       {state === "copied" ? "Copied" : state === "failed" ? "Press Ctrl+C" : "Copy"}
     </button>
@@ -124,7 +124,7 @@ export function CredentialRevealDialog({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="px-4 py-2 bg-brand-600 text-white text-sm rounded hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               I&apos;ve saved it
             </button>

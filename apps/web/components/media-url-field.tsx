@@ -20,7 +20,7 @@ export function MediaUrlField({
   placeholder = "https://example.com/image.jpg",
   autoFocus,
   filterType,
-  className = "w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500",
+  className = "w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500",
   onKeyDown,
 }: Props): JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false);

@@ -172,7 +172,7 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Pipeline</label>
             <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               value={pipelineId}
               onChange={(e) => onPipelineChange(e.target.value)}
             >
@@ -185,7 +185,7 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
           <label className="block text-xs font-medium text-gray-700 mb-1">Deal title *</label>
           <input
             autoFocus
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             placeholder="e.g. Premium plan — 10 seats"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -199,7 +199,7 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
               type="number"
               min="0"
               step="0.01"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               placeholder="0.00"
               value={value}
               onChange={(e) => setValue(e.target.value)}
@@ -208,7 +208,7 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Stage</label>
             <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               value={stage}
               onChange={(e) => setStage(e.target.value)}
             >
@@ -220,7 +220,7 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">Internal notes</label>
           <textarea
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
             rows={2}
             placeholder="Notes visible only to your team..."
             value={notes}
@@ -236,7 +236,7 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
               onClick={() => setSendMsg((v) => !v)}
               className={[
                 "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                sendMsg ? "bg-green-500" : "bg-gray-200",
+                sendMsg ? "bg-brand-500" : "bg-gray-200",
               ].join(" ")}
             >
               <span className={["inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform", sendMsg ? "translate-x-4" : "translate-x-1"].join(" ")} />
@@ -245,7 +245,7 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
           {sendMsg && (
             <>
               <textarea
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
                 rows={3}
                 placeholder="Add a message to the contact (optional)..."
                 value={contactMessage}
@@ -275,7 +275,7 @@ export function CreateOfferModal({ contactId, contactName, onClose, onCreated }:
           <button
             onClick={() => void handleSubmit(sendMsg)}
             disabled={saving || !title.trim() || !pipelineId}
-            className="flex-1 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50"
+            className="flex-1 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 disabled:opacity-50"
           >
             {saving ? "Saving..." : sendMsg ? "Create & Send Offer" : "Save Deal Only"}
           </button>

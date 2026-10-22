@@ -99,7 +99,7 @@ export function BotPanel({ conversationId }: Props): JSX.Element {
               <button
                 onClick={() => void handleSend(bot.id)}
                 disabled={sending === bot.id}
-                className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                className="text-xs px-2 py-1 bg-brand-600 text-white rounded hover:bg-brand-700 disabled:opacity-50"
               >
                 {sending === bot.id ? "…" : "Send"}
               </button>
