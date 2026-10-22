@@ -242,6 +242,18 @@ describe("no hard-coded product brand outside the allow-list", () => {
     expect(literalsInSource("const g = `/* ${a} */`; const t = 'info@conveys.in';")).toEqual(["info@conveys.in"]);
   });
 
+  it("a glob string with /* does not hide a planted literal on the next line", () => {
+    const src = 'const g = "**/*.ts";\nconst u = "https://wbmsg.com/x";\n';
+    expect(literalsInSource(src)).toEqual(["wbmsg.com"]);
+  });
+
+  it("a regex literal containing a quote does not hide a planted literal after it", () => {
+    const src = "const r = /[\"']+/g;\nconst u = \"https://wbmsg.com/x\";\n";
+    expect(literalsInSource(src)).toEqual(["wbmsg.com"]);
+    const src2 = "const r = /'/;\nconst t = 'info@conveys.in';\n";
+    expect(literalsInSource(src2)).toEqual(["info@conveys.in"]);
+  });
+
   it("an apostrophe in JSX text does not swallow the rest of the file", () => {
     expect(literalsInSource("const X = () => <p>Don't panic</p>;\nconst T = \"TrustCRM\";")).toEqual(["TrustCRM"]);
   });
