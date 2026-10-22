@@ -84,6 +84,9 @@ describe("PATCH /v1/admin/organizations/:orgId/parent-capability", () => {
     app = await buildApp("superAdmin");
     const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled: false } });
     expect(res.statusCode).toBe(200);
+    expect(mockPrisma.organization.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { isParent: false, whiteLabelEnabled: false } })
+    );
     expect(res.json()).toEqual({ data: { organizationId: "org-1", isParent: false } });
   });
 

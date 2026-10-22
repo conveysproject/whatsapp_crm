@@ -269,7 +269,7 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         if (!enabled && (await tx.organization.count({ where: { parentOrganizationId: org.id } })) > 0) {
           return { code: "HAS_CHILDREN" as const };
         }
-        const row = await tx.organization.update({ where: { id: org.id }, data: { isParent: enabled }, select: { id: true, isParent: true } });
+        const row = await tx.organization.update({ where: { id: org.id }, data: { isParent: enabled, ...(enabled ? {} : { whiteLabelEnabled: false }) }, select: { id: true, isParent: true } });
         return { code: "OK" as const, row };
       });
       if (result.code === "NOT_FOUND") return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
@@ -309,45 +309,56 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       if (!requireSuperAdmin(request.auth.role, reply)) return;
       const { orgId } = request.params;
       const { enabled } = request.body;
-      const org = await fastify.prisma.organization.findUnique({
-        where: { id: orgId },
-        select: {
-          id: true,
-          isParent: true,
-          parentOrganizationId: true,
-          brandName: true,
-          brandColor: true,
-          slug: true,
-          brandSupportEmail: true,
-        },
-      });
-      if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
       if (enabled) {
-        if (!org.isParent || org.parentOrganizationId) {
-          return reply.status(409).send({ error: { code: "NOT_PARENT", message: "Only a parent organization can be white-labelled" } });
-        }
-        const missing = (["brandName", "brandColor", "slug", "brandSupportEmail"] as const).filter((f) => !org[f]);
-        if (missing.length > 0) {
+        // One conditional write: the checks and the switch cannot be separated by a concurrent edit.
+        const res = await fastify.prisma.organization.updateMany({
+          where: {
+            id: orgId,
+            isParent: true,
+            parentOrganizationId: null,
+            brandName: { not: null },
+            brandColor: { not: null },
+            slug: { not: null },
+            brandSupportEmail: { not: null },
+          },
+          data: { whiteLabelEnabled: true },
+        });
+        if (res.count === 0) {
+          const org = await fastify.prisma.organization.findUnique({
+            where: { id: orgId },
+            select: {
+              id: true,
+              isParent: true,
+              parentOrganizationId: true,
+              brandName: true,
+              brandColor: true,
+              slug: true,
+              brandSupportEmail: true,
+            },
+          });
+          if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
+          if (!org.isParent || org.parentOrganizationId) {
+            return reply.status(409).send({ error: { code: "NOT_PARENT", message: "Only a parent organization can be white-labelled" } });
+          }
+          const missing = (["brandName", "brandColor", "slug", "brandSupportEmail"] as const).filter((f) => !org[f]);
           return reply
             .status(409)
             .send({ error: { code: "BRAND_INCOMPLETE", message: "The brand is not complete yet", missing } });
         }
+      } else {
+        const res = await fastify.prisma.organization.updateMany({ where: { id: orgId }, data: { whiteLabelEnabled: false } });
+        if (res.count === 0) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
       }
-      const row = await fastify.prisma.organization.update({
-        where: { id: org.id },
-        data: { whiteLabelEnabled: enabled },
-        select: { id: true, whiteLabelEnabled: true },
-      });
       writeAdminAudit({
         prisma: fastify.prisma,
         actorId: request.auth.userId,
         action: "org.white_label",
         targetType: "organization",
-        targetId: org.id,
+        targetId: orgId,
         metadata: { enabled },
         request,
       });
-      return reply.send({ data: { organizationId: row.id, whiteLabelEnabled: row.whiteLabelEnabled } });
+      return reply.send({ data: { organizationId: orgId, whiteLabelEnabled: enabled } });
     }
   );
 

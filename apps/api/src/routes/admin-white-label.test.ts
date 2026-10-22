@@ -6,7 +6,7 @@ vi.mock("../lib/redis.js", () => ({ redis: { incr: vi.fn(), expire: vi.fn(), set
 vi.mock("../lib/mail.js", () => ({ sendMail: vi.fn(), isEmailConfigured: vi.fn().mockReturnValue(true) }));
 
 const mockPrisma = {
-  organization: { findUnique: vi.fn(), update: vi.fn() },
+  organization: { findUnique: vi.fn(), updateMany: vi.fn() },
   adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
 };
 
@@ -38,10 +38,7 @@ describe("PATCH /v1/admin/organizations/:orgId/white-label", () => {
     vi.resetModules();
     vi.clearAllMocks();
     mockPrisma.organization.findUnique.mockResolvedValue({ ...complete });
-    mockPrisma.organization.update.mockImplementation(async (a: { data: { whiteLabelEnabled: boolean } }) => ({
-      id: "org-1",
-      whiteLabelEnabled: a.data.whiteLabelEnabled,
-    }));
+    mockPrisma.organization.updateMany.mockResolvedValue({ count: 1 });
   });
   afterEach(async () => {
     await app.close();
@@ -52,56 +49,79 @@ describe("PATCH /v1/admin/organizations/:orgId/white-label", () => {
     const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled: true } });
     expect(res.statusCode).toBe(403);
     expect(mockPrisma.organization.findUnique).not.toHaveBeenCalled();
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(mockPrisma.organization.updateMany).not.toHaveBeenCalled();
   });
 
-  it("enables a complete parent brand and audits org.white_label", async () => {
+  it("enables with ONE conditional write that carries every precondition, and audits org.white_label", async () => {
     app = await buildApp("superAdmin");
     const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled: true } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ data: { organizationId: "org-1", whiteLabelEnabled: true } });
-    expect(mockPrisma.organization.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: "org-1" }, data: { whiteLabelEnabled: true } }),
-    );
+    expect(mockPrisma.organization.updateMany).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.organization.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "org-1",
+        isParent: true,
+        parentOrganizationId: null,
+        brandName: { not: null },
+        brandColor: { not: null },
+        slug: { not: null },
+        brandSupportEmail: { not: null },
+      },
+      data: { whiteLabelEnabled: true },
+    });
     await vi.waitFor(() => expect(mockPrisma.adminAuditLog.create).toHaveBeenCalledTimes(1));
     const audit = mockPrisma.adminAuditLog.create.mock.calls[0]![0] as { data: Record<string, unknown> };
     expect(audit.data).toMatchObject({ action: "org.white_label", targetId: "org-1" });
   });
 
-  it("409 NOT_PARENT when the org is not a parent or is a child", async () => {
+  it("409 NOT_PARENT when the conditional write matched nothing and the org is not a parent or is a child", async () => {
     app = await buildApp("superAdmin");
+    mockPrisma.organization.updateMany.mockResolvedValue({ count: 0 });
     for (const row of [{ ...complete, isParent: false }, { ...complete, parentOrganizationId: "p-1" }]) {
       mockPrisma.organization.findUnique.mockResolvedValue(row);
       const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled: true } });
       expect(res.statusCode).toBe(409);
       expect(res.json<{ error: { code: string } }>().error.code).toBe("NOT_PARENT");
     }
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
   });
 
   it("409 BRAND_INCOMPLETE listing the missing fields", async () => {
     app = await buildApp("superAdmin");
+    mockPrisma.organization.updateMany.mockResolvedValue({ count: 0 });
     mockPrisma.organization.findUnique.mockResolvedValue({ ...complete, brandSupportEmail: null, slug: null });
     const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled: true } });
     expect(res.statusCode).toBe(409);
     const err = res.json<{ error: { code: string; missing: string[] } }>().error;
     expect(err.code).toBe("BRAND_INCOMPLETE");
     expect(err.missing).toEqual(["slug", "brandSupportEmail"]);
-    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
   });
 
-  it("disabling is always allowed, even for an incomplete or non-parent org", async () => {
+  it("race: the brand loses its support email after the first look => still BRAND_INCOMPLETE, never enabled", async () => {
     app = await buildApp("superAdmin");
-    mockPrisma.organization.findUnique.mockResolvedValue({ ...complete, isParent: false, brandName: null });
+    // The conditional write sees the incomplete row (count 0); the re-read reports what is missing.
+    mockPrisma.organization.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.organization.findUnique.mockResolvedValue({ ...complete, brandSupportEmail: null });
+    const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled: true } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ error: { missing: string[] } }>().error.missing).toEqual(["brandSupportEmail"]);
+    expect(mockPrisma.organization.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("disabling is always allowed, with no preconditions", async () => {
+    app = await buildApp("superAdmin");
     const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled: false } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ data: { organizationId: "org-1", whiteLabelEnabled: false } });
+    expect(mockPrisma.organization.updateMany).toHaveBeenCalledWith({ where: { id: "org-1" }, data: { whiteLabelEnabled: false } });
   });
 
   it("404 for an unknown org and 400 for a bad body", async () => {
     app = await buildApp("superAdmin");
+    mockPrisma.organization.updateMany.mockResolvedValue({ count: 0 });
     mockPrisma.organization.findUnique.mockResolvedValue(null);
     expect((await app.inject({ method: "PATCH", url: URL, payload: { enabled: true } })).statusCode).toBe(404);
+    expect((await app.inject({ method: "PATCH", url: URL, payload: { enabled: false } })).statusCode).toBe(404);
     expect((await app.inject({ method: "PATCH", url: URL, payload: { enabled: "yes" } })).statusCode).toBe(400);
   });
 });
