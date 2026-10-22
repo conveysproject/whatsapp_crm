@@ -16,7 +16,7 @@ const mockCanBeParent = vi.fn();
 vi.mock("../lib/parent-orgs.js", () => ({ canBeParent: (...a: unknown[]) => mockCanBeParent(...a) }));
 
 const mockPrisma = {
-  organization: { findUnique: vi.fn(), update: vi.fn() },
+  organization: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
 };
 
@@ -54,10 +54,13 @@ async function buildApp(found?: Found[]): Promise<FastifyInstance> {
   return app;
 }
 
-const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)]);
+const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const PNG = Buffer.concat([PNG_SIG, Buffer.from([0, 0, 0, 13]), Buffer.from("IHDR"), Buffer.alloc(32)]);
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(32)]);
 const WEBP = Buffer.concat([Buffer.from("RIFF"), Buffer.from([0x10, 0, 0, 0]), Buffer.from("WEBP"), Buffer.alloc(16)]);
-const ICO = Buffer.concat([Buffer.from([0, 0, 1, 0]), Buffer.alloc(32)]);
+const ICO = Buffer.concat([Buffer.from([0, 0, 1, 0, 1, 0]), Buffer.alloc(32)]);
+const CUR = Buffer.concat([Buffer.from([0, 0, 2, 0, 1, 0]), Buffer.alloc(32)]);
+const ICO_EMPTY = Buffer.concat([Buffer.from([0, 0, 1, 0, 0, 0]), Buffer.alloc(32)]);
 const GIF = Buffer.concat([Buffer.from("GIF89a"), Buffer.alloc(32)]);
 const SVG = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
 const HTML = Buffer.from("<html><script>alert(1)</script></html>");
@@ -99,6 +102,7 @@ beforeEach(() => {
   mockCanBeParent.mockResolvedValue(true);
   mockPrisma.organization.findUnique.mockResolvedValue({ ...storedRow });
   mockPrisma.organization.update.mockResolvedValue({ ...storedRow });
+  mockPrisma.organization.updateMany.mockResolvedValue({ count: 1 });
   mockPrisma.adminAuditLog.create.mockResolvedValue({});
   mockUpload.mockImplementation(async (_f: Buffer, orgId: string, mime: string, prefix?: string) => {
     const ext = mime === "image/jpeg" ? "jpg" : mime === "image/x-icon" ? "ico" : mime.split("/")[1];
@@ -229,10 +233,143 @@ describe("PUT /v1/organizations/brand", () => {
     await app.close();
   });
 
-  it("allows editing without supportEmail while not yet approved", async () => {
+  it("allows editing without supportEmail while not yet approved, with a conditional write", async () => {
     const app = await buildApp();
     const res = await put(app, { ...goodBody, supportEmail: null });
     expect(res.statusCode).toBe(200);
+    expect(mockPrisma.organization.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "org-A", whiteLabelEnabled: false } }),
+    );
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("race: approval lands between the read and a no-email write => D8 400, nothing written", async () => {
+    const app = await buildApp();
+    mockPrisma.organization.updateMany.mockResolvedValue({ count: 0 });
+    const res = await put(app, { ...goodBody, supportEmail: null });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { field: string } }>().error.field).toBe("supportEmail");
+    await app.close();
+  });
+
+  it("a non-object body gets the VALIDATION_FAILED shape with field body", async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: "PUT", url: "/v1/organizations/brand", headers: { "content-type": "application/json" }, payload: "null" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string; field: string } }>().error).toMatchObject({ code: "VALIDATION_FAILED", field: "body" });
+    await app.close();
+  });
+
+  describe("re-approval", () => {
+    const live = { ...storedRow, whiteLabelEnabled: true };
+    const lastUpdateData = () => (mockPrisma.organization.update.mock.calls[0]![0] as { data: Record<string, unknown> }).data;
+    const lastAudit = async (action = "org.brand_update") => {
+      let found: Record<string, unknown> | undefined;
+      await vi.waitFor(() => {
+        const call = mockPrisma.adminAuditLog.create.mock.calls
+          .map((c) => (c[0] as { data: { action: string; metadata: Record<string, unknown> } }).data)
+          .find((d) => d.action === action);
+        expect(call).toBeDefined();
+        found = call!.metadata;
+      });
+      return found!;
+    };
+
+    it("renaming a live brand switches it off in the same update and says so, with before/after in the audit", async () => {
+      mockPrisma.organization.findUnique.mockResolvedValue(live);
+      mockPrisma.organization.update.mockResolvedValue({ ...live, brandName: "New Name", whiteLabelEnabled: false });
+      const app = await buildApp();
+      const res = await put(app, { ...goodBody, name: "New Name" });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ reapprovalRequired: true, data: { whiteLabelEnabled: false } });
+      expect(mockPrisma.organization.update).toHaveBeenCalledTimes(1);
+      expect(lastUpdateData()).toMatchObject({ brandName: "New Name", whiteLabelEnabled: false });
+      expect(await lastAudit()).toMatchObject({
+        before: { name: "Acme Cloud", slug: "acme-cloud", supportEmail: "help@acme.test" },
+        after: { name: "New Name", slug: "acme-cloud", supportEmail: "help@acme.test" },
+        approvalReset: true,
+      });
+      await app.close();
+    });
+
+    it("changing the slug of a live brand switches it off, audit has old and new slug", async () => {
+      mockPrisma.organization.findUnique.mockResolvedValue(live);
+      const app = await buildApp();
+      const res = await put(app, { ...goodBody, slug: "acme-two" });
+      expect(res.json()).toMatchObject({ reapprovalRequired: true });
+      expect(lastUpdateData()).toMatchObject({ slug: "acme-two", whiteLabelEnabled: false });
+      expect(await lastAudit()).toMatchObject({ before: { slug: "acme-cloud" }, after: { slug: "acme-two" } });
+      await app.close();
+    });
+
+    it("color, supportEmail and hidePoweredBy changes keep a live brand enabled", async () => {
+      mockPrisma.organization.findUnique.mockResolvedValue(live);
+      const app = await buildApp();
+      const res = await put(app, { ...goodBody, color: "#ff0000", supportEmail: "new@acme.test", hidePoweredBy: false });
+      expect(res.json()).toMatchObject({ reapprovalRequired: false });
+      expect(lastUpdateData()).not.toHaveProperty("whiteLabelEnabled");
+      expect((await lastAudit())["approvalReset"]).toBe(false);
+      await app.close();
+    });
+
+    it("edits while not enabled never touch the flag", async () => {
+      const app = await buildApp();
+      const res = await put(app, { ...goodBody, name: "Another", slug: "another-one" });
+      expect(res.json()).toMatchObject({ reapprovalRequired: false });
+      expect(lastUpdateData()).not.toHaveProperty("whiteLabelEnabled");
+      await app.close();
+    });
+
+    it("an upload on a live brand switches it off in the same update; the audit has slot and url", async () => {
+      mockPrisma.organization.findUnique.mockResolvedValue(live);
+      const app = await buildApp();
+      const res = await app.inject({ method: "POST", url: "/v1/organizations/brand/assets/logo", ...multipart(PNG, "image/png", "a.png") });
+      expect(res.json()).toMatchObject({ reapprovalRequired: true });
+      expect(lastUpdateData()).toEqual({ logoImage: `${R2_BASE}/brand/org-A/uuid-1.png`, whiteLabelEnabled: false });
+      expect(await lastAudit("org.brand_asset")).toMatchObject({ slot: "logo", url: `${R2_BASE}/brand/org-A/uuid-1.png`, approvalReset: true });
+      await app.close();
+    });
+
+    it("deleting an image on a live brand switches it off; deleting an empty slot does not", async () => {
+      mockPrisma.organization.findUnique.mockResolvedValue({ ...live, logoImage: `${R2_BASE}/brand/org-A/old.png` });
+      const app = await buildApp();
+      expect((await app.inject({ method: "DELETE", url: "/v1/organizations/brand/assets/logo" })).statusCode).toBe(204);
+      expect(lastUpdateData()).toEqual({ logoImage: null, whiteLabelEnabled: false });
+      mockPrisma.organization.update.mockClear();
+      mockPrisma.organization.findUnique.mockResolvedValue(live);
+      await app.inject({ method: "DELETE", url: "/v1/organizations/brand/assets/logo" });
+      expect(lastUpdateData()).toEqual({ logoImage: null });
+      await app.close();
+    });
+
+    it("the public route stops serving the brand once the stored flag is off", async () => {
+      const publicRow = (enabled: boolean) => ({
+        id: "org-A", isParent: true, parentOrganizationId: null, whiteLabelEnabled: enabled, brandName: "Acme Cloud",
+        brandColor: "#1a2b3c", brandSupportEmail: "h@a.test", brandHidePoweredBy: false, slug: "acme-cloud",
+        logoImage: null, smallLogoImage: null, favicon: null, darkLogoImage: null, darkSmallLogoImage: null, darkFavicon: null,
+        parentOrganization: null,
+      });
+      const app = await buildApp();
+      mockPrisma.organization.findUnique.mockResolvedValue(publicRow(true));
+      expect((await app.inject({ method: "GET", url: "/v1/public/brand/acme-cloud" })).statusCode).toBe(200);
+      mockPrisma.organization.findUnique.mockResolvedValue(publicRow(false));
+      expect((await app.inject({ method: "GET", url: "/v1/public/brand/acme-cloud" })).statusCode).toBe(404);
+      await app.close();
+    });
+  });
+
+  it("refuses PUT, upload and delete during impersonation", async () => {
+    (auth as unknown as { impersonation: unknown }).impersonation = { actorId: "sa" };
+    const app = await buildApp();
+    const calls = [
+      app.inject({ method: "PUT", url: "/v1/organizations/brand", payload: goodBody }),
+      app.inject({ method: "POST", url: "/v1/organizations/brand/assets/logo", ...multipart(PNG, "image/png", "a.png") }),
+      app.inject({ method: "DELETE", url: "/v1/organizations/brand/assets/logo" }),
+    ];
+    for (const res of await Promise.all(calls)) expect(res.statusCode).toBe(403);
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    expect(mockUpload).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -272,6 +409,95 @@ describe("POST /v1/organizations/brand/assets/:slot", () => {
     mockPrisma.organization.update.mockResolvedValue({ ...storedRow, favicon: `${R2_BASE}/brand/org-A/uuid-1.ico` });
     expect((await post(app, "favicon", ICO, "image/png", "a.png")).statusCode).toBe(200);
     expect(mockUpload.mock.calls[0]![2]).toBe("image/x-icon");
+    await app.close();
+  });
+
+  it("magic bytes are strict: truncated PNG, PNG without IHDR, CUR and empty ICO are rejected", async () => {
+    const app = await buildApp();
+    expect((await post(app, "logo", PNG_SIG.subarray(0, 5), "image/png")).statusCode).toBe(415);
+    expect((await post(app, "logo", Buffer.concat([PNG_SIG, Buffer.alloc(8), Buffer.from("<html>")]), "image/png")).statusCode).toBe(415);
+    expect((await post(app, "favicon", CUR, "image/x-icon", "a.ico")).statusCode).toBe(415);
+    expect((await post(app, "favicon", ICO_EMPTY, "image/x-icon", "a.ico")).statusCode).toBe(415);
+    expect(mockUpload).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("a PNG with an HTML tail passes the signature but is stored with the DETECTED content type", async () => {
+    const app = await buildApp();
+    const sneaky = Buffer.concat([PNG, Buffer.from("<html><script>alert(1)</script></html>")]);
+    const res = await post(app, "logo", sneaky, "text/html", "x.html");
+    expect(res.statusCode).toBe(200);
+    expect(mockUpload.mock.calls[0]![2]).toBe("image/png");
+    await app.close();
+  });
+
+  it("a stream far over the limit always ends as FILE_TOO_LARGE 413", async () => {
+    const app = await buildApp();
+    const huge = Buffer.concat([PNG, Buffer.alloc(3 * 1024 * 1024)]);
+    const res = await post(app, "logo", huge, "image/png");
+    expect(res.statusCode).toBe(413);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("FILE_TOO_LARGE");
+    expect(mockUpload).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("503 UPLOADS_UNAVAILABLE without leaking the variable name when R2_PUBLIC_URL is unset or not https", async () => {
+    const app = await buildApp();
+    for (const v of [undefined, "http://pub.test-r2.dev"]) {
+      if (v === undefined) delete process.env["R2_PUBLIC_URL"];
+      else process.env["R2_PUBLIC_URL"] = v;
+      const res = await post(app, "logo", PNG, "image/png");
+      expect(res.statusCode).toBe(503);
+      expect(res.json<{ error: { code: string } }>().error.code).toBe("UPLOADS_UNAVAILABLE");
+      expect(res.body).not.toContain("R2_PUBLIC_URL");
+    }
+    expect(mockUpload).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("deletes the new object and rethrows when the database update fails after the upload", async () => {
+    const app = await buildApp();
+    mockPrisma.organization.update.mockRejectedValue(new Error("db down"));
+    const res = await post(app, "logo", PNG, "image/png");
+    expect(res.statusCode).toBe(500);
+    expect(mockDelete).toHaveBeenCalledWith("brand/org-A/uuid-1.png");
+    await app.close();
+  });
+
+  it("a multipart request with no file part is 400 NO_FILE", async () => {
+    const app = await buildApp();
+    const boundary = "----b";
+    const payload = `--${boundary}\r\nContent-Disposition: form-data; name="note"\r\n\r\nhi\r\n--${boundary}--\r\n`;
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/organizations/brand/assets/logo",
+      payload,
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("NO_FILE");
+    expect(mockUpload).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("two file parts never store more than one object", async () => {
+    const app = await buildApp();
+    const boundary = "----b2";
+    const part = (n: string) =>
+      Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${n}"; filename="${n}.png"\r\nContent-Type: image/png\r\n\r\n`),
+        PNG,
+        Buffer.from("\r\n"),
+      ]);
+    const payload = Buffer.concat([part("a"), part("b"), Buffer.from(`--${boundary}--\r\n`)]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/organizations/brand/assets/logo",
+      payload,
+      headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+    });
+    expect(res.statusCode).toBeLessThan(500);
+    expect(mockUpload.mock.calls.length).toBeLessThanOrEqual(1);
     await app.close();
   });
 
@@ -472,9 +698,13 @@ describe("route config", () => {
     const up = found.find((r) => r.method === "POST" && r.url === "/v1/organizations/brand/assets/:slot")!;
     expect(up.config).toMatchObject({ rateLimit: { max: 20, timeWindow: "1 hour" } });
     const keyGen = (up.config as { rateLimit: { keyGenerator: (r: unknown) => string } }).rateLimit.keyGenerator;
-    expect(keyGen({ auth: { organizationId: "org-A" }, ip: "1.1.1.1" })).toContain("org-A");
+    expect(keyGen({ auth: { organizationId: "org-A" }, ip: "1.1.1.1", headers: {} })).toBe("brand-upload:org-A");
     const pubKey = (pub.config as { rateLimit: { keyGenerator: (r: unknown) => string } }).rateLimit.keyGenerator;
-    expect(pubKey({ ip: "9.9.9.9" })).toContain("9.9.9.9");
+    // Behind the proxy req.ip is the same private hop for everyone: the forwarded address picks the bucket.
+    const viaProxy = (xff: string) => pubKey({ ip: "100.64.0.5", headers: { "x-forwarded-for": xff } });
+    expect(viaProxy("203.0.113.7")).not.toBe(viaProxy("198.51.100.9"));
+    expect(viaProxy("203.0.113.7")).toBe(viaProxy("203.0.113.7"));
+    expect(viaProxy("203.0.113.7")).toContain("203.0.113.7");
     await app.close();
   });
 });

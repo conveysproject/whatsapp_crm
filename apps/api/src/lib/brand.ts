@@ -213,6 +213,6 @@ export async function resolveBrand(prisma: PrismaClient, orgId: string): Promise
   if (!org) return DEFAULT_BRAND;
   if (org.isParent && org.whiteLabelEnabled && org.brandName) return toBrand(org, org.brandName);
   const parent = org.parentOrganization;
-  if (parent && parent.whiteLabelEnabled && parent.brandName) return toBrand(parent, parent.brandName);
+  if (parent && parent.isParent && parent.whiteLabelEnabled && parent.brandName) return toBrand(parent, parent.brandName);
   return DEFAULT_BRAND;
 }

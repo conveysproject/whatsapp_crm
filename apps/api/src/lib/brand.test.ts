@@ -247,6 +247,12 @@ describe("resolveBrand", () => {
     );
     expect(await resolveBrand(c.prisma, "c1")).toEqual(DEFAULT_BRAND);
   });
+  it("returns DEFAULT_BRAND when the client's parent is no longer a parent", async () => {
+    const c = prismaWith(
+      brandFields({ parentOrganizationId: "p1", parentOrganization: { ...parentRow, isParent: false } })
+    );
+    expect(await resolveBrand(c.prisma, "c1")).toEqual(DEFAULT_BRAND);
+  });
   it("returns DEFAULT_BRAND when the client's parent has white-label off", async () => {
     const c = prismaWith(
       brandFields({ parentOrganizationId: "p1", parentOrganization: { ...parentRow, whiteLabelEnabled: false } })

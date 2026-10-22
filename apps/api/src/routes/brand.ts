@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { writeAdminAudit } from "../lib/audit.js";
 import { isAllowedAssetUrl, resolveBrand, validateBrandInput, validateSlug } from "../lib/brand.js";
 import { canBeParent } from "../lib/parent-orgs.js";
+import { clientIp } from "../lib/public-api/client-ip.js";
 import { deleteFromR2, R2_PUBLIC_URL, uploadToR2 } from "../lib/r2.js";
 
 // Slot name (URL) -> organizations column. Logo-type slots take up to 1 MB, favicon slots 256 KB.
@@ -69,10 +70,20 @@ function toSettings(o: BrandSettingsRow) {
 
 /** Magic-byte sniffing. The client's mimetype and filename are never trusted. */
 export function detectImageType(buf: Buffer, allowIco: boolean): "image/png" | "image/jpeg" | "image/webp" | "image/x-icon" | null {
-  if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  // PNG: signature, then the first chunk must be IHDR.
+  if (
+    buf.length >= 16 &&
+    buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) &&
+    buf.toString("latin1", 12, 16) === "IHDR"
+  ) {
+    return "image/png";
+  }
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
   if (buf.length >= 12 && buf.toString("latin1", 0, 4) === "RIFF" && buf.toString("latin1", 8, 12) === "WEBP") return "image/webp";
-  if (allowIco && buf.length >= 4 && buf[0] === 0 && buf[1] === 0 && buf[2] === 1 && buf[3] === 0) return "image/x-icon";
+  // ICO (type 1, not CUR) with at least one image.
+  if (allowIco && buf.length >= 6 && buf[0] === 0 && buf[1] === 0 && buf[2] === 1 && buf[3] === 0 && buf.readUInt16LE(4) > 0) {
+    return "image/x-icon";
+  }
   return null;
 }
 
@@ -114,57 +125,66 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data });
   });
 
-  fastify.put<{ Body: unknown }>(
-    "/organizations/brand",
-    { preHandler: brandGuard, schema: { body: { type: "object" } } },
-    async (request, reply) => {
-      if (request.auth.impersonation) return forbidden(reply);
-      const { organizationId, userId } = request.auth;
-      const parsed = validateBrandInput(request.body);
-      if (!parsed.ok) return validationFailed(reply, parsed.field, parsed.message);
-      const input = parsed.value;
+  fastify.put<{ Body: unknown }>("/organizations/brand", { preHandler: brandGuard }, async (request, reply) => {
+    if (request.auth.impersonation) return forbidden(reply);
+    const { organizationId, userId } = request.auth;
+    const parsed = validateBrandInput(request.body);
+    if (!parsed.ok) return validationFailed(reply, parsed.field, parsed.message);
+    const input = parsed.value;
+    const supportEmailRequired = () =>
+      validationFailed(reply, "supportEmail", "A support email is required while your brand is live");
 
-      // D8: once approved, the public brand must always have a way to reach support.
-      const current = await fastify.prisma.organization.findUnique({
-        where: { id: organizationId },
-        select: { whiteLabelEnabled: true },
-      });
-      if (!current) return forbidden(reply);
-      if (current.whiteLabelEnabled && !input.supportEmail) {
-        return validationFailed(reply, "supportEmail", "A support email is required while your brand is live");
-      }
+    const current = await fastify.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { whiteLabelEnabled: true, brandName: true, slug: true, brandSupportEmail: true },
+    });
+    if (!current) return forbidden(reply);
+    // D8: once approved, the public brand must always have a way to reach support.
+    if (current.whiteLabelEnabled && !input.supportEmail) return supportEmailRequired();
 
-      let row: BrandSettingsRow;
-      try {
-        row = await fastify.prisma.organization.update({
-          where: { id: organizationId },
-          data: {
-            brandName: input.name,
-            brandColor: input.color,
-            brandSupportEmail: input.supportEmail,
-            slug: input.slug,
-            brandHidePoweredBy: input.hidePoweredBy,
-          },
-          select: BRAND_FIELDS,
-        });
-      } catch (err) {
-        if ((err as { code?: string } | null)?.code === "P2002") {
-          return reply.status(409).send({ error: { code: "SLUG_TAKEN", message: "That web address is already taken" } });
-        }
-        throw err;
+    // A new name or web address on a live brand needs a fresh approval: switch it off in the SAME write.
+    const reapprovalRequired = current.whiteLabelEnabled && (current.brandName !== input.name || current.slug !== input.slug);
+    const data = {
+      brandName: input.name,
+      brandColor: input.color,
+      brandSupportEmail: input.supportEmail,
+      slug: input.slug,
+      brandHidePoweredBy: input.hidePoweredBy,
+      ...(reapprovalRequired ? { whiteLabelEnabled: false } : {}),
+    };
+
+    let row: BrandSettingsRow | null;
+    try {
+      if (input.supportEmail) {
+        row = await fastify.prisma.organization.update({ where: { id: organizationId }, data, select: BRAND_FIELDS });
+      } else {
+        // No support email: only write while the brand is not live (closes the race with an approval).
+        const res = await fastify.prisma.organization.updateMany({ where: { id: organizationId, whiteLabelEnabled: false }, data });
+        if (res.count === 0) return supportEmailRequired();
+        row = await fastify.prisma.organization.findUnique({ where: { id: organizationId }, select: BRAND_FIELDS });
       }
-      writeAdminAudit({
-        prisma: fastify.prisma,
-        actorId: userId,
-        action: "org.brand_update",
-        targetType: "organization",
-        targetId: organizationId,
-        metadata: { fields: ["name", "color", "supportEmail", "slug", "hidePoweredBy"] },
-        request,
-      });
-      return reply.send({ data: toSettings(row) });
-    },
-  );
+    } catch (err) {
+      if ((err as { code?: string } | null)?.code === "P2002") {
+        return reply.status(409).send({ error: { code: "SLUG_TAKEN", message: "That web address is already taken" } });
+      }
+      throw err;
+    }
+    if (!row) return forbidden(reply);
+    writeAdminAudit({
+      prisma: fastify.prisma,
+      actorId: userId,
+      action: "org.brand_update",
+      targetType: "organization",
+      targetId: organizationId,
+      metadata: {
+        before: { name: current.brandName, slug: current.slug, supportEmail: current.brandSupportEmail },
+        after: { name: input.name, slug: input.slug, supportEmail: input.supportEmail },
+        approvalReset: reapprovalRequired,
+      },
+      request,
+    });
+    return reply.send({ data: toSettings(row), reapprovalRequired });
+  });
 
   fastify.post<{ Params: { slot: Slot } }>(
     "/organizations/brand/assets/:slot",
@@ -174,7 +194,8 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
           hook: "preHandler",
           max: 20,
           timeWindow: "1 hour",
-          keyGenerator: (req) => `brand-upload:${req.auth?.organizationId ?? req.ip}`,
+          keyGenerator: (req) =>
+            `brand-upload:${req.auth?.organizationId ?? clientIp(req.ip, req.headers["x-forwarded-for"], req.headers["x-real-ip"])}`,
         },
       },
       preHandler: brandGuard,
@@ -186,10 +207,15 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
       const slot = SLOTS[request.params.slot];
       const maxBytes = slot.favicon ? MAX_FAVICON_BYTES : MAX_LOGO_BYTES;
 
+      const publicBase = process.env["R2_PUBLIC_URL"] ?? "";
+      if (!publicBase.startsWith("https://")) {
+        request.log.error("R2_PUBLIC_URL is not set to an https URL: brand uploads are disabled");
+        return reply.status(503).send({ error: { code: "UPLOADS_UNAVAILABLE", message: "Uploads are not available right now" } });
+      }
       if (!request.isMultipart()) {
         return reply.status(400).send({ error: { code: "NO_FILE", message: "No file uploaded" } });
       }
-      const part = await request.file({ limits: { fileSize: maxBytes + 1, files: 1 } });
+      const part = await request.file({ throwFileSizeLimit: false, limits: { fileSize: maxBytes + 1, files: 1 } });
       if (!part) return reply.status(400).send({ error: { code: "NO_FILE", message: "No file uploaded" } });
 
       // Stream-check the size: stop reading as soon as the limit is passed, never buffer more than maxBytes + one chunk.
@@ -203,9 +229,6 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.status(413).send({ error: { code: "FILE_TOO_LARGE", message: "That file is too large" } });
         }
         chunks.push(chunk as Buffer);
-      }
-      if (part.file.truncated) {
-        return reply.status(413).send({ error: { code: "FILE_TOO_LARGE", message: "That file is too large" } });
       }
       const file = Buffer.concat(chunks);
 
@@ -222,9 +245,10 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
       const prefix = `brand/${organizationId}`;
       const previous = await fastify.prisma.organization.findUnique({
         where: { id: organizationId },
-        select: { [slot.column]: true },
+        select: { [slot.column]: true, whiteLabelEnabled: true },
       });
       const oldUrl = (previous as Record<string, string | null> | null)?.[slot.column] ?? null;
+      const wasLive = Boolean((previous as { whiteLabelEnabled?: boolean } | null)?.whiteLabelEnabled);
 
       const { key, url } = await uploadToR2(file, organizationId, mime, prefix);
       // Defense in depth: only a URL the public pages are allowed to render may be stored.
@@ -232,11 +256,18 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
         await deleteFromR2(key).catch(() => undefined);
         return reply.status(500).send({ error: { code: "UPLOAD_FAILED", message: "Upload failed" } });
       }
-      const row = await fastify.prisma.organization.update({
-        where: { id: organizationId },
-        data: { [slot.column]: url },
-        select: BRAND_FIELDS,
-      });
+      let row: BrandSettingsRow;
+      try {
+        // Any image change on a live brand needs a fresh approval: switch it off in the SAME write.
+        row = await fastify.prisma.organization.update({
+          where: { id: organizationId },
+          data: { [slot.column]: url, ...(wasLive ? { whiteLabelEnabled: false } : {}) },
+          select: BRAND_FIELDS,
+        });
+      } catch (err) {
+        await deleteFromR2(key).catch(() => undefined);
+        throw err;
+      }
       await removeOldAsset(organizationId, oldUrl);
       writeAdminAudit({
         prisma: fastify.prisma,
@@ -244,10 +275,10 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
         action: "org.brand_asset",
         targetType: "organization",
         targetId: organizationId,
-        metadata: { slot: request.params.slot, op: "upload", bytes: size },
+        metadata: { slot: request.params.slot, op: "upload", url, bytes: size, approvalReset: wasLive },
         request,
       });
-      return reply.send({ data: toSettings(row) });
+      return reply.send({ data: toSettings(row), reapprovalRequired: wasLive });
     },
   );
 
@@ -260,12 +291,13 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
       const slot = SLOTS[request.params.slot];
       const previous = await fastify.prisma.organization.findUnique({
         where: { id: organizationId },
-        select: { [slot.column]: true },
+        select: { [slot.column]: true, whiteLabelEnabled: true },
       });
       const oldUrl = (previous as Record<string, string | null> | null)?.[slot.column] ?? null;
+      const reset = Boolean((previous as { whiteLabelEnabled?: boolean } | null)?.whiteLabelEnabled) && oldUrl !== null;
       await fastify.prisma.organization.update({
         where: { id: organizationId },
-        data: { [slot.column]: null },
+        data: { [slot.column]: null, ...(reset ? { whiteLabelEnabled: false } : {}) },
         select: { id: true },
       });
       await removeOldAsset(organizationId, oldUrl);
@@ -275,7 +307,7 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
         action: "org.brand_asset",
         targetType: "organization",
         targetId: organizationId,
-        metadata: { slot: request.params.slot, op: "delete" },
+        metadata: { slot: request.params.slot, op: "delete", url: null, approvalReset: reset },
         request,
       });
       return reply.status(204).send();
@@ -306,7 +338,7 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
           hook: "preHandler",
           max: 30,
           timeWindow: "1 minute",
-          keyGenerator: (req) => `public-brand:${req.ip}`,
+          keyGenerator: (req) => `public-brand:${clientIp(req.ip, req.headers["x-forwarded-for"], req.headers["x-real-ip"])}`,
         },
       },
       attachValidation: true,
