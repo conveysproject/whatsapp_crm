@@ -11,7 +11,7 @@ vi.mock("next/font/google", () => ({
   Bricolage_Grotesque: () => ({ variable: "br-var" }),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => undefined }), useSearchParams: () => new URLSearchParams() }));
-vi.mock("next/link", () => ({ default: ({ children, href }: { children: ReactNode; href: string }) => h("a", { href }, children) }));
+vi.mock("next/link", () => ({ default: ({ children, href, className }: { children: ReactNode; href: string; className?: string }) => h("a", { href, className }, children) }));
 
 // The default (WBMSG) markup of the auth pages must never change when a brand is added.
 describe("auth pages default markup", () => {

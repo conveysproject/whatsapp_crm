@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 const signedIn = vi.hoisted(() => ({ value: false }));
 vi.mock("next/navigation", () => ({ useParams: () => ({ token: "tok-1" }) }));
-vi.mock("next/link", () => ({ default: ({ children, href }: { children: ReactNode; href: string }) => h("a", { href }, children) }));
+vi.mock("next/link", () => ({ default: ({ children, href, className }: { children: ReactNode; href: string; className?: string }) => h("a", { href, className }, children) }));
 vi.mock("@/lib/auth/client", () => ({ useAuth: () => ({ isSignedIn: signedIn.value, getToken: async () => "tok" }) }));
 
 import { AcceptInvitation } from "@/components/invitations/AcceptInvitation";

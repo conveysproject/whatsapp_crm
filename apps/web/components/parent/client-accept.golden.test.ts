@@ -3,7 +3,7 @@ import { createElement as h, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ClientAcceptMessage, ClientAcceptView } from "./ClientAcceptView";
 
-vi.mock("next/link", () => ({ default: ({ children, href }: { children: ReactNode; href: string }) => h("a", { href }, children) }));
+vi.mock("next/link", () => ({ default: ({ children, href, className }: { children: ReactNode; href: string; className?: string }) => h("a", { href, className }, children) }));
 
 const meta = { parentName: "Acme Agency", email: "client@example.com", accountExists: false };
 const props = { meta, busy: false, error: null, redirectPath: "/client-invitations/t/accept", onSubmit: () => undefined, onCreateAccount: () => undefined };
