@@ -12,6 +12,7 @@ import {
   clientInvitationAcceptUrl,
   clientInvitationSubject,
 } from "../lib/invitation-email.js";
+import { previewBrandPayload } from "../lib/brand.js";
 import { activeBrand, brandForOrg, brandMailExtras } from "../lib/email-brand.js";
 
 class InvitationGone extends Error {}
@@ -160,7 +161,8 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
         where: { email: normalizeEmail(invitation.email) },
         select: { id: true },
       });
-      return reply.send({ data: { parentName: parent.name, email: invitation.email, accountExists: account !== null } });
+      const brand = await previewBrandPayload(prisma, invitation.parentOrganizationId);
+      return reply.send({ data: { parentName: parent.name, email: invitation.email, accountExists: account !== null, brand } });
     },
   );
 

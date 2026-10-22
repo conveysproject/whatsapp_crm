@@ -9,6 +9,7 @@ import { normalizeEmail } from "../auth/ids.js";
 import { sendMail, isEmailConfigured } from "../lib/mail.js";
 import { buildInvitationEmail, invitationAcceptUrl, invitationSubject } from "../lib/invitation-email.js";
 import { activeBrand, brandForOrg, brandMailExtras } from "../lib/email-brand.js";
+import { previewBrandPayload } from "../lib/brand.js";
 
 class InvitationGone extends Error {}
 
@@ -193,7 +194,7 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
       if (!invitation || invitation.expiresAt < new Date()) {
         return reply.status(404).send({ error: { code: "INVALID_TOKEN", message: "Invitation not found or expired" } });
       }
-      return reply.send({ data: invitation });
+      return reply.send({ data: { ...invitation, brand: await previewBrandPayload(prisma, invitation.organizationId) } });
     }
   );
 

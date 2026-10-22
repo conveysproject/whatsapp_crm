@@ -274,6 +274,62 @@ describe("invitations", () => {
     expect(res.json().error.code).toBe("PLAN_LIMIT_REACHED");
   });
 
+  describe("preview (GET /v1/invitations/:token)", () => {
+    const future = new Date(Date.now() + 86_400_000);
+    const row = { email: "a@b.com", role: "agent", expiresAt: future, organizationId: "org-9" };
+    const parentRow = {
+      isParent: true, whiteLabelEnabled: true, brandName: "Acme Agency", brandColor: "#0055ff",
+      brandSupportEmail: "help@acme.test", brandHidePoweredBy: true, slug: "acme",
+      logoImage: "https://cdn.test/logo.png", smallLogoImage: null, favicon: null,
+      darkLogoImage: null, darkSmallLogoImage: null, darkFavicon: null, parentOrganization: null,
+    };
+    const get = async () => (await buildApp()).inject({ method: "GET", url: "/v1/invitations/tok" });
+
+    it("returns the default brand payload for an org without white label", async () => {
+      mockPrisma.invitation.findUnique.mockResolvedValue(row);
+      mockPrisma.organization.findUnique.mockResolvedValue(null);
+      const res = await get();
+      expect(res.statusCode).toBe(200);
+      const data = res.json().data;
+      expect(data).toMatchObject({ email: "a@b.com", role: "agent", organizationId: "org-9" });
+      expect(data.brand).toMatchObject({ name: "WBMSG", isDefault: true, slug: null });
+      expect(data.brand.palette["500"]).toBe("#22c55e");
+    });
+
+    it("returns the approved parent's brand for the inviting org, with no ids", async () => {
+      mockPrisma.invitation.findUnique.mockResolvedValue(row);
+      mockPrisma.organization.findUnique.mockResolvedValue(parentRow);
+      const res = await get();
+      const { brand } = res.json().data;
+      expect(brand).toMatchObject({ name: "Acme Agency", isDefault: false, slug: "acme", primaryColor: "#0055ff", supportEmail: "help@acme.test" });
+      expect(Object.keys(brand).sort()).toEqual([
+        "darkFaviconUrl", "darkLogoUrl", "darkSmallLogoUrl", "faviconUrl", "hidePoweredBy", "isDefault", "logoUrl",
+        "name", "palette", "primaryColor", "slug", "smallLogoUrl", "supportEmail",
+      ]);
+      expect(mockPrisma.organization.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "org-9" } }));
+    });
+
+    it("a failing brand lookup gives the default brand and the preview still works", async () => {
+      mockPrisma.invitation.findUnique.mockResolvedValue(row);
+      mockPrisma.organization.findUnique.mockRejectedValue(new Error("db down"));
+      const res = await get();
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.email).toBe("a@b.com");
+      expect(res.json().data.brand.isDefault).toBe(true);
+    });
+
+    it("bad tokens keep the same 404 and never look up a brand", async () => {
+      mockPrisma.invitation.findUnique.mockResolvedValue(null);
+      const a = await get();
+      mockPrisma.invitation.findUnique.mockResolvedValue({ ...row, expiresAt: new Date(Date.now() - 1000) });
+      const b = await get();
+      expect(a.statusCode).toBe(404);
+      expect(b.body).toBe(a.body);
+      expect(a.json()).toEqual({ error: { code: "INVALID_TOKEN", message: "Invitation not found or expired" } });
+      expect(mockPrisma.organization.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
   describe("accept", () => {
     const invRow = () => ({
       id: "inv-1",

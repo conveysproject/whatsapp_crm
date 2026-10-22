@@ -231,3 +231,15 @@ export async function resolveBrand(prisma: PrismaClient, orgId: string): Promise
   if (parent && parent.isParent && parent.whiteLabelEnabled && parent.brandName) return toBrand(parent, parent.brandName);
   return DEFAULT_BRAND;
 }
+
+/**
+ * The brand payload an invitation preview shows for the inviting org. Never throws: a failed lookup is the
+ * default brand, so the preview itself keeps working. Carries no ids.
+ */
+export async function previewBrandPayload(prisma: PrismaClient, orgId: string): Promise<BrandPayload> {
+  try {
+    return brandPayload(await resolveBrand(prisma, orgId));
+  } catch {
+    return brandPayload(DEFAULT_BRAND);
+  }
+}
