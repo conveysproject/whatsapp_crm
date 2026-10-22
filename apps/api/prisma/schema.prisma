@@ -74,6 +74,11 @@ model Organization {
   planCancelAtPeriodEnd  Boolean   @default(false) @map("plan_cancel_at_period_end")
   parentOrganizationId   String?   @map("parent_organization_id")
   isParent               Boolean   @default(false) @map("is_parent")
+  brandName              String?   @map("brand_name")
+  brandColor             String?   @map("brand_color")
+  brandSupportEmail      String?   @map("brand_support_email")
+  whiteLabelEnabled      Boolean   @default(false) @map("white_label_enabled")
+  brandHidePoweredBy     Boolean   @default(false) @map("brand_hide_powered_by")
   parentOrganization     Organization?  @relation("OrgParentChild", fields: [parentOrganizationId], references: [id], onDelete: SetNull)
   childOrganizations     Organization[] @relation("OrgParentChild")
   vendorSettings     VendorSetting[]
