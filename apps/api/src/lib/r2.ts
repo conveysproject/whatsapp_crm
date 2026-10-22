@@ -17,6 +17,8 @@ export async function uploadToR2(
   file: Buffer,
   organizationId: string,
   mimeType: string,
+  /** Optional key prefix (no leading or trailing slash). Default: the organization id. */
+  keyPrefix?: string,
 ): Promise<{ key: string; url: string }> {
   const rawExt = mimeType.split("/")[1]?.split(";")[0] ?? "bin";
   // Normalise common mime subtypes to clean extensions
@@ -25,10 +27,11 @@ export async function uploadToR2(
     "vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
     "vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
     "msword": "doc",
+    "x-icon": "ico",
     "vnd.ms-excel": "xls",
   };
   const ext = extMap[rawExt] ?? rawExt;
-  const key = `${organizationId}/${randomUUID()}.${ext}`;
+  const key = `${keyPrefix ?? organizationId}/${randomUUID()}.${ext}`;
 
   await client.send(
     new PutObjectCommand({
