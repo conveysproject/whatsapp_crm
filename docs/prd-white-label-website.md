@@ -56,6 +56,8 @@ Anti-goals: a brand that lets one company impersonate another; a logo URL pointi
 
 **Web:** `BrandProvider` fed by the server-rendered dashboard layout (no flash); a `useBrand()` hook replaces the hard-coded logo and name in the shell, onboarding, auth and invite pages; `generateMetadata` for title and favicon in the dashboard segment; the `brand-*` Tailwind scale becomes CSS variables set from the brand color (defaults equal today's green, so nothing changes by default); a rewritten Branding page with current values, preview, remove, and "view as client".
 
+**Approval is bound to a brand revision:** `organizations.brand_revision` (integer, additive migration) goes up on every brand write (settings, upload, delete). A super admin enables white-label by sending the revision they reviewed; if the brand changed since (revision differs) the enable is refused with `BRAND_CHANGED` and nothing is switched on. Changing the name, web address or any image of a live brand switches it off in the same write and asks for a new approval; other writes are conditional on the approval state they read, so a concurrent approval can never carry an unreviewed edit live.
+
 **Email:** `fromName` plumbed through API mail helper, internal send route and web mail; sender address stays our verified mailbox; templates take a brand (name, logo URL, footer, support email); the From name is sanitized (no header injection).
 
 **Security:** brand is data, rendered as text or validated URL only; super admin approval gate; slug reserved words (wbmsg, admin, api, www, support, billing, login, etc.); branded sign-in never reveals whether a user exists; public brand endpoint is rate limited and returns nothing for unknown or disabled slugs (same body).
