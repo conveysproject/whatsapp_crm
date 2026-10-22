@@ -96,6 +96,18 @@ export async function resolveBrand(prisma: PrismaClient, orgId: string): Promise
 - [ ] **Step 1:** Write a string-leak test that renders each touched component with a branded provider and asserts the output contains the brand name and none of `WBMSG`, `wbmsg.com`, `info@conveys.in` (the support email comes from the brand); and with the default brand renders exactly the old strings.
 - [ ] **Step 2-4:** FAIL, replace strings and logos with `useBrand()` (logo `<img>` with the validated URL, alt = brand name; small logo for the collapsed sidebar; dark variants when the dark class is set), PASS, commit. Document the list of intentionally unchanged strings (billing, legal, marketing) in the commit message.
 
+### Task A5b: Brand color audit (green accents follow the brand) and guard hardening
+
+Added after the Task 4 review: only the `brand-*` classes (about 416 uses) follow the brand color; about 96 files still hard-code `green-N` (406 uses) and `emerald-` (121), plus about 16 hex literals in charts and the flow editor. The brand scale equals Tailwind's green scale exactly (50-900), so converting a brand accent from `green-N` to `brand-N` is a no-op for the default look.
+
+**Files:** every file the inventory classifies as a brand accent; `apps/web/lib/brand-hardcode.test.ts`; `apps/web/app/(dashboard)/settings/ai/page.tsx:109`.
+**Interfaces:** `useBrand().palette` / `primaryColor` for chart libraries (a tiny `useBrandChartColors(): { primary: string; primaryDark: string }` hook that returns today's hex for the default brand).
+- [ ] **Step 1:** Inventory (committed as `docs/white-label-color-audit.md`): every `green-*`, `emerald-*`, `teal-*` class and `#22c55e|#16a34a|#15803d|#4ade80` hex in `apps/web/app` and `apps/web/components` with a classification: brand accent (primary buttons, active nav, links, focus rings, toggles, progress, selected states, primary chart series) vs keep (semantic success/delivered/active badges, success toasts, WhatsApp green `wa-*`, warning/error). Billing pages (D4a) stay as they are.
+- [ ] **Step 2:** Test first: a test proving Tailwind's green 50-900 hex values equal the default `--brand-*` triplets in `globals.css` (so the swap is a no-op by default) and a scan test that fails if a brand-accent file (the audit's list) reintroduces `green-*`/`emerald-*`.
+- [ ] **Step 3:** Convert accents to `brand-*` in small batches by directory, running the full web suite after each batch; replace chart hex with `useBrandChartColors()`; keep semantic colors.
+- [ ] **Step 4:** Guard hardening: add `TrustCRM` and lowercase/mixed-case `wbmsg` in user-visible strings to the forbidden list, make the comment stripper string-aware, scan `.js`/`.jsx`, add tests for `wbmsg.com` and `info@conveys.in` plant cases; replace the stale "TrustCRM" text on the AI settings page with the brand name or neutral wording.
+- [ ] **Step 5:** Verification: full web suite, lint, type-check, `pnpm --filter web build`; commit.
+
 ### Task 6: Branded entry points (invite pages and sign-in)
 
 **Files:** `apps/web/app/c/[slug]/sign-in/page.tsx` (+ forgot password), the client and team invitation accept pages, `middleware-wbmsg.ts` and `lib/auth/provider-logic.ts` public-path lists, the invitation preview endpoints in the API (return `brand`).
