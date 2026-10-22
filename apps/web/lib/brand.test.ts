@@ -100,16 +100,37 @@ describe("brandMetadata", () => {
   it("is empty for the default brand so the root metadata stays untouched", () => {
     expect(brandMetadata(DEFAULT_BRAND)).toEqual({});
   });
-  it("sets the title template and favicon for a branded org", () => {
-    expect(brandMetadata(parseBrand(custom))).toEqual({
-      title: { template: "%s | Acme Cloud", default: "Acme Cloud" },
-      icons: { icon: "https://cdn.example.com/brand/fav.ico", shortcut: "https://cdn.example.com/brand/fav.ico" },
+  const title = { template: "%s | Acme Cloud", default: "Acme Cloud" };
+  const FAV = "https://cdn.example.com/brand/fav.ico";
+  const SMALL = "https://cdn.example.com/brand/small.png";
+  const LOGO = "https://cdn.example.com/brand/logo.png";
+  const base = { ...custom, logoUrl: null, smallLogoUrl: null, faviconUrl: null };
+
+  it("with a favicon: icon and shortcut use it, apple falls back to small logo then logo", () => {
+    expect(brandMetadata(parseBrand({ ...base, faviconUrl: FAV, smallLogoUrl: SMALL, logoUrl: LOGO }))).toEqual({
+      title,
+      icons: { icon: FAV, shortcut: FAV, apple: SMALL },
     });
+    expect(brandMetadata(parseBrand({ ...base, faviconUrl: FAV })).icons).toEqual({ icon: FAV, shortcut: FAV });
   });
-  it("omits icons when there is no favicon", () => {
-    const m = brandMetadata(parseBrand({ ...custom, faviconUrl: null }));
-    expect(m).toEqual({ title: { template: "%s | Acme Cloud", default: "Acme Cloud" } });
-    expect(m).not.toHaveProperty("icons");
+  it("with only a small logo: it is the icon and the apple icon", () => {
+    expect(brandMetadata(parseBrand({ ...base, smallLogoUrl: SMALL })).icons).toEqual({ icon: SMALL, shortcut: SMALL, apple: SMALL });
+  });
+  it("with only a logo: it is the icon and the apple icon", () => {
+    expect(brandMetadata(parseBrand({ ...base, logoUrl: LOGO })).icons).toEqual({ icon: LOGO, shortcut: LOGO, apple: LOGO });
+  });
+  it("with no image at all: a neutral transparent icon replaces WBMSG's", () => {
+    const m = brandMetadata(parseBrand(base));
+    const icons = m.icons as { icon: string; shortcut: string };
+    expect(icons.icon).toMatch(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/);
+    expect(icons.shortcut).toBe(icons.icon);
+    expect(m.title).toEqual(title);
+  });
+  it("always replaces the root icons: no WBMSG files, no manifest link", () => {
+    for (const b of [base, { ...base, faviconUrl: FAV }, { ...base, logoUrl: LOGO }]) {
+      const json = JSON.stringify(brandMetadata(parseBrand(b)));
+      expect(json).not.toMatch(/favicon-\d+x\d+|apple-touch-icon|site\.webmanifest|"other"|"manifest"/);
+    }
   });
 });
 

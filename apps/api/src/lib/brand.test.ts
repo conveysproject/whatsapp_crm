@@ -286,4 +286,10 @@ describe("brandPayload", () => {
     expect(brandPayload(b).palette).toEqual(makePalette("#1a2b3c"));
     expect(brandPayload(b).name).toBe("Acme");
   });
+  it("returns the primary color trimmed and lowercased", () => {
+    expect(brandPayload({ ...DEFAULT_BRAND, primaryColor: "#22C55E" }).primaryColor).toBe("#22c55e");
+    const p = brandPayload({ ...DEFAULT_BRAND, primaryColor: "#3366CC" });
+    expect(p.primaryColor).toBe("#3366cc");
+    expect(p.palette).toEqual(makePalette("#3366cc"));
+  });
 });

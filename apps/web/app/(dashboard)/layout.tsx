@@ -129,25 +129,25 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     <BrandProvider brand={brand}>
       {/* First child, so portals and toasts get the colors from the first paint. Null for the default brand. */}
       {brandCss ? <style dangerouslySetInnerHTML={{ __html: brandCss }} /> : null}
-    <OnboardingProvider status={status}>
-      <ImpersonationProvider impersonating={impersonating} />
-      <RoleRouteGuard />
-      <Toaster richColors position="top-right" />
-      {/* relative: hidden (sr-only) and other absolutely positioned elements are contained and clipped by this frame instead of stretching the window's own scroll height */}
-      <div className="relative flex h-screen overflow-hidden bg-gray-50">
-        <Sidebar />
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
-          <ImpersonationBanner impersonating={impersonating} />
-          <TopBar orgName={status.orgName} userId={userId ?? undefined} />
-          <SetupBanner />
-          <BillingStandingBanner />
-          <main className="flex flex-col flex-1 px-4 py-4 overflow-auto min-h-0">
-            {/* <BreadcrumbNav /> */}
-            {children}
-          </main>
+      <OnboardingProvider status={status}>
+        <ImpersonationProvider impersonating={impersonating} />
+        <RoleRouteGuard />
+        <Toaster richColors position="top-right" />
+        {/* relative: hidden (sr-only) and other absolutely positioned elements are contained and clipped by this frame instead of stretching the window's own scroll height */}
+        <div className="relative flex h-screen overflow-hidden bg-gray-50">
+          <Sidebar />
+          <div className="flex flex-col flex-1 min-w-0 min-h-0">
+            <ImpersonationBanner impersonating={impersonating} />
+            <TopBar orgName={status.orgName} userId={userId ?? undefined} />
+            <SetupBanner />
+            <BillingStandingBanner />
+            <main className="flex flex-col flex-1 px-4 py-4 overflow-auto min-h-0">
+              {/* <BreadcrumbNav /> */}
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
-    </OnboardingProvider>
+      </OnboardingProvider>
     </BrandProvider>
   );
 }

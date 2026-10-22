@@ -167,7 +167,8 @@ export type BrandPayload = Brand & { palette: Record<Shade, string> };
 
 /** The brand as the API returns it: every brand field plus the ten-shade palette derived from the primary color. */
 export function brandPayload(brand: Brand): BrandPayload {
-  return { ...brand, palette: makePalette(brand.primaryColor) };
+  const primaryColor = brand.primaryColor.trim().toLowerCase();
+  return { ...brand, primaryColor, palette: makePalette(primaryColor) };
 }
 
 const BRAND_SELECT = {

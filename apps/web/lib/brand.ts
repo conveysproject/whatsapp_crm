@@ -140,16 +140,24 @@ export function brandCssText(brand: Brand): string | null {
   return out;
 }
 
+// 1x1 transparent PNG: a branded org with no image must not show WBMSG's favicon.
+const NEUTRAL_ICON =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
 /**
  * Metadata a branded dashboard adds on top of the root layout. Next replaces `icons` as a whole when a nested layout
- * sets it (it is not merged), so a branded favicon replaces the root icon list (including apple-touch and manifest).
- * `title.template` set here applies to the pages below the layout.
+ * sets it (it is not merged). The root declares its manifest link through `icons.other`, so replacing `icons` also
+ * removes it (nothing is inherited through `metadata.manifest`, so no `manifest: null` is needed). Every non-default
+ * brand therefore gets its own icons and never WBMSG's. `title.template` applies to the pages below the layout.
  */
 export function brandMetadata(brand: Brand): Metadata {
   if (brand.isDefault) return {};
-  const md: Metadata = { title: { template: `%s | ${brand.name}`, default: brand.name } };
-  if (brand.faviconUrl) md.icons = { icon: brand.faviconUrl, shortcut: brand.faviconUrl };
-  return md;
+  const icon = brand.faviconUrl ?? brand.smallLogoUrl ?? brand.logoUrl ?? NEUTRAL_ICON;
+  const apple = brand.smallLogoUrl ?? brand.logoUrl;
+  return {
+    title: { template: `%s | ${brand.name}`, default: brand.name },
+    icons: { icon, shortcut: icon, ...(apple ? { apple } : {}) },
+  };
 }
 
 /**
