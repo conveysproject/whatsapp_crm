@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent, type JSX } from "react";
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/BrandLogo";
+import { useBrand } from "@/hooks/useBrand";
 import {
   FULL_READ_ACCESS_SENTENCE,
   type AcceptForm, type AcceptViewMode, type ClientInvitationMeta, type NewAccountForm,
@@ -9,6 +11,8 @@ import {
 
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 const button = "w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50";
+// A brand uses its own color scale; the default brand keeps the green classes (identical markup).
+const brandButton = "w-full bg-brand-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50";
 
 /**
  * Presentational accept screen: the page owns auth state and the requests.
@@ -34,6 +38,10 @@ export function ClientAcceptView({
   const [organizationName, setOrganizationName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
   const next = encodeURIComponent(redirectPath);
+  const brand = useBrand();
+  const btn = brand.isDefault ? button : brandButton;
+  const link = brand.isDefault ? "text-green-600 hover:underline" : "text-brand-600 hover:underline";
+  const signInLinkClass = `block w-full rounded-lg ${brand.isDefault ? "bg-green-600 hover:bg-green-700" : "bg-brand-600 hover:bg-brand-700"} py-2.5 text-center text-sm font-medium text-white`;
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -54,7 +62,12 @@ export function ClientAcceptView({
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl border border-gray-200 shadow p-8 w-full max-w-md space-y-4">
-        <h1 className="text-xl font-semibold text-gray-900">{meta.parentName} invited you to WBMSG</h1>
+        {!brand.isDefault && (
+          <div className="flex justify-center">
+            <BrandLogo height={40} />
+          </div>
+        )}
+        <h1 className="text-xl font-semibold text-gray-900">{`${meta.parentName} invited you to ${brand.name}`}</h1>
         <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{FULL_READ_ACCESS_SENTENCE}</p>
         {mode === "signedIn" && (
           <form onSubmit={submit} className="space-y-3">
@@ -62,7 +75,7 @@ export function ClientAcceptView({
             <input type="text" required placeholder="Your full name" autoComplete="name" value={fullName} onChange={(e) => setFullName(e.target.value)} className={input} />
             {orgAndMobile}
             {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-            <button type="submit" disabled={busy || !fullName.trim() || !organizationName.trim()} className={button}>
+            <button type="submit" disabled={busy || !fullName.trim() || !organizationName.trim()} className={btn}>
               {busy ? "Creating account..." : "Accept and create account"}
             </button>
           </form>
@@ -76,12 +89,12 @@ export function ClientAcceptView({
             <input type="password" required placeholder="Password (min 8 characters)" autoComplete="new-password" minLength={8} maxLength={128} value={password} onChange={(e) => setPassword(e.target.value)} className={input} />
             {orgAndMobile}
             {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-            <button type="submit" disabled={busy || !firstName.trim() || !lastName.trim() || !password || !organizationName.trim()} className={button}>
+            <button type="submit" disabled={busy || !firstName.trim() || !lastName.trim() || !password || !organizationName.trim()} className={btn}>
               {busy ? "Creating account..." : "Accept and create account"}
             </button>
             <p className="text-xs text-center text-gray-400">
               Already have an account?{" "}
-              <Link href={`/sign-in?redirect_url=${next}`} className="text-green-600 hover:underline">Sign in</Link>
+              <Link href={`/sign-in?redirect_url=${next}`} className={link}>Sign in</Link>
             </p>
           </form>
         )}
@@ -91,7 +104,7 @@ export function ClientAcceptView({
               You already have an account with <span className="font-medium">{meta.email}</span>. Sign in to accept this invitation.
             </p>
             {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-            <Link href={`/sign-in?redirect_url=${next}`} className="block w-full rounded-lg bg-green-600 py-2.5 text-center text-sm font-medium text-white hover:bg-green-700">
+            <Link href={`/sign-in?redirect_url=${next}`} className={signInLinkClass}>
               Sign in
             </Link>
           </div>

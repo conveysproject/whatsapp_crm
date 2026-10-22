@@ -15,7 +15,7 @@ const SCAN_DIRS = ["app", "components", "lib", "hooks"];
 
 const BILLING = "billing stays WBMSG on the web (decision D4a)";
 const PUBLIC = "public marketing, legal or docs page: always the WBMSG product";
-const AUTH = "sign-in / sign-up / invitation page: branded by token or slug in task A6";
+const AUTH = "default-brand-only auth page: no white-label variant (clients are invited and sign in on /c/<slug>/sign-in)";
 
 const ALLOW: Record<string, string> = {
   // billing (D4a)
@@ -63,8 +63,6 @@ const ALLOW: Record<string, string> = {
   // auth surfaces handled in A6
   "app/(auth)/sign-in/confirm-email/page.tsx": AUTH,
   "app/(auth)/sign-up/[[...sign-up]]/page.tsx": AUTH,
-  "app/invitations/[token]/accept/page.tsx": AUTH,
-  "components/parent/ClientAcceptView.tsx": "client-invitation accept page (token based, no signed-in org yet): A6",
   "lib/auth/oauth.ts": "sign-in error messages (auth surface, A6)",
   // other
   "app/(setup)/business-details/page.tsx": "post-signup setup before the user has an organization, so there is no brand yet: always the default",
