@@ -30,6 +30,7 @@ export function useAuthMethods(): AuthMethods {
 
 const BUTTON = {
   light: "w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50",
+  brand: "w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50",
   dark: "w-full rounded-lg border border-gray-600 bg-gray-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-700",
 } as const;
 

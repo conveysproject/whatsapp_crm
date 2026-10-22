@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement as h, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DEFAULT_PALETTE } from "@/lib/brand";
+import { clearPublicBrandCache, setPublicBrandClock } from "@/lib/public-brand";
 import BrandedSignIn, { generateMetadata as signInMeta } from "./[slug]/sign-in/[[...sign-in]]/page";
 import BrandedForgot, { generateMetadata as forgotMeta } from "./[slug]/forgot-password/page";
 
@@ -38,10 +39,15 @@ const ok = (data: unknown) => new Response(JSON.stringify({ data }), { status: 2
 const fetchMock = vi.fn();
 
 beforeEach(() => {
+  // The module caches results for 60 s; every test starts empty and moves the clock past the TTL between lookups.
+  clearPublicBrandCache();
+  let t = 0;
+  setPublicBrandClock(() => (t += 61_000));
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
 });
 afterEach(() => {
+  setPublicBrandClock(null);
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -70,12 +76,12 @@ describe("branded sign-in", () => {
     expect(out.toLowerCase()).not.toContain("wbmsg");
   });
 
-  it("calls the public endpoint with the 60 s revalidate", async () => {
+  it("calls the public endpoint uncached (the module keeps its own 60 s cache)", async () => {
     fetchMock.mockResolvedValue(ok(payload()));
     await html();
-    const [url, init] = fetchMock.mock.calls[0] as [string, { next: { revalidate: number } }];
+    const [url, init] = fetchMock.mock.calls[0] as [string, { cache: string }];
     expect(url).toMatch(/\/v1\/public\/brand\/acme$/);
-    expect(init.next).toEqual({ revalidate: 60 });
+    expect(init.cache).toBe("no-store");
   });
 
   it("shows a wordmark of the name when there is no logo", async () => {
@@ -142,6 +148,31 @@ describe("branded sign-in", () => {
     }
   });
 
+  it("the fallback redirect carries a valid redirect_url and drops an unsafe one", async () => {
+    fetchMock.mockResolvedValue(new Response("{}", { status: 404 }));
+    const withQuery = (q: unknown) => async () =>
+      renderToStaticMarkup(await BrandedSignIn({ ...params("acme"), searchParams: Promise.resolve({ redirect_url: q as string }) }));
+    expect(await redirectOf(withQuery("/invitations/t/accept"))).toBe("/sign-in?redirect_url=%2Finvitations%2Ft%2Faccept");
+    expect(await redirectOf(withQuery("//evil.com"))).toBe("/sign-in");
+    expect(await redirectOf(withQuery("https://evil.com"))).toBe("/sign-in");
+    expect(await redirectOf(withQuery(["/a", "/b"]))).toBe("/sign-in");
+  });
+
+  it("uses the brand color instead of the WBMSG green", async () => {
+    fetchMock.mockResolvedValue(ok(payload()));
+    const out = await html();
+    expect(out).not.toContain("0BBF77");
+    expect(out).toContain("bg-brand-600");
+    expect(out).toContain("text-brand-600");
+  });
+
+  it("never turns a support email into mailto parameters", async () => {
+    fetchMock.mockResolvedValue(ok(payload({ supportEmail: "a@b.co?cc=x@evil&body=x" })));
+    const out = await html();
+    expect(out).not.toContain("mailto:");
+    expect(out).not.toContain("Need access?");
+  });
+
   it("an invalid slug redirects the same way without calling the API", async () => {
     for (const slug of ["ab", "A-b-c", "a_b_c", "-abc", "abc-", "a--bc", "x".repeat(41), "..%2f..", "a b c", ""]) {
       expect(await redirectOf(() => html(slug)), slug).toBe("/sign-in");
@@ -163,9 +194,11 @@ describe("branded sign-in", () => {
   it("metadata: brand title and icons, never indexed; no brand gives only noindex", async () => {
     fetchMock.mockResolvedValue(ok(payload({ faviconUrl: "https://cdn.test/acme/fav.png" })));
     const m = await signInMeta(params("acme"));
-    expect(m.title).toBe("Sign in | Acme Cloud");
+    expect(m.title).toEqual({ absolute: "Sign in | Acme Cloud" });
     expect(m.robots).toEqual({ index: false, follow: false });
     expect((m.icons as { icon: string }).icon).toBe("https://cdn.test/acme/fav.png");
+    expect(m.alternates).toEqual({ canonical: null });
+    expect(JSON.stringify(m).toLowerCase()).not.toContain("wbmsg");
     fetchMock.mockResolvedValue(new Response("{}", { status: 404 }));
     expect(await signInMeta(params("nope"))).toEqual({ robots: { index: false, follow: false } });
   });
@@ -196,6 +229,7 @@ describe("branded forgot password", () => {
     fetchMock.mockResolvedValue(ok(payload()));
     const m = await forgotMeta(params("acme"));
     expect(m.robots).toEqual({ index: false, follow: false });
-    expect(m.title).toBe("Forgot password | Acme Cloud");
+    expect(m.title).toEqual({ absolute: "Forgot password | Acme Cloud" });
+    expect(JSON.stringify(m).toLowerCase()).not.toContain("wbmsg");
   });
 });

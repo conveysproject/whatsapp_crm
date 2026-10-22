@@ -6,7 +6,9 @@ import Link from "next/link";
 import { nextStep, postAuth } from "@/lib/auth/flows";
 import { ResetPasswordForm } from "./ResetPasswordForm";
 import { TURNSTILE_ENABLED, Turnstile } from "./Turnstile";
+import { useBrand } from "@/hooks/useBrand";
 import { ErrorText, SubmitButton, TextField, styles } from "./fields";
+import type { Theme } from "./fields";
 
 export function ForgotPasswordForm({ signInHref = "/sign-in" }: { signInHref?: string }): JSX.Element {
   const [email, setEmail] = useState("");
@@ -15,7 +17,9 @@ export function ForgotPasswordForm({ signInHref = "/sign-in" }: { signInHref?: s
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [tsKey, setTsKey] = useState(0);
-  const s = styles("light");
+  const brand = useBrand();
+  const theme: Theme = brand.isDefault ? "light" : "brand";
+  const s = styles(theme);
 
   useEffect(() => {
     const prefill = new URLSearchParams(window.location.search).get("email");
@@ -45,6 +49,7 @@ export function ForgotPasswordForm({ signInHref = "/sign-in" }: { signInHref?: s
         <ResetPasswordForm
           initialEmail={email.trim()}
           note="If an account exists for that email, we've sent a 6-digit code. Enter it with your new password."
+          theme={theme}
         />
       </div>
     );
@@ -54,10 +59,10 @@ export function ForgotPasswordForm({ signInHref = "/sign-in" }: { signInHref?: s
     <form onSubmit={(e) => void submit(e)} className="space-y-4">
       <h1 className={s.title}>Forgot your password?</h1>
       <p className={s.muted}>Enter your email and we will send you a code.</p>
-      <TextField id="email" label="Email" type="email" value={email} onChange={setEmail} autoComplete="email" theme="light" />
+      <TextField id="email" label="Email" type="email" value={email} onChange={setEmail} autoComplete="email" theme={theme} />
       <Turnstile onToken={setToken} resetKey={tsKey} />
-      <ErrorText message={error} theme="light" />
-      <SubmitButton pending={pending} theme="light" disabled={TURNSTILE_ENABLED && !token}>
+      <ErrorText message={error} theme={theme} />
+      <SubmitButton pending={pending} theme={theme} disabled={TURNSTILE_ENABLED && !token}>
         Send code
       </SubmitButton>
       <p className={s.muted}>

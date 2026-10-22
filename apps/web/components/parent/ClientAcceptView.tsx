@@ -4,6 +4,7 @@ import { useState, type FormEvent, type JSX } from "react";
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { useBrand } from "@/hooks/useBrand";
+import { signInPath } from "@/lib/brand";
 import {
   FULL_READ_ACCESS_SENTENCE,
   type AcceptForm, type AcceptViewMode, type ClientInvitationMeta, type NewAccountForm,
@@ -41,7 +42,9 @@ export function ClientAcceptView({
   const brand = useBrand();
   const btn = brand.isDefault ? button : brandButton;
   const link = brand.isDefault ? "text-green-600 hover:underline" : "text-brand-600 hover:underline";
-  const signInLinkClass = `block w-full rounded-lg ${brand.isDefault ? "bg-green-600 hover:bg-green-700" : "bg-brand-600 hover:bg-brand-700"} py-2.5 text-center text-sm font-medium text-white`;
+  const signInLinkClass = brand.isDefault
+    ? "block w-full rounded-lg bg-green-600 py-2.5 text-center text-sm font-medium text-white hover:bg-green-700"
+    : "block w-full rounded-lg bg-brand-600 py-2.5 text-center text-sm font-medium text-white hover:bg-brand-700";
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -94,7 +97,7 @@ export function ClientAcceptView({
             </button>
             <p className="text-xs text-center text-gray-400">
               Already have an account?{" "}
-              <Link href={`/sign-in?redirect_url=${next}`} className={link}>Sign in</Link>
+              <Link href={`${signInPath(brand.slug)}?redirect_url=${next}`} className={link}>Sign in</Link>
             </p>
           </form>
         )}
@@ -104,7 +107,7 @@ export function ClientAcceptView({
               You already have an account with <span className="font-medium">{meta.email}</span>. Sign in to accept this invitation.
             </p>
             {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-            <Link href={`/sign-in?redirect_url=${next}`} className={signInLinkClass}>
+            <Link href={`${signInPath(brand.slug)}?redirect_url=${next}`} className={signInLinkClass}>
               Sign in
             </Link>
           </div>

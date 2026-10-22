@@ -4,8 +4,9 @@ import { useState, useEffect, type FormEvent, type JSX } from "react";
 import { useAuth } from "@/lib/auth/client";
 import Link from "next/link";
 import { BrandedShell } from "@/components/brand/BrandedShell";
+import { useBrandTitle } from "@/hooks/useBrandTitle";
 import { BrandLogo } from "@/components/brand/BrandLogo";
-import { parseBrand } from "@/lib/brand";
+import { parseBrand, signInPath } from "@/lib/brand";
 import { invitationNextStep, signedInAcceptStep } from "@/lib/auth/invitation";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -119,6 +120,8 @@ export function AcceptInvitation({ token, initialMeta = null }: { token: string;
     }
   }
 
+  useBrandTitle(meta ? parseBrand(meta.brand) : null);
+
   // ── Error state ──────────────────────────────────────────────────────────
   if (metaError) {
     return (
@@ -141,7 +144,7 @@ export function AcceptInvitation({ token, initialMeta = null }: { token: string;
       <BrandLogo height={40} />
     </div>
   );
-  const signInHref = `/sign-in?redirect_url=${encodeURIComponent(`/invitations/${token}/accept`)}`;
+  const signInHref = signInPath(brand.slug) + `?redirect_url=${encodeURIComponent(`/invitations/${token}/accept`)}`;
 
   // ── Already signed in ────────────────────────────────────────────────────
   if (isSignedIn) {

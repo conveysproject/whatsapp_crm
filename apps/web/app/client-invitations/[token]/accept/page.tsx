@@ -4,6 +4,7 @@ import { useEffect, useState, type JSX } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/client";
 import { BrandedShell } from "@/components/brand/BrandedShell";
+import { useBrandTitle } from "@/hooks/useBrandTitle";
 import { parseBrand } from "@/lib/brand";
 import { ClientAcceptMessage, ClientAcceptView } from "@/components/parent/ClientAcceptView";
 import {
@@ -69,6 +70,8 @@ export default function AcceptClientInvitationPage(): JSX.Element {
     }
     setBusy(false);
   }
+
+  useBrandTitle(meta ? parseBrand(meta.brand) : null);
 
   if (metaError) return <ClientAcceptMessage message={metaError} />;
   if (!meta || !isLoaded) return <ClientAcceptMessage message="Loading invitation..." />;

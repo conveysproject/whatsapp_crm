@@ -63,7 +63,7 @@ const ALLOW: Record<string, string> = {
   // auth surfaces handled in A6
   "app/(auth)/sign-in/confirm-email/page.tsx": AUTH,
   "app/(auth)/sign-up/[[...sign-up]]/page.tsx": AUTH,
-  "lib/auth/oauth.ts": "sign-in error messages (auth surface, A6)",
+  "lib/auth/oauth.ts": "OAuth error strings: generic auth messages, to be branded in a later task (behaviour unchanged here)",
   // other
   "app/(setup)/business-details/page.tsx": "post-signup setup before the user has an organization, so there is no brand yet: always the default",
   "app/admin/(protected)/layout.tsx": "super-admin area: platform staff, always the WBMSG platform",

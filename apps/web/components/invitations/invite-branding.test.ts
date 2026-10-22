@@ -62,6 +62,18 @@ describe("team invite page", () => {
     expect(out.toLowerCase()).not.toContain("wbmsg");
   });
 
+  it("sign-in links go to the brand's own route with the redirect_url, or /sign-in without a slug", () => {
+    signedIn.value = false;
+    const redirect = encodeURIComponent("/invitations/tok-1/accept");
+    const branded = renderToStaticMarkup(h(AcceptInvitation, { token: "tok-1", initialMeta: { email: "a@b.com", role: "agent", brand: apiBrand() } }));
+    expect(branded).toContain(`href="/c/acme/sign-in?redirect_url=${redirect}"`);
+    expect(branded).not.toContain('href="/sign-in?');
+    const noSlug = renderToStaticMarkup(h(AcceptInvitation, { token: "tok-1", initialMeta: { email: "a@b.com", role: "agent", brand: apiBrand({ slug: null }) } }));
+    expect(noSlug).toContain(`href="/sign-in?redirect_url=${redirect}"`);
+    const dflt = renderToStaticMarkup(h(AcceptInvitation, { token: "tok-1", initialMeta: { email: "a@b.com", role: "agent" } }));
+    expect(dflt).toContain(`href="/sign-in?redirect_url=${redirect}"`);
+  });
+
   it("default brand, missing brand and malformed brand all keep today's text", () => {
     signedIn.value = false;
     for (const brand of [undefined, apiBrand({ isDefault: true }), { name: 5 }, "junk"]) {
@@ -101,6 +113,18 @@ describe("client invite page", () => {
       expect(out, mode).toContain(FULL_READ_ACCESS_SENTENCE.replace(/'/g, "&#x27;"));
       expect(out.toLowerCase(), mode).not.toContain("wbmsg");
       expect(out, mode).not.toContain("green-");
+    }
+  });
+
+  it("sign-in links use /c/<slug>/sign-in for a brand with a slug and /sign-in otherwise", () => {
+    const next = encodeURIComponent(props.redirectPath);
+    for (const mode of ["newAccount", "signIn"] as const) {
+      const branded = renderToStaticMarkup(inBrand(brandOf({ slug: "acme" }), h(ClientAcceptView, { ...props, mode })));
+      expect(branded, mode).toContain(`href="/c/acme/sign-in?redirect_url=${next}"`);
+      const noSlug = renderToStaticMarkup(inBrand(brandOf({ slug: null }), h(ClientAcceptView, { ...props, mode })));
+      expect(noSlug, mode).toContain(`href="/sign-in?redirect_url=${next}"`);
+      const dflt = renderToStaticMarkup(h(ClientAcceptView, { ...props, mode }));
+      expect(dflt, mode).toContain(`href="/sign-in?redirect_url=${next}"`);
     }
   });
 

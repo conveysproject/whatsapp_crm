@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import tailwindConfig from "../tailwind.config";
-import { DEFAULT_BRAND, DEFAULT_PALETTE, SHADES, brandCssText, brandMetadata, fetchBrandServer, parseBrand } from "./brand";
+import { DEFAULT_BRAND, DEFAULT_PALETTE, SHADES, brandCssText, brandEntryMetadata, brandMetadata, fetchBrandServer, parseBrand } from "./brand";
 
 // Today's tailwind scale, written out so the test does not depend on the constant under test.
 const TODAY = {
@@ -63,9 +63,26 @@ describe("parseBrand", () => {
     ["name with markup", { ...custom, name: "<b>x</b>" }],
     ["hidePoweredBy wrong type", { ...custom, hidePoweredBy: "yes" }],
     ["isDefault wrong type", { ...custom, isDefault: "no" }],
-    ["supportEmail wrong type", { ...custom, supportEmail: 3 }],
   ])("falls back to the default for %s", (_n, input) => {
     expect(parseBrand(input)).toBe(DEFAULT_BRAND);
+  });
+  it.each([
+    ["wrong type", 3],
+    ["mailto parameters", "a@b.co?cc=x@evil&body=x"],
+    ["query without a second at", "a@b.co?cc=x"],
+    ["fragment", "a@b.co#x"],
+    ["two addresses", "a@b.co,c@d.co"],
+    ["angle brackets", "<a@b.co>"],
+    ["whitespace", "a @b.co"],
+    ["empty string", ""],
+  ])("drops an unusable support email (%s) but keeps the brand", (_n, supportEmail) => {
+    const b = parseBrand({ ...custom, supportEmail });
+    expect(b.isDefault).toBe(false);
+    expect(b.name).toBe(custom.name);
+    expect(b.supportEmail).toBeNull();
+  });
+  it("keeps a plain support email", () => {
+    expect(parseBrand({ ...custom, supportEmail: "help@acme.test" }).supportEmail).toBe("help@acme.test");
   });
   it("treats a payload flagged isDefault as the default", () => {
     expect(parseBrand({ ...custom, isDefault: true })).toBe(DEFAULT_BRAND);
@@ -131,6 +148,19 @@ describe("brandMetadata", () => {
       const json = JSON.stringify(brandMetadata(parseBrand(b)));
       expect(json).not.toMatch(/favicon-\d+x\d+|apple-touch-icon|site\.webmanifest|"other"|"manifest"/);
     }
+  });
+});
+
+describe("brandEntryMetadata", () => {
+  const brand = parseBrand(custom);
+  it("resolves to the brand everywhere: absolute title, description, openGraph, twitter, no canonical, noindex", () => {
+    const m = brandEntryMetadata(brand, "Sign in");
+    expect(m.title).toEqual({ absolute: `Sign in | ${brand.name}` });
+    expect(m.robots).toEqual({ index: false, follow: false });
+    expect(m.alternates).toEqual({ canonical: null });
+    expect(m.openGraph).toMatchObject({ title: `Sign in | ${brand.name}`, siteName: brand.name, images: [] });
+    expect(m.twitter).toMatchObject({ card: "summary", images: [] });
+    expect(JSON.stringify(m).toLowerCase()).not.toContain("wbmsg");
   });
 });
 

@@ -4,7 +4,7 @@ import type { JSX } from "react";
 import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
 import { AuthLogo } from "@/components/brand/AuthLogo";
 import { BrandedShell } from "@/components/brand/BrandedShell";
-import { brandMetadata } from "@/lib/brand";
+import { brandEntryMetadata } from "@/lib/brand";
 import { fetchPublicBrand } from "@/lib/public-brand";
 
 const NO_INDEX: Metadata = { robots: { index: false, follow: false } };
@@ -14,7 +14,7 @@ type Params = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const brand = await fetchPublicBrand((await params).slug);
   if (!brand) return NO_INDEX;
-  return { ...brandMetadata(brand), title: `Forgot password | ${brand.name}`, ...NO_INDEX };
+  return brandEntryMetadata(brand, "Forgot password");
 }
 
 /** White-label forgot-password: the existing form, inside the brand. Every non-brandable slug redirects to /forgot-password. */

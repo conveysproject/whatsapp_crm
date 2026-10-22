@@ -1,6 +1,7 @@
 import type { JSX, ReactNode } from "react";
 
-export type Theme = "light" | "dark";
+/** "brand" is the light theme in the colors of a white-label brand; "light" keeps the WBMSG green. */
+export type Theme = "light" | "dark" | "brand";
 
 const T = {
   light: {
@@ -10,6 +11,17 @@ const T = {
     button:
       "w-full rounded-lg bg-[#0BBF77] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#09a867] disabled:opacity-60 disabled:cursor-not-allowed",
     link: "text-[#0BBF77] font-semibold hover:underline",
+    muted: "text-sm text-gray-600",
+    title: "text-2xl font-bold text-gray-900",
+    error: "text-sm text-red-600",
+  },
+  brand: {
+    label: "block text-sm font-medium text-gray-700 mb-1",
+    input:
+      "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 read-only:bg-gray-50 read-only:text-gray-500",
+    button:
+      "w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed",
+    link: "text-brand-600 font-semibold hover:underline",
     muted: "text-sm text-gray-600",
     title: "text-2xl font-bold text-gray-900",
     error: "text-sm text-red-600",

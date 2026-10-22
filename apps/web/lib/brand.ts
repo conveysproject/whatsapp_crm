@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { isPlainEmail } from "@/lib/mail-from";
 
 export const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900] as const;
 export type Shade = (typeof SHADES)[number];
@@ -100,8 +101,10 @@ export function parseBrand(input: unknown): Brand {
     palette[s] = v;
   }
 
-  const email = o["supportEmail"];
-  if (email !== null && (typeof email !== "string" || email.length > 254 || /[\s<>]/.test(email))) return DEFAULT_BRAND;
+  // A support email that is not one plain address (or could add mailto: parameters such as ?cc= or &body=) is dropped;
+  // the rest of the brand stays valid.
+  const rawEmail = o["supportEmail"];
+  const email = isPlainEmail(rawEmail) && !/[?&#%/=]/.test(rawEmail) ? rawEmail : null;
   const slug = o["slug"];
   if (slug !== null && (typeof slug !== "string" || slug.length > 40)) return DEFAULT_BRAND;
   if (typeof o["hidePoweredBy"] !== "boolean") return DEFAULT_BRAND;
@@ -157,6 +160,30 @@ export function brandMetadata(brand: Brand): Metadata {
   return {
     title: { template: `%s | ${brand.name}`, default: brand.name },
     icons: { icon, shortcut: icon, ...(apple ? { apple } : {}) },
+  };
+}
+
+/** The sign-in page for a brand: its own /c/<slug>/sign-in when it has a slug, else the normal one. */
+export function signInPath(slug: string | null): string {
+  return slug ? `/c/${slug}/sign-in` : "/sign-in";
+}
+
+/**
+ * Complete metadata for a public, branded entry page (sign-in, forgot password). The root layout's metadata is WBMSG's
+ * (title template, description, openGraph, twitter, canonical), and Next merges it into every page, so each of those
+ * fields is set here: nothing of the root's reaches a branded page. `title.absolute` skips the root `%s | WBMSG` template.
+ */
+export function brandEntryMetadata(brand: Brand, pageTitle: string): Metadata {
+  const title = `${pageTitle} | ${brand.name}`;
+  const description = `${pageTitle} to ${brand.name}`;
+  return {
+    ...brandMetadata(brand),
+    title: { absolute: title },
+    description,
+    alternates: { canonical: null },
+    openGraph: { type: "website", siteName: brand.name, title, description, images: [] },
+    twitter: { card: "summary", title, description, images: [] },
+    robots: { index: false, follow: false },
   };
 }
 

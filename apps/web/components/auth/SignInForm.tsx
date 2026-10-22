@@ -29,7 +29,7 @@ export function SignInForm({
   forgotHref?: string;
 }): JSX.Element {
   const brand = useBrand();
-  const theme: Theme = variant === "admin" ? "dark" : "light";
+  const theme: Theme = variant === "admin" ? "dark" : brand.isDefault ? "light" : "brand";
   const s = styles(theme);
   const [view, setView] = useState<View>("password");
   const [email, setEmail] = useState("");
