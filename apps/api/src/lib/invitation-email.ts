@@ -1,15 +1,39 @@
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+import { activeBrand, brandFooterInner, brandMark, escapeHtml, subjectText, type EmailBrand } from "./email-brand.js";
 
 export const INVITATION_SUBJECT = "You've been invited to join WBMSG";
+
+export function invitationSubject(brand?: EmailBrand): string {
+  const b = activeBrand(brand);
+  return b ? `You've been invited to join ${subjectText(b.name)}` : INVITATION_SUBJECT;
+}
 
 export function invitationAcceptUrl(token: string): string {
   const base = (process.env["WEB_URL"] ?? "https://wbmsg.com").replace(/\/$/, "");
   return `${base}/invitations/${encodeURIComponent(token)}/accept`;
 }
 
-export function buildInvitationEmail({ role, acceptUrl }: { role: string; acceptUrl: string }): string {
+export function buildInvitationEmail({
+  role,
+  acceptUrl,
+  brand,
+}: {
+  role: string;
+  acceptUrl: string;
+  brand?: EmailBrand;
+}): string {
+  const html = buildUnbrandedInvitationEmail({ role, acceptUrl });
+  const b = activeBrand(brand);
+  if (!b) return html;
+  // Only the wordmark and footer carry the product name; swap them for the brand's.
+  const withMark = mustReplace(html, ">WBMSG</p>", `>${brandMark(b, "color:#fff")}</p>`);
+  return mustReplace(
+    withMark,
+    /<p style="margin:0;font-size:12px;color:#94a3b8">[\s\S]*?<\/p>/,
+    `<p style="margin:0;font-size:12px;color:#94a3b8">${brandFooterInner(b)}</p>`,
+  );
+}
+
+function buildUnbrandedInvitationEmail({ role, acceptUrl }: { role: string; acceptUrl: string }): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -54,6 +78,11 @@ export function buildInvitationEmail({ role, acceptUrl }: { role: string; accept
 
 export const CLIENT_INVITATION_SUBJECT = "You've been invited to create a WBMSG account";
 
+export function clientInvitationSubject(brand?: EmailBrand): string {
+  const b = activeBrand(brand);
+  return b ? `You've been invited to create a ${subjectText(b.name)} account` : CLIENT_INVITATION_SUBJECT;
+}
+
 export function clientInvitationAcceptUrl(token: string): string {
   const base = (process.env["WEB_URL"] ?? "https://wbmsg.com").replace(/\/$/, "");
   return `${base}/client-invitations/${encodeURIComponent(token)}/accept`;
@@ -69,13 +98,23 @@ function mustReplace(html: string, from: RegExp | string, to: string): string {
   return out;
 }
 
-export function buildClientInvitationEmail({ parentName, acceptUrl }: { parentName: string; acceptUrl: string }): string {
+export function buildClientInvitationEmail({
+  parentName,
+  acceptUrl,
+  brand,
+}: {
+  parentName: string;
+  acceptUrl: string;
+  brand?: EmailBrand;
+}): string {
   const name = escapeHtml(parentName);
-  let html = buildInvitationEmail({ role: "admin", acceptUrl });
+  const b = activeBrand(brand);
+  const product = b ? escapeHtml(b.name) : "WBMSG";
+  let html = buildInvitationEmail({ role: "admin", acceptUrl, ...(b ? { brand: b } : {}) });
   html = mustReplace(
     html,
     /You've been invited to join as <strong>[\s\S]*?<\/strong>\.<br>\s*Accept below to create your account and get started\./,
-    `<strong>${name}</strong> has invited you to create your own WBMSG account.<br>Accept below to create your account and get started.`,
+    `<strong>${name}</strong> has invited you to create your own ${product} account.<br>Accept below to create your account and get started.`,
   );
   return mustReplace(
     html,
