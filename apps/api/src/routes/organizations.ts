@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { isAllowedAssetUrl } from "../lib/brand.js";
 import { PROFILE_FIELDS, PROFILE_MAX_LENGTH, normalizeProfileField, type ProfileField } from "../lib/org-profile.js";
 
 // Keys managed server-side only — never overwritable via PATCH /organizations/me
@@ -138,10 +139,14 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
   for (const [slug, field] of Object.entries(brandingFields)) {
     fastify.post<{ Params: { slug: string }; Body: { url: string } }>(
       `/organizations/branding/${slug}`,
+      { schema: { body: { type: "object", required: ["url"], properties: { url: { type: "string", maxLength: 2048 } } } } },
       async (request, reply) => {
         const { organizationId, role } = request.auth;
         if (role !== "admin") {
           return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can update branding" } });
+        }
+        if (!isAllowedAssetUrl(request.body.url)) {
+          return reply.status(400).send({ error: { code: "VALIDATION_FAILED", field: "url", message: "Upload the image instead of linking to it" } });
         }
         const data = await prisma.organization.update({
           where: { id: organizationId },

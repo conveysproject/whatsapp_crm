@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 import Fastify from "fastify";
 import type { Organization } from "@prisma/client";
 
@@ -142,27 +142,49 @@ describe("POST /v1/organizations/branding/logo", () => {
 
   afterAll(() => app.close());
 
+  beforeEach(() => {
+    process.env["R2_PUBLIC_URL"] = "https://pub.test-r2.dev";
+  });
+
   it("updates org logoImage field with provided URL", async () => {
     const { prisma } = await import("../lib/prisma.js");
     vi.mocked(prisma.organization.update).mockResolvedValueOnce({
       id: "org_123",
-      logoImage: "https://cdn.example.com/logo.png",
+      logoImage: "https://pub.test-r2.dev/brand/org_123/logo.png",
     } as unknown as Organization);
 
     const res = await app.inject({
       method: "POST",
       url: "/v1/organizations/branding/logo",
-      payload: { url: "https://cdn.example.com/logo.png" },
+      payload: { url: "https://pub.test-r2.dev/brand/org_123/logo.png" },
     });
     expect(res.statusCode).toBe(200);
     expect(prisma.organization.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { logoImage: "https://cdn.example.com/logo.png" } })
+      expect.objectContaining({ data: { logoImage: "https://pub.test-r2.dev/brand/org_123/logo.png" } })
     );
+  });
+
+  it("rejects a URL that is not an allowed R2 asset URL with 400 and does not write", async () => {
+    const { prisma } = await import("../lib/prisma.js");
+    vi.mocked(prisma.organization.update).mockClear();
+    for (const url of ["https://evil.example.com/logo.png", "javascript:alert(1)", "https://pub.test-r2.dev/x.svg", ""]) {
+      const res = await app.inject({ method: "POST", url: "/v1/organizations/branding/logo", payload: { url } });
+      expect(res.statusCode).toBe(400);
+    }
+    const tooLong = await app.inject({
+      method: "POST",
+      url: "/v1/organizations/branding/logo",
+      payload: { url: "https://pub.test-r2.dev/" + "a".repeat(2100) + ".png" },
+    });
+    expect(tooLong.statusCode).toBe(400);
+    const missing = await app.inject({ method: "POST", url: "/v1/organizations/branding/logo", payload: {} });
+    expect(missing.statusCode).toBe(400);
+    expect(prisma.organization.update).not.toHaveBeenCalled();
   });
 
   it("branding updates never select wabaAccessToken or stripeId", async () => {
     const { prisma } = await import("../lib/prisma.js");
-    await app.inject({ method: "POST", url: "/v1/organizations/branding/favicon", payload: { url: "https://cdn.example.com/f.png" } });
+    await app.inject({ method: "POST", url: "/v1/organizations/branding/favicon", payload: { url: "https://pub.test-r2.dev/brand/org_123/f.png" } });
     const call = vi.mocked(prisma.organization.update).mock.calls.at(-1)![0] as { select?: Record<string, boolean> };
     expect(call.select).toBeDefined();
     expect(call.select).not.toHaveProperty("wabaAccessToken");

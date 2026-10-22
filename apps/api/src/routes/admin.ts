@@ -290,6 +290,67 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // ── White-label switch (super admin only) ────────────────────────────────
+  // The parent edits its brand freely, but it only SHOWS once a super admin enables it here.
+  fastify.patch<{ Params: { orgId: string }; Body: { enabled: boolean } }>(
+    "/admin/organizations/:orgId/white-label",
+    {
+      schema: {
+        params: { type: "object", properties: { orgId: { type: "string", maxLength: 64 } }, required: ["orgId"] },
+        body: {
+          type: "object",
+          required: ["enabled"],
+          properties: { enabled: { type: "boolean" } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!requireSuperAdmin(request.auth.role, reply)) return;
+      const { orgId } = request.params;
+      const { enabled } = request.body;
+      const org = await fastify.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: {
+          id: true,
+          isParent: true,
+          parentOrganizationId: true,
+          brandName: true,
+          brandColor: true,
+          slug: true,
+          brandSupportEmail: true,
+        },
+      });
+      if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
+      if (enabled) {
+        if (!org.isParent || org.parentOrganizationId) {
+          return reply.status(409).send({ error: { code: "NOT_PARENT", message: "Only a parent organization can be white-labelled" } });
+        }
+        const missing = (["brandName", "brandColor", "slug", "brandSupportEmail"] as const).filter((f) => !org[f]);
+        if (missing.length > 0) {
+          return reply
+            .status(409)
+            .send({ error: { code: "BRAND_INCOMPLETE", message: "The brand is not complete yet", missing } });
+        }
+      }
+      const row = await fastify.prisma.organization.update({
+        where: { id: org.id },
+        data: { whiteLabelEnabled: enabled },
+        select: { id: true, whiteLabelEnabled: true },
+      });
+      writeAdminAudit({
+        prisma: fastify.prisma,
+        actorId: request.auth.userId,
+        action: "org.white_label",
+        targetType: "organization",
+        targetId: org.id,
+        metadata: { enabled },
+        request,
+      });
+      return reply.send({ data: { organizationId: row.id, whiteLabelEnabled: row.whiteLabelEnabled } });
+    }
+  );
+
   // ── Impersonation token (user-level) ─────────────────────────────────────
   // Token lifetime: 15 min (900s). Rate-limited per actor: 10 tokens/hour.
   // Sessions start read-only; the read-only guard enforces it on every request.
