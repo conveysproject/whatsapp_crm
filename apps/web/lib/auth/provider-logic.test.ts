@@ -37,7 +37,16 @@ describe("retryDelayMs", () => {
   });
 });
 
+const BRANDED_PUBLIC = ["/c/acme/sign-in", "/c/acme/forgot-password", "/c/a-b-c/sign-in", "/c/abc/sign-in", `/c/${"a".repeat(40)}/forgot-password`];
+const BRANDED_NOT_PUBLIC = [
+  "/c", "/c/", "/c/acme", "/c/acme/", "/c/acme/anything-else", "/c/acme/sign-in/extra", "/c/acme/sign-in/", "/c/acme/reset-password",
+  "/c/ab/sign-in", `/c/${"a".repeat(41)}/sign-in`, "/c/Acme/sign-in", "/c/ac_me/sign-in", "/c/../sign-in", "/c/acme/../dashboard",
+  "/c/acme/%2e%2e/sign-in", "/c//sign-in", "/c/a.b.c/sign-in", "/x/c/acme/sign-in", "/c/acme/sign-in%2f..%2fdashboard",
+];
+
 describe("isPublicAuthPath", () => {
+  it.each(BRANDED_PUBLIC)("%s (branded entry) is public", (p) => expect(isPublicAuthPath(p)).toBe(true));
+  it.each(BRANDED_NOT_PUBLIC)("%s is not public", (p) => expect(isPublicAuthPath(p)).toBe(false));
   it.each(["/sign-in", "/sign-in/x", "/sign-up", "/forgot-password", "/reset-password", "/admin/sign-in", "/invitations/abc/accept", "/client-invitations/abc/accept"])(
     "%s is public",
     (p) => expect(isPublicAuthPath(p)).toBe(true),
