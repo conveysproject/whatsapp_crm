@@ -1,17 +1,18 @@
 import { canAccess, canAccessSub, isAdmin, type CurrentUser } from "./can";
+import { showClientsNav, type OrgFlags } from "./parent-orgs";
 
 // Settings index tiles. Each tile's rule mirrors what its page's API enforces, so users only
 // see settings they can actually use. No rule = any user who can open Settings.
-type Rule = { perm: string; sub?: string } | { adminOnly: true };
+type Rule = { perm: string; sub?: string } | { adminOnly: true } | { parentAdminOnly: true };
 
-export interface SettingsTile { href: string; label: string; desc: string; rule?: Rule }
+export interface SettingsTile { href: string; label: string; desc: string; rule?: Rule; isNew?: boolean }
 
 export const SETTINGS_TILES: SettingsTile[] = [
   { href: "/settings/members", label: "Members", desc: "Manage team access and permissions", rule: { perm: "settings_access", sub: "settings_agents" } },
   { href: "/settings/teams", label: "Manage Teams", desc: "Organise agents into teams and control visibility", rule: { perm: "settings_access", sub: "settings_teams" } },
   { href: "/settings/roles", label: "Roles", desc: "Default permissions per role", rule: { adminOnly: true } },
   { href: "/settings/whatsapp-account", label: "WhatsApp Account", desc: "Connect your WABA", rule: { perm: "settings_access", sub: "settings_whatsapp" } },
-  { href: "/settings/branding", label: "Branding", desc: "Logo, colors, favicon", rule: { adminOnly: true } },
+  { href: "/settings/branding", label: "Branding", desc: "Your brand for your clients: name, logo, colors, web address", rule: { parentAdminOnly: true }, isNew: true },
   { href: "/settings/labels", label: "Labels", desc: "Color-coded contact tags", rule: { perm: "settings_access", sub: "settings_tags" } },
   { href: "/settings/inbox-labels", label: "Conversation Labels", desc: "Labels for inbox queue management", rule: { perm: "settings_access", sub: "settings_tags" } },
   { href: "/settings/contact-settings", label: "Contact Settings", desc: "Fields, statuses, configuration & assignment rules", rule: { perm: "contacts_access" } },
@@ -26,11 +27,12 @@ export const SETTINGS_TILES: SettingsTile[] = [
   { href: "/settings/billing", label: "Billing", desc: "Subscription and usage", rule: { perm: "settings_access", sub: "settings_billing" } },
 ];
 
-export function visibleSettingsTiles(user: CurrentUser | null | undefined): SettingsTile[] {
+export function visibleSettingsTiles(user: CurrentUser | null | undefined, org?: OrgFlags | null): SettingsTile[] {
   if (!user) return [];
   return SETTINGS_TILES.filter(({ rule }) => {
     if (!rule) return true;
     if ("adminOnly" in rule) return isAdmin(user);
+    if ("parentAdminOnly" in rule) return showClientsNav(user, org);
     return rule.sub ? canAccessSub(user, rule.perm, rule.sub) : canAccess(user, rule.perm);
   });
 }
