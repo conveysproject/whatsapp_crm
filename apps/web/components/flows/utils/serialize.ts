@@ -1,4 +1,5 @@
 import type { Node, Edge } from "reactflow";
+import { DEFAULT_PALETTE } from "@/lib/brand";
 
 export interface FlowNodeDef {
   id: string;
@@ -72,7 +73,8 @@ export function getDefaultConfig(nodeType: string): Record<string, unknown> {
   }
 }
 
-export function deserializeFlow(flow: FlowData): { nodes: Node[]; edges: Edge[] } {
+/** `edgeColor` defaults to the default brand's dark shade; the editor passes the signed-in brand's. */
+export function deserializeFlow(flow: FlowData, edgeColor: string = DEFAULT_PALETTE[600]): { nodes: Node[]; edges: Edge[] } {
   const { nodes: flowNodes, startNodeId } = flow.flowDefinition;
 
   const nodes: Node[] = (flowNodes ?? []).map((fn, index) => {
@@ -103,7 +105,7 @@ export function deserializeFlow(flow: FlowData): { nodes: Node[]; edges: Edge[] 
         target: fn.next,
         sourceHandle: fn.type === "condition" ? "yes" : undefined,
         animated: flow.isActive,
-        style: { stroke: "#16a34a", strokeWidth: 2 },
+        style: { stroke: edgeColor, strokeWidth: 2 },
         type: "smoothstep",
       });
     }

@@ -2,6 +2,7 @@
 
 import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/client";
+import { useBrandChartColors } from "@/hooks/useBrandChartColors";
 import {
   LineChart,
   Line,
@@ -33,6 +34,7 @@ const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 export function ConversationsTab({ days }: ConversationsTabProps): JSX.Element {
   const { getToken } = useAuth();
+  const { primary } = useBrandChartColors();
   const [volume, setVolume] = useState<DailyVolume[]>([]);
   const [status, setStatus] = useState<StatusBreakdown | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,7 +91,7 @@ export function ConversationsTab({ days }: ConversationsTabProps): JSX.Element {
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <Tooltip />
               <Legend />
-              <Line type="monotone" dataKey="inbound" stroke="#22c55e" dot={false} strokeWidth={2} />
+              <Line type="monotone" dataKey="inbound" stroke={primary} dot={false} strokeWidth={2} />
               <Line type="monotone" dataKey="outbound" stroke="#3b82f6" dot={false} strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>

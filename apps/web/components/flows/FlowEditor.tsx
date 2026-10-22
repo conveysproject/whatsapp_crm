@@ -22,6 +22,7 @@ import { ConditionNode } from "./nodes/ConditionNode";
 import { FlowNodePalette } from "./FlowNodePalette";
 import { FlowConfigPanel } from "./FlowConfigPanel";
 import { FlowLogsTab } from "./FlowLogsTab";
+import { useBrandChartColors } from "@/hooks/useBrandChartColors";
 import { getLayoutedElements } from "./utils/layout";
 import {
   deserializeFlow,
@@ -53,7 +54,8 @@ const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 export function FlowEditor({ initialFlow }: { initialFlow: FlowData }): JSX.Element {
   const { getToken } = useAuth();
 
-  const { nodes: initNodes, edges: initEdges } = deserializeFlow(initialFlow);
+  const { primaryDark: edgeColor } = useBrandChartColors();
+  const { nodes: initNodes, edges: initEdges } = deserializeFlow(initialFlow, edgeColor);
   const layoutedInit = getLayoutedElements(initNodes, initEdges);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedInit);
@@ -112,14 +114,14 @@ export function FlowEditor({ initialFlow }: { initialFlow: FlowData }): JSX.Elem
     (params: Connection) => {
       setEdges((eds) => {
         const next = addEdge(
-          { ...params, animated: isActive, style: { stroke: "#16a34a", strokeWidth: 2 }, type: "smoothstep" },
+          { ...params, animated: isActive, style: { stroke: edgeColor, strokeWidth: 2 }, type: "smoothstep" },
           eds
         );
         setIsDirty(true);
         return next;
       });
     },
-    [isActive, setEdges]
+    [isActive, edgeColor, setEdges]
   );
 
   const handleAddNode = useCallback(
@@ -152,7 +154,7 @@ export function FlowEditor({ initialFlow }: { initialFlow: FlowData }): JSX.Elem
             source: lastNode.id,
             target: id,
             animated: isActive,
-            style: { stroke: "#16a34a", strokeWidth: 2 },
+            style: { stroke: edgeColor, strokeWidth: 2 },
             type: "smoothstep",
           },
           eds
@@ -162,7 +164,7 @@ export function FlowEditor({ initialFlow }: { initialFlow: FlowData }): JSX.Elem
       setIsDirty(true);
       setSelectedNodeId(id);
     },
-    [nodes, edges, isActive, setNodes, setEdges]
+    [nodes, edges, isActive, edgeColor, setNodes, setEdges]
   );
 
   const handleDragStart = useCallback((event: React.DragEvent, nodeType: string) => {
