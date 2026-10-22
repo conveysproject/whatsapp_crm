@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
  * Files that legitimately keep the WBMSG brand are listed below, each with the reason.
  */
 
-const FORBIDDEN = ["WBMSG", "wbmsg.com", "info@conveys.in"] as const;
+const FORBIDDEN = ["WBMSG", "wbmsg.com", "info@conveys.in", "TrustCRM"] as const;
 const SCAN_DIRS = ["app", "components", "lib", "hooks"];
 
 const BILLING = "billing stays WBMSG on the web (decision D4a)";
@@ -56,6 +56,8 @@ const ALLOW: Record<string, string> = {
   // root metadata, brand defaults, mail
   "app/layout.tsx": "root metadata for the public site; a branded dashboard overrides it through brandMetadata",
   "lib/brand.ts": "the DEFAULT_BRAND definition itself",
+  "components/brand/BrandLogo.tsx": "the default logo asset path /wbmsg_logo.png (a file name, not text)",
+  "lib/auth/jwt.ts": "JWT issuer / audience identifiers: protocol values that must match the API, never shown",
   "lib/mail-from.ts": "fallback From-name of outgoing mail when no usable name is left",
   // auth surfaces handled in A6
   "app/(auth)/sign-in/[[...sign-in]]/page.tsx": AUTH,
@@ -80,24 +82,110 @@ function sourceFiles(dir: string): string[] {
     if (statSync(full).isDirectory()) {
       if (name === "node_modules" || name === ".next") continue;
       out.push(...sourceFiles(full));
-    } else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) && name !== "brand-test-fixtures.ts") {
+    } else if (/\.(tsx?|jsx?)$/.test(name) && !/\.test\.(tsx?|jsx?)$/.test(name) && name !== "brand-test-fixtures.ts") {
       out.push(full);
     }
   }
   return out;
 }
 
+interface Scanned {
+  /** Source without comments (strings kept). A comment marker inside a string does not hide anything. */
+  code: string;
+  /** Contents of every string / template literal that is not an import specifier. */
+  strings: string[];
+}
+
+/**
+ * Minimal tokenizer: tracks single, double and template quotes (with `${}` nesting) so that a `/*` or `//` inside a string is not a comment.
+ * An unmatched ' or " (an apostrophe in JSX text) ends at the line break, so it cannot swallow the rest of the file.
+ */
+export function scan(src: string): Scanned {
+  let code = "";
+  const strings: string[] = [];
+  const tplStack: number[] = []; // brace depth at which each open `${` returns to its template
+  let braces = 0;
+  let i = 0;
+  const n = src.length;
+  const isImportSpec = () => /(?:\bfrom|\bimport|\brequire\()\s*$/.test(code.slice(-24));
+  const readTemplate = () => {
+    // after the opening backtick or a closing `}` of `${}`
+    let buf = "";
+    while (i < n) {
+      const c = src[i]!;
+      if (c === "\\") { buf += c + (src[i + 1] ?? ""); i += 2; continue; }
+      if (c === "`") { code += buf + "`"; strings.push(buf); i++; return; }
+      if (c === "$" && src[i + 1] === "{") {
+        code += buf + "${"; strings.push(buf); i += 2; tplStack.push(braces); braces++; return;
+      }
+      buf += c; i++;
+    }
+    code += buf;
+  };
+  while (i < n) {
+    const c = src[i]!;
+    const next = src[i + 1];
+    if (c === "/" && next === "*") {
+      const end = src.indexOf("*/", i + 2);
+      i = end === -1 ? n : end + 2;
+      continue;
+    }
+    if (c === "/" && next === "/" && src[i - 1] !== ":") {
+      while (i < n && src[i] !== "\n") i++;
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      const spec = isImportSpec();
+      let j = i + 1;
+      let buf = "";
+      while (j < n && src[j] !== c && src[j] !== "\n") {
+        if (src[j] === "\\") { buf += src[j]! + (src[j + 1] ?? ""); j += 2; continue; }
+        buf += src[j]; j++;
+      }
+      if (src[j] === c) {
+        if (!spec) strings.push(buf);
+        code += c + buf + c;
+        i = j + 1;
+      } else {
+        code += c; i++; // lone apostrophe in text
+      }
+      continue;
+    }
+    if (c === "`") { i++; code += "`"; readTemplate(); continue; }
+    if (c === "{") braces++;
+    if (c === "}") {
+      braces--;
+      if (tplStack.length && tplStack[tplStack.length - 1] === braces) {
+        tplStack.pop(); code += "}"; i++; readTemplate(); continue;
+      }
+    }
+    code += c; i++;
+  }
+  return { code, strings };
+}
+
+/** Visible JSX text between `>` and `<` (good enough to catch `<p>wbmsg</p>`). */
+function jsxText(code: string): string[] {
+  return [...code.matchAll(/>([^<>{}=;]+)</g)].map((m) => m[1]!);
+}
+
 /** Source without comments and without the `@WBMSG/...` workspace package names in import paths. */
 function stripped(file: string): string {
-  return readFileSync(file, "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/^\s*\/\/.*$/gm, "")
-    .replace(/@WBMSG\/[\w-]+/g, "");
+  return scan(readFileSync(file, "utf8")).code.replace(/@WBMSG\/[\w-]+/g, "");
+}
+
+/** Forbidden literals in a source text. Lower or mixed-case `wbmsg` counts only inside user-visible strings or JSX text. */
+export function literalsInSource(src: string): string[] {
+  const { code, strings } = scan(src);
+  const clean = code.replace(/@WBMSG\/[\w-]+/g, "");
+  const found: string[] = FORBIDDEN.filter((l) => clean.includes(l));
+  const visible = [...strings, ...jsxText(code)].map((t) => t.replace(/x-wbmsg-[\w-]*/gi, "").replace(/@WBMSG\/[\w-]+/g, ""));
+  if (visible.some((t) => /wbmsg/i.test(t.replace(/WBMSG|wbmsg\.com/g, "")))) found.push("wbmsg (any case)");
+  return found;
 }
 
 function literalsIn(file: string): string[] {
-  const src = stripped(file);
-  return FORBIDDEN.filter((l) => src.includes(l));
+  return literalsInSource(readFileSync(file, "utf8"));
 }
 
 const files = SCAN_DIRS.flatMap((d) => sourceFiles(join(ROOT, d))).map((f) => ({
@@ -123,6 +211,48 @@ describe("no hard-coded product brand outside the allow-list", () => {
       const abs = byRel.get(rel);
       expect(abs, `${rel} is on the allow-list but not found`).toBeDefined();
       expect(literalsIn(abs!).length, `${rel} no longer has a literal: remove it from the allow-list`).toBeGreaterThan(0);
+    }
+  });
+
+  it("the scanner catches wbmsg.com, info@conveys.in, TrustCRM and mixed-case wbmsg in visible text", () => {
+    expect(literalsInSource('export const U = "https://wbmsg.com/x";')).toEqual(["wbmsg.com"]);
+    expect(literalsInSource('export const M = "info@conveys.in";')).toEqual(["info@conveys.in"]);
+    expect(literalsInSource("export const X = () => <p>Powered by TrustCRM</p>;")).toEqual(["TrustCRM"]);
+    expect(literalsInSource('export const T = "Welcome to Wbmsg";')).toEqual(["wbmsg (any case)"]);
+    expect(literalsInSource("export const X = () => <p>welcome to wbmsg</p>;")).toEqual(["wbmsg (any case)"]);
+    expect(literalsInSource("export const T = `Hi from wbmsg ${name}`;")).toEqual(["wbmsg (any case)"]);
+  });
+
+  it("the scanner ignores identifiers, imports, protocol names and comments", () => {
+    const ok = [
+      "function WbmsgSecurity() { return null; }",
+      'import { x } from "@/lib/auth/middleware-wbmsg";',
+      'import type { A } from "@WBMSG/shared";',
+      'headers["x-wbmsg-bff"] = secret;',
+      "const a = wbmsgAuth();",
+      "// wbmsg only in a comment",
+      "/* WBMSG wbmsg.com */",
+    ].join("\n");
+    expect(literalsInSource(ok)).toEqual([]);
+  });
+
+  it("a comment marker inside a string does not hide code after it", () => {
+    expect(literalsInSource('const glob = "/*"; const t = "Welcome to WBMSG"; const e = "*/";')).toEqual(["WBMSG"]);
+    expect(literalsInSource('const u = "http://x"; const t = "WBMSG";')).toEqual(["WBMSG"]);
+    expect(literalsInSource("const g = `/* ${a} */`; const t = 'info@conveys.in';")).toEqual(["info@conveys.in"]);
+  });
+
+  it("an apostrophe in JSX text does not swallow the rest of the file", () => {
+    expect(literalsInSource("const X = () => <p>Don't panic</p>;\nconst T = \"TrustCRM\";")).toEqual(["TrustCRM"]);
+  });
+
+  it("scans .js and .jsx files too", () => {
+    const dir = mkdtempSync(join(tmpdir(), "brand-guard-js-"));
+    try {
+      writeFileSync(join(dir, "a.jsx"), "export const A = () => <p>WBMSG</p>;\n");
+      expect(sourceFiles(dir).map((f) => relative(dir, f))).toEqual(["a.jsx"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 
