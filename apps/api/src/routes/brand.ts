@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { writeAdminAudit } from "../lib/audit.js";
-import { isAllowedAssetUrl, resolveBrand, validateBrandInput, validateSlug } from "../lib/brand.js";
+import { brandPayload, isAllowedAssetUrl, resolveBrand, validateBrandInput, validateSlug } from "../lib/brand.js";
 import { canBeParent } from "../lib/parent-orgs.js";
 import { clientIp } from "../lib/public-api/client-ip.js";
 import { deleteFromR2, R2_PUBLIC_URL, uploadToR2 } from "../lib/r2.js";
@@ -367,7 +367,7 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/brand", async (request, reply) => {
     const data = await resolveBrand(fastify.prisma, request.auth.organizationId);
     reply.header("Cache-Control", "private, no-store");
-    return reply.send({ data });
+    return reply.send({ data: brandPayload(data) });
   });
 
   // Public, used by the white-label sign-in pages. Every "not available" reason returns the identical 404.
@@ -402,7 +402,7 @@ export const brandRoutes: FastifyPluginAsync = async (fastify) => {
       const brand = await resolveBrand(fastify.prisma, org.id);
       if (brand.isDefault) return publicNotFound(reply);
       reply.header("Cache-Control", "public, max-age=60");
-      return reply.send({ data: brand });
+      return reply.send({ data: brandPayload(brand) });
     },
   );
 };

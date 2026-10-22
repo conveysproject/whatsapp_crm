@@ -163,6 +163,13 @@ export function makePalette(hex: string): Record<Shade, string> {
   return Object.fromEntries(order.map((k) => [k, out[k]])) as Record<Shade, string>;
 }
 
+export type BrandPayload = Brand & { palette: Record<Shade, string> };
+
+/** The brand as the API returns it: every brand field plus the ten-shade palette derived from the primary color. */
+export function brandPayload(brand: Brand): BrandPayload {
+  return { ...brand, palette: makePalette(brand.primaryColor) };
+}
+
 const BRAND_SELECT = {
   isParent: true,
   whiteLabelEnabled: true,

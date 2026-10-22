@@ -671,6 +671,8 @@ describe("GET /v1/brand", () => {
     expect(res.headers["cache-control"]).toBe("private, no-store");
     const data = res.json<{ data: Record<string, unknown> }>().data;
     expect(data["name"]).toBe("Acme Cloud");
+    expect((data["palette"] as Record<string, string>)["500"]).toBe("#1a2b3c");
+    expect(Object.keys(data["palette"] as object)).toHaveLength(10);
     expect(data).not.toHaveProperty("whiteLabelEnabled");
     expect(JSON.stringify(data)).not.toMatch(/client-1|"id"|organizationId/);
     await app.close();
@@ -687,6 +689,7 @@ describe("GET /v1/brand", () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/brand" });
     expect(res.json<{ data: { name: string; isDefault: boolean } }>().data).toMatchObject({ name: "WBMSG", isDefault: true });
+    expect(res.json<{ data: { palette: Record<string, string> } }>().data.palette).toMatchObject({ "50": "#f0fdf4", "500": "#22c55e", "900": "#14532d" });
     await app.close();
   });
 });
@@ -719,6 +722,7 @@ describe("GET /v1/public/brand/:slug", () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers["cache-control"]).toBe("public, max-age=60");
     expect(res.json<{ data: { name: string } }>().data.name).toBe("Acme Cloud");
+    expect(res.json<{ data: { palette: Record<string, string> } }>().data.palette["500"]).toBe("#1a2b3c");
     expect(res.body).not.toMatch(/org-A|"id"|organizationId|whiteLabelEnabled/);
     expect(mockPrisma.organization.findUnique.mock.calls[0]![0]).toMatchObject({ where: { slug: "acme-cloud" } });
     await app.close();

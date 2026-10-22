@@ -5,6 +5,7 @@ import {
   RESERVED_SLUGS,
   isAllowedAssetUrl,
   makePalette,
+  brandPayload,
   resolveBrand,
   validateBrandInput,
   validateSlug,
@@ -271,5 +272,18 @@ describe("resolveBrand", () => {
     const { prisma } = prismaWith({ ...parentRow, id: "p1" });
     expect(Object.keys(await resolveBrand(prisma, "p1")).sort()).toEqual(Object.keys(DEFAULT_BRAND).sort());
     expect(Object.keys(DEFAULT_BRAND).some((k) => /id$/i.test(k))).toBe(false);
+  });
+});
+
+describe("brandPayload", () => {
+  it("adds the palette to every brand field, default palette is today's scale", () => {
+    const p = brandPayload(DEFAULT_BRAND);
+    expect(p).toEqual({ ...DEFAULT_BRAND, palette: makePalette("#22c55e") });
+    expect(Object.keys(p.palette)).toEqual(["50", "100", "200", "300", "400", "500", "600", "700", "800", "900"]);
+  });
+  it("derives the palette from the brand color", () => {
+    const b = { ...DEFAULT_BRAND, name: "Acme", primaryColor: "#1a2b3c", isDefault: false };
+    expect(brandPayload(b).palette).toEqual(makePalette("#1a2b3c"));
+    expect(brandPayload(b).name).toBe("Acme");
   });
 });
