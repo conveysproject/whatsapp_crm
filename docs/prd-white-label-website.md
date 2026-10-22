@@ -32,7 +32,7 @@ A parent company (agency / reseller) wants its clients to see the parent's brand
 
 ## 4. Non-goals
 
-- Custom domains, DNS, TLS, host-based routing. Sending email from the parent's own domain address.
+- Custom domains, DNS, TLS, host-based routing (our side). Receiving or reading email (IMAP/POP3 are receiving protocols; replies simply go to the client's own mailbox).
 - The mobile app, the marketing site (`apps/conveys`), WBMSG's public marketing, legal and docs pages (they stay WBMSG; the legal operator stays Conveys).
 - Billing: the billing pages, statements, PDFs and billing emails stay WBMSG-branded (see decision D4).
 - Fixing dark mode. Replacing the green semantic colors (WhatsApp green, success states); only the `brand-*` palette follows the brand.
@@ -60,6 +60,26 @@ Anti-goals: a brand that lets one company impersonate another; a logo URL pointi
 
 **Security:** brand is data, rendered as text or validated URL only; super admin approval gate; slug reserved words (wbmsg, admin, api, www, support, billing, login, etc.); branded sign-in never reveals whether a user exists; public brand endpoint is rate limited and returns nothing for unknown or disabled slugs (same body).
 
+## 5a. Email: the client connects its own email service (all sending protocols)
+
+Owner request (2026-10-22): the brand's emails must be able to go out through the client's own email service, whatever it uses. This replaces the earlier "sender address stays ours": our mailbox becomes the **fallback**, not the only sender.
+
+**Providers (adapters behind one interface)**
+- **SMTP** (host, port 465 / 587 / 25 / 2525, SSL or STARTTLS, user, password). This covers Gmail and Google Workspace (app password), Microsoft 365, GoDaddy, Zoho, cPanel and most business mailboxes.
+- **HTTP API providers** (API key): SendGrid, Mailgun, Postmark, Resend, Brevo, Amazon SES, SparkPost.
+- **Later (needs OAuth app review):** Gmail API and Microsoft Graph.
+- Not applicable: IMAP and POP3 are for receiving mail; they are not used to send.
+
+**How it works**
+- New per-organization setting `org_email_settings` (provider, from address, from name, reply-to, encrypted credentials, status `unverified | verified | failing`, last error, last tested). Parent admin only. Clients inherit their parent's setting, like the brand.
+- Credentials are encrypted at rest (AES-256-GCM, key from an environment variable), never returned by any API, never logged. The parent can replace or delete them.
+- **Test before live:** a setting is only used after a successful test send to the admin's own address (verified). Changes reset it to unverified.
+- **Where it sends from:** HTTP providers send from the API directly. Railway blocks outbound SMTP, so SMTP goes through the existing web relay route (`/api/internal/send-email`, bearer-protected). The API passes the decrypted SMTP settings in that request over HTTPS; they are not logged or stored by the relay.
+- **Only our fixed templates are sent through it** (sign-in codes, invitations, branded notices). There is no endpoint that lets a client send arbitrary email, so it cannot be used as an open relay.
+- **Fallback and failure handling:** if the client's provider fails (authentication error, rejected, timeout), that email is re-sent once from our default sender so a login code or invite is never lost; after 3 consecutive failures the setting is marked `failing`, the parent admin is told by email from our sender, and the page shows the last error. Billing and statement emails stay on our sender (D4).
+- **Safety:** the SMTP host and any API base URL are checked against private, loopback and link-local addresses before connecting (reuse the existing safe-URL check), only ports 25 / 465 / 587 / 2525, TLS required unless the admin explicitly accepts plain; test sends are rate limited (5 per hour per organization), and sending is capped per organization per hour.
+- **Deliverability is the client's side:** their SPF and DKIM at their own provider. The settings page shows plain help text. We do not touch DNS.
+
 ## 6. Decisions needed (recommended default first)
 
 | # | Decision | Default |
@@ -73,6 +93,11 @@ Anti-goals: a brand that lets one company impersonate another; a logo URL pointi
 | D7 | Logo formats | png, jpg, webp (favicon also ico); no SVG |
 | D8 | Support email shown to clients | Required when white-label is enabled; no fallback to our address |
 | D9 | Legal pages and terms | Stay WBMSG / Conveys; add white-label terms in your contract (not engineering) |
+| D10 | Email providers in the first release | SMTP plus SendGrid, Mailgun, Postmark, Resend, Brevo, Amazon SES; Gmail API and Microsoft Graph (OAuth) later |
+| D11 | Who configures the email provider | The parent admin; clients inherit |
+| D12 | If the client's provider fails | Fall back once to our sender, mark failing after 3 failures, tell the parent admin |
+| D13 | Which emails use the client's provider | Sign-in codes, password changed, team and client invitations, closure notices. Billing and statements stay on our sender |
+| D14 | Sending through an unverified setting | No: a successful test send is required first |
 
 ## 7. Acceptance criteria
 

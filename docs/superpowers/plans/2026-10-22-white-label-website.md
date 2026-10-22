@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A parent company's brand (name, logo, favicon, color, support email) replaces "WBMSG" in the web app, invitation pages, a branded sign-in path and emails, for the parent and all its linked clients, once a super admin approves it.
+**Goal:** A parent company's brand (name, logo, favicon, color, support email) replaces "WBMSG" in the web app, invitation pages, a branded sign-in path and emails, for the parent and all its linked clients, once a super admin approves it. Part B lets the parent connect its own email service (SMTP and the main API providers) so those emails go out from its own address.
 
 **Architecture:** One brand object resolved server-side (own brand if parent with white-label on, else the parent's, else the WBMSG default). The dashboard layout fetches it once and hands it to a `BrandProvider`; Tailwind's `brand-*` scale becomes CSS variables with today's green as the default so nothing changes when no brand is set. Emails take a brand and a from-name; the sender address stays our verified mailbox. No domain, DNS or host routing.
 
@@ -16,7 +16,7 @@
 - Only the parent's `admin` role edits the brand; clients inherit it and never receive the parent organization's id, only the brand fields.
 - Brand fields: name 2-40 chars (rendered as text only); color `#RRGGBB`; slug 3-40, `[a-z0-9-]`, reserved words blocked (wbmsg, admin, api, www, support, billing, login, sign-in, sign-up, docs, settings, c); support email valid; image URLs must start with the R2 public URL; uploads png/jpg/webp (favicon also ico), logo max 1 MB, favicon max 256 KB, SVG refused.
 - Every new route has org scoping, an RBAC check and a cross-tenant negative test. Public brand reads are rate limited and give the same body for unknown, disabled and non-parent slugs.
-- Sender address unchanged (`SMTP_USER`); only the display name changes; the From name is sanitized (no CR/LF, no angle brackets) to prevent header injection.
+- Part A (website): sender address unchanged (`SMTP_USER`), only the display name changes; the From name is sanitized (no CR/LF, no angle brackets) to prevent header injection. Part B replaces the sender with the parent's verified provider, with our sender as fallback.
 - Billing pages, statements and billing emails stay WBMSG-branded (D4). Marketing, legal and docs pages stay WBMSG.
 - Secrets rule: no literal credentials; tests use fakes. No "Plivo" in customer-facing text. LF line endings in the index, no NUL/binary files.
 
@@ -112,6 +112,45 @@ export async function resolveBrand(prisma: PrismaClient, orgId: string): Promise
 - [ ] **Step 1:** Root lint, type-check, full API and web suites; a real-database smoke addition (brand resolve for parent, child and unrelated org; upload to a stubbed R2; email From sanitization) and a headless-browser pass on a scratch stack for the branded shell, `/c/<slug>/sign-in` and the invite pages (screenshots reviewed for overflow and contrast).
 - [ ] **Step 2:** Security audit table for every new route (scoping, RBAC, cross-tenant test); docs `docs/white-label-website.md`; super admin approval checklist (name, slug, logo are the company's own).
 - [ ] **Step 3:** Roll out with one pilot parent: super admin enables white-label after reviewing the brand. Rollback: toggle off.
+
+---
+
+## Part B: Email providers (all sending protocols)
+
+Starts after Part A Task 3. Same rules as Part A. Extra constraints: credentials encrypted with AES-256-GCM using a key from the environment variable `EMAIL_SETTINGS_KEY` (fail loudly if missing); never returned, never logged; SMTP host and API base URLs checked against private/loopback/link-local ranges before any connection; ports 25/465/587/2525 only; TLS required unless explicitly accepted; test sends 5/hour/org; only our fixed templates use the provider (no arbitrary-send endpoint).
+
+### Task B1: Settings table and crypto helper
+
+**Files:** migration, `schema.prisma`, `apps/api/src/lib/secret-box.ts` (+ test).
+**Interfaces:** `encryptJson(value: unknown): string`, `decryptJson<T>(blob: string): T` (AES-256-GCM, random 12-byte IV, version prefix, throws if `EMAIL_SETTINGS_KEY` is not 32 bytes base64); table `org_email_settings(organization_id UNIQUE, provider TEXT, from_address, from_name, reply_to, config_enc TEXT, status TEXT DEFAULT 'unverified', consecutive_failures INT DEFAULT 0, last_error TEXT, last_tested_at, created_at, updated_at)`.
+- [ ] Failing tests: round trip; tampered blob fails; two encryptions of the same value differ; wrong/missing key throws. Hand-written SQL, `prisma validate`, commit.
+
+### Task B2: Transport interface and adapters
+
+**Files:** `apps/api/src/lib/email/transport.ts`, `providers/{smtp,sendgrid,mailgun,postmark,resend,brevo,ses,sparkpost}.ts`, `safe-host.ts`, tests per adapter.
+**Interfaces:** `interface EmailTransport { send(m: { from: string; to: string; subject: string; html: string; replyTo?: string }): Promise<{ ok: true } | { ok: false; retryable: boolean; reason: string }> }`; `buildTransport(provider: string, config: unknown): EmailTransport`; `assertSafeHost(host: string, port: number): Promise<void>` (reuse the existing safe-URL logic).
+- [ ] Failing tests per HTTP adapter against a mocked `fetch`: exact URL, auth header and JSON/form body; 401/403 become non-retryable, 5xx/timeout retryable; the API key never appears in thrown messages. SMTP adapter: builds the relay request to the web route (Railway cannot open SMTP); unsafe hosts (127.0.0.1, 10.x, 169.254.x, metadata IP, localhost, IPv6 loopback) refused; port allow-list. Commit.
+
+### Task B3: Settings API with verification
+
+**Files:** `apps/api/src/routes/email-settings.ts` (+ test), `routes/index.ts`.
+**Interfaces:** `GET /v1/organizations/email-settings` (never returns secrets; returns provider, from, status, last error, `hasCredentials`), `PUT` (validates per provider, resets status to unverified), `POST /test` (sends to the calling admin's own address; success sets `verified`), `DELETE`. Parent admin only; clients cannot read or write.
+- [ ] Failing tests: non-admin 403; non-parent 403; response never contains credentials; invalid host/port 400; test endpoint rate limit; a failed test leaves it unverified and stores only a sanitized reason; audit rows for create/update/delete (no secret in metadata). Commit; security review.
+
+### Task B4: Use the provider when sending
+
+**Files:** `apps/api/src/lib/mail.ts` (new `sendOrgMail(prisma, orgId, message)`), the Part A email builders' call sites, the web relay route for SMTP.
+**Interfaces:** `sendOrgMail` resolves the effective email settings (own, else the parent's) and uses the verified transport; on a failed send it retries once from our default sender, increments `consecutive_failures`, marks `failing` at 3 and emails the parent admin from our sender; success resets the counter. Billing, statement and admin emails keep using `sendMail`.
+- [ ] Failing tests: verified provider used for sign-in code, invites; unverified or failing setting is ignored; fallback exactly once; a thrown adapter error never loses the email; counter and status transitions; credentials never in logs; relay route accepts SMTP settings only with the internal bearer. Commit.
+
+### Task B5: Email settings UI
+
+**Files:** `apps/web/app/(dashboard)/settings/email/page.tsx` (+ components).
+- [ ] Failing tests: provider picker shows the right fields per provider; password fields are write-only (never prefilled); Test button shows success or the sanitized reason; status badge; delete confirms; plain help text about SPF/DKIM; visible to parent admins only. Commit.
+
+### Task B6: Verification
+
+- [ ] Real SMTP test against a throwaway local mail catcher container (scratch ports only): the verified flow, the fallback and the failing state; HTTP adapters against recorded contract fixtures; `pnpm lint`, type-check, full suites; security audit table; docs; rollout: pilot with one parent and a throwaway provider account.
 
 ## Self-review
 
