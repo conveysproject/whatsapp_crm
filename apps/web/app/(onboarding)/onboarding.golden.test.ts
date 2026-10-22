@@ -10,6 +10,7 @@ vi.mock("@/lib/auth/server", () => ({
     protect: async () => ({ userId: "u1", getToken: async () => "tok" }),
   }),
 }));
+vi.mock("@/lib/brand-session", async () => ({ loadSessionBrand: async () => (await import("@/lib/brand")).DEFAULT_BRAND }));
 vi.mock("@/lib/auth/client", () => ({ useAuth: () => ({ getToken: async () => "tok" }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => undefined }) }));
 vi.mock("next/link", () => ({ default: ({ children, href }: { children: ReactNode; href: string }) => h("a", { href }, children) }));

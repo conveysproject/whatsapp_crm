@@ -7,6 +7,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { PermissionGate } from "@/components/PermissionGate";
 import { CopyButton, CredentialRevealDialog } from "@/components/settings/CredentialRevealDialog";
+import { useBrand } from "@/hooks/useBrand";
 import {
   ApiCredentialsError,
   createCredential,
@@ -81,7 +82,7 @@ function ErrorLine({ message }: { message: string | null }): JSX.Element | null 
   return <p role="alert" className="text-sm text-red-600">{message}</p>;
 }
 
-function CredentialFormDialog({
+export function CredentialFormDialog({
   mode,
   initial,
   onClose,
@@ -92,6 +93,7 @@ function CredentialFormDialog({
   onClose: () => void;
   onDone: (revealed?: RevealedCredential) => void;
 }): JSX.Element {
+  const brandName = useBrand().name;
   const [form, setForm] = useState<CredentialInput>({
     name: initial?.name ?? "",
     callbackUrl: initial?.callbackUrl ?? "",
@@ -154,7 +156,7 @@ function CredentialFormDialog({
       title={mode === "create" ? "Create API credential" : "Edit API credential"}
       description={
         mode === "create"
-          ? "A new Auth ID and Auth Token are generated for the WBMSG API."
+          ? `A new Auth ID and Auth Token are generated for the ${brandName} API.`
           : undefined
       }
       onClose={onClose}
@@ -278,6 +280,7 @@ function CredentialRow({
 }
 
 function ApiCredentialsBody(): JSX.Element | null {
+  const brandName = useBrand().name;
   const qc = useQueryClient();
   const { data, error, isLoading, refetch, isFetching } = useQuery<ApiCredential[], Error>({
     queryKey: QUERY_KEY,
@@ -310,7 +313,7 @@ function ApiCredentialsBody(): JSX.Element | null {
       <div className="text-center py-6 space-y-2">
         <p className="text-sm font-medium">No API credentials yet</p>
         <p className="text-sm text-gray-500">
-          Create a credential to send WhatsApp messages from your own systems using the WBMSG API.
+          Create a credential to send WhatsApp messages from your own systems using the {brandName} API.
         </p>
       </div>
     );
@@ -332,7 +335,7 @@ function ApiCredentialsBody(): JSX.Element | null {
         <div>
           <h2 id="api-credentials-heading" className="font-medium">API Credentials</h2>
           <p className="text-sm text-gray-500">
-            Auth ID and Auth Token for the WBMSG API. Tokens are shown only once, when created or rotated.
+            Auth ID and Auth Token for the {brandName} API. Tokens are shown only once, when created or rotated.
           </p>
           <Link href="/settings/api-usage" className="mt-1 inline-block text-sm text-blue-600 hover:underline">
             View usage

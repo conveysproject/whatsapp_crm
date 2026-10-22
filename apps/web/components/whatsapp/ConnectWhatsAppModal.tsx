@@ -2,6 +2,7 @@
 
 import { useState, useRef, type JSX, type ChangeEvent } from "react";
 import { EmbeddedSignupButton, type ConnectResult } from "./EmbeddedSignupButton";
+import { useBrand } from "@/hooks/useBrand";
 export type { ConnectResult };
 
 interface ConnectWhatsAppModalProps {
@@ -84,6 +85,7 @@ export function ConnectWhatsAppModal({ flow, onSuccess, onClose, variant = "moda
 }
 
 function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Element {
+  const brandName = useBrand().name;
   return (
     <div className="py-4 space-y-4 px-6 pt-6 pb-4 border-b">
       <p className="text-sm text-gray-500">You can connect your number in two ways. Here&apos;s how they differ.</p>
@@ -105,8 +107,8 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
                 <BulletItem muted>Use your existing WhatsApp Business App number</BulletItem>
               </InfoRow>
               <InfoRow label="App Usage">
-                <BulletItem>Continue using WhatsApp Business App alongside WBMSG</BulletItem>
-                <BulletItem muted>Messages sync between WBMSG &amp; app</BulletItem>
+                <BulletItem>Continue using WhatsApp Business App alongside {brandName}</BulletItem>
+                <BulletItem muted>Messages sync between {brandName} &amp; app</BulletItem>
               </InfoRow>
               <InfoRow label="Broadcasts">
                 <BulletItem orange>Slower Broadcast Speeds</BulletItem>
@@ -117,7 +119,7 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
               </InfoRow>
               <InfoRow label="Groups, Status &amp; Calling">
                 <BulletItem>Groups, Status, and Calling available on WA Business App</BulletItem>
-                <BulletItem muted>WA Calling not possible from WBMSG</BulletItem>
+                <BulletItem muted>WA Calling not possible from {brandName}</BulletItem>
               </InfoRow>
               <InfoRow label="Display Name">
                 <BulletItem>Display name depends on contact saving</BulletItem>
@@ -154,7 +156,7 @@ function ChooseStep({ onChoose }: { onChoose: (smb: boolean) => void }): JSX.Ele
               </InfoRow>
               <InfoRow label="App Usage">
                 <BulletItem>Cannot use WhatsApp Business/Personal app</BulletItem>
-                <BulletItem muted>Fully API-based — manage everything inside WBMSG</BulletItem>
+                <BulletItem muted>Fully API-based — manage everything inside {brandName}</BulletItem>
               </InfoRow>
               <InfoRow label="Broadcasts">
                 <BulletItem green>Faster Broadcast Speeds</BulletItem>

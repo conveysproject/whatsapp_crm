@@ -3,10 +3,12 @@
 import { useState, type FormEvent, type JSX } from "react";
 import { useAuth } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
+import { useBrand } from "@/hooks/useBrand";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 export default function InviteTeamPage(): JSX.Element {
+  const brandName = useBrand().name;
   const { getToken } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -47,7 +49,7 @@ export default function InviteTeamPage(): JSX.Element {
   return (
     <div>
       <h2 className="text-lg font-semibold text-gray-800 mb-2">Invite Your Team</h2>
-      <p className="text-sm text-gray-500 mb-6">Add colleagues who will use WBMSG.</p>
+      <p className="text-sm text-gray-500 mb-6">Add colleagues who will use {brandName}.</p>
 
       <form onSubmit={(e) => { void handleInvite(e); }} className="flex gap-2 mb-4">
         <input

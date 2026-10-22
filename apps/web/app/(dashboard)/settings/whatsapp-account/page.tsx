@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ConnectWhatsAppModal, type ConnectResult } from "@/components/whatsapp/ConnectWhatsAppModal";
 import { PermissionGate } from "@/components/PermissionGate";
+import { useBrand } from "@/hooks/useBrand";
 
 async function fetchJson(url: string): Promise<unknown> {
   const res = await fetch(url);
@@ -136,6 +137,7 @@ function WhatsAppIcon({ className }: { className?: string }) {
 }
 
 export default function WhatsAppAccountPage(): JSX.Element {
+  const brandName = useBrand().name;
   const qc = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -642,7 +644,7 @@ export default function WhatsAppAccountPage(): JSX.Element {
             <div>
               <h2 className="text-sm font-semibold text-red-600">Disconnect Account</h2>
               <p className="text-xs text-gray-500 mt-0.5">
-                Remove WBMSG&apos;s access to your WhatsApp Business Account. Incoming messages will stop.
+                Remove {brandName}&apos;s access to your WhatsApp Business Account. Incoming messages will stop.
               </p>
             </div>
             <button
