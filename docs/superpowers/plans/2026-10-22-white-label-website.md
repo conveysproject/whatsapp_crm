@@ -17,7 +17,7 @@
 - Brand fields: name 2-40 chars (rendered as text only); color `#RRGGBB`; slug 3-40, `[a-z0-9-]`, reserved words blocked (wbmsg, admin, api, www, support, billing, login, sign-in, sign-up, docs, settings, c); support email valid; image URLs must start with the R2 public URL; uploads png/jpg/webp (favicon also ico), logo max 1 MB, favicon max 256 KB, SVG refused.
 - Every new route has org scoping, an RBAC check and a cross-tenant negative test. Public brand reads are rate limited and give the same body for unknown, disabled and non-parent slugs.
 - Part A (website): sender address unchanged (`SMTP_USER`), only the display name changes; the From name is sanitized (no CR/LF, no angle brackets) to prevent header injection. Part B replaces the sender with the parent's verified provider, with our sender as fallback.
-- Billing pages, statements and billing emails stay WBMSG-branded (D4). Marketing, legal and docs pages stay WBMSG.
+- Billing web pages stay WBMSG-branded (D4a). Billing, statement and closure emails sent to a CLIENT organization are branded and sent through the parent's email service (Part B, Task B4b); the legal seller identity (Conveys Information Technology and its tax details) stays in the body and on PDFs. Emails to the parent's own billing contacts, owner summaries and admin emails stay on our sender. Marketing, legal and docs pages stay WBMSG.
 - Secrets rule: no literal credentials; tests use fakes. No "Plivo" in customer-facing text. LF line endings in the index, no NUL/binary files.
 
 ## Review Focus
@@ -28,6 +28,7 @@
 - First paint shows "WBMSG" for a branded client (flash), or a title/favicon of the wrong brand.
 - Branded sign-in leaks whether an email/account exists, or the public brand endpoint enumerates slugs.
 - An email header injection through the brand name; brand emails sent to users of an unbranded org.
+- A client organization's billing email goes out under the parent's brand without the legal seller identity, or reaches the parent's contacts instead of the client's own billing contacts; the parent's own billing email gets branded as someone else.
 
 ## File Structure
 
@@ -78,7 +79,7 @@ export async function resolveBrand(prisma: PrismaClient, orgId: string): Promise
 **Files:** Modify `apps/api/src/lib/mail.ts` (`fromName?: string` in `MailOptions`), `apps/web/app/api/internal/send-email/route.ts`, `apps/web/lib/mail.ts`, `apps/api/src/auth/emails.ts`, `apps/api/src/lib/invitation-email.ts`; tests next to each.
 
 **Interfaces:** `sendMail({ ..., fromName?: string })`; web side builds `from: "<sanitized name> <SMTP_USER>"` (falls back to `WBMSG`); templates accept an optional `brand: Pick<Brand, "name"|"logoUrl"|"supportEmail"|"hidePoweredBy">` and render today's exact output when it is omitted or default.
-- [ ] **Step 1:** Failing tests: `fromName` with CR/LF, quotes or `<>` is sanitized (header-injection test); omitted brand gives byte-identical HTML to the stored snapshot; with a brand the logo (as `<img>` with the allowed URL), name and footer appear and "WBMSG" does not; sign-in code, password-changed, team invite and client invite pass the recipient org's effective brand and its support email as Reply-To; billing and closure emails stay unchanged.
+- [ ] **Step 1:** Failing tests: `fromName` with CR/LF, quotes or `<>` is sanitized (header-injection test); omitted brand gives byte-identical HTML to the stored snapshot; with a brand the logo (as `<img>` with the allowed URL), name and footer appear and "WBMSG" does not; sign-in code, password-changed, team invite and client invite pass the recipient org's effective brand and its support email as Reply-To; billing and closure emails are handled in Task B4b.
 - [ ] **Step 2-4:** FAIL, implement, PASS, commit.
 
 ### Task 4: Web foundation (provider, palette variables, metadata)
@@ -140,8 +141,15 @@ Starts after Part A Task 3. Same rules as Part A. Extra constraints: credentials
 ### Task B4: Use the provider when sending
 
 **Files:** `apps/api/src/lib/mail.ts` (new `sendOrgMail(prisma, orgId, message)`), the Part A email builders' call sites, the web relay route for SMTP.
-**Interfaces:** `sendOrgMail` resolves the effective email settings (own, else the parent's) and uses the verified transport; on a failed send it retries once from our default sender, increments `consecutive_failures`, marks `failing` at 3 and emails the parent admin from our sender; success resets the counter. Billing, statement and admin emails keep using `sendMail`.
+**Interfaces:** `sendOrgMail` resolves the effective email settings (own, else the parent's) and uses the verified transport; on a failed send it retries once from our default sender, increments `consecutive_failures`, marks `failing` at 3 and emails the parent admin from our sender; success resets the counter. Billing, statement and closure emails to a client organization use `sendOrgMail` (Task B4b); owner summaries and admin emails keep using `sendMail`.
 - [ ] Failing tests: verified provider used for sign-in code, invites; unverified or failing setting is ignored; fallback exactly once; a thrown adapter error never loses the email; counter and status transitions; credentials never in logs; relay route accepts SMTP settings only with the internal bearer. Commit.
+
+### Task B4b: Billing and statement emails follow the parent (D4)
+
+**Files:** `apps/api/src/lib/billing/statement-payment.ts` (3 send sites), `automation.ts` (customer send; the owner summary stays), `cancellation.ts` (3 sites), `payment-failed-email.ts`, `alerts.ts`, `apps/api/src/workers/closure-deadline.worker.ts`, `apps/api/src/lib/billing/statement-pdf.ts` (footer only), tests next to each.
+**Interfaces:** `recipientBrandContext(prisma, orgId): Promise<{ brand: Brand; useOrgMail: boolean }>`, true only when the recipient organization is a CLIENT (has a parent with white-label enabled and a verified provider); `LEGAL_SELLER_LINE` constant (Conveys Information Technology and its tax details, one source of truth shared with the PDF).
+- [ ] **Step 1:** Failing tests per send site: for a client organization the email uses `sendOrgMail` with the parent's brand and Reply-To and still contains `LEGAL_SELLER_LINE` and the unchanged payment link; for the parent's own organization and for a non-client organization the output is byte-identical to today; the owner summary never changes; recipients are still the client's own billing contacts (never the parent's); provider failure falls back to our sender once and the email is not lost; the PDF footer keeps the legal seller identity.
+- [ ] **Step 2-4:** FAIL, implement, PASS, commit. Security review together with B4.
 
 ### Task B5: Email settings UI
 
@@ -154,6 +162,6 @@ Starts after Part A Task 3. Same rules as Part A. Extra constraints: credentials
 
 ## Self-review
 
-- **PRD coverage:** goals 1 to 6 map to tasks 4-5 (brand in app), 6 (entry points), 3 (email), 2 (approval gate, validation, upload fix), 7 (settings). Non-goals respected: billing, legal, marketing, mobile, domain untouched.
+- **PRD coverage:** goals 1 to 6 map to tasks 4-5 (brand in app), 6 (entry points), 3 (email), 2 (approval gate, validation, upload fix), 7 (settings). Non-goals respected: billing web pages, legal, marketing, mobile, domain untouched; billing emails to clients follow the parent (D4, Task B4b).
 - **Ordering:** 1 before 2 and 3; 2 before 4 (needs `GET /v1/brand`); 4 before 5 and 6; 7 last.
 - **Not verified yet:** Next.js merging of per-segment icons, dark mode behaviour, whether `R2_PUBLIC_URL` is configured in production, billing payer.

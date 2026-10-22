@@ -34,7 +34,7 @@ A parent company (agency / reseller) wants its clients to see the parent's brand
 
 - Custom domains, DNS, TLS, host-based routing (our side). Receiving or reading email (IMAP/POP3 are receiving protocols; replies simply go to the client's own mailbox).
 - The mobile app, the marketing site (`apps/conveys`), WBMSG's public marketing, legal and docs pages (they stay WBMSG; the legal operator stays Conveys).
-- Billing: the billing pages, statements, PDFs and billing emails stay WBMSG-branded (see decision D4).
+- Billing web pages stay WBMSG-branded (D4a). The legal seller identity (Conveys Information Technology and its tax details) always stays visible in billing emails, statements and PDFs. Payment checkout pages belong to our payment provider account and cannot be re-branded.
 - Fixing dark mode. Replacing the green semantic colors (WhatsApp green, success states); only the `brand-*` palette follows the brand.
 - Per-client brands (a client choosing its own brand): clients inherit their parent's.
 
@@ -76,7 +76,7 @@ Owner request (2026-10-22): the brand's emails must be able to go out through th
 - **Test before live:** a setting is only used after a successful test send to the admin's own address (verified). Changes reset it to unverified.
 - **Where it sends from:** HTTP providers send from the API directly. Railway blocks outbound SMTP, so SMTP goes through the existing web relay route (`/api/internal/send-email`, bearer-protected). The API passes the decrypted SMTP settings in that request over HTTPS; they are not logged or stored by the relay.
 - **Only our fixed templates are sent through it** (sign-in codes, invitations, branded notices). There is no endpoint that lets a client send arbitrary email, so it cannot be used as an open relay.
-- **Fallback and failure handling:** if the client's provider fails (authentication error, rejected, timeout), that email is re-sent once from our default sender so a login code or invite is never lost; after 3 consecutive failures the setting is marked `failing`, the parent admin is told by email from our sender, and the page shows the last error. Billing and statement emails stay on our sender (D4).
+- **Fallback and failure handling:** if the client's provider fails (authentication error, rejected, timeout), that email is re-sent once from our default sender so a login code or invite is never lost; after 3 consecutive failures the setting is marked `failing`, the parent admin is told by email from our sender, and the page shows the last error. Billing and statement emails to a client organization follow the same path (D4).
 - **Safety:** the SMTP host and any API base URL are checked against private, loopback and link-local addresses before connecting (reuse the existing safe-URL check), only ports 25 / 465 / 587 / 2525, TLS required unless the admin explicitly accepts plain; test sends are rate limited (5 per hour per organization), and sending is capped per organization per hour.
 - **Deliverability is the client's side:** their SPF and DKIM at their own provider. The settings page shows plain help text. We do not touch DNS.
 
@@ -87,7 +87,8 @@ Owner request (2026-10-22): the brand's emails must be able to go out through th
 | D1 | Who sets the brand | The parent sets it; its clients inherit (no per-client brand) |
 | D2 | Super admin approval before a brand shows | Yes (`white_label_enabled`) |
 | D3 | Parent's own dashboard also shows its brand | Yes |
-| D4 | Billing pages, statements and billing emails | Stay WBMSG-branded (billing is between WBMSG and each organization). **Contract question for you**: clients may object to seeing WBMSG there |
+| D4 | Billing and statement emails to a CLIENT organization (statements, payment confirmations and failures, sending-paused and usage alerts, cancellation notices, closure notices) | **Decided by the owner (2026-10-22):** sent through the parent's email service with the parent's brand. Emails to the parent's own billing contacts, owner summaries and admin emails stay on our sender and brand. The legal seller identity stays in the body and on PDFs |
+| D4a | Billing web pages for a client organization | Stay WBMSG-branded unless you say otherwise (open) |
 | D5 | "Powered by WBMSG" | Hidden when white-label is on (check your terms) |
 | D6 | Branded sign-in at a path (`wbmsg.com/c/<slug>`) | Yes (no domain needed) |
 | D7 | Logo formats | png, jpg, webp (favicon also ico); no SVG |
@@ -96,7 +97,7 @@ Owner request (2026-10-22): the brand's emails must be able to go out through th
 | D10 | Email providers in the first release | SMTP plus SendGrid, Mailgun, Postmark, Resend, Brevo, Amazon SES; Gmail API and Microsoft Graph (OAuth) later |
 | D11 | Who configures the email provider | The parent admin; clients inherit |
 | D12 | If the client's provider fails | Fall back once to our sender, mark failing after 3 failures, tell the parent admin |
-| D13 | Which emails use the client's provider | Sign-in codes, password changed, team and client invitations, closure notices. Billing and statements stay on our sender |
+| D13 | Which emails use the client's provider | Sign-in codes, password changed, team and client invitations, closure notices, and (D4) billing and statement emails to a client organization. Our own sender for the parent's own billing, owner summaries and admin emails |
 | D14 | Sending through an unverified setting | No: a successful test send is required first |
 
 ## 7. Acceptance criteria
@@ -118,5 +119,6 @@ No global flag: the gate is `white_label_enabled` per parent (default off, so ze
 - Impersonation of other companies through the brand name: mitigated by D2 (super admin approval), but needs an approval checklist.
 - About 40 static strings and about 12 logo spots must all be found; the string-leak test is the net.
 - The Next.js behaviour of merging per-segment icons and the manifest is **Unverified**; a dynamic manifest is Phase 2.
-- Whether billing is paid by each client or by the parent is not decided (affects D4).
+- Billing emails branded as the parent while WBMSG is the legal seller: statements and PDFs must keep the legal seller identity (tax and GST rules require the supplier's name and number); a client may think the parent is billing them. Whether each client pays WBMSG directly or the parent pays for them is not decided; a model where the parent bills its clients would be a separate billing project.
+- Payment links in these emails open our payment provider's page (WBMSG/Conveys account) and cannot carry the parent's brand.
 - Contract and terms: not an engineering item.
