@@ -8,7 +8,7 @@ import { ResetPasswordForm } from "./ResetPasswordForm";
 import { TURNSTILE_ENABLED, Turnstile } from "./Turnstile";
 import { ErrorText, SubmitButton, TextField, styles } from "./fields";
 
-export function ForgotPasswordForm(): JSX.Element {
+export function ForgotPasswordForm({ signInHref = "/sign-in" }: { signInHref?: string }): JSX.Element {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
@@ -61,7 +61,7 @@ export function ForgotPasswordForm(): JSX.Element {
         Send code
       </SubmitButton>
       <p className={s.muted}>
-        <Link href="/sign-in" className={s.link}>
+        <Link href={signInHref} className={s.link}>
           Back to sign in
         </Link>
       </p>

@@ -56,15 +56,14 @@ const ALLOW: Record<string, string> = {
   // root metadata, brand defaults, mail
   "app/layout.tsx": "root metadata for the public site; a branded dashboard overrides it through brandMetadata",
   "lib/brand.ts": "the DEFAULT_BRAND definition itself",
+  "components/brand/AuthLogo.tsx": "the default logo asset path /wbmsg_logo.png (a file name, not text)",
   "components/brand/BrandLogo.tsx": "the default logo asset path /wbmsg_logo.png (a file name, not text)",
   "lib/auth/jwt.ts": "JWT issuer / audience identifiers: protocol values that must match the API, never shown",
   "lib/mail-from.ts": "fallback From-name of outgoing mail when no usable name is left",
   // auth surfaces handled in A6
-  "app/(auth)/sign-in/[[...sign-in]]/page.tsx": AUTH,
   "app/(auth)/sign-in/confirm-email/page.tsx": AUTH,
   "app/(auth)/sign-up/[[...sign-up]]/page.tsx": AUTH,
   "app/invitations/[token]/accept/page.tsx": AUTH,
-  "components/auth/SignInForm.tsx": AUTH,
   "components/parent/ClientAcceptView.tsx": "client-invitation accept page (token based, no signed-in org yet): A6",
   "lib/auth/oauth.ts": "sign-in error messages (auth surface, A6)",
   // other
