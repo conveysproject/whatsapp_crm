@@ -7,7 +7,7 @@ describe("sanitizeFromName", () => {
     ["Evil\r\nBcc: x@y.z", "Evil Bcc: x@y.z"],
     ['Quo"ted', "Quoted"],
     ["A <b@c.d>", "A b@c.d"],
-    ["back\slash, comma; semi", "backslash comma semi"],
+    ["back\\slash, comma; semi", "backslash comma semi"],
     ["  many   spaces  ", "many spaces"],
     ["nul\u0000byte\u0007bell", "nul byte bell"],
     ["x".repeat(200), "x".repeat(60)],
@@ -23,6 +23,32 @@ describe("sanitizeFromName", () => {
   });
   it("never leaves a CR, LF or NUL", () => {
     expect(sanitizeFromName("a\r\nb\nc\rd\u0000e")).not.toMatch(/[\r\n\u0000]/);
+  });
+});
+
+// KEEP IN SYNC with PLAIN_EMAIL_CASES in apps/api/src/lib/brand.test.ts (same literal, same rules).
+const PLAIN_EMAIL_CASES: [string, boolean][] = [
+  ["help@acme.test", true],
+  ["help+tag@acme.test", true],
+  ["help@mail.sub.acme.test", true],
+  ["o'brien@x.com", false],
+  ["a,b@x.com", false],
+  ["a;b@x.com", false],
+  ["a(b)@x.com", false],
+  ["a[b]@x.com", false],
+  ["a:b@x.com", false],
+  ["a\\b@x.com", false],
+  ["<a@x.com>", false],
+  ['a"b@x.com', false],
+  ["a b@x.com", false],
+  ["a@b@x.com", false],
+  ["a@xcom", false],
+  [`${"a".repeat(250)}@x.com`, false],
+];
+
+describe("isPlainEmail table", () => {
+  it.each(PLAIN_EMAIL_CASES)("%j -> %s", (input, expected) => {
+    expect(isPlainEmail(input)).toBe(expected);
   });
 });
 

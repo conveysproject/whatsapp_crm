@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import { DEFAULT_BRAND, isAllowedAssetUrl, resolveBrand, type Brand } from "./brand.js";
+import { DEFAULT_BRAND, PLAIN_EMAIL_RE, isAllowedAssetUrl, resolveBrand, type Brand } from "./brand.js";
 import { normalizeEmail } from "../auth/ids.js";
 
 /** What a template needs from a brand. `isDefault` marks the WBMSG default (rendered as today). */
@@ -20,7 +20,7 @@ export function brandMailExtras(brand: EmailBrand | undefined | null): { fromNam
   if (!b) return {};
   // The web relay sanitizes again; this keeps CR/LF and brackets out of the request in the first place.
   const fromName = subjectText(b.name).slice(0, 60).trim();
-  const replyTo = b.supportEmail && SAFE_EMAIL_RE.test(b.supportEmail) ? b.supportEmail : undefined;
+  const replyTo = b.supportEmail && PLAIN_EMAIL_RE.test(b.supportEmail) ? b.supportEmail : undefined;
   return { ...(fromName ? { fromName } : {}), ...(replyTo ? { replyTo } : {}) };
 }
 
@@ -30,7 +30,6 @@ export function subjectText(s: string): string {
   return s.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
 }
 
-const SAFE_EMAIL_RE = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
 
 /** Logo image when the URL is an allowed asset, else a text wordmark of the brand name. All values escaped. */
 export function brandMark(brand: EmailBrand, wordmarkStyle: string): string {
@@ -44,7 +43,7 @@ export function brandMark(brand: EmailBrand, wordmarkStyle: string): string {
 /** Footer line: brand name, support email as a mailto link, and (unless hidden) "Powered by WBMSG". No wbmsg.com link. */
 export function brandFooterInner(brand: EmailBrand): string {
   const parts = [escapeHtml(brand.name)];
-  if (brand.supportEmail && SAFE_EMAIL_RE.test(brand.supportEmail)) {
+  if (brand.supportEmail && PLAIN_EMAIL_RE.test(brand.supportEmail)) {
     const e = escapeHtml(brand.supportEmail);
     parts.push(`<a href="mailto:${e}" style="color:#6b7280;text-decoration:none">${e}</a>`);
   }

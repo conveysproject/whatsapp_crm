@@ -48,7 +48,13 @@ export const RESERVED_SLUGS: readonly string[] = [
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+/**
+ * One plain address: the single source of truth for support emails. Identical rules to the web relay's
+ * `isPlainEmail` (apps/web/lib/mail-from.ts): no whitespace, no second @, none of , ; < > " ' ( ) [ ] \ :,
+ * a dot in the domain, at most 254 characters. An address failing it would make the relay refuse the email.
+ */
+export const PLAIN_EMAIL_RE = /^(?=.{1,254}$)[^\s@,;<>"'()[\]\\:]+@[^\s@,;<>"'()[\]\\:]+\.[^\s@,;<>"'()[\]\\:]+$/;
+const HAS_LETTER_OR_DIGIT_RE = /[\p{L}\p{N}]/u;
 // eslint-disable-next-line no-control-regex
 const BAD_NAME_RE = /[<>\u0000-\u001f\u007f]/;
 
@@ -66,6 +72,7 @@ export function validateBrandInput(
   const name = typeof o["name"] === "string" ? o["name"].trim() : "";
   if (name.length < 2 || name.length > 40) return fail("name", "Brand name must be 2 to 40 characters");
   if (BAD_NAME_RE.test(name)) return fail("name", "Brand name cannot contain < > or control characters");
+  if (!HAS_LETTER_OR_DIGIT_RE.test(name)) return fail("name", "Brand name must contain at least one letter or number");
 
   const color = o["color"];
   if (typeof color !== "string" || !HEX_RE.test(color)) return fail("color", "Color must look like #1a2b3c");
@@ -73,8 +80,8 @@ export function validateBrandInput(
   let supportEmail: string | null = null;
   const email = o["supportEmail"];
   if (email !== undefined && email !== null && email !== "") {
-    if (typeof email !== "string" || email.length > 254 || !EMAIL_RE.test(email.trim())) {
-      return fail("supportEmail", "Enter a valid support email address");
+    if (typeof email !== "string" || email.length > 254 || !PLAIN_EMAIL_RE.test(email.trim())) {
+      return fail("supportEmail", "Enter a plain email address without spaces, commas, quotes, brackets or colons");
     }
     supportEmail = email.trim();
   }
