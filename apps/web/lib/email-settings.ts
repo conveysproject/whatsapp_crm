@@ -281,7 +281,13 @@ export function validateMailgunDomain(v: string): string | null {
   return MAILGUN_HOST_RE.test(v.trim().toLowerCase()) ? null : "Sending domain must be a valid hostname";
 }
 export function validateFromAddress(v: string): string | null {
-  return isPlainEmail(v.trim()) ? null : "From address must be a single email address";
+  const t = v.trim();
+  if (!isPlainEmail(t)) return "From address must be a single email address";
+  const domain = t.slice(t.lastIndexOf("@") + 1).toLowerCase();
+  if (["wbmsg.com", "conveys.in"].some((d) => domain === d || domain.endsWith(`.${d}`))) {
+    return "Use your own domain: wbmsg.com and conveys.in addresses cannot be used";
+  }
+  return null;
 }
 export function validateReplyTo(v: string): string | null {
   const t = v.trim();

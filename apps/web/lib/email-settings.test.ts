@@ -203,6 +203,9 @@ describe("validators", () => {
   });
   it("from address uses the plain-email rule; reply-to is optional", () => {
     expect(validateFromAddress("a@b.co")).toBeNull();
+    expect(validateFromAddress("a@wbmsg.com")).toMatch(/own domain/);
+    expect(validateFromAddress("a@mail.Conveys.in")).toMatch(/own domain/);
+    expect(validateFromAddress("a@notwbmsg.com")).toBeNull();
     for (const a of ["", "a@b", "a b@c.co", "A <a@b.co>", "a@b.co,c@d.co", '"a"@b.co']) expect(validateFromAddress(a)).not.toBeNull();
     expect(validateReplyTo("")).toBeNull();
     expect(validateReplyTo("a@b.co")).toBeNull();

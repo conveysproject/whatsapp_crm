@@ -23,6 +23,7 @@ const ALLOW: Record<string, string> = {
   "components/billing/CancelAccountCard.tsx": BILLING,
   "lib/billing-cancellation.ts": BILLING,
   "lib/billing-standing.ts": BILLING,
+  "lib/email-settings.ts": "reserved sender domains: the product and seller domains cannot be used as a client From address",
   // public marketing, legal and docs
   "app/(public)/cancellation-policy/page.tsx": PUBLIC,
   "app/(public)/contact/page.tsx": PUBLIC,

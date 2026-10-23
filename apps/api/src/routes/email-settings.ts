@@ -65,6 +65,12 @@ function secretField(provider: string): "pass" | "apiKey" {
   return provider === "smtp" ? "pass" : "apiKey";
 }
 
+const RESERVED_SENDER_DOMAINS = ["wbmsg.com", "conveys.in"];
+function isReservedSenderDomain(address: string): boolean {
+  const domain = address.slice(address.lastIndexOf("@") + 1).toLowerCase();
+  return RESERVED_SENDER_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`));
+}
+
 export const emailSettingsRoutes: FastifyPluginAsync = async (fastify) => {
   /** Admin role only, a parent-capable org, never an impersonation session. Org id comes from request.auth only. */
   async function guard(request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> {
@@ -125,6 +131,9 @@ export const emailSettingsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const fromAddress = typeof b["fromAddress"] === "string" ? b["fromAddress"].trim() : "";
     if (!PLAIN_EMAIL_RE.test(fromAddress)) return validationFailed(reply, "fromAddress", "From address must be a single email address");
+    if (isReservedSenderDomain(fromAddress)) {
+      return validationFailed(reply, "fromAddress", "Use your own domain: wbmsg.com and conveys.in addresses cannot be used");
+    }
 
     let fromName: string | null = null;
     const fn = b["fromName"];
