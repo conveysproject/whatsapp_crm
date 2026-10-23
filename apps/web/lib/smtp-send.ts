@@ -33,10 +33,22 @@ export type SmtpSendResult = { ok: true } | { ok: false; retryable: boolean; rea
 
 export interface SmtpSendDeps extends SafeHostDeps {
   createTransport?: typeof nodemailer.createTransport;
+  /** Test seam only (never reachable from the route): replaces the SSRF-safe resolver. */
+  resolveHost?: typeof resolveSafeSmtpHost;
 }
 
-// Fixed and brand-neutral: nodemailer would otherwise send the serverless host name.
-const EHLO_NAME = "mail-relay.localdomain";
+/** Hard cap for one send: DNS (5 s) + connect/greeting (10 s each) + socket idle would otherwise reach ~40 s. */
+export const SMTP_SEND_DEADLINE_MS = 25_000;
+
+// Brand-neutral default: nodemailer would otherwise send the serverless host name.
+const DEFAULT_EHLO_NAME = "mail-relay.localdomain";
+const EHLO_RE = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/i;
+
+/** SMTP_EHLO_NAME when it is a valid hostname, else the default. */
+function ehloName(): string {
+  const v = process.env["SMTP_EHLO_NAME"];
+  return v && EHLO_RE.test(v) ? v : DEFAULT_EHLO_NAME;
+}
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000\r\n]/;
@@ -53,6 +65,7 @@ export function isValidSmtpSettings(s: unknown): s is SmtpSettings {
   if (typeof o["security"] !== "string" || !(SMTP_SECURITY as readonly string[]).includes(o["security"])) return false;
   if (o["allowPlain"] !== undefined && typeof o["allowPlain"] !== "boolean") return false;
   if (o["security"] === "plain" && o["allowPlain"] !== true) return false;
+  if (o["security"] !== "plain" && o["allowPlain"] !== undefined) return false;
   const user = o["user"];
   if (typeof user !== "string" || user.length < 1 || user.length > 255 || CONTROL.test(user)) return false;
   const pass = o["pass"];
@@ -73,6 +86,21 @@ const CERT_CODES = new Set([
   "CERT_REVOKED",
   "HOSTNAME_MISMATCH",
 ]);
+const CERT_MESSAGE_RE = new RegExp(
+  [
+    "self[- ]signed certificate",
+    "certificate has expired",
+    "unable to verify the (first|leaf signature)",
+    "unable to get (local )?issuer certificate",
+    "does not match certificate's altnames",
+    "Hostname/IP does not match",
+    "certificate is not yet valid",
+    "certificate (has been )?revoked",
+    "unsuitable certificate purpose",
+    "ERR_TLS_CERT_ALTNAME_INVALID",
+  ].join("|"),
+  "i",
+);
 const CONNECTION_CODES = new Set(["ECONNECTION", "ETIMEDOUT", "ESOCKET", "ECONNRESET", "EDNS", "ECONNREFUSED", "EHOSTUNREACH", "ENETUNREACH", "ETLS"]);
 
 function codesOf(err: unknown): string[] {
@@ -91,7 +119,10 @@ export function mapSmtpError(err: unknown): SmtpSendResult {
   const codes = codesOf(err);
   const rc = typeof err === "object" && err !== null ? (err as { responseCode?: unknown }).responseCode : undefined;
   const responseCode = typeof rc === "number" ? rc : undefined;
-  if (codes.some((c) => CERT_CODES.has(c))) return fail(false, "certificate not trusted");
+  // nodemailer overwrites err.code with ESOCKET for TLS failures, so also recognise Node's fixed
+  // verification texts. The message is only matched, never returned or logged.
+  const text = typeof err === "object" && err !== null && typeof (err as { message?: unknown }).message === "string" ? (err as { message: string }).message : "";
+  if (codes.some((c) => CERT_CODES.has(c)) || CERT_MESSAGE_RE.test(text)) return fail(false, "certificate not trusted");
   if (codes.includes("EAUTH") || responseCode === 535) return fail(false, "authentication failed");
   if (codes.some((c) => CONNECTION_CODES.has(c))) return fail(true, "connection failed");
   if (responseCode !== undefined && responseCode >= 500) return fail(false, "rejected by server");
@@ -107,7 +138,7 @@ export async function sendViaSmtp(smtp: SmtpSettings, message: SmtpMessage, deps
   if (!isPlainEmail(to) || typeof subject !== "string" || typeof html !== "string") return INVALID;
   if (replyTo !== undefined && replyTo !== "" && !isPlainEmail(replyTo)) return INVALID;
 
-  const resolved = await resolveSafeSmtpHost(smtp.host, deps.lookup ? { lookup: deps.lookup } : {});
+  const resolved = await (deps.resolveHost ?? resolveSafeSmtpHost)(smtp.host, deps.lookup ? { lookup: deps.lookup } : {});
   if (!resolved.ok) {
     if (resolved.reason === "unresolvable") return fail(true, "connection failed");
     return fail(false, "host not allowed");
@@ -132,7 +163,7 @@ export async function sendViaSmtp(smtp: SmtpSettings, message: SmtpMessage, deps
     disableFileAccess: true,
     disableUrlAccess: true,
     auth: { user: smtp.user, pass: smtp.pass },
-    name: EHLO_NAME,
+    name: ehloName(),
     logger: false,
     debug: false,
   };
@@ -140,13 +171,24 @@ export async function sendViaSmtp(smtp: SmtpSettings, message: SmtpMessage, deps
   let transport: ReturnType<typeof nodemailer.createTransport> | undefined;
   try {
     transport = (deps.createTransport ?? nodemailer.createTransport)(options);
-    await transport.sendMail({
+    const sending = transport.sendMail({
       from: buildFrom(fromName, smtp.fromAddress),
       to,
       subject,
       html,
       ...(replyTo ? { replyTo } : {}),
     });
+    sending.catch(() => {}); // a late rejection after the deadline must not be unhandled
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<"deadline">((resolve) => {
+      timer = setTimeout(() => resolve("deadline"), SMTP_SEND_DEADLINE_MS);
+    });
+    try {
+      const winner = await Promise.race([sending.then(() => "sent" as const), deadline]);
+      if (winner === "deadline") return fail(true, "connection failed");
+    } finally {
+      clearTimeout(timer);
+    }
     return { ok: true };
   } catch (err: unknown) {
     return mapSmtpError(err);

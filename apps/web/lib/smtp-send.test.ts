@@ -189,3 +189,81 @@ describe("transport lifecycle", () => {
     expect(await run()).toEqual({ ok: false, retryable: true, reason: "send failed" });
   });
 });
+
+describe("certificate failures reported only through ESOCKET and a message", () => {
+  // nodemailer overwrites err.code with ESOCKET and keeps Node's TLS text in the message.
+  const msgs = [
+    "self-signed certificate",
+    "self signed certificate in certificate chain",
+    "certificate has expired",
+    "unable to verify the first certificate",
+    "unable to verify the leaf signature",
+    "unable to get local issuer certificate",
+    "unable to get issuer certificate",
+    "Hostname/IP does not match certificate's altnames: Host: x. is not in the cert's altnames: DNS:y",
+    "certificate is not yet valid",
+    "certificate revoked",
+    "certificate has been revoked",
+    "unsuitable certificate purpose",
+    "ERR_TLS_CERT_ALTNAME_INVALID",
+  ];
+  it.each(msgs)("%s => certificate not trusted", async (m) => {
+    sendMail.mockRejectedValueOnce(Object.assign(new Error(m), { code: "ESOCKET" }));
+    const r = await run();
+    expect(r).toEqual({ ok: false, retryable: false, reason: "certificate not trusted" });
+    expect(JSON.stringify(r)).not.toContain(m);
+  });
+  it("matches case-insensitively and never logs the message", async () => {
+    sendMail.mockRejectedValueOnce(Object.assign(new Error("SELF-SIGNED CERTIFICATE"), { code: "ESOCKET" }));
+    expect(await run()).toMatchObject({ retryable: false, reason: "certificate not trusted" });
+    const all = logSpies.flatMap((s) => s.mock.calls).map((c) => JSON.stringify(c)).join("\n");
+    expect(all.toLowerCase()).not.toContain("self-signed");
+  });
+  it("a plain socket error stays retryable", async () => {
+    sendMail.mockRejectedValueOnce(Object.assign(new Error("read ECONNRESET"), { code: "ESOCKET" }));
+    expect(await run()).toEqual({ ok: false, retryable: true, reason: "connection failed" });
+  });
+});
+
+describe("overall deadline", () => {
+  afterEach(() => vi.useRealTimers());
+  it("gives up after 25 s, closes the transport and clears the timer", async () => {
+    vi.useFakeTimers();
+    sendMail.mockImplementationOnce(() => new Promise(() => {}));
+    const p = run();
+    await vi.advanceTimersByTimeAsync(24999);
+    expect(close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2);
+    expect(await p).toEqual({ ok: false, retryable: true, reason: "connection failed" });
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("clears the timer after a normal send", async () => {
+    vi.useFakeTimers();
+    expect(await run()).toEqual({ ok: true });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("allowPlain and EHLO name", () => {
+  it("rejects allowPlain true unless security is plain", async () => {
+    for (const security of ["ssl", "starttls"]) {
+      expect(await run({ security, allowPlain: true })).toEqual({ ok: false, retryable: false, reason: "invalid configuration" });
+    }
+    expect(createTransport).not.toHaveBeenCalled();
+  });
+  it("uses SMTP_EHLO_NAME when it is a valid hostname, else the default", async () => {
+    vi.stubEnv("SMTP_EHLO_NAME", "relay.example.net");
+    await run();
+    expect(opts().name).toBe("relay.example.net");
+    createTransport.mockClear();
+    vi.stubEnv("SMTP_EHLO_NAME", "bad name\r\nQUIT");
+    await run();
+    expect(opts().name).toBe("mail-relay.localdomain");
+    createTransport.mockClear();
+    vi.stubEnv("SMTP_EHLO_NAME", "");
+    await run();
+    expect(opts().name).toBe("mail-relay.localdomain");
+    vi.unstubAllEnvs();
+  });
+});
