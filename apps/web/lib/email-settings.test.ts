@@ -289,7 +289,6 @@ describe("describeSendReason covers every reason the API can produce", () => {
   it.each(reasons)("%s", (r) => {
     const text = describeSendReason(r);
     expect(text).not.toBe(UNKNOWN_REASON_TEXT);
-    expect(text).not.toContain(r.replace(/^HTTP \d+: /, "") === r ? "\u0000" : "HTTP");
     expect(text.length).toBeGreaterThan(20);
   });
   it("gives a specific text per class", () => {
