@@ -7,6 +7,7 @@ import { postmarkTransport } from "./providers/postmark.js";
 import { resendTransport } from "./providers/resend.js";
 import { brevoTransport } from "./providers/brevo.js";
 import { sparkpostTransport } from "./providers/sparkpost.js";
+import { buildSmtpTransport, validateSmtpConfig, type SmtpConfig } from "./providers/smtp.js";
 
 export interface OutboundEmail {
   from: { name: string | null; address: string };
@@ -25,9 +26,13 @@ export interface EmailTransport {
 
 export const HTTP_PROVIDERS = ["sendgrid", "mailgun", "postmark", "resend", "brevo", "sparkpost"] as const;
 
-export type ProviderConfig =
+export type HttpProviderConfig =
   | { provider: "sendgrid" | "resend" | "postmark" | "brevo" | "sparkpost"; apiKey: string; region?: "us" | "eu" }
   | { provider: "mailgun"; apiKey: string; domain: string; region: "us" | "eu" };
+
+export type SmtpProviderConfig = { provider: "smtp" } & SmtpConfig;
+
+export type ProviderConfig = HttpProviderConfig | SmtpProviderConfig;
 
 export type FetchLike = typeof fetch;
 
@@ -37,7 +42,7 @@ export function isValidMailgunDomain(domain: string): boolean {
   return HOSTNAME_RE.test(domain);
 }
 
-export function buildHttpTransport(config: ProviderConfig, fetchImpl: FetchLike = fetch): EmailTransport {
+export function buildHttpTransport(config: HttpProviderConfig, fetchImpl: FetchLike = fetch): EmailTransport {
   switch (config.provider) {
     case "sendgrid":
       return sendgridTransport(config.apiKey, config.region ?? "us", fetchImpl);
@@ -57,12 +62,22 @@ export function buildHttpTransport(config: ProviderConfig, fetchImpl: FetchLike 
   }
 }
 
+/** Builds the transport for any provider: HTTP APIs directly, SMTP through the web relay. */
+export function buildTransport(config: ProviderConfig, fetchImpl: FetchLike = fetch): EmailTransport {
+  if (config.provider === "smtp") return buildSmtpTransport(config, { fetchImpl });
+  return buildHttpTransport(config, fetchImpl);
+}
+
 type Validation = { ok: true; config: ProviderConfig } | { ok: false; field: string; message: string };
 
 const fail = (field: string, message: string): Validation => ({ ok: false, field, message });
 
 // Messages never include the submitted value, so a malformed key is not echoed.
 export function validateProviderConfig(provider: string, raw: unknown): Validation {
+  if (provider === "smtp") {
+    const v = validateSmtpConfig(raw);
+    return v.ok ? { ok: true, config: { provider: "smtp", ...v.config } } : v;
+  }
   if (!(HTTP_PROVIDERS as readonly string[]).includes(provider)) return fail("provider", "Unknown email provider");
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return fail("config", "Configuration must be an object");
   const r = raw as Record<string, unknown>;
@@ -94,7 +109,8 @@ export function validateProviderConfig(provider: string, raw: unknown): Validati
   return { ok: true, config };
 }
 
-/** For logging and audit: the config with the API key masked. */
+/** For logging and audit: the config with the API key (or SMTP password) masked; the SMTP user is kept. */
 export function redactConfig<T extends ProviderConfig>(config: T): T {
+  if (config.provider === "smtp") return { ...config, pass: "***" };
   return { ...config, apiKey: "***" };
 }

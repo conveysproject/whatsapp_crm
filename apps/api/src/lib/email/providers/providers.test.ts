@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildHttpTransport, type ProviderConfig, type OutboundEmail } from "../transport.js";
+import { buildHttpTransport, type HttpProviderConfig, type OutboundEmail } from "../transport.js";
 
 const KEY = "test-key-123";
 const mail: OutboundEmail = {
@@ -20,9 +20,9 @@ const call = (f: F) => {
   const [url, init] = f.mock.calls[0] as [string, RequestInit];
   return { url, init, headers: init.headers as Record<string, string>, json: () => JSON.parse(init.body as string) };
 };
-const send = (c: ProviderConfig, f: F, m: OutboundEmail = mail) => buildHttpTransport(c, f as unknown as typeof fetch).send(m);
+const send = (c: HttpProviderConfig, f: F, m: OutboundEmail = mail) => buildHttpTransport(c, f as unknown as typeof fetch).send(m);
 
-const cfgs: ProviderConfig[] = [
+const cfgs: HttpProviderConfig[] = [
   { provider: "sendgrid", apiKey: KEY },
   { provider: "mailgun", apiKey: KEY, domain: "mg.acme.test", region: "us" },
   { provider: "postmark", apiKey: KEY },

@@ -77,7 +77,6 @@ describe("validateProviderConfig", () => {
 
   it("rejects unknown providers and non-object input", () => {
     expect(validateProviderConfig("mailchimp", { apiKey: KEY })).toMatchObject({ ok: false, field: "provider" });
-    expect(validateProviderConfig("smtp", { apiKey: KEY })).toMatchObject({ ok: false, field: "provider" });
     expect(validateProviderConfig("resend", null)).toMatchObject({ ok: false });
     expect(validateProviderConfig("resend", "x")).toMatchObject({ ok: false });
   });
