@@ -6,9 +6,10 @@ import { canAccessSub } from "../lib/permissions.js";
 import { canGrantRole } from "../lib/role-grants.js";
 import { verifyBearer } from "../auth/identity.js";
 import { normalizeEmail } from "../auth/ids.js";
-import { sendMail, isEmailConfigured } from "../lib/mail.js";
+import { isEmailConfigured } from "../lib/mail.js";
+import { sendOrgMail } from "../lib/email/org-mail.js";
 import { buildInvitationEmail, invitationAcceptUrl, invitationSubject } from "../lib/invitation-email.js";
-import { activeBrand, brandForOrg, brandMailExtras } from "../lib/email-brand.js";
+import { activeBrand, brandForOrg } from "../lib/email-brand.js";
 import { previewBrandPayload } from "../lib/brand.js";
 
 class InvitationGone extends Error {}
@@ -143,13 +144,16 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       // Fixed template, recipient is the invitation's own address. sendMail relays
-      // through the web app (Railway cannot reach SMTP) with the internal secret.
+      // through the web app (Railway cannot reach SMTP) with the internal secret, or through the
+      // inviting org's own verified email provider when one applies (sendOrgMail).
       let emailSent = false;
       try {
         if (isEmailConfigured()) {
           // The invitee sees the inviting organization's effective brand (its own if approved, else its parent's).
           const brand = activeBrand(await brandForOrg(prisma, request.auth.organizationId));
-          await sendMail({
+          await sendOrgMail(prisma, {
+            orgId: request.auth.organizationId,
+            logger: request.log,
             to: invitation.email,
             subject: invitationSubject(brand),
             html: buildInvitationEmail({
@@ -157,7 +161,7 @@ export const invitationRoutes: FastifyPluginAsync = async (fastify) => {
               acceptUrl: invitationAcceptUrl(invitation.token),
               ...(brand ? { brand } : {}),
             }),
-            ...brandMailExtras(brand),
+            brand: brand ?? null,
           });
           emailSent = true;
         } else {

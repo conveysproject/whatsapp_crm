@@ -377,7 +377,8 @@ describe("pending email confirmation", () => {
     await settleOAuthWork();
     expect(res.statusCode).toBe(202);
     expect(m.issueCode).toHaveBeenCalledWith(prisma, { purpose: "email_verify", target: "ann@x.com" });
-    expect(m.sendCodeEmail).toHaveBeenCalledWith("ann@x.com", "email_verify", "123456", expect.stringContaining("Facebook"));
+    // A known account passes its org delivery as trailing arguments; only the leading ones are asserted.
+    expect(m.sendCodeEmail.mock.calls[0]?.slice(0, 4)).toEqual(["ann@x.com", "email_verify", "123456", expect.stringContaining("Facebook")]);
     expect(JSON.parse(m.store.get(`auth:oauth:pending:${pendingId}`)!)).toMatchObject({ target: "ann@x.com", codeId: "code1" });
   });
 

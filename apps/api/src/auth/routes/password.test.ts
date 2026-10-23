@@ -121,7 +121,8 @@ describe("auth password routes", () => {
         target: "foo@x.com",
         accountId: "usr_a",
       });
-      expect(m.sendCodeEmail).toHaveBeenCalledWith("foo@x.com", "password_reset", "123456");
+      // A known account passes its org delivery as trailing arguments; only the leading ones are asserted.
+      expect(m.sendCodeEmail.mock.calls[0]?.slice(0, 3)).toEqual(["foo@x.com", "password_reset", "123456"]);
     });
 
     it("must_set_password account (unverified) is eligible; inactive or unverified-without-flag is not", async () => {
@@ -172,7 +173,8 @@ describe("auth password routes", () => {
       expect(m.revokeAllSessions).toHaveBeenCalledWith(prisma, "usr_a", "password_reset");
       expect(m.clearPasswordFailures).toHaveBeenCalledWith("usr_a");
       await settlePasswordWork();
-      expect(m.sendPasswordChangedEmail).toHaveBeenCalledWith("foo@x.com");
+      // A known account passes its org delivery as trailing arguments; only the leading ones are asserted.
+      expect(m.sendPasswordChangedEmail.mock.calls[0]?.slice(0, 1)).toEqual(["foo@x.com"]);
       expect(m.createSession).not.toHaveBeenCalled();
     });
 
@@ -281,7 +283,8 @@ describe("auth password routes", () => {
       expect(data.passwordChangedAt).toBeInstanceOf(Date);
       expect(m.revokeAllSessions).toHaveBeenCalledWith(prisma, "usr_a", "password_change", "s1");
       await settlePasswordWork();
-      expect(m.sendPasswordChangedEmail).toHaveBeenCalledWith("foo@x.com");
+      // A known account passes its org delivery as trailing arguments; only the leading ones are asserted.
+      expect(m.sendPasswordChangedEmail.mock.calls[0]?.slice(0, 1)).toEqual(["foo@x.com"]);
     });
 
     it("wrong current password -> 401 and a failure is recorded", async () => {
