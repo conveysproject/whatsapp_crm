@@ -18,7 +18,7 @@ vi.mock("./transport.js", async (orig) => ({
   buildTransport: (...a: unknown[]) => mockBuildTransport(...a),
 }));
 
-import { resolveEmailRoute, sendOrgMail } from "./org-mail.js";
+import { countsTowardFailing, sendOrgMail } from "./org-mail.js";
 import { encryptJson } from "../secret-box.js";
 
 const prisma = {
@@ -28,6 +28,8 @@ const prisma = {
 };
 const db = prisma as unknown as PrismaClient;
 const logger = { warn: vi.fn() };
+
+const UPDATED_AT = new Date("2026-01-02T00:00:00Z");
 
 function settings(over: Record<string, unknown> = {}) {
   return {
@@ -40,6 +42,7 @@ function settings(over: Record<string, unknown> = {}) {
     configEnc: encryptJson({ provider: "sendgrid", apiKey: SECRET }),
     status: "verified",
     consecutiveFailures: 0,
+    updatedAt: UPDATED_AT,
     ...over,
   };
 }
@@ -69,54 +72,92 @@ beforeEach(() => {
   prisma.user.findMany.mockReset().mockResolvedValue([{ email: "admin@acme.test" }]);
 });
 
-describe("resolveEmailRoute", () => {
-  it("own verified settings for a parent", async () => {
-    const r = await resolveEmailRoute(db, "parent-1");
-    expect(r).toMatchObject({
-      ownerOrgId: "parent-1",
-      settingsId: "set-1",
-      provider: "sendgrid",
-      from: { name: "Acme", address: "no-reply@acme.test" },
-      replyTo: "help@acme.test",
-    });
-    expect(r?.config).toMatchObject({ provider: "sendgrid", apiKey: SECRET });
+// Route resolution is internal (it holds the decrypted config); it is observed through which sender was used.
+const viaProvider = () => mockProviderSend.mock.calls.length === 1 && mockSendMail.mock.calls.length === 0;
+const viaDefault = () => mockProviderSend.mock.calls.length === 0 && mockSendMail.mock.calls.length === 1;
+
+describe("route resolution (observed through sendOrgMail)", () => {
+  it("own verified settings for a parent; the settings are read for that org", async () => {
+    await sendOrgMail(db, { orgId: "parent-1", ...args });
+    expect(viaProvider()).toBe(true);
+    expect(mockBuildTransport.mock.calls[0]![0]).toMatchObject({ provider: "sendgrid", apiKey: SECRET });
     expect(prisma.orgEmailSettings.findUnique.mock.calls[0]![0].where).toEqual({ organizationId: "parent-1" });
   });
-  it("client of an approved parent uses the parent's settings", async () => {
+  it("client of an approved parent uses the parent settings", async () => {
     prisma.organization.findUnique.mockResolvedValue(clientOrg());
-    const r = await resolveEmailRoute(db, "client-1");
-    expect(r?.ownerOrgId).toBe("parent-1");
+    await sendOrgMail(db, { orgId: "client-1", ...args });
+    expect(viaProvider()).toBe(true);
     expect(prisma.orgEmailSettings.findUnique.mock.calls[0]![0].where).toEqual({ organizationId: "parent-1" });
   });
-  it("client of a parent without white-label => null, no settings query", async () => {
+  it("client of a parent without white-label => default, no settings query", async () => {
     prisma.organization.findUnique.mockResolvedValue(clientOrg({ isParent: true, whiteLabelEnabled: false }));
-    expect(await resolveEmailRoute(db, "client-1")).toBeNull();
+    await sendOrgMail(db, { orgId: "client-1", ...args });
+    expect(viaDefault()).toBe(true);
     expect(prisma.orgEmailSettings.findUnique).not.toHaveBeenCalled();
   });
-  it.each(["unverified", "failing"])("%s => null", async (status) => {
+  it.each(["unverified", "failing"])("%s => default, no bookkeeping", async (status) => {
     prisma.orgEmailSettings.findUnique.mockResolvedValue(settings({ status }));
-    expect(await resolveEmailRoute(db, "parent-1")).toBeNull();
+    await sendOrgMail(db, { orgId: "parent-1", ...args });
+    expect(viaDefault()).toBe(true);
+    expect(prisma.orgEmailSettings.update).not.toHaveBeenCalled();
   });
-  it("no settings => null; unknown org => null", async () => {
+  it("no settings => default; unknown org => default", async () => {
     prisma.orgEmailSettings.findUnique.mockResolvedValue(null);
-    expect(await resolveEmailRoute(db, "parent-1")).toBeNull();
+    await sendOrgMail(db, { orgId: "parent-1", ...args });
+    expect(viaDefault()).toBe(true);
+    mockSendMail.mockClear();
     prisma.organization.findUnique.mockResolvedValue(null);
-    expect(await resolveEmailRoute(db, "x")).toBeNull();
+    await sendOrgMail(db, { orgId: "x", ...args });
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    expect(mockProviderSend).not.toHaveBeenCalled();
   });
-  it("decrypt failure or missing key => null, one warn each, no throw", async () => {
+  it("decrypt failure or missing key => default, one warn each, no throw", async () => {
     prisma.orgEmailSettings.findUnique.mockResolvedValue(settings({ configEnc: "garbage" }));
-    expect(await resolveEmailRoute(db, "parent-1", logger)).toBeNull();
+    await expect(sendOrgMail(db, { orgId: "parent-1", ...args, logger })).resolves.toBeUndefined();
+    expect(viaDefault()).toBe(true);
     expect(logger.warn).toHaveBeenCalledTimes(1);
     const valid = settings();
     delete process.env["EMAIL_SETTINGS_KEY"];
     prisma.orgEmailSettings.findUnique.mockResolvedValue(valid);
-    expect(await resolveEmailRoute(db, "parent-1", logger)).toBeNull();
+    mockSendMail.mockClear();
+    await sendOrgMail(db, { orgId: "parent-1", ...args, logger });
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    expect(mockProviderSend).not.toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledTimes(2);
   });
-  it("a throwing query => null", async () => {
+  it("a throwing query => default", async () => {
     prisma.organization.findUnique.mockRejectedValue(new Error("db down"));
-    expect(await resolveEmailRoute(db, "parent-1", logger)).toBeNull();
+    await sendOrgMail(db, { orgId: "parent-1", ...args, logger });
+    expect(viaDefault()).toBe(true);
   });
+});
+
+describe("countsTowardFailing", () => {
+  it.each([
+    "HTTP 400: rejected by provider",
+    "HTTP 422: rejected by provider, code 406",
+    "rejected by provider, code 406",
+    "rejected by server",
+    "temporary failure",
+    "invalid email address",
+  ])("%s does not count", (r) => expect(countsTowardFailing(r)).toBe(false));
+  it.each([
+    "HTTP 401: authentication failed",
+    "HTTP 403: authentication failed, code 1",
+    "authentication failed",
+    "certificate not trusted",
+    "connection failed",
+    "HTTP 503: provider unavailable",
+    "HTTP 429: rate limited",
+    "host not allowed",
+    "relay unavailable",
+    "relay not authorised",
+    "relay rejected request",
+    "invalid configuration",
+    "unexpected redirect",
+    "unexpected provider response",
+    "send failed",
+  ])("%s counts", (r) => expect(countsTowardFailing(r)).toBe(true));
 });
 
 describe("sendOrgMail default path", () => {
@@ -178,8 +219,8 @@ describe("sendOrgMail failure", () => {
     expect(mockSendMail.mock.calls[0]![0]).toStrictEqual({ ...args, fromName: "Acme Msgs", replyTo: "brand@acme.test" });
     expect(prisma.orgEmailSettings.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "set-1" },
-        data: { consecutiveFailures: { increment: 1 }, lastError: "the provider rejected the credentials" },
+        where: { id: "set-1", updatedAt: UPDATED_AT },
+        data: { consecutiveFailures: { increment: 1 }, lastError: "the provider rejected the credentials", updatedAt: UPDATED_AT },
       }),
     );
     expect(prisma.orgEmailSettings.updateMany).not.toHaveBeenCalled();
@@ -212,8 +253,8 @@ describe("sendOrgMail failure", () => {
     prisma.organization.findUnique.mockResolvedValue(clientOrg());
     await sendOrgMail(db, { orgId: "client-1", ...args });
     expect(prisma.orgEmailSettings.updateMany).toHaveBeenCalledWith({
-      where: { id: "set-1", status: "verified" },
-      data: { status: "failing" },
+      where: { id: "set-1", status: "verified", updatedAt: UPDATED_AT },
+      data: { status: "failing", updatedAt: UPDATED_AT },
     });
     const q = prisma.user.findMany.mock.calls[0]![0];
     expect(q.where).toMatchObject({ organizationId: "parent-1", role: "admin", isActive: true });
@@ -261,6 +302,85 @@ describe("sendOrgMail failure", () => {
     prisma.orgEmailSettings.update.mockResolvedValue({ consecutiveFailures: 3 });
     prisma.user.findMany.mockResolvedValue([]);
     await sendOrgMail(db, { orgId: "parent-1", ...args });
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("sendOrgMail failure classes and edge cases", () => {
+  it.each(["HTTP 400: rejected by provider", "rejected by server", "temporary failure"])(
+    "recipient-level failure (%s): fallback once, no increment, lastError recorded, no flip",
+    async (reason) => {
+      mockProviderSend.mockResolvedValue({ ok: false, retryable: false, reason });
+      prisma.orgEmailSettings.findUnique.mockResolvedValue(settings({ consecutiveFailures: 2 }));
+      await sendOrgMail(db, { orgId: "parent-1", ...args });
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+      expect(prisma.orgEmailSettings.update).not.toHaveBeenCalled();
+      expect(prisma.orgEmailSettings.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.orgEmailSettings.updateMany).toHaveBeenCalledWith({
+        where: { id: "set-1", updatedAt: UPDATED_AT },
+        data: { lastError: reason, updatedAt: UPDATED_AT },
+      });
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+    },
+  );
+  it.each([
+    "HTTP 401: authentication failed",
+    "connection failed",
+    "HTTP 503: provider unavailable",
+    "HTTP 429: rate limited",
+    "certificate not trusted",
+    "host not allowed",
+    "relay unavailable",
+    "relay not authorised",
+  ])("connection-level failure (%s) increments", async (reason) => {
+    mockProviderSend.mockResolvedValue({ ok: false, retryable: true, reason });
+    prisma.orgEmailSettings.update.mockResolvedValue({ consecutiveFailures: 1 });
+    await sendOrgMail(db, { orgId: "parent-1", ...args });
+    expect(prisma.orgEmailSettings.update).toHaveBeenCalledTimes(1);
+  });
+  it("repeated recipient-level failures never flip the setting", async () => {
+    mockProviderSend.mockResolvedValue({ ok: false, retryable: false, reason: "rejected by server" });
+    for (let i = 0; i < 5; i++) await sendOrgMail(db, { orgId: "parent-1", ...args });
+    expect(prisma.orgEmailSettings.update).not.toHaveBeenCalled();
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(mockSendMail).toHaveBeenCalledTimes(5);
+  });
+  it("stale snapshot (settings changed): bookkeeping skipped silently, fallback still sent", async () => {
+    mockProviderSend.mockResolvedValue({ ok: false, retryable: true, reason: "connection failed" });
+    prisma.orgEmailSettings.update.mockRejectedValue(Object.assign(new Error("not found"), { code: "P2025" }));
+    await sendOrgMail(db, { orgId: "parent-1", ...args, logger });
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    expect(prisma.orgEmailSettings.updateMany).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+  it("one failing admin notice does not stop the others", async () => {
+    mockProviderSend.mockResolvedValue({ ok: false, retryable: true, reason: "connection failed" });
+    prisma.orgEmailSettings.update.mockResolvedValue({ consecutiveFailures: 3 });
+    prisma.user.findMany.mockResolvedValue([{ email: "a1@acme.test" }, { email: "a2@acme.test" }, { email: "a3@acme.test" }]);
+    mockSendMail.mockImplementation(async (m: { to: string }) => {
+      if (m.to === "a1@acme.test") throw new Error("relay down");
+    });
+    await sendOrgMail(db, { orgId: "parent-1", ...args, logger });
+    const tos = mockSendMail.mock.calls.map((c) => (c[0] as { to: string }).to);
+    expect(tos).toEqual(expect.arrayContaining(["a1@acme.test", "a2@acme.test", "a3@acme.test"]));
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+  it("a failed fallback after a failed provider send propagates, and the failure was recorded", async () => {
+    mockProviderSend.mockResolvedValue({ ok: false, retryable: true, reason: "connection failed" });
+    prisma.orgEmailSettings.update.mockResolvedValue({ consecutiveFailures: 1 });
+    mockSendMail.mockRejectedValue(new Error("Email service returned 500"));
+    await expect(sendOrgMail(db, { orgId: "parent-1", ...args })).rejects.toThrow("Email service returned 500");
+    expect(prisma.orgEmailSettings.update).toHaveBeenCalledTimes(1);
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+  });
+  it("a rejecting default send on the cap or redis-down path is attempted exactly once", async () => {
+    mockEval.mockResolvedValue(201);
+    mockSendMail.mockRejectedValue(new Error("relay down"));
+    await expect(sendOrgMail(db, { orgId: "parent-1", ...args })).rejects.toThrow("relay down");
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    mockSendMail.mockClear();
+    mockEval.mockRejectedValue(new Error("redis down"));
+    await expect(sendOrgMail(db, { orgId: "parent-1", ...args, logger })).rejects.toThrow("relay down");
     expect(mockSendMail).toHaveBeenCalledTimes(1);
   });
 });
