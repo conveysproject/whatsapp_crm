@@ -31,8 +31,7 @@ beforeEach(() => {
 });
 afterEach(() => logSpies.forEach((s) => s.mockRestore()));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const opts = () => createTransport.mock.calls[0]?.[0] as Record<string, any>;
+const opts = () => createTransport.mock.calls[0]?.[0] as Record<string, unknown>;
 
 describe("connect options", () => {
   it("connects to the resolved IP and verifies the certificate against the original hostname", async () => {
@@ -50,7 +49,7 @@ describe("connect options", () => {
     expect(o.logger).toBe(false);
     expect(o.debug).toBe(false);
     expect(typeof o.name).toBe("string");
-    expect(o.name.length).toBeGreaterThan(0);
+    expect(String(o.name).length).toBeGreaterThan(0);
     expect(o.pool).toBeFalsy();
   });
   it("omits servername for an IP literal host", async () => {

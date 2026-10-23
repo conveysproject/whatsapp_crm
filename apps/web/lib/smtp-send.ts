@@ -35,7 +35,8 @@ export interface SmtpSendDeps extends SafeHostDeps {
   createTransport?: typeof nodemailer.createTransport;
 }
 
-const EHLO_NAME = "mail.wbmsg.com";
+// Fixed and brand-neutral: nodemailer would otherwise send the serverless host name.
+const EHLO_NAME = "mail-relay.localdomain";
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000\r\n]/;
