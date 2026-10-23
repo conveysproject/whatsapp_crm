@@ -163,7 +163,7 @@ describe("POST /v1/client-invitations", () => {
     const mail = mockSendMail.mock.calls[0][0];
     expect(mail.fromName).toBe("Acme Msgs");
     expect(mail.replyTo).toBe("help@acme.test");
-    expect(mail.subject).toBe("You've been invited to create a Acme Msgs account");
+    expect(mail.subject).toBe("You've been invited to join Acme Msgs");
     expect(mail.html).toContain("create your own Acme Msgs account");
     expect(mail.html).toContain("full read access");
     expect(mail.html).not.toContain("WBMSG");

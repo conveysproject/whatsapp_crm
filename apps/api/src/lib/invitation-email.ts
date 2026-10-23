@@ -80,7 +80,7 @@ export const CLIENT_INVITATION_SUBJECT = "You've been invited to create a WBMSG 
 
 export function clientInvitationSubject(brand?: EmailBrand): string {
   const b = activeBrand(brand);
-  return b ? `You've been invited to create a ${subjectText(b.name)} account` : CLIENT_INVITATION_SUBJECT;
+  return b ? `You've been invited to join ${subjectText(b.name)}` : CLIENT_INVITATION_SUBJECT;
 }
 
 export function clientInvitationAcceptUrl(token: string): string {

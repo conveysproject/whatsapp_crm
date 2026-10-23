@@ -119,10 +119,10 @@ describe("brandForOrg / brandForAccountEmail", () => {
     expect(await brandForAccountEmail(make({ account: null }).prisma, "x@y.z")).toBe(DEFAULT_BRAND);
     expect(await brandForAccountEmail(make({ user: null }).prisma, "x@y.z")).toBe(DEFAULT_BRAND);
     expect(await brandForAccountEmail(make({ user: { organizationId: null } }).prisma, "x@y.z")).toBe(DEFAULT_BRAND);
-    expect(await brandForAccountEmail(make({ org: null }).prisma, "x@y.z")).toBe(DEFAULT_BRAND);
+    expect(await brandForAccountEmail(make({ org: null }).prisma, "x@y.z")).toEqual(DEFAULT_BRAND);
     expect(
       await brandForAccountEmail(make({ org: { ...orgRow, isParent: false, parentOrganization: null } }).prisma, "x@y.z"),
-    ).toBe(DEFAULT_BRAND);
+    ).toEqual(DEFAULT_BRAND);
   });
   it("never throws", async () => {
     expect(await brandForAccountEmail(make({ throws: true }).prisma, "x@y.z")).toBe(DEFAULT_BRAND);

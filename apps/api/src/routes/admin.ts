@@ -311,7 +311,7 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
 
   // ── White-label switch (super admin only) ────────────────────────────────
   // The parent edits its brand freely, but it only SHOWS once a super admin enables it here.
-  fastify.patch<{ Params: { orgId: string }; Body: { enabled: boolean; reviewedRevision?: number } }>(
+  fastify.patch<{ Params: { orgId: string }; Body: { enabled: boolean; reviewedRevision?: unknown } }>(
     "/admin/organizations/:orgId/white-label",
     {
       schema: {
@@ -319,7 +319,8 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         body: {
           type: "object",
           required: ["enabled"],
-          properties: { enabled: { type: "boolean" }, reviewedRevision: { type: "integer", minimum: 0 } },
+          // reviewedRevision is checked in the handler: Ajv would coerce null to 0 and "3" to 3.
+          properties: { enabled: { type: "boolean" }, reviewedRevision: {} },
           additionalProperties: false,
         },
       },
@@ -327,12 +328,18 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       if (!requireSuperAdmin(request.auth.role, reply)) return;
       const { orgId } = request.params;
-      const { enabled, reviewedRevision } = request.body;
-      if (enabled && reviewedRevision === undefined) {
+      const { enabled, reviewedRevision: rawRevision } = request.body;
+      if (enabled && rawRevision === undefined) {
         return reply
           .status(400)
           .send({ error: { code: "VALIDATION_FAILED", field: "reviewedRevision", message: "reviewedRevision is required to enable" } });
       }
+      if (rawRevision !== undefined && !(typeof rawRevision === "number" && Number.isInteger(rawRevision) && rawRevision >= 0)) {
+        return reply
+          .status(400)
+          .send({ error: { code: "VALIDATION_FAILED", field: "reviewedRevision", message: "reviewedRevision must be a whole number of 0 or more" } });
+      }
+      const reviewedRevision = rawRevision as number | undefined;
       if (enabled) {
         // One conditional write: the checks and the switch cannot be separated by a concurrent edit.
         const res = await fastify.prisma.organization.updateMany({

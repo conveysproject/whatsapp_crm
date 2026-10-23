@@ -26,7 +26,13 @@ export interface BrandInput {
 
 const DEFAULT_COLOR = "#22c55e";
 
-export const DEFAULT_BRAND: Brand = {
+function deepFreeze<T extends object>(o: T): Readonly<T> {
+  for (const v of Object.values(o)) if (typeof v === "object" && v !== null) deepFreeze(v);
+  return Object.freeze(o);
+}
+
+/** Shared and frozen: callers get copies from resolveBrand and brandPayload. */
+export const DEFAULT_BRAND: Readonly<Brand> = deepFreeze({
   name: "WBMSG",
   logoUrl: null,
   smallLogoUrl: null,
@@ -39,7 +45,7 @@ export const DEFAULT_BRAND: Brand = {
   hidePoweredBy: false,
   slug: null,
   isDefault: true,
-};
+} satisfies Brand);
 
 export const RESERVED_SLUGS: readonly string[] = [
   "wbmsg", "conveys", "admin", "api", "www", "app", "support", "billing", "login", "signin",
@@ -56,8 +62,8 @@ const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
  */
 export const PLAIN_EMAIL_RE = /^(?=.{1,254}$)[^\s@,;<>"'()[\]\\:]+@[^\s@,;<>"'()[\]\\:]+\.[^\s@,;<>"'()[\]\\:]+$/;
 const HAS_LETTER_OR_DIGIT_RE = /[\p{L}\p{N}]/u;
-// eslint-disable-next-line no-control-regex
-const BAD_NAME_RE = /[<>\u0000-\u001f\u007f]/;
+// Angle brackets, control characters (\p{Cc}) and format characters such as zero-width and bidi overrides (\p{Cf}).
+const BAD_NAME_RE = /[<>\p{Cc}\p{Cf}]/u;
 
 export function validateSlug(s: string): boolean {
   return typeof s === "string" && s.length >= 3 && s.length <= 40 && SLUG_RE.test(s) && !RESERVED_SLUGS.includes(s);
@@ -70,9 +76,11 @@ export function validateBrandInput(
   if (typeof i !== "object" || i === null || Array.isArray(i)) return fail("body", "Brand details are required");
   const o = i as Record<string, unknown>;
 
-  const name = typeof o["name"] === "string" ? o["name"].trim() : "";
-  if (name.length < 2 || name.length > 40) return fail("name", "Brand name must be 2 to 40 characters");
-  if (BAD_NAME_RE.test(name)) return fail("name", "Brand name cannot contain < > or control characters");
+  // NFKC folds lookalikes (fullwidth letters and the like) to their plain form; length counts code points.
+  const name = typeof o["name"] === "string" ? o["name"].normalize("NFKC").trim() : "";
+  const codePoints = [...name].length;
+  if (codePoints < 2 || codePoints > 40) return fail("name", "Brand name must be 2 to 40 characters");
+  if (BAD_NAME_RE.test(name)) return fail("name", "Brand name cannot contain < >, hidden or control characters");
   if (!HAS_LETTER_OR_DIGIT_RE.test(name)) return fail("name", "Brand name must contain at least one letter or number");
 
   const color = o["color"];
@@ -169,7 +177,7 @@ export type BrandPayload = Brand & { palette: Record<Shade, string> };
 /** The brand as the API returns it: every brand field plus the ten-shade palette derived from the primary color. */
 export function brandPayload(brand: Brand): BrandPayload {
   const primaryColor = brand.primaryColor.trim().toLowerCase();
-  return { ...brand, primaryColor, palette: makePalette(primaryColor) };
+  return { ...brand, primaryColor, palette: makePalette(primaryColor) }; // a fresh object every call
 }
 
 const BRAND_SELECT = {
@@ -226,11 +234,11 @@ export async function resolveBrand(prisma: PrismaClient, orgId: string): Promise
     where: { id: orgId },
     select: { ...BRAND_SELECT, parentOrganization: { select: BRAND_SELECT } },
   });
-  if (!org) return DEFAULT_BRAND;
+  if (!org) return { ...DEFAULT_BRAND };
   if (org.isParent && org.whiteLabelEnabled && org.brandName) return toBrand(org, org.brandName);
   const parent = org.parentOrganization;
   if (parent && parent.isParent && parent.whiteLabelEnabled && parent.brandName) return toBrand(parent, parent.brandName);
-  return DEFAULT_BRAND;
+  return { ...DEFAULT_BRAND };
 }
 
 /**

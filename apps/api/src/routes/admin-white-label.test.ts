@@ -135,6 +135,19 @@ describe("PATCH /v1/admin/organizations/:orgId/white-label", () => {
     expect(mockPrisma.organization.updateMany).not.toHaveBeenCalled();
   });
 
+  it.each([["null", null], ["a string", "3"], ["a fraction", 3.5], ["negative", -1], ["a boolean", true]])(
+    "reviewedRevision as %s is 400 and nothing is written",
+    async (_n, bad) => {
+      app = await buildApp("superAdmin");
+      for (const enabled of [true, false]) {
+        const res = await app.inject({ method: "PATCH", url: URL, payload: { enabled, reviewedRevision: bad } });
+        expect(res.statusCode).toBe(400);
+        expect(res.json<{ error: { field: string } }>().error.field).toBe("reviewedRevision");
+      }
+      expect(mockPrisma.organization.updateMany).not.toHaveBeenCalled();
+    },
+  );
+
   it("a stale reviewed revision is 409 BRAND_CHANGED and the flag is not set", async () => {
     app = await buildApp("superAdmin");
     // The conditional write (revision 4) matches nothing because the brand is at revision 5 now.
