@@ -170,6 +170,18 @@ export const emailSettingsRoutes: FastifyPluginAsync = async (fastify) => {
         return unavailable(reply);
       }
       if (old && typeof old[field] === "string") {
+        // SMTP: the password is sent to host:port, so it may only be kept while the whole connection target is
+        // unchanged (compared after the validator's normalisation). Otherwise a changed host would receive it.
+        // API providers send the key to a fixed provider host (Mailgun domain is only a path segment): mergeable.
+        if (provider === "smtp") {
+          const probe = validateProviderConfig("smtp", { ...config, pass: "x" });
+          if (!probe.ok) return validationFailed(reply, probe.field, probe.message);
+          const n = probe.config as unknown as Record<string, unknown>;
+          const same = ["host", "port", "security", "user"].every((k) => n[k] === old[k]) && (n["allowPlain"] ?? false) === (old["allowPlain"] ?? false);
+          if (!same) {
+            return validationFailed(reply, "pass", "Re-enter the password when the server, port, security or username changes");
+          }
+        }
         config[field] = old[field];
         credentialsReplaced = false;
       }
@@ -218,7 +230,8 @@ export const emailSettingsRoutes: FastifyPluginAsync = async (fastify) => {
     // Atomic fixed-window limiter; errors propagate so it fails closed.
     const count = await incrWithTtl(redis, `email-settings-test:${organizationId}`, TEST_WINDOW_SECONDS);
     if (count > TEST_LIMIT) {
-      reply.header("Retry-After", String(TEST_WINDOW_SECONDS));
+      const ttl = await redis.ttl(`email-settings-test:${organizationId}`).catch(() => -1);
+      reply.header("Retry-After", String(ttl > 0 ? ttl : TEST_WINDOW_SECONDS));
       return reply.status(429).send({ error: { code: "RATE_LIMITED", message: "Too many test emails; try again later" } });
     }
 

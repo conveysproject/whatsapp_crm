@@ -11,7 +11,10 @@ const mockCanBeParent = vi.fn();
 vi.mock("../lib/parent-orgs.js", () => ({ canBeParent: (...a: unknown[]) => mockCanBeParent(...a) }));
 
 const mockEval = vi.fn();
-vi.mock("../lib/redis.js", () => ({ redis: { eval: (...a: unknown[]) => mockEval(...a) } }));
+const mockTtl = vi.fn();
+vi.mock("../lib/redis.js", () => ({
+  redis: { eval: (...a: unknown[]) => mockEval(...a), ttl: (...a: unknown[]) => mockTtl(...a) },
+}));
 
 const mockResolveBrand = vi.fn();
 vi.mock("../lib/brand.js", async (orig) => ({
@@ -88,6 +91,7 @@ beforeEach(async () => {
   auth = { userId: "u-admin", organizationId: "org-parent", role: "admin" };
   mockCanBeParent.mockResolvedValue(true);
   mockEval.mockResolvedValue(1);
+  mockTtl.mockResolvedValue(1234);
   mockResolveBrand.mockResolvedValue({ name: "Acme Cloud", isDefault: false });
   mockBuildTransport.mockReturnValue({ send: mockSend });
   mockSend.mockResolvedValue({ ok: true });
@@ -299,13 +303,13 @@ describe("PUT validation", () => {
     );
     const res = await put({
       provider: "smtp",
-      config: { host: "smtp.acme.test", port: 465, security: "ssl", user: "mailer" },
+      config: { host: "smtp.acme.test", port: 587, security: "starttls", user: "mailer" },
       fromAddress: "no-reply@acme.test",
     });
     expect(res.statusCode).toBe(200);
     const { decryptJson } = await import("../lib/secret-box.js");
     const saved = decryptJson<Record<string, unknown>>(mockPrisma.orgEmailSettings.upsert.mock.calls[0]![0].update.configEnc);
-    expect(saved).toMatchObject({ pass: SECRET_PASS, port: 465 });
+    expect(saved).toMatchObject({ pass: SECRET_PASS, port: 587 });
     expect(res.body).not.toContain(SECRET_PASS);
   });
 
@@ -362,6 +366,109 @@ describe("PUT validation", () => {
   });
 });
 
+describe("PUT keep-secret is bound to the connection target", () => {
+  const put = (payload: unknown) => app.inject({ method: "PUT", url: BASE, payload: payload as object });
+  const smtpStored = { provider: "smtp", host: "smtp.gmail.com", port: 587, security: "starttls", user: "mailer", pass: SECRET_PASS, fromAddress: "no-reply@acme.test" };
+  const smtpBody = (over: Record<string, unknown> = {}) => ({
+    provider: "smtp",
+    config: { host: "smtp.gmail.com", port: 587, security: "starttls", user: "mailer", ...over },
+    fromAddress: "no-reply@acme.test",
+  });
+  const MSG = "Re-enter the password when the server, port, security or username changes";
+
+  beforeEach(async () => {
+    mockPrisma.orgEmailSettings.findUnique.mockResolvedValue(await storedRow({ provider: "smtp" }, smtpStored));
+  });
+
+  async function expectRefused(body: unknown) {
+    const res = await put(body);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toEqual({ code: "VALIDATION_FAILED", field: "pass", message: MSG });
+    expect(mockPrisma.orgEmailSettings.upsert).not.toHaveBeenCalled();
+    await flush();
+    expect(mockPrisma.adminAuditLog.create).not.toHaveBeenCalled();
+    expect(res.body).not.toContain(SECRET_PASS);
+  }
+
+  it("refuses a changed host with the password omitted", async () => {
+    await expectRefused(smtpBody({ host: "mx.attacker.example" }));
+  });
+  it("refuses a changed port", async () => {
+    await expectRefused(smtpBody({ port: 2525 }));
+  });
+  it("refuses a security downgrade to plain", async () => {
+    await expectRefused(smtpBody({ security: "plain", allowPlain: true }));
+  });
+  it("refuses a changed user", async () => {
+    await expectRefused(smtpBody({ user: "other" }));
+  });
+  it("refuses a changed allowPlain", async () => {
+    mockPrisma.orgEmailSettings.findUnique.mockResolvedValue(
+      await storedRow({ provider: "smtp" }, { ...smtpStored, security: "plain", allowPlain: true }),
+    );
+    // plain without allowPlain is a validation error on allowPlain itself, never a merge
+    const res = await put(smtpBody({ security: "plain" }));
+    expect(res.statusCode).toBe(400);
+    expect(mockPrisma.orgEmailSettings.upsert).not.toHaveBeenCalled();
+    // starttls with the stored plain config: security changed
+    await expectRefused(smtpBody());
+  });
+
+  it("treats a case-only host change as unchanged", async () => {
+    const res = await put(smtpBody({ host: "SMTP.Gmail.com" }));
+    expect(res.statusCode).toBe(200);
+    const { decryptJson } = await import("../lib/secret-box.js");
+    const saved = decryptJson<Record<string, unknown>>(mockPrisma.orgEmailSettings.upsert.mock.calls[0]![0].update.configEnc);
+    expect(saved).toMatchObject({ host: "smtp.gmail.com", pass: SECRET_PASS });
+  });
+
+  it("treats a mapped IPv4 spelling as unchanged", async () => {
+    mockPrisma.orgEmailSettings.findUnique.mockResolvedValue(await storedRow({ provider: "smtp" }, { ...smtpStored, host: "8.8.8.8" }));
+    const res = await put(smtpBody({ host: "::ffff:8.8.8.8" }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain(SECRET_PASS);
+  });
+
+  it("merges when every connection field is identical", async () => {
+    const res = await put(smtpBody());
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("accepts a changed host when a new password is supplied", async () => {
+    const res = await put(smtpBody({ host: "smtp.other.test", pass: "new-pass-1" }));
+    expect(res.statusCode).toBe(200);
+    const { decryptJson } = await import("../lib/secret-box.js");
+    const saved = decryptJson<Record<string, unknown>>(mockPrisma.orgEmailSettings.upsert.mock.calls[0]![0].update.configEnc);
+    expect(saved).toMatchObject({ host: "smtp.other.test", pass: "new-pass-1" });
+  });
+
+  it("keeps the Mailgun key when only the domain changes (a path segment under the fixed Mailgun host)", async () => {
+    mockPrisma.orgEmailSettings.findUnique.mockResolvedValue(
+      await storedRow({ provider: "mailgun" }, { provider: "mailgun", apiKey: SECRET_KEY, domain: "mg.acme.test", region: "us" }),
+    );
+    const res = await put({ provider: "mailgun", config: { domain: "mg2.acme.test", region: "eu" }, fromAddress: "a@acme.test" });
+    expect(res.statusCode).toBe(200);
+    const { decryptJson } = await import("../lib/secret-box.js");
+    const saved = decryptJson<Record<string, unknown>>(mockPrisma.orgEmailSettings.upsert.mock.calls[0]![0].update.configEnc);
+    expect(saved).toMatchObject({ apiKey: SECRET_KEY, domain: "mg2.acme.test", region: "eu" });
+  });
+
+  it("requires the secret when the stored config is unreadable, and stores nothing", async () => {
+    process.env["EMAIL_SETTINGS_KEY"] = OTHER_KEY;
+    const res = await put(smtpBody());
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.field).toBe("pass");
+    expect(mockPrisma.orgEmailSettings.upsert).not.toHaveBeenCalled();
+  });
+
+  it("marks a first save as created in the audit", async () => {
+    mockPrisma.orgEmailSettings.findUnique.mockResolvedValue(null);
+    await put(sgBody);
+    await flush();
+    expect(mockPrisma.adminAuditLog.create.mock.calls[0]![0].data.metadata).toMatchObject({ created: true });
+  });
+});
+
 describe("POST test", () => {
   const test = (payload: unknown = {}) => app.inject({ method: "POST", url: `${BASE}/test`, payload: payload as object });
 
@@ -407,7 +514,7 @@ describe("POST test", () => {
     const res = await test();
     expect(res.statusCode).toBe(429);
     expect(res.json().error.code).toBe("RATE_LIMITED");
-    expect(res.headers["retry-after"]).toBe("3600");
+    expect(res.headers["retry-after"]).toBe("1234");
     expect(mockEval.mock.calls[0]![2]).toBe("email-settings-test:org-parent");
     expect(mockSend).toHaveBeenCalledTimes(5);
   });
