@@ -17,12 +17,12 @@ export interface SmtpPresetData {
 export const SMTP_PRESETS: Record<SmtpPresetId, SmtpPresetData> = {
   gmail: {
     label: "Gmail / Google Workspace (app password)",
-    help: "Use your full email address as the username and an app password (Google Account, Security, App passwords), not your normal password.",
+    help: "Use your full email address as the username and an app password (Google Account, Security, App passwords), not your normal password. App passwords need 2-Step Verification turned on for the Google account.",
     host: "smtp.gmail.com", port: 587, security: "starttls",
   },
   microsoft365: {
     label: "Microsoft 365",
-    help: "Use your full email address as the username. SMTP AUTH must be enabled for this mailbox by your Microsoft 365 admin.",
+    help: "Use your full email address as the username. Microsoft is phasing out password sign-in for SMTP; if your tenant has disabled it, use another provider (for example SES or SendGrid) or ask your Microsoft admin.",
     host: "smtp.office365.com", port: 587, security: "starttls",
   },
   ses: {

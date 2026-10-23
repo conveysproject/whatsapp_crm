@@ -84,12 +84,14 @@ export function formFromSettings(s: BrandSettings): BrandFormValues {
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 // eslint-disable-next-line no-control-regex
-const BAD_NAME_RE = /[<>\u0000-\u001f\u007f]/;
+const BAD_NAME_RE = /[<>\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
 export function validateName(v: string): string | null {
-  const name = v.trim();
-  if (name.length < 2 || name.length > 40) return "Brand name must be 2 to 40 characters";
-  if (BAD_NAME_RE.test(name)) return "Brand name cannot contain < > or control characters";
+  // Same steps as the API: NFKC, trim, length in code points.
+  const name = v.normalize("NFKC").trim();
+  const length = [...name].length;
+  if (length < 2 || length > 40) return "Brand name must be 2 to 40 characters";
+  if (BAD_NAME_RE.test(name)) return "Brand name cannot contain < >, hidden or control characters";
   if (!/[\p{L}\p{N}]/u.test(name)) return "Brand name must contain at least one letter or number";
   return null;
 }

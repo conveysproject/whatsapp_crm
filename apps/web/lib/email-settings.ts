@@ -2,7 +2,7 @@
 // boundary (parent admin only, validation, credentials encrypted at rest); everything here shapes requests,
 // pre-checks inputs for a faster message, and decides what to show. Pure and unit-testable.
 // Secrets are WRITE-ONLY: the API never returns them, and nothing here copies one into a form from stored data.
-import { SMTP_PRESETS, isPublicAddress, parseDottedQuadIpv4, parseIpv6, smtpPresetFor, type SmtpPresetId } from "@WBMSG/shared";
+import { SMTP_PRESETS, isPublicAddress, normalizeIpv4Mapped, parseDottedQuadIpv4, parseIpv6, smtpPresetFor, type SmtpPresetId } from "@WBMSG/shared";
 import { GENERIC_ERROR } from "./brand-settings";
 import { isPlainEmail } from "./mail-from";
 import type { ConfirmState } from "./parent-orgs";
@@ -80,7 +80,7 @@ export function providerHelp(choice: PickerId): string {
 
 export const SPAM_HELP = "To avoid spam folders, set up SPF and DKIM for your sending domain in your email provider; we do not change your DNS.";
 export const PRIVACY_HELP =
-  "Your clients' sign-in codes and billing emails are sent through this connection, so your email provider can see them; if it stops working we send from our address and tell you.";
+  "Once white-label is approved for your organization, your clients' sign-in codes and billing emails are sent through this connection, so your email provider can see them; if it stops working we send from our address and tell you.";
 export const PLAIN_WARNING = "Unencrypted connections can expose your password and your emails to anyone on the network. Use this only on a trusted network.";
 export const PASSWORD_REENTER = "Re-enter the password when the server, port, security or username changes";
 export const KEEP_PLACEHOLDER = "Saved: leave blank to keep";
@@ -200,7 +200,11 @@ export function applySecurity(v: EmailFormValues, security: Security): EmailForm
 // ── Connection change and the write-only secret rules (mirror the API) ──
 interface Connection { host: string; port: number | null; security: string; allowPlain: boolean; user: string }
 
-const normHost = (h: string) => h.trim().toLowerCase();
+/** Trimmed, lower-cased; an IPv4-mapped IPv6 literal becomes the plain IPv4 (the API stores it that way). */
+const normHost = (h: string): string => {
+  const host = h.trim().toLowerCase();
+  return host.includes(":") ? (normalizeIpv4Mapped(host)?.address ?? host) : host;
+};
 
 function connectionOfValues(v: EmailFormValues): Connection {
   return {
@@ -355,6 +359,16 @@ export function hasUnsavedChanges(v: EmailFormValues, stored: EmailSettings | nu
   return false;
 }
 
+/**
+ * Background data arrived: new form values when the form has no unsaved changes against the previous data,
+ * otherwise null (the person's edits are kept).
+ */
+export function reseedValues(current: EmailFormValues, prev: EmailSettings | null, next: EmailSettings | null): EmailFormValues | null {
+  // With nothing saved yet, "no edits" means the form still equals the empty form.
+  const dirty = prev ? hasUnsavedChanges(current, prev) : JSON.stringify(current) !== JSON.stringify(EMPTY_VALUES);
+  return dirty ? null : formFromSettings(next);
+}
+
 // ── API calls through the same-origin /api/v1 proxy ──
 export class EmailApiError extends Error {
   constructor(public status: number, public code: string, message: string, public field?: string) {
@@ -421,7 +435,8 @@ export function mapEmailError(err: unknown): MappedError {
 /** Errors of the test call (the HTTP-level ones; a failed send comes back as a normal outcome). */
 export function mapTestError(err: unknown): string {
   if (!(err instanceof EmailApiError)) return GENERIC_ERROR;
-  if (err.status === 429 || err.code === "RATE_LIMITED") return TEST_LIMIT_MESSAGE;
+  if (err.code === "RATE_LIMITED") return TEST_LIMIT_MESSAGE;
+  if (err.status === 429) return "Too many requests, try again in a minute";
   if (err.code === "NOT_CONFIGURED" || err.status === 404) return "Save your email settings before sending a test email.";
   if (err.code === "NO_RECIPIENT" || err.status === 409) return NO_RECIPIENT_MESSAGE;
   if (err.status === 503 || err.code === "EMAIL_PROVIDER_UNAVAILABLE") return UNAVAILABLE_MESSAGE;
@@ -429,12 +444,17 @@ export function mapTestError(err: unknown): string {
   return GENERIC_ERROR;
 }
 
+/** A 404 NOT_CONFIGURED on the test means the cached settings are stale (removed elsewhere): refetch them. */
+export function shouldRefreshAfterTestError(err: unknown): boolean {
+  return err instanceof EmailApiError && err.code === "NOT_CONFIGURED";
+}
+
 /**
  * Readable text for a send failure reason. The reasons are the fixed strings the API adapters produce (they carry
  * no provider text and no credentials). Anything unrecognised gets a generic line; the raw reason is never shown.
  */
 const REASON_RULES: readonly (readonly [RegExp, string])[] = [
-  [/authentication failed|relay not authorised/i, "Your provider refused the credentials. Check the username and password or the API key."],
+  [/authentication failed/i, "Your provider refused the credentials. Check the username and password or the API key."],
   [/certificate not trusted/i, "The server's security certificate is not trusted. Check the host name, or ask your provider for a server with a valid certificate."],
   [/host not allowed/i, "That server address is not allowed. Use the public host name your provider gave you."],
   [/connection failed/i, "We could not connect to the server. Check the host, the port and the security setting."],
@@ -442,7 +462,7 @@ const REASON_RULES: readonly (readonly [RegExp, string])[] = [
   [/temporary failure/i, "The server reported a temporary problem. Try again in a few minutes."],
   [/rejected by (provider|server)/i, "Your provider rejected the email. Check that the From address is verified with your provider."],
   [/provider unavailable/i, "Your provider is not available right now. Try again later."],
-  [/relay unavailable|relay rejected request/i, "Our email relay is not available right now. Try again later."],
+  [/relay unavailable|relay rejected request|relay not authorised/i, "Our email relay is not available right now. Try again later."],
   [/invalid email address/i, "An email address in your settings is not valid."],
   [/invalid configuration/i, "The connection details are not valid. Check them and save again."],
   [/timeout|network error/i, "The connection timed out. Try again later."],
@@ -466,7 +486,11 @@ export interface BannerInfo { state: BannerState; title: string; detail: string 
 export function bannerInfo(s: EmailSettings | null): BannerInfo {
   if (!s) return { state: "none", title: "Not connected: emails are sent from our address", detail: null };
   if (s.status === "verified") {
-    return { state: "verified", title: `Connected: your organization's emails are sent from ${s.fromAddress}`, detail: null };
+    return {
+      state: "verified",
+      title: `Connected: your organization's emails are sent from ${s.fromAddress}`,
+      detail: "Once white-label is approved for your organization, your clients' sign-in codes and billing emails also go through this connection.",
+    };
   }
   if (s.status === "failing") {
     return {

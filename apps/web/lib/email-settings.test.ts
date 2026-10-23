@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   EMPTY_VALUES, EmailApiError, KEEP_PLACEHOLDER, PASSWORD_REENTER, PICKER_OPTIONS, UNKNOWN_REASON_TEXT,
   applyChoice, applySecurity, applySesRegion, applyTestOutcome, bannerInfo, clearFieldErrors, connectionChanged, describeSendReason,
-  formFromSettings, hasUnsavedChanges, inferChoice, isEmailBusy, mapEmailError, mapTestError, providerFields, providerOf, secretLabel,
+  formFromSettings, hasUnsavedChanges, reseedValues, shouldRefreshAfterTestError, PRIVACY_HELP, inferChoice, isEmailBusy, mapEmailError, mapTestError, providerFields, providerOf, secretLabel,
   secretPlaceholder, secretRule, testDisabledReason, toSaveBody, validateApiKey, validateEmailForm, validateFromAddress, validateFromName,
   validateHost, validateMailgunDomain, validatePort, validateReplyTo, validateSmtpPassword, validateUser,
   type EmailFormValues, type EmailSettings, type PickerId,
@@ -115,11 +115,12 @@ describe("write-only secrets", () => {
 
 describe("connection change requires the password again (mirrors the API)", () => {
   const s = smtpStored();
-  const table: [string, Partial<EmailFormValues>, boolean][] = [
+  const table: [string, Partial<EmailFormValues>, boolean | "mapped"][] = [
     ["unchanged", {}, false],
     ["host changed", { host: "smtp.evil.test" }, true],
     ["host case only", { host: "SMTP.Gmail.COM" }, false],
     ["host with spaces around", { host: "  smtp.gmail.com " }, false],
+    ["mapped IPv4 equals the stored IPv4", { host: "::ffff:8.8.8.8" }, "mapped"],
     ["port changed", { port: "465" }, true],
     ["security changed", { security: "ssl" }, true],
     ["allowPlain changed", { security: "plain", allowPlain: true }, true],
@@ -127,12 +128,19 @@ describe("connection change requires the password again (mirrors the API)", () =
     ["from address changed", { fromAddress: "other@acme.test" }, false],
     ["from name changed", { fromName: "Other" }, false],
   ];
-  it.each(table)("%s", (_n, patch, changed) => {
+  it.each(table.filter((r) => r[2] !== "mapped") as [string, Partial<EmailFormValues>, boolean][])("%s", (_n, patch, changed) => {
     const v = vals(patch);
     expect(connectionChanged(v, s)).toBe(changed);
     const errs = validateEmailForm(v, s);
     if (changed) expect(errs.secret).toBe(PASSWORD_REENTER);
     else expect(errs.secret).toBeUndefined();
+  });
+  it("an IPv4-mapped IPv6 literal equals the stored IPv4 (the API normalises it the same way)", () => {
+    const ip = smtpStored({ config: { host: "8.8.8.8", port: 587, security: "starttls", user: "me@acme.test" } });
+    expect(connectionChanged(vals({ host: "::ffff:8.8.8.8" }), ip)).toBe(false);
+    expect(connectionChanged(vals({ host: "::FFFF:8.8.8.8" }), ip)).toBe(false);
+    expect(connectionChanged(vals({ host: "::ffff:8.8.4.4" }), ip)).toBe(true);
+    expect(connectionChanged(vals({ host: "8.8.8.8" }), smtpStored({ config: { host: "::ffff:8.8.8.8", port: 587, security: "starttls", user: "me@acme.test" } }))).toBe(false);
   });
   it("typing a new password clears the requirement", () => {
     expect(validateEmailForm(vals({ host: "smtp.other.test", secret: "new-pass" }), s).secret).toBeUndefined();
@@ -268,6 +276,7 @@ describe("error mapping", () => {
   });
   it("test errors", () => {
     expect(mapTestError(e(429, "RATE_LIMITED"))).toBe("You can send 5 test emails per hour");
+    expect(mapTestError(e(429, "ERROR"))).toBe("Too many requests, try again in a minute");
     expect(mapTestError(e(409, "NO_RECIPIENT"))).toBe("Your user has no email address");
     expect(mapTestError(e(404, "NOT_CONFIGURED"))).toMatch(/Save your email settings/);
     expect(mapTestError(e(503, "EMAIL_PROVIDER_UNAVAILABLE"))).toMatch(/not available right now/);
@@ -301,6 +310,10 @@ describe("describeSendReason covers every reason the API can produce", () => {
     expect(describeSendReason("HTTP 429: rate limited")).toMatch(/limiting/);
     expect(describeSendReason("HTTP 502: provider unavailable")).toMatch(/not available/);
     expect(describeSendReason("relay unavailable")).toMatch(/relay/);
+    // Our own relay secret is wrong: the client cannot fix it, so it is NOT the credentials text.
+    expect(describeSendReason("relay not authorised")).toBe("Our email relay is not available right now. Try again later.");
+    expect(describeSendReason("relay not authorised")).not.toBe(describeSendReason("authentication failed"));
+    expect(describeSendReason("relay not authorised")).not.toMatch(/credentials/);
   });
   it("never echoes an unknown or hostile reason", () => {
     for (const r of ["<script>alert(1)</script>", "secret-token-123", "", null, undefined]) {
@@ -364,7 +377,39 @@ describe("busy lock, test availability, confirm", () => {
     expect(finishConfirm(true)).toBe("idle");
     expect(finishConfirm(false)).toBe("confirming");
   });
+  it("a 404 NOT_CONFIGURED on the test means the cached settings are stale", () => {
+    expect(shouldRefreshAfterTestError(e404())).toBe(true);
+    expect(shouldRefreshAfterTestError(new EmailApiError(429, "RATE_LIMITED", "m"))).toBe(false);
+    expect(shouldRefreshAfterTestError(new Error("x"))).toBe(false);
+  });
   it("clearFieldErrors drops only the edited fields", () => {
     expect(clearFieldErrors({ host: "a", port: "b", secret: "c" }, ["host"])).toEqual({ port: "b", secret: "c" });
+  });
+});
+
+const e404 = () => new EmailApiError(404, "NOT_CONFIGURED", "m");
+
+describe("wording that depends on white-label approval", () => {
+  it("the privacy help and the verified banner say it applies once white-label is approved", () => {
+    expect(PRIVACY_HELP).toContain("white-label is approved for your organization");
+    expect(PRIVACY_HELP).toContain("sign-in codes and billing emails");
+    const b = bannerInfo(apiStored("sendgrid"));
+    expect(`${b.title} ${b.detail}`).toContain("white-label is approved for your organization");
+  });
+});
+
+describe("reseedValues (background data arriving)", () => {
+  const prev = smtpStored();
+  const next = smtpStored({ fromName: "Renamed", status: "verified" });
+  it("re-seeds when the form has no unsaved changes", () => {
+    expect(reseedValues(formFromSettings(prev), prev, next)).toEqual(formFromSettings(next));
+  });
+  it("keeps the person's edits when the form is dirty", () => {
+    expect(reseedValues({ ...formFromSettings(prev), fromName: "Mine" }, prev, next)).toBeNull();
+    expect(reseedValues({ ...formFromSettings(prev), secret: "typing" }, prev, next)).toBeNull();
+  });
+  it("seeds from the first data, and re-seeds after the settings were removed elsewhere", () => {
+    expect(reseedValues(formFromSettings(null), null, next)).toEqual(formFromSettings(next));
+    expect(reseedValues(formFromSettings(prev), prev, null)).toEqual(formFromSettings(null));
   });
 });

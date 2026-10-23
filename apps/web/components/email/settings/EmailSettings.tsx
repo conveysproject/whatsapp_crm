@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, type JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   EMPTY_VALUES, applyChoice, applySecurity, applySesRegion, applyTestOutcome, clearFieldErrors, describeSendReason, fetchEmailSettings,
-  formFromSettings, hasUnsavedChanges, isEmailBusy, mapEmailError, mapTestError, removeEmailSettings, saveEmailSettings, testEmailSettings,
+  formFromSettings, hasUnsavedChanges, isEmailBusy, mapEmailError, mapTestError, removeEmailSettings, reseedValues, saveEmailSettings,
+  shouldRefreshAfterTestError, testEmailSettings,
   validateEmailForm, type EmailFormValues, type EmailSettings as EmailSettingsData, type FieldKey, type FormErrors, type PickerId, type Security,
 } from "@/lib/email-settings";
 import { finishConfirm, startConfirm } from "@/lib/brand-settings";
@@ -28,15 +29,24 @@ export function EmailSettings(): JSX.Element {
   const [removeState, setRemoveState] = useState<ConfirmState>("idle");
   const [removeError, setRemoveError] = useState<string | null>(null);
   const seeded = useRef(false);
+  const lastData = useRef<EmailSettingsData | null>(null);
+  const valuesRef = useRef<EmailFormValues | null>(null);
+  valuesRef.current = values;
   const removeRunning = useRef(false);
   const opRunning = useRef(false);
   const latestOp = useRef(0);
 
   useEffect(() => {
-    if (data !== undefined && !seeded.current) {
+    if (data === undefined) return;
+    if (!seeded.current) {
       seeded.current = true;
       setValues(formFromSettings(data));
+    } else if (valuesRef.current && data !== lastData.current) {
+      // Newer data arrived in the background (for example a warm cache refetch): follow it unless the form has edits.
+      const next = reseedValues(valuesRef.current, lastData.current, data);
+      if (next) setValues(next);
     }
+    lastData.current = data;
   }, [data]);
 
   if (isLoading || (data !== undefined && !values)) return <div className="py-12 text-center text-sm text-gray-400">Loading...</div>;
@@ -93,6 +103,7 @@ export function EmailSettings(): JSX.Element {
         : { ok: false, text: describeSendReason(outcome.reason) });
     } catch (err) {
       setTestMessage({ ok: false, text: mapTestError(err) });
+      if (shouldRefreshAfterTestError(err)) void qc.invalidateQueries({ queryKey: EMAIL_SETTINGS_QUERY_KEY });
     } finally {
       opRunning.current = false;
       setTesting(false);

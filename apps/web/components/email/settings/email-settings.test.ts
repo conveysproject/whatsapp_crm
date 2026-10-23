@@ -48,9 +48,14 @@ describe("Email settings page", () => {
     expect(html).toContain("set up SPF and DKIM for your sending domain");
     expect(html).toContain("we do not change your DNS");
     expect(html).toContain("sign-in codes and billing emails are sent through this connection");
+    expect(html).toContain("white-label is approved for your organization");
     expect(html).toContain("we send from our address and tell you");
     expect(html).toContain("app password");
-    expect(view({ values: mkValues("microsoft365") }, null)).toContain("SMTP AUTH must be enabled");
+    expect(html).toContain("2-Step Verification");
+    const ms = view({ values: mkValues("microsoft365") }, null);
+    expect(ms).toContain("Microsoft is phasing out password sign-in for SMTP");
+    expect(ms).toContain("use another provider (for example SES or SendGrid) or ask your Microsoft admin");
+    expect(ms).not.toContain("must be enabled");
     expect(view({ values: mkValues("ses") }, null)).toContain("not your IAM access keys");
   });
 
@@ -123,6 +128,7 @@ describe("Email settings page", () => {
       const html = view({}, stored({ status: "verified" }));
       expect(html).toContain('data-status="verified"');
       expect(html).toContain("Connected: your organization&#x27;s emails are sent from hello@acme.test");
+      expect(html).toContain("white-label is approved for your organization");
     });
     it("failing explains the fallback and shows the reason in words", () => {
       const html = view({}, stored({ status: "failing", lastError: "authentication failed" }));

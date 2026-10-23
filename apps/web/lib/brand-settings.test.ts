@@ -28,6 +28,12 @@ describe("field validation", () => {
     expect(validateName("x".repeat(41))).not.toBeNull();
     expect(validateName("<b>x</b>")).not.toBeNull();
     expect(validateName("   ")).not.toBeNull();
+    for (const bad of ["a b", "a b", "a​b", "a\nb", "a\u0007b", "ab>", "!!!"]) expect(validateName(bad)).not.toBeNull();
+    expect(validateName("ＡＢ")).toBeNull(); // fullwidth folds to AB (NFKC)
+    expect(validateName("\u{1F600}\u{1F600}a")).toBeNull(); // code points, not UTF-16 units
+    expect(validateName("  Acme  ")).toBeNull(); // trimmed
+    expect(validateName("a".repeat(40))).toBeNull();
+    expect(validateName("ａ".repeat(41))).not.toBeNull();
   });
   it("support email is optional but must be a plain address", () => {
     expect(validateEmail("")).toBeNull();
