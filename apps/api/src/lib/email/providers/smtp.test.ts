@@ -241,3 +241,49 @@ describe("PRESETS", () => {
     expect(presetFor("ses", r as string)).toBeNull();
   });
 });
+
+describe("unsafe IP literal hosts are refused at save", () => {
+  it.each([
+    "127.0.0.1", "10.0.0.1", "192.168.1.1", "169.254.169.254", "::1", "fd00::1", "::ffff:127.0.0.1",
+    "2001:10::1", "2001:20::1", "2001:2::1", "100.64.0.1", "0.0.0.0", "64:ff9b::7f00:1",
+  ])("rejects %s", (host) => {
+    expect(validateSmtpConfig({ ...good, host })).toEqual({ ok: false, field: "host", message: "This address is not allowed" });
+  });
+  it.each(["93.184.216.34", "8.8.8.8", "2606:2800:220:1:248:1893:25c8:1946"])("accepts public literal %s", (host) => {
+    expect(validateSmtpConfig({ ...good, host })).toMatchObject({ ok: true, config: { host } });
+  });
+  it("normalises a public IPv4-mapped literal to the embedded IPv4", () => {
+    expect(validateSmtpConfig({ ...good, host: "::ffff:93.184.216.34" })).toMatchObject({ ok: true, config: { host: "93.184.216.34" } });
+  });
+  it("hostnames stay format-only (the relay re-checks at send time)", () => {
+    expect(validateSmtpConfig({ ...good, host: "localhost.example.com" }).ok).toBe(true);
+  });
+});
+
+describe("presetFor own-property check", () => {
+  it.each(["__proto__", "toString", "constructor", "hasOwnProperty"])("rejects %s", (id) => {
+    expect(presetFor(id as never)).toBeNull();
+  });
+});
+
+describe("relay timeout", () => {
+  it("is strictly greater than the relay maxDuration", async () => {
+    const { SMTP_RELAY_TIMEOUT_MS } = await import("./smtp.js");
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../../../../../web/app/api/internal/send-email/route.ts", import.meta.url), "utf8");
+    const m = /export const maxDuration = (\d+);/.exec(src);
+    expect(m).not.toBeNull();
+    expect(SMTP_RELAY_TIMEOUT_MS).toBeGreaterThan(Number(m?.[1]) * 1000);
+    expect(SMTP_RELAY_TIMEOUT_MS).toBe(35_000);
+  });
+  it("uses that timeout for the relay call", async () => {
+    vi.stubEnv("WEB_URL", "https://web.example.test");
+    vi.stubEnv("INTERNAL_EMAIL_SECRET", "s".repeat(40));
+    const spy = vi.spyOn(AbortSignal, "timeout");
+    const f = vi.fn(async () => new Response("{}", { status: 200 }));
+    await buildSmtpTransport(good as unknown as SmtpConfig, { fetchImpl: f as unknown as typeof fetch }).send(mail);
+    expect(spy).toHaveBeenCalledWith(35_000);
+    spy.mockRestore();
+    vi.unstubAllEnvs();
+  });
+});

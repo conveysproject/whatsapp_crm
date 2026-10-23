@@ -2,7 +2,7 @@
 // Railway blocks outbound SMTP, so this adapter does not speak SMTP: it POSTs to the web relay
 // (Vercel), which connects to the client's server through an SSRF-safe, pinned connection.
 // The password is only ever in the relay request body; it never appears in a reason, error or log.
-import { isIPv6 } from "node:net";
+import { isPublicAddress, normalizeIpv4Mapped, parseDottedQuadIpv4, parseIpv6 } from "@WBMSG/shared";
 import { PLAIN_EMAIL_RE } from "../../brand.js";
 import type { EmailTransport, FetchLike, OutboundEmail, SendResult } from "../transport.js";
 
@@ -25,21 +25,14 @@ export type SmtpValidation = { ok: true; config: SmtpConfig } | { ok: false; fie
 const fail = (field: string, message: string): SmtpValidation => ({ ok: false, field, message });
 
 const LABEL_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
-const DOTTED_QUAD_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 // eslint-disable-next-line no-control-regex
 const CONTROL_RE = /[\u0000\r\n]/;
-
-function isStrictIPv4(s: string): boolean {
-  const m = DOTTED_QUAD_RE.exec(s);
-  if (!m) return false;
-  return m.slice(1).every((p) => !(p.length > 1 && p.startsWith("0")) && Number(p) <= 255);
-}
 
 /** A hostname (2+ labels, non-numeric TLD) or an IP literal. IPv4 literals must be strict dotted quads. */
 export function isValidSmtpHost(host: string): boolean {
   if (host.length < 1 || host.length > 253) return false;
-  if (host.includes(":")) return !host.includes("%") && isIPv6(host);
-  if (isStrictIPv4(host)) return true;
+  if (host.includes(":")) return parseIpv6(host) !== null;
+  if (parseDottedQuadIpv4(host)) return true;
   const labels = host.split(".");
   if (labels.length < 2 || !labels.every((l) => LABEL_RE.test(l))) return false;
   const tld = labels[labels.length - 1] as string;
@@ -53,8 +46,13 @@ export function validateSmtpConfig(raw: unknown): SmtpValidation {
 
   const hostRaw = r["host"];
   if (typeof hostRaw !== "string") return fail("host", "SMTP host is required");
-  const host = hostRaw.toLowerCase();
+  let host = hostRaw.toLowerCase();
   if (!isValidSmtpHost(host)) return fail("host", "SMTP host must be a hostname or IP address, without a scheme, port or path");
+  // IP literals must be public (the relay re-checks hostnames at send time); mapped IPv4 is stored as IPv4.
+  if (host.includes(":") || parseDottedQuadIpv4(host)) {
+    if (!isPublicAddress(host)) return fail("host", "This address is not allowed");
+    host = normalizeIpv4Mapped(host)?.address ?? host;
+  }
 
   const port = r["port"];
   if (typeof port !== "number" || !(SMTP_PORTS as readonly number[]).includes(port)) return fail("port", "Port must be 25, 465, 587 or 2525");
@@ -116,8 +114,8 @@ const AWS_REGION_RE = /^[a-z]{2}(-[a-z]+){1,2}-\d{1,2}$/;
 
 /** The host/port/security for a preset; SES needs a valid AWS region. Returns null for a bad id or region. */
 export function presetFor(id: PresetId, region?: string): SmtpPreset | null {
+  if (typeof id !== "string" || !Object.hasOwn(PRESETS, id)) return null;
   const p = PRESETS[id];
-  if (!p) return null;
   let host = p.host;
   if (id === "ses") {
     if (typeof region !== "string" || !AWS_REGION_RE.test(region)) return null;
@@ -128,7 +126,11 @@ export function presetFor(id: PresetId, region?: string): SmtpPreset | null {
 
 // ---- Transport (via the web relay) ----
 
-const RELAY_TIMEOUT_MS = 15_000;
+/**
+ * Must stay strictly above the web relay's `maxDuration` (30 s) so the API never gives up, and retries,
+ * while the relay may still deliver. A test reads the relay source to enforce this.
+ */
+export const SMTP_RELAY_TIMEOUT_MS = 35_000;
 
 /** The only reasons the relay may report; anything else becomes "send failed". */
 const RELAY_REASONS = new Set([
@@ -179,7 +181,7 @@ export function buildSmtpTransport(config: SmtpConfig, deps: { fetchImpl?: Fetch
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
           body: JSON.stringify(body),
           redirect: "error",
-          signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
+          signal: AbortSignal.timeout(SMTP_RELAY_TIMEOUT_MS),
         });
       } catch {
         // Never use the error text: it could carry request details.
