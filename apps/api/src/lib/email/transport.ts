@@ -70,8 +70,8 @@ export function validateProviderConfig(provider: string, raw: unknown): Validati
   const key = r["apiKey"];
   if (typeof key !== "string") return fail("apiKey", "API key is required");
   if (key.length < 8 || key.length > 512) return fail("apiKey", "API key must be 8 to 512 characters");
-  // eslint-disable-next-line no-control-regex
-  if (/[\s\u0000-\u001f\u007f]/.test(key)) return fail("apiKey", "API key must not contain spaces or control characters");
+  // Printable ASCII only: the key goes into an HTTP header, where other characters are rejected or mangled.
+  if (!/^[\x21-\x7e]{8,512}$/.test(key)) return fail("apiKey", "API key must use only letters, numbers and symbols, without spaces");
 
   const rr = r["region"];
   if (rr !== undefined && rr !== "us" && rr !== "eu") return fail("region", "Region must be us or eu");

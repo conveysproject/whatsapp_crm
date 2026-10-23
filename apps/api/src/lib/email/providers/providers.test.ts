@@ -66,7 +66,7 @@ describe("request shapes", () => {
     expect(c.headers["Authorization"]).toBe(`Basic ${Buffer.from(`api:${KEY}`).toString("base64")}`);
     expect(c.headers["Content-Type"]).toBe("application/x-www-form-urlencoded");
     const p = new URLSearchParams(c.init.body as string);
-    expect(p.get("from")).toBe("Acme Support <support@acme.test>");
+    expect(p.get("from")).toBe('"Acme Support" <support@acme.test>');
     expect(p.get("to")).toBe("user@example.com");
     expect(p.get("subject")).toBe("Hello");
     expect(p.get("html")).toBe("<p>Hi</p>");
@@ -95,7 +95,7 @@ describe("request shapes", () => {
     expect(c.url).toBe("https://api.postmarkapp.com/email");
     expect(c.headers["X-Postmark-Server-Token"]).toBe(KEY);
     expect(c.json()).toEqual({
-      From: "Acme Support <support@acme.test>",
+      From: '"Acme Support" <support@acme.test>',
       To: "user@example.com",
       Subject: "Hello",
       HtmlBody: "<p>Hi</p>",
@@ -109,6 +109,10 @@ describe("request shapes", () => {
     expect(r).toMatchObject({ ok: false, retryable: false });
     expect((r as { reason: string }).reason).not.toContain("Inactive");
   });
+  it("postmark 200 with an unreadable body is non-retryable (the message may be accepted)", async () => {
+    const f = vi.fn(async () => ({ status: 200, text: async () => { throw new Error("reset"); } }) as unknown as Response);
+    expect(await send(cfgs[2]!, f as unknown as F)).toMatchObject({ ok: false, retryable: false });
+  });
   it("postmark 200 with unparseable body is a failure", async () => {
     const r = await send(cfgs[2]!, mockFetch(200, "<html>", true));
     expect(r).toMatchObject({ ok: false });
@@ -121,7 +125,7 @@ describe("request shapes", () => {
     expect(c.url).toBe("https://api.resend.com/emails");
     expect(c.headers["Authorization"]).toBe(`Bearer ${KEY}`);
     expect(c.json()).toEqual({
-      from: "Acme Support <support@acme.test>",
+      from: '"Acme Support" <support@acme.test>',
       to: ["user@example.com"],
       subject: "Hello",
       html: "<p>Hi</p>",
@@ -225,6 +229,57 @@ describe.each(cfgs)("$provider common behaviour", (cfg) => {
     expect(body).not.toContain("\\n");
     expect(decoded).not.toContain("<a@b.c>");
     expect(decoded).not.toContain('Ev"il');
+  });
+  it("redirect is refused, the key is never in the URL, and a User-Agent is set", async () => {
+    const f = mockFetch(okStatus[cfg.provider]!, okBody(cfg.provider));
+    await send(cfg, f);
+    const c = call(f);
+    expect(c.init.redirect).toBe("error");
+    expect(String(c.url)).not.toContain(KEY);
+    expect(c.headers["User-Agent"]).toBe("wbmsg-mailer/1");
+  });
+  it("any 3xx is a non-retryable unexpected redirect", async () => {
+    for (const s of [301, 302, 307, 308]) {
+      const r = await send(cfg, mockFetch(s));
+      expect(r).toEqual({ ok: false, retryable: false, reason: "unexpected redirect" });
+    }
+  });
+  it("a refused redirect thrown by fetch is also non-retryable", async () => {
+    const f = vi.fn(async () => {
+      throw new TypeError("fetch failed", { cause: new Error("unexpected redirect") });
+    });
+    expect(await send(cfg, f as unknown as F)).toEqual({ ok: false, retryable: false, reason: "unexpected redirect" });
+  });
+  it("408 and 425 are retryable", async () => {
+    for (const s of [408, 425]) {
+      expect(await send(cfg, mockFetch(s))).toMatchObject({ ok: false, retryable: true });
+    }
+  });
+  it("cancels the body of a non-2xx response to release the connection", async () => {
+    const cancel = vi.fn(async () => undefined);
+    const f = vi.fn(async () => ({ status: 500, body: { cancel } }) as unknown as Response);
+    await send(cfg, f as unknown as F);
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+  it("a throwing cancel does not break the result", async () => {
+    const f = vi.fn(async () => ({ status: 400, body: { cancel: () => { throw new Error("x"); } } }) as unknown as Response);
+    expect(await send(cfg, f as unknown as F)).toMatchObject({ ok: false, retryable: false });
+  });
+  it.each(["Acme, Inc.", "Smith; Co (EU)"])("quotes the display name %j as one name where a From string is used", async (name) => {
+    if (!["mailgun", "postmark"].includes(cfg.provider)) return;
+    const f = mockFetch(okStatus[cfg.provider]!, okBody(cfg.provider));
+    await send(cfg, f, { ...mail, from: { name, address: "support@acme.test" } });
+    const c = call(f);
+    const from = cfg.provider === "mailgun" ? new URLSearchParams(c.init.body as string).get("from") : c.json().From;
+    expect(from).toBe(`"${name}" <support@acme.test>`);
+  });
+  it("escapes a quote and a backslash in the display name", async () => {
+    if (!["mailgun", "postmark"].includes(cfg.provider)) return;
+    const f = mockFetch(okStatus[cfg.provider]!, okBody(cfg.provider));
+    await send(cfg, f, { ...mail, from: { name: 'A"B\\C', address: "support@acme.test" } });
+    const c = call(f);
+    const from = cfg.provider === "mailgun" ? new URLSearchParams(c.init.body as string).get("from") : c.json().From;
+    expect(from).toBe('"A\\"B\\\\C" <support@acme.test>');
   });
   it("rejects a malformed recipient without calling the provider", async () => {
     const f = mockFetch(okStatus[cfg.provider]!);
