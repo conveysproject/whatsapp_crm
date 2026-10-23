@@ -71,6 +71,17 @@ describe("billingMailContext", () => {
     expect(await billingMailContext(prisma, "o")).toEqual({ orgId: null });
     expect(findUnique).toHaveBeenCalledTimes(1);
   });
+  it.each([
+    ["the parent has no brand name", brandRow({ brandName: null })],
+    ["the parent is not a parent", brandRow({ isParent: false })],
+  ])("is the default (sendMail path) when the brand resolves to the default because %s", async (_n, parent) => {
+    const { prisma } = fakePrisma(clientRow, { ...clientBrand, parentOrganization: parent });
+    expect(await billingMailContext(prisma, "client-1")).toEqual({ orgId: null });
+    const { prisma: p2 } = fakePrisma(clientRow, { ...clientBrand, parentOrganization: parent });
+    await sendBillingMail(p2, { orgId: "client-1", to: "a@x.com", subject: SUBJECT, html: HTML });
+    expect(sendMail).toHaveBeenCalledWith({ to: "a@x.com", subject: SUBJECT, html: HTML });
+    expect(sendOrgMail).not.toHaveBeenCalled();
+  });
   it("is the default when the lookup throws, and never throws", async () => {
     const prisma = { organization: { findUnique: vi.fn().mockRejectedValue(new Error("db down")) } } as unknown as PrismaClient;
     await expect(billingMailContext(prisma, "o")).resolves.toEqual({ orgId: null });

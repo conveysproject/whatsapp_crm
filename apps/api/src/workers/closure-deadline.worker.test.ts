@@ -68,6 +68,23 @@ describe("golden: closure deadline email (default organization)", () => {
     expect(args.subject).not.toMatch(/[\r\n]/);
   });
 
+  it("looks the organization up once per run, not once per contact", async () => {
+    const brand = { isParent: false, whiteLabelEnabled: false, brandName: null, brandColor: null, brandSupportEmail: null, brandHidePoweredBy: false, slug: null, logoImage: null, smallLogoImage: null, favicon: null, darkLogoImage: null, darkSmallLogoImage: null, darkFavicon: null,
+      parentOrganization: { isParent: true, whiteLabelEnabled: true, brandName: "Acme Messaging", brandColor: "#112233", brandSupportEmail: "help@acme.test", brandHidePoweredBy: false, slug: "acme", logoImage: null, smallLogoImage: null, favicon: null, darkLogoImage: null, darkSmallLogoImage: null, darkFavicon: null } };
+    prismaMock.contact.findMany.mockReset().mockResolvedValueOnce([]).mockResolvedValueOnce([
+      { id: "c1", name: "A", phoneNumber: "+1", assignedUserId: "u1" },
+      { id: "c2", name: "B", phoneNumber: "+2", assignedUserId: "u1" },
+      { id: "c3", name: "C", phoneNumber: "+3", assignedUserId: "u1" },
+    ]);
+    prismaMock.organization.findUnique
+      .mockResolvedValueOnce({ parentOrganizationId: "parent-1", parentOrganization: { whiteLabelEnabled: true } })
+      .mockResolvedValueOnce(brand);
+    await processClosureDeadlines();
+    expect(sendOrgMail).toHaveBeenCalledTimes(3);
+    expect(prismaMock.organization.findUnique).toHaveBeenCalledTimes(2);
+    for (const c of sendOrgMail.mock.calls) expect(c[1].brand).toMatchObject({ name: "Acme Messaging" });
+  });
+
   it("for the parent's own organization the email is unchanged and not routed through a provider", async () => {
     prismaMock.organization.findUnique.mockResolvedValueOnce({ parentOrganizationId: null, parentOrganization: null });
     await processClosureDeadlines();

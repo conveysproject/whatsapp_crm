@@ -34,6 +34,8 @@ export async function billingMailContext(prisma: PrismaClient, orgId: string): P
     });
     if (!org?.parentOrganizationId || org.parentOrganization?.whiteLabelEnabled !== true) return { orgId: null };
     const brand = await resolveBrand(prisma, orgId);
+    // The parent is flagged but has no usable brand (not a parent, or no brand name): today's exact email.
+    if (brand.isDefault) return { orgId: null };
     return { orgId, brand };
   } catch {
     return { orgId: null };
@@ -69,10 +71,12 @@ export interface BillingMailArgs {
   subject: string;
   html: string;
   logger?: MailLogger;
+  /** A context already worked out for this organization (loops hoist it so the org is looked up once). */
+  context?: BillingMailContext;
 }
 
 export async function sendBillingMail(prisma: PrismaClient, args: BillingMailArgs): Promise<void> {
-  const ctx = await billingMailContext(prisma, args.orgId);
+  const ctx = args.context ?? (await billingMailContext(prisma, args.orgId));
   if (ctx.orgId === null || !ctx.brand) {
     // Exactly today's call (the same as sendOrgMail with a null org id; the recipient list stays one message).
     return sendMail({ to: args.to, subject: args.subject, html: args.html });
