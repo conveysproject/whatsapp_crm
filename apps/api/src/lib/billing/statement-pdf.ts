@@ -1,4 +1,5 @@
 import PDFDocument from "pdfkit";
+import { LEGAL_SELLER_EMAIL } from "./legal-seller.js";
 
 export interface StatementPdfInput {
   invoiceNumber: string;
@@ -67,7 +68,7 @@ export function buildStatementPdf(i: StatementPdfInput): Promise<Buffer> {
     doc.fontSize(9).fillColor(grey);
     if (i.seller.address) doc.text(i.seller.address, { width: 230 });
     if (i.seller.gstin) doc.text(`GSTIN: ${i.seller.gstin}`, { width: 230 });
-    doc.text("info@conveys.in", { width: 230 });
+    doc.text(LEGAL_SELLER_EMAIL, { width: 230 });
     const leftEnd = doc.y;
 
     doc.fontSize(9).fillColor(grey).text("BILLED TO", 320, top);
@@ -101,7 +102,7 @@ export function buildStatementPdf(i: StatementPdfInput): Promise<Buffer> {
 
     doc.fontSize(9).fillColor(grey).text(
       "Meta's own WhatsApp message charges are billed to you directly by Meta and are not part of this statement. " +
-      "Questions about this statement: info@conveys.in.",
+      `Questions about this statement: ${LEGAL_SELLER_EMAIL}.`,
       50, y + 50, { width: 495 },
     );
     doc.end();
