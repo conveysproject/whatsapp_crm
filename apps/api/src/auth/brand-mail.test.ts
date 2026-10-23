@@ -57,6 +57,24 @@ describe("sendCodeEmailToAccount", () => {
   });
 });
 
+describe("who may carry the code", () => {
+  const deliver = (i: number) => m.sendCodeEmail.mock.calls[i]![5] as unknown;
+  it("a parent's own user may use the parent's provider", async () => {
+    await sendCodeEmailToAccount(prismaFor({ id: "u1" }, { organizationId: "o1" }, orgRow), "x@y.z", "signin_email", "123456");
+    expect(typeof deliver(0)).toBe("function");
+  });
+  it("a client's code never goes through the parent's provider (default sender, parent brand kept)", async () => {
+    const client = { ...orgRow, isParent: false, parentOrganizationId: "p1" };
+    await sendCodeEmailToAccount(prismaFor({ id: "u1" }, { organizationId: "c1" }, client), "x@y.z", "password_reset", "123456");
+    expect(deliver(0)).toBeUndefined();
+  });
+  it("a client's password-changed notice also uses the default sender", async () => {
+    const client = { ...orgRow, isParent: false, parentOrganizationId: "p1" };
+    await sendPasswordChangedToAccount(prismaFor({ id: "u1" }, { organizationId: "c1" }, client), "x@y.z");
+    expect(m.sendPasswordChangedEmail.mock.calls[0]![2]).toBeUndefined();
+  });
+});
+
 describe("sendPasswordChangedToAccount", () => {
   it("default: unchanged call", async () => {
     await sendPasswordChangedToAccount(prismaFor(null, null, null), "x@y.z");
