@@ -6,6 +6,7 @@ import { invitationRoutes } from "./invitations.js";
 import { clientInvitationRoutes } from "./client-invitations.js";
 import { parentRoutes } from "./parent.js";
 import { brandRoutes } from "./brand.js";
+import { emailSettingsRoutes } from "./email-settings.js";
 import { orgLinkRoutes } from "./org-link.js";
 import { webhooksRouter } from "./webhooks.js";
 import { conversationsRouter } from "./conversations.js";
@@ -82,6 +83,7 @@ export const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(clientInvitationRoutes, { prefix: "/v1" });
   await fastify.register(parentRoutes, { prefix: "/v1" });
   await fastify.register(brandRoutes, { prefix: "/v1" });
+  await fastify.register(emailSettingsRoutes, { prefix: "/v1" });
   await fastify.register(orgLinkRoutes, { prefix: "/v1" });
   await fastify.register(webhooksRouter, { prefix: "/v1" });
   await fastify.register(conversationsRouter, { prefix: "/v1" });
