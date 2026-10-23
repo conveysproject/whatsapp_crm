@@ -13,6 +13,7 @@ export const SETTINGS_TILES: SettingsTile[] = [
   { href: "/settings/roles", label: "Roles", desc: "Default permissions per role", rule: { adminOnly: true } },
   { href: "/settings/whatsapp-account", label: "WhatsApp Account", desc: "Connect your WABA", rule: { perm: "settings_access", sub: "settings_whatsapp" } },
   { href: "/settings/branding", label: "Branding", desc: "Your brand for your clients: name, logo, colors, web address", rule: { parentAdminOnly: true }, isNew: true },
+  { href: "/settings/email", label: "Email", desc: "Send your emails from your own address", rule: { parentAdminOnly: true }, isNew: true },
   { href: "/settings/labels", label: "Labels", desc: "Color-coded contact tags", rule: { perm: "settings_access", sub: "settings_tags" } },
   { href: "/settings/inbox-labels", label: "Conversation Labels", desc: "Labels for inbox queue management", rule: { perm: "settings_access", sub: "settings_tags" } },
   { href: "/settings/contact-settings", label: "Contact Settings", desc: "Fields, statuses, configuration & assignment rules", rule: { perm: "contacts_access" } },
