@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import { sendMail } from "../mail.js";
+import { sendBillingMail } from "./billing-mail.js";
 
 export async function notifyPaymentFailed(prisma: PrismaClient, organizationId: string, graceEndsAt: Date): Promise<void> {
   try {
@@ -10,7 +10,8 @@ export async function notifyPaymentFailed(prisma: PrismaClient, organizationId: 
     const to = admins.map((a) => a.email).filter(Boolean);
     if (to.length === 0) return;
     const until = graceEndsAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-    await sendMail({
+    await sendBillingMail(prisma, {
+      orgId: organizationId,
       to,
       subject: "WBMSG: your last payment failed",
       html: `<p>We could not process your latest WBMSG subscription payment.</p>

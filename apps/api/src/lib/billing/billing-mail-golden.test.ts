@@ -2,16 +2,18 @@
 // ordinary (default) organization. They were captured before Task B4b and must stay byte-identical afterwards.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
+import type * as PaymentLinks from "./payment-links.js";
+import type * as Statements from "./statements.js";
 
 const { sendMail, createLink } = vi.hoisted(() => ({ sendMail: vi.fn(), createLink: vi.fn() }));
 vi.mock("../mail.js", () => ({ sendMail: (...a: unknown[]) => sendMail(...a), isEmailConfigured: () => true }));
 vi.mock("../redis.js", () => ({ redis: { eval: vi.fn() } }));
 vi.mock("../prisma.js", () => ({ prisma: {} }));
 vi.mock("./payment-links.js", async (orig) => ({
-  ...(await orig<typeof import("./payment-links.js")>()),
+  ...(await orig<typeof PaymentLinks>()),
   createStatementPaymentLink: (...a: unknown[]) => createLink(...a),
 }));
-vi.mock("./statements.js", async (orig) => ({ ...(await orig<typeof import("./statements.js")>()), issueStatements: vi.fn() }));
+vi.mock("./statements.js", async (orig) => ({ ...(await orig<typeof Statements>()), issueStatements: vi.fn() }));
 vi.mock("./metering-sweep.js", () => ({ runMeteringSweep: vi.fn().mockResolvedValue({}) }));
 
 import { ensurePaymentLinks, sendPaymentReminders, sendPaymentReceived } from "./statement-payment.js";

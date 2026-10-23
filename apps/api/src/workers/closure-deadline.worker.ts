@@ -2,7 +2,7 @@ import { Queue, Worker } from "bullmq";
 import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
 import { computeClosureDeadline } from "../lib/closure-deadline.js";
-import { sendMail } from "../lib/mail.js";
+import { sendBillingMail } from "../lib/billing/billing-mail.js";
 import { pushToUser } from "../lib/push.js";
 import { closureOverduePush } from "../lib/push-events.js";
 
@@ -66,7 +66,8 @@ export async function processClosureDeadlines(): Promise<void> {
         const user = await prisma.user.findFirst({ where: { id: userId, organizationId: org.id }, select: { email: true } });
         if (user?.email) {
           const safeLabel = label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-          await sendMail({
+          await sendBillingMail(prisma, {
+            orgId: org.id,
             to: user.email,
             subject: `Closure deadline passed: ${label}`,
             html: `<p>The contact <strong>${safeLabel}</strong> has passed its closure deadline without reaching a closure status.</p><p>Please review and update the contact.</p>`,

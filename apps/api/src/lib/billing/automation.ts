@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { sendMail } from "../mail.js";
+import { sendBillingMail } from "./billing-mail.js";
 import { loadBillingConfig } from "./settings.js";
 import { issueStatements } from "./statements.js";
 import { ensurePaymentLinks } from "./statement-payment.js";
@@ -88,7 +89,8 @@ export async function runBlockingSweep(prisma: PrismaClient, mode: "off" | "watc
       const admins = await prisma.user.findMany({ where: { organizationId: f.organizationId, role: "admin", isActive: true, deletedAt: null }, select: { email: true } });
       const to = statementRecipients(readBillingDetails(org?.settings), admins.map((a) => a.email).filter(Boolean));
       if (to.length === 0) continue;
-      await sendMail({
+      await sendBillingMail(prisma, {
+        orgId: f.organizationId,
         to,
         subject: "WBMSG: sending is paused until your statement is paid",
         html: `<p>Your WBMSG statement for the billing period starting ${esc(f.month)} is overdue, so sending WhatsApp messages from WBMSG is paused.</p>

@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { sendMail } from "../mail.js";
+import { sendBillingMail } from "./billing-mail.js";
 import { cycleContaining } from "./cycle.js";
 import { loadBillingConfig } from "./settings.js";
 import { priceStatement } from "./statements.js";
@@ -56,7 +57,7 @@ export async function requestCancellation(prisma: PrismaClient, input: { organiz
       html: `<p><strong>${esc(org?.name ?? input.organizationId)}</strong> asked to cancel their account.</p>${reason ? `<p>Reason: ${esc(reason)}</p>` : ""}<p>Approve or dismiss it in Admin &gt; Billing &gt; Cancellation requests.</p>`,
     }),
     recipientsFor(prisma, input.organizationId).then((to) => to.length > 0
-      ? sendMail({ to, subject: "WBMSG: we received your cancellation request", html: "<p>We received your request to cancel your WBMSG account. We will confirm shortly. Until we do, nothing changes and you can withdraw the request in Settings &gt; Billing.</p>" })
+      ? sendBillingMail(prisma, { orgId: input.organizationId, to, subject: "WBMSG: we received your cancellation request", html: "<p>We received your request to cancel your WBMSG account. We will confirm shortly. Until we do, nothing changes and you can withdraw the request in Settings &gt; Billing.</p>" })
       : undefined),
   ]).catch((err: unknown) => console.warn("[billing-cancel] request email failed", err instanceof Error ? err.name : "error"));
   return "created";
@@ -119,7 +120,8 @@ export async function approveCancellation(prisma: PrismaClient, organizationId: 
   try {
     const to = await recipientsFor(prisma, organizationId);
     if (to.length > 0) {
-      await sendMail({
+      await sendBillingMail(prisma, {
+        orgId: organizationId,
         to,
         subject: "WBMSG: your account has been cancelled",
         html: `<p>Your WBMSG account has been cancelled. Sending WhatsApp messages from WBMSG is now off.</p>
