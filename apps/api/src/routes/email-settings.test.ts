@@ -532,6 +532,23 @@ describe("POST test", () => {
     expect(upd.data.lastTestedAt).toBeInstanceOf(Date);
   });
 
+  it("a failed test keeps a failing setting failing", async () => {
+    mockPrisma.orgEmailSettings.findUnique.mockResolvedValue(await storedRow({ status: "failing" }));
+    mockSend.mockResolvedValue({ ok: false, retryable: true, reason: "the provider timed out" });
+    const res = await test();
+    expect(res.json()).toEqual({ data: { status: "failing", ok: false, reason: "the provider timed out", retryable: true } });
+    const upd = mockPrisma.orgEmailSettings.updateMany.mock.calls[0]![0];
+    expect(upd.data).toMatchObject({ status: "failing", lastError: "the provider timed out" });
+  });
+
+  it("a successful test of a failing setting verifies it and resets the counter", async () => {
+    mockPrisma.orgEmailSettings.findUnique.mockResolvedValue(await storedRow({ status: "failing", consecutiveFailures: 5 }));
+    const res = await test();
+    expect(res.json()).toEqual({ data: { status: "verified" } });
+    const upd = mockPrisma.orgEmailSettings.updateMany.mock.calls[0]![0];
+    expect(upd.data).toMatchObject({ status: "verified", consecutiveFailures: 0, lastError: null });
+  });
+
   it("caps the stored reason at 120 characters", async () => {
     mockPrisma.orgEmailSettings.findUnique.mockResolvedValue(await storedRow());
     mockSend.mockResolvedValue({ ok: false, retryable: true, reason: "r".repeat(500) });

@@ -296,12 +296,14 @@ export const emailSettingsRoutes: FastifyPluginAsync = async (fastify) => {
       retryable = true;
     }
 
+    // A failed test never lifts a "failing" mark: only a successful test does.
+    const failStatus = row.status === "failing" ? "failing" : "unverified";
     // Only the exact row that was tested may be updated; a concurrent PUT changes updatedAt and wins.
     const result = await fastify.prisma.orgEmailSettings.updateMany({
       where: { id: row.id, organizationId, updatedAt: row.updatedAt },
       data: ok
         ? { status: "verified", lastTestedAt: new Date(), consecutiveFailures: 0, lastError: null }
-        : { status: "unverified", lastTestedAt: new Date(), lastError: reason },
+        : { status: failStatus, lastTestedAt: new Date(), lastError: reason },
     });
     if (result.count === 0) {
       audit({ ok: false, reason: "settings changed during the test" });
@@ -309,7 +311,7 @@ export const emailSettingsRoutes: FastifyPluginAsync = async (fastify) => {
     }
     audit(ok ? { ok: true } : { ok: false, reason });
     if (ok) return reply.send({ data: { status: "verified" } });
-    return reply.send({ data: { status: "unverified", ok: false, reason, retryable } });
+    return reply.send({ data: { status: failStatus, ok: false, reason, retryable } });
   });
 
   fastify.delete("/organizations/email-settings", { preHandler: guard }, async (request, reply) => {
