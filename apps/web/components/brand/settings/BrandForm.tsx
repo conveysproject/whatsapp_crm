@@ -7,6 +7,8 @@ interface Props {
   /** A server message that belongs to no single field. */
   formError: string | null;
   saving: boolean;
+  /** Another action (an upload or remove) is running. */
+  locked?: boolean;
   /** The page origin once known in the browser (null while rendering on the server). */
   origin: string | null;
   onChange: (patch: Partial<BrandFormValues>) => void;
@@ -19,7 +21,7 @@ function FieldError({ id, message }: { id: string; message?: string }): JSX.Elem
   return message ? <p id={id} role="alert" className="mt-1 text-xs text-red-600">{message}</p> : null;
 }
 
-export function BrandForm({ values, errors, formError, saving, origin, onChange, onSubmit }: Props): JSX.Element {
+export function BrandForm({ values, errors, formError, saving, locked, origin, onChange, onSubmit }: Props): JSX.Element {
   const colorOk = /^#[0-9a-fA-F]{6}$/.test(values.color);
   const address = clientSignInUrl(origin, values.slug);
   return (
@@ -76,7 +78,7 @@ export function BrandForm({ values, errors, formError, saving, origin, onChange,
 
       {formError && <p role="alert" className="text-sm text-red-600">{formError}</p>}
 
-      <button type="submit" disabled={saving} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+      <button type="submit" disabled={saving || locked === true} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
         {saving ? "Saving..." : "Save"}
       </button>
     </form>

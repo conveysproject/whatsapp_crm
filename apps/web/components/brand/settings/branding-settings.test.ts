@@ -167,3 +167,18 @@ describe("BrandForm", () => {
     expect(render()).toContain(">/c/acme/sign-in<");
   });
 });
+
+describe("Background refresh failure and locking", () => {
+  it("keeps the form and shows a small notice when a refresh failed", () => {
+    const html = view({ refreshFailed: true });
+    expect(html).toContain("Could not refresh");
+    expect(html).toContain('id="brand-name"');
+    expect(view()).not.toContain("Could not refresh");
+  });
+  it("disables upload, remove and save while another action runs", () => {
+    const html = view({ locked: true }, settings({ logoUrl: "https://cdn.example/l.png" }));
+    expect(html).not.toMatch(/<button type="submit"(?![^>]*disabled)/);
+    expect(html).toMatch(/aria-label="Upload Logo"[^>]*/);
+    expect(html.match(/disabled=""/g)!.length).toBeGreaterThanOrEqual(8);
+  });
+});

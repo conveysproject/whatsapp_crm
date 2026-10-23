@@ -6,18 +6,21 @@ interface Props {
   /** The current image URL exactly as the API returned it. Nothing typed by the user is ever used here. */
   url: string | null;
   busy: boolean;
+  /** Another save, upload or remove is running. */
+  locked?: boolean;
   error: string | null;
   onFile: (file: File) => void;
   onRemove: () => void;
 }
 
 /** One image slot: preview, Upload and Remove. The API checks size and the real file type again. */
-export function BrandImageSlot({ def, url, busy, error, onFile, onRemove }: Props): JSX.Element {
+export function BrandImageSlot({ def, url, busy, locked, error, onFile, onRemove }: Props): JSX.Element {
   function onChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (file) onFile(file);
   }
+  const off = busy || locked === true;
   return (
     <div data-slot={def.slot} className="rounded-lg border p-4 space-y-3">
       <div>
@@ -33,12 +36,12 @@ export function BrandImageSlot({ def, url, busy, error, onFile, onRemove }: Prop
         )}
       </div>
       <div className="flex items-center gap-2">
-        <label className={`inline-flex cursor-pointer items-center rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 ${busy ? "pointer-events-none opacity-50" : ""}`}>
+        <label className={`inline-flex cursor-pointer items-center rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 ${off ? "pointer-events-none opacity-50" : ""}`}>
           {busy ? "Uploading..." : url ? "Replace" : "Upload"}
-          <input type="file" accept={def.accept} disabled={busy} onChange={onChange} className="sr-only" aria-label={`Upload ${def.label}`} />
+          <input type="file" accept={def.accept} disabled={off} onChange={onChange} className="sr-only" aria-label={`Upload ${def.label}`} />
         </label>
         {url && (
-          <button type="button" onClick={onRemove} disabled={busy} className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50">
+          <button type="button" onClick={onRemove} disabled={off} className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50">
             Remove
           </button>
         )}

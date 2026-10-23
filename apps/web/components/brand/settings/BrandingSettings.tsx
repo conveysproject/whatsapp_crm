@@ -3,17 +3,19 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  fetchBrandSettings, formFromSettings, mapBrandError, preCheckFile, removeBrandAsset, saveBrandSettings, uploadBrandAsset,
+  clearFieldErrors, fetchBrandSettings, finishConfirm, formFromSettings, isBrandBusy, startConfirm, mapBrandError, preCheckFile, removeBrandAsset, saveBrandSettings, uploadBrandAsset,
   validateBrandForm, type BrandFormValues, type BrandSettings, type FormErrors, type SaveResult, type SlotName,
 } from "@/lib/brand-settings";
-import { confirmReducer, runConfirmed, type ConfirmState } from "@/lib/parent-orgs";
+import { confirmReducer, type ConfirmState } from "@/lib/parent-orgs";
 import { BrandingSettingsView, type SlotUiState } from "./BrandingSettingsView";
 
 export const BRAND_SETTINGS_QUERY_KEY = ["brand-settings"] as const;
 
 export function BrandingSettings(): JSX.Element {
   const qc = useQueryClient();
-  const { data, isLoading, isError } = useQuery({ queryKey: BRAND_SETTINGS_QUERY_KEY, queryFn: fetchBrandSettings, staleTime: 0 });
+  const { data, isLoading, isError } = useQuery({
+    queryKey: BRAND_SETTINGS_QUERY_KEY, queryFn: fetchBrandSettings, staleTime: 0, refetchOnWindowFocus: false,
+  });
   const [values, setValues] = useState<BrandFormValues | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -25,6 +27,7 @@ export function BrandingSettings(): JSX.Element {
   const [removeState, setRemoveState] = useState<ConfirmState>("idle");
   const [removeError, setRemoveError] = useState<string | null>(null);
   const seeded = useRef(false);
+  const removeRunning = useRef(false);
 
   useEffect(() => { setOrigin(window.location.origin); }, []);
   useEffect(() => {
@@ -35,7 +38,8 @@ export function BrandingSettings(): JSX.Element {
   }, [data]);
 
   if (isLoading || (data && !values)) return <div className="py-12 text-center text-sm text-gray-400">Loading...</div>;
-  if (isError || !data || !values) return <div className="py-12 text-center text-sm text-red-600">Could not load your brand. Please reload the page.</div>;
+  if (!data || !values) return <div className="py-12 text-center text-sm text-red-600">Could not load your brand. Please reload the page.</div>;
+  const busy = isBrandBusy({ saving, slotState, removeState });
 
   function applyResult(r: SaveResult) {
     qc.setQueryData<BrandSettings>(BRAND_SETTINGS_QUERY_KEY, r.data);
@@ -47,7 +51,7 @@ export function BrandingSettings(): JSX.Element {
   }
 
   async function save() {
-    if (!values) return;
+    if (!values || busy) return;
     const found = validateBrandForm(values);
     setErrors(found);
     setFormError(null);
@@ -65,6 +69,7 @@ export function BrandingSettings(): JSX.Element {
   }
 
   async function onFile(slot: SlotName, file: File) {
+    if (busy) return;
     const problem = preCheckFile(slot, { name: file.name, type: file.type, size: file.size });
     if (problem) {
       setSlot(slot, { busy: false, error: problem });
@@ -81,29 +86,29 @@ export function BrandingSettings(): JSX.Element {
 
   async function confirmRemove() {
     const slot = removeSlot;
-    if (!slot) return;
-    const next = confirmReducer(removeState, "confirm");
-    setRemoveState(next);
+    if (!slot || removeRunning.current) return;
+    const step = startConfirm(removeState);
+    if (!step.proceed) return;
+    removeRunning.current = true;
+    setRemoveState(step.next);
     setRemoveError(null);
     let ok = false;
-    await runConfirmed(removeState, async () => {
-      try {
-        applyResult(await removeBrandAsset(slot));
-        ok = true;
-      } catch (err) {
-        setRemoveError(mapBrandError(err).message);
-      }
-    });
-    if (ok) {
-      setRemoveSlot(null);
-      setRemoveState(confirmReducer(next, "done"));
-    } else {
-      setRemoveState("confirming");
+    try {
+      applyResult(await removeBrandAsset(slot));
+      ok = true;
+    } catch (err) {
+      setRemoveError(mapBrandError(err).message);
+    } finally {
+      removeRunning.current = false;
     }
+    if (ok) setRemoveSlot(null);
+    setRemoveState(finishConfirm(ok));
   }
 
   return (
     <BrandingSettingsView
+      refreshFailed={isError}
+      locked={busy}
       settings={data}
       values={values}
       errors={errors}
@@ -115,10 +120,10 @@ export function BrandingSettings(): JSX.Element {
       removeSlot={removeSlot}
       removeState={removeState}
       removeError={removeError}
-      onChange={(patch) => { setValues({ ...values, ...patch }); setErrors({}); }}
+      onChange={(patch) => { setValues({ ...values, ...patch }); setErrors((prev) => clearFieldErrors(prev, patch)); }}
       onSave={() => { void save(); }}
       onFile={(slot, file) => { void onFile(slot, file); }}
-      onRequestRemove={(slot) => { setRemoveSlot(slot); setRemoveError(null); setRemoveState(confirmReducer("idle", "request")); }}
+      onRequestRemove={(slot) => { if (busy) return; setRemoveSlot(slot); setRemoveError(null); setRemoveState(confirmReducer("idle", "request")); }}
       onCancelRemove={() => { setRemoveSlot(null); setRemoveState("idle"); setRemoveError(null); }}
       onConfirmRemove={() => { void confirmRemove(); }}
     />
