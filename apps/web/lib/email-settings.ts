@@ -465,7 +465,7 @@ const REASON_RULES: readonly (readonly [RegExp, string])[] = [
   [/relay unavailable|relay rejected request|relay not authorised/i, "Our email relay is not available right now. Try again later."],
   [/invalid email address/i, "An email address in your settings is not valid."],
   [/invalid configuration/i, "The connection details are not valid. Check them and save again."],
-  [/timeout|network error/i, "The connection timed out. Try again later."],
+  [/timeout|timed out|network error/i, "The connection timed out. Try again later."],
   [/unexpected (redirect|provider response)|could not read the provider response/i, "Your provider answered in an unexpected way. Check the settings and the region."],
   [/stored credentials cannot be read/i, "Your saved credentials cannot be read. Enter them again and save."],
   [/settings changed during the test/i, "Your settings changed during the test. Save and send the test again."],

@@ -288,7 +288,7 @@ describe("describeSendReason covers every reason the API can produce", () => {
   // Gathered from apps/api/src/lib/email/providers/*.ts, transport.ts, the SMTP relay mapping and routes/email-settings.ts.
   const reasons = [
     "HTTP 401: authentication failed", "HTTP 403: authentication failed, code 10", "HTTP 429: rate limited", "HTTP 408: rate limited",
-    "HTTP 500: provider unavailable", "HTTP 503: provider unavailable, code 7", "HTTP 422: rejected by provider", "HTTP 400: rejected by provider, code 300",
+    "HTTP 408: request timed out", "HTTP 425: request timed out", "HTTP 500: provider unavailable", "HTTP 503: provider unavailable, code 7", "HTTP 422: rejected by provider", "HTTP 400: rejected by provider, code 300",
     "rejected by provider, code 406", "unexpected redirect", "timeout", "network error", "could not read the provider response",
     "unexpected provider response", "invalid email address",
     "authentication failed", "connection failed", "certificate not trusted", "rejected by server", "temporary failure", "host not allowed",
