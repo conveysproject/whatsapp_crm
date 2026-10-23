@@ -252,7 +252,10 @@ describe.each(cfgs)("$provider common behaviour", (cfg) => {
   });
   it("408 and 425 are retryable", async () => {
     for (const s of [408, 425]) {
-      expect(await send(cfg, mockFetch(s))).toMatchObject({ ok: false, retryable: true });
+      const r = await send(cfg, mockFetch(s));
+      expect(r).toMatchObject({ ok: false, retryable: true });
+      // A timeout reason, not "rate limited": the provider did not throttle us.
+      expect((r as { reason: string }).reason).toBe(`HTTP ${s}: request timed out`);
     }
   });
   it("cancels the body of a non-2xx response to release the connection", async () => {

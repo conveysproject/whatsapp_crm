@@ -76,6 +76,8 @@ describe("validateBrandInput", () => {
     ["markup in name", { name: "<b>Acme</b>" }, "name"],
     ["control char in name", { name: "Ac\u0000me" }, "name"],
     ["zero-width space in name", { name: "Ac\u200bme" }, "name"],
+    ["line separator in name", { name: "Ac\u2028me" }, "name"],
+    ["paragraph separator in name", { name: "Ac\u2029me" }, "name"],
     ["right-to-left override in name", { name: "Acme\u202e" }, "name"],
     ["zero-width joiners around digits", { name: "\u200d12\u200d" }, "name"],
     ["41 astral letters", { name: "\u{1d538}".repeat(41) }, "name"],

@@ -149,6 +149,8 @@ describe("countsTowardFailing", () => {
     "connection failed",
     "HTTP 503: provider unavailable",
     "HTTP 429: rate limited",
+    "HTTP 408: request timed out",
+    "HTTP 425: request timed out",
     "host not allowed",
     "relay unavailable",
     "relay not authorised",

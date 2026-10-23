@@ -43,7 +43,8 @@ export function classifyStatus(status: number, code?: number): SendResult {
   const suffix = code !== undefined ? `, code ${code}` : "";
   if (status === 401 || status === 403) return fixed(false, `HTTP ${status}: authentication failed${suffix}`);
   if (status >= 300 && status < 400) return fixed(false, "unexpected redirect");
-  if (status === 408 || status === 425 || status === 429) return fixed(true, `HTTP ${status}: rate limited${suffix}`);
+  if (status === 408 || status === 425) return fixed(true, `HTTP ${status}: request timed out${suffix}`);
+  if (status === 429) return fixed(true, `HTTP ${status}: rate limited${suffix}`);
   if (status >= 500) return fixed(true, `HTTP ${status}: provider unavailable${suffix}`);
   return fixed(false, `HTTP ${status}: rejected by provider${suffix}`);
 }

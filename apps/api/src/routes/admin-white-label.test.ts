@@ -135,7 +135,7 @@ describe("PATCH /v1/admin/organizations/:orgId/white-label", () => {
     expect(mockPrisma.organization.updateMany).not.toHaveBeenCalled();
   });
 
-  it.each([["null", null], ["a string", "3"], ["a fraction", 3.5], ["negative", -1], ["a boolean", true]])(
+  it.each([["null", null], ["a string", "3"], ["a fraction", 3.5], ["negative", -1], ["a boolean", true], ["1e300", 1e300], ["above int32", 2147483648]])(
     "reviewedRevision as %s is 400 and nothing is written",
     async (_n, bad) => {
       app = await buildApp("superAdmin");

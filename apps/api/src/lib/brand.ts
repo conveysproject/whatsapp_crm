@@ -62,8 +62,9 @@ const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
  */
 export const PLAIN_EMAIL_RE = /^(?=.{1,254}$)[^\s@,;<>"'()[\]\\:]+@[^\s@,;<>"'()[\]\\:]+\.[^\s@,;<>"'()[\]\\:]+$/;
 const HAS_LETTER_OR_DIGIT_RE = /[\p{L}\p{N}]/u;
-// Angle brackets, control characters (\p{Cc}) and format characters such as zero-width and bidi overrides (\p{Cf}).
-const BAD_NAME_RE = /[<>\p{Cc}\p{Cf}]/u;
+// Angle brackets, control characters (\p{Cc}), format characters such as zero-width and bidi overrides (\p{Cf}),
+// and the line and paragraph separators U+2028 / U+2029 (\p{Zl}, \p{Zp}).
+const BAD_NAME_RE = /[<>\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
 export function validateSlug(s: string): boolean {
   return typeof s === "string" && s.length >= 3 && s.length <= 40 && SLUG_RE.test(s) && !RESERVED_SLUGS.includes(s);

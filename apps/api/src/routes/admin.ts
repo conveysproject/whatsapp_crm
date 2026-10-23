@@ -334,10 +334,10 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
           .status(400)
           .send({ error: { code: "VALIDATION_FAILED", field: "reviewedRevision", message: "reviewedRevision is required to enable" } });
       }
-      if (rawRevision !== undefined && !(typeof rawRevision === "number" && Number.isInteger(rawRevision) && rawRevision >= 0)) {
+      if (rawRevision !== undefined && !(typeof rawRevision === "number" && Number.isInteger(rawRevision) && rawRevision >= 0 && rawRevision <= 2147483647)) {
         return reply
           .status(400)
-          .send({ error: { code: "VALIDATION_FAILED", field: "reviewedRevision", message: "reviewedRevision must be a whole number of 0 or more" } });
+          .send({ error: { code: "VALIDATION_FAILED", field: "reviewedRevision", message: "reviewedRevision must be a whole number from 0 to 2147483647" } });
       }
       const reviewedRevision = rawRevision as number | undefined;
       if (enabled) {
