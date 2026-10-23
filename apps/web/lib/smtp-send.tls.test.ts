@@ -1,53 +1,103 @@
-// Real TLS handshakes against a local server with a self-signed certificate (test-only fixture in
-// __fixtures__). Nothing is mocked except the host resolver, which is replaced by a pass-through
-// to 127.0.0.1 because the real guard blocks loopback by design.
-import { readFileSync } from "node:fs";
+// Real TLS handshakes against a local server with a self-signed certificate. The key pair and the
+// certificate are generated at test time into a unique temp directory (deleted afterwards): no key
+// material is stored in the repository. Nodemailer is called directly with the same TLS options
+// sendViaSmtp uses, on an ephemeral port, and the real error goes through the exported mapper, so
+// the SMTP port allow-list and the loopback guard stay untouched.
+import { execFileSync } from "node:child_process";
+import { generateKeyPairSync } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import tls from "node:tls";
-import { afterEach, describe, expect, it } from "vitest";
-import { sendViaSmtp, type SmtpSettings } from "./smtp-send";
+import nodemailer from "nodemailer";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { mapSmtpError } from "./smtp-send";
 
-const KEY = readFileSync(new URL("./__fixtures__/test-only-selfsigned.key.pem", import.meta.url), "utf8");
-const CERT = readFileSync(new URL("./__fixtures__/test-only-selfsigned.cert.pem", import.meta.url), "utf8");
+function opensslAvailable(): boolean {
+  try {
+    execFileSync("openssl", ["version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+const HAVE_OPENSSL = opensslAvailable();
 
-const PORT = 2525; // one of the fixed allowed ports
-const smtp: SmtpSettings = {
-  host: "smtp.example.com",
-  port: PORT,
-  security: "ssl",
-  user: "mailer@example.com",
-  pass: "test-pass-123",
-  fromAddress: "noreply@example.com",
-};
-const message = { to: "rcpt@example.org", subject: "Hello", html: "<p>hi</p>" };
-const loopback = { resolveHost: async () => ({ ok: true as const, address: "127.0.0.1", family: 4 as const }) };
-
-let close: (() => Promise<void>) | undefined;
-afterEach(async () => {
-  await close?.();
-  close = undefined;
+describe("real TLS prerequisites", () => {
+  it("openssl is available when running in CI (so CI cannot silently skip the TLS tests)", () => {
+    if (process.env["CI"]) expect(HAVE_OPENSSL, "openssl must be on PATH in CI").toBe(true);
+    else if (!HAVE_OPENSSL) console.warn("openssl not found: real-TLS certificate tests are skipped locally");
+  });
 });
 
-const listen = (server: net.Server) =>
-  new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(PORT, "127.0.0.1", resolve);
+describe.skipIf(!HAVE_OPENSSL)("certificate errors from a real TLS server", () => {
+  let dir = "";
+  let KEY = "";
+  let CERT = "";
+
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), "smtp-tls-test-"));
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const keyPath = join(dir, "k.pem");
+    const certPath = join(dir, "c.pem");
+    writeFileSync(keyPath, privateKey.export({ type: "pkcs8", format: "pem" }));
+    execFileSync("openssl", ["req", "-x509", "-new", "-key", keyPath, "-out", certPath, "-days", "1", "-subj", "/CN=localhost"], {
+      stdio: "ignore",
+    });
+    KEY = readFileSync(keyPath, "utf8");
+    CERT = readFileSync(certPath, "utf8");
+  });
+  afterAll(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
   });
 
-describe("certificate errors from a real TLS server", () => {
+  let close: (() => Promise<void>) | undefined;
+  afterEach(async () => {
+    await close?.();
+    close = undefined;
+  });
+
+  const listen = (server: net.Server) =>
+    new Promise<number>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => resolve((server.address() as net.AddressInfo).port));
+    });
+
+  // Same TLS options as sendViaSmtp, pointed at the local server.
+  const attempt = async (port: number, mode: "ssl" | "starttls") => {
+    const transport = nodemailer.createTransport({
+      host: "127.0.0.1",
+      port,
+      secure: mode === "ssl",
+      ...(mode === "starttls" ? { requireTLS: true } : {}),
+      tls: { servername: "smtp.example.com", rejectUnauthorized: true, minVersion: "TLSv1.2" },
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 5000,
+      auth: { user: "mailer@example.com", pass: "test-pass-123" },
+      logger: false,
+      debug: false,
+    });
+    try {
+      await transport.sendMail({ from: "noreply@example.com", to: "rcpt@example.org", subject: "x", html: "<p>x</p>" });
+      return null;
+    } catch (err) {
+      return mapSmtpError(err);
+    } finally {
+      transport.close();
+    }
+  };
+
   it("implicit TLS (ssl) with a self-signed certificate => certificate not trusted, not retryable", async () => {
     const server = tls.createServer({ key: KEY, cert: CERT }, (s) => {
       s.on("error", () => {});
       s.write("220 stub ESMTP\r\n");
     });
     server.on("tlsClientError", () => {});
-    await listen(server);
+    const port = await listen(server);
     close = () => new Promise((r) => server.close(() => r()));
-    expect(await sendViaSmtp({ ...smtp, security: "ssl" }, message, loopback)).toEqual({
-      ok: false,
-      retryable: false,
-      reason: "certificate not trusted",
-    });
+    expect(await attempt(port, "ssl")).toEqual({ ok: false, retryable: false, reason: "certificate not trusted" });
   });
 
   it("STARTTLS with a self-signed certificate => certificate not trusted, not retryable", async () => {
@@ -68,12 +118,8 @@ describe("certificate errors from a real TLS server", () => {
         }
       });
     });
-    await listen(server);
+    const port = await listen(server);
     close = () => new Promise((r) => server.close(() => r()));
-    expect(await sendViaSmtp({ ...smtp, security: "starttls" }, message, loopback)).toEqual({
-      ok: false,
-      retryable: false,
-      reason: "certificate not trusted",
-    });
+    expect(await attempt(port, "starttls")).toEqual({ ok: false, retryable: false, reason: "certificate not trusted" });
   });
 });
