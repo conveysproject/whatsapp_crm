@@ -72,15 +72,32 @@ export function brandForOrg(prisma: PrismaClient, orgId: string): Promise<Brand>
   return resolveBrand(prisma, orgId);
 }
 
-/** The brand the recipient of an account email should see. Never throws; the default when anything is missing. */
-export async function brandForAccountEmail(prisma: PrismaClient, email: string): Promise<Brand> {
+/**
+ * The brand the recipient of an account email should see, and the recipient's organization (for choosing the
+ * sending provider). Never throws; the default brand and a null org id when anything is missing. Same queries as
+ * `brandForAccountEmail`: no extra lookup.
+ */
+export async function brandAndOrgForAccountEmail(
+  prisma: PrismaClient,
+  email: string,
+): Promise<{ brand: Brand; orgId: string | null }> {
   try {
     const account = await prisma.authAccount.findUnique({ where: { email: normalizeEmail(email) }, select: { id: true } });
-    if (!account) return DEFAULT_BRAND;
+    if (!account) return { brand: DEFAULT_BRAND, orgId: null };
     const user = await prisma.user.findUnique({ where: { id: account.id }, select: { organizationId: true } });
-    if (!user?.organizationId) return DEFAULT_BRAND;
-    return await resolveBrand(prisma, user.organizationId);
+    if (!user?.organizationId) return { brand: DEFAULT_BRAND, orgId: null };
+    const orgId = user.organizationId;
+    try {
+      return { brand: await resolveBrand(prisma, orgId), orgId };
+    } catch {
+      return { brand: DEFAULT_BRAND, orgId };
+    }
   } catch {
-    return DEFAULT_BRAND;
+    return { brand: DEFAULT_BRAND, orgId: null };
   }
+}
+
+/** The brand the recipient of an account email should see. Never throws; the default when anything is missing. */
+export async function brandForAccountEmail(prisma: PrismaClient, email: string): Promise<Brand> {
+  return (await brandAndOrgForAccountEmail(prisma, email)).brand;
 }

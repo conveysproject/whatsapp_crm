@@ -19,6 +19,10 @@ export interface BrandingSettingsViewProps {
   errors: FormErrors;
   formError: string | null;
   saving: boolean;
+  /** True while any save, upload or remove is running: the other controls are disabled. */
+  locked?: boolean;
+  /** A background refresh failed; the form stays and a small notice shows. */
+  refreshFailed?: boolean;
   reapprovalRequired: boolean;
   origin: string | null;
   slotState: Partial<Record<SlotName, SlotUiState>>;
@@ -44,6 +48,7 @@ export function BrandingSettingsView(p: BrandingSettingsViewProps): JSX.Element 
         def={def}
         url={p.settings[def.urlField]}
         busy={p.slotState[name]?.busy === true}
+        locked={p.locked === true}
         error={p.slotState[name]?.error ?? null}
         onFile={(file) => p.onFile(name, file)}
         onRemove={() => p.onRequestRemove(name)}
@@ -62,12 +67,14 @@ export function BrandingSettingsView(p: BrandingSettingsViewProps): JSX.Element 
         <p className="mt-1 text-sm text-gray-500">Show your clients your own name, logo and colors.</p>
       </div>
 
+      {p.refreshFailed && <p role="status" className="text-xs text-amber-700">Could not refresh. Showing the last loaded details.</p>}
+
       <BrandStatusBanner state={bannerState(p.settings, p.reapprovalRequired)} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="space-y-4">
           <h2 className="font-medium">Details</h2>
-          <BrandForm values={p.values} errors={p.errors} formError={p.formError} saving={p.saving} origin={p.origin} onChange={p.onChange} onSubmit={p.onSave} />
+          <BrandForm values={p.values} errors={p.errors} formError={p.formError} saving={p.saving} locked={p.locked === true} origin={p.origin} onChange={p.onChange} onSubmit={p.onSave} />
         </section>
 
         <section className="space-y-4">

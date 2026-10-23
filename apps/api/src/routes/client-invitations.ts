@@ -6,14 +6,15 @@ import { canBeParent, linkChild, ParentLinkError } from "../lib/parent-orgs.js";
 import { createWorkspace } from "../lib/create-workspace.js";
 import { verifyBearer } from "../auth/identity.js";
 import { normalizeEmail } from "../auth/ids.js";
-import { sendMail, isEmailConfigured } from "../lib/mail.js";
+import { isEmailConfigured } from "../lib/mail.js";
+import { sendOrgMail } from "../lib/email/org-mail.js";
 import {
   buildClientInvitationEmail,
   clientInvitationAcceptUrl,
   clientInvitationSubject,
 } from "../lib/invitation-email.js";
 import { previewBrandPayload } from "../lib/brand.js";
-import { activeBrand, brandForOrg, brandMailExtras } from "../lib/email-brand.js";
+import { activeBrand, brandForOrg } from "../lib/email-brand.js";
 
 class InvitationGone extends Error {}
 
@@ -89,7 +90,9 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
         if (isEmailConfigured()) {
           // The invitee sees the inviting parent's brand when it is approved, else the WBMSG default.
           const brand = activeBrand(await brandForOrg(prisma, parentOrganizationId));
-          await sendMail({
+          await sendOrgMail(prisma, {
+            orgId: parentOrganizationId,
+            logger: request.log,
             to: invitation.email,
             subject: clientInvitationSubject(brand),
             html: buildClientInvitationEmail({
@@ -97,7 +100,7 @@ export const clientInvitationRoutes: FastifyPluginAsync = async (fastify) => {
               acceptUrl: clientInvitationAcceptUrl(invitation.token),
               ...(brand ? { brand } : {}),
             }),
-            ...brandMailExtras(brand),
+            brand: brand ?? null,
           });
           emailSent = true;
         } else {

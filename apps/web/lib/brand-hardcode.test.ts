@@ -23,6 +23,7 @@ const ALLOW: Record<string, string> = {
   "components/billing/CancelAccountCard.tsx": BILLING,
   "lib/billing-cancellation.ts": BILLING,
   "lib/billing-standing.ts": BILLING,
+  "lib/email-settings.ts": "reserved sender domains: the product and seller domains cannot be used as a client From address",
   // public marketing, legal and docs
   "app/(public)/cancellation-policy/page.tsx": PUBLIC,
   "app/(public)/contact/page.tsx": PUBLIC,
@@ -56,7 +57,6 @@ const ALLOW: Record<string, string> = {
   // root metadata, brand defaults, mail
   "app/layout.tsx": "root metadata for the public site; a branded dashboard overrides it through brandMetadata",
   "lib/brand.ts": "the DEFAULT_BRAND definition itself",
-  "lib/brand-settings.ts": "the \"Hide 'Powered by WBMSG'\" option label: it names the platform's own credit line on the settings page",
   "components/brand/AuthLogo.tsx": "the default logo asset path /wbmsg_logo.png (a file name, not text)",
   "components/brand/BrandLogo.tsx": "the default logo asset path /wbmsg_logo.png (a file name, not text)",
   "lib/auth/jwt.ts": "JWT issuer / audience identifiers: protocol values that must match the API, never shown",

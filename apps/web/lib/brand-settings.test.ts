@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   BRAND_SLOTS, HIDE_POWERED_BY_LABEL, bannerState, clientSignInUrl, formFromSettings, mapBrandError, BrandApiError,
-  brandPreviewStyle, preCheckFile, previewBrand, validateBrandForm, validateColor, validateEmail, validateName, validateSlugInput, viewAsClient,
+  brandPreviewStyle, clearFieldErrors, isBrandBusy, startConfirm, finishConfirm, preCheckFile, previewBrand, validateBrandForm, validateColor, validateEmail, validateName, validateSlugInput, viewAsClient,
   type BrandSettings,
 } from "./brand-settings";
 
@@ -28,6 +28,12 @@ describe("field validation", () => {
     expect(validateName("x".repeat(41))).not.toBeNull();
     expect(validateName("<b>x</b>")).not.toBeNull();
     expect(validateName("   ")).not.toBeNull();
+    for (const bad of ["a b", "a b", "a​b", "a\nb", "a\u0007b", "ab>", "!!!"]) expect(validateName(bad)).not.toBeNull();
+    expect(validateName("ＡＢ")).toBeNull(); // fullwidth folds to AB (NFKC)
+    expect(validateName("\u{1F600}\u{1F600}a")).toBeNull(); // code points, not UTF-16 units
+    expect(validateName("  Acme  ")).toBeNull(); // trimmed
+    expect(validateName("a".repeat(40))).toBeNull();
+    expect(validateName("ａ".repeat(41))).not.toBeNull();
   });
   it("support email is optional but must be a plain address", () => {
     expect(validateEmail("")).toBeNull();
@@ -109,6 +115,34 @@ describe("status and view as client", () => {
   });
   it("the powered-by label names the product", () => {
     expect(HIDE_POWERED_BY_LABEL).toMatch(/^Hide 'Powered by .+'$/);
+  });
+  it("shows a placeholder when the typed slug would fail the API format check", () => {
+    for (const bad of ["Acme", "-acme", "acme-", "a--b", "ab", "a".repeat(41), "ac me", "acme/../x", "a_b"]) {
+      expect(clientSignInUrl("https://app.example", bad)).toBe("https://app.example/c/<your-address>/sign-in");
+    }
+    expect(clientSignInUrl("https://app.example", "a-b-c")).toBe("https://app.example/c/a-b-c/sign-in");
+  });
+});
+
+describe("page helpers", () => {
+  it("isBrandBusy is true while saving, uploading or removing", () => {
+    expect(isBrandBusy({ saving: false, slotState: {}, removeState: "idle" })).toBe(false);
+    expect(isBrandBusy({ saving: false, slotState: { logo: { busy: false, error: "x" } }, removeState: "confirming" })).toBe(false);
+    expect(isBrandBusy({ saving: true, slotState: {}, removeState: "idle" })).toBe(true);
+    expect(isBrandBusy({ saving: false, slotState: { favicon: { busy: true, error: null } }, removeState: "idle" })).toBe(true);
+    expect(isBrandBusy({ saving: false, slotState: {}, removeState: "running" })).toBe(true);
+  });
+  it("clearFieldErrors clears only the edited field", () => {
+    const e = { name: "a", slug: "b", color: "c" };
+    expect(clearFieldErrors(e, { slug: "x" })).toEqual({ name: "a", color: "c" });
+    expect(clearFieldErrors(e, {})).toEqual(e);
+  });
+  it("a repeated confirm click never restarts or re-runs the action", () => {
+    expect(startConfirm("confirming")).toEqual({ proceed: true, next: "running" });
+    expect(startConfirm("running")).toEqual({ proceed: false, next: "running" });
+    expect(startConfirm("idle")).toEqual({ proceed: false, next: "idle" });
+    expect(finishConfirm(true)).toBe("idle");
+    expect(finishConfirm(false)).toBe("confirming");
   });
 });
 

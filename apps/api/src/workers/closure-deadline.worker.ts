@@ -2,7 +2,7 @@ import { Queue, Worker } from "bullmq";
 import { prisma } from "../lib/prisma.js";
 import { redisConnection } from "../lib/queue.js";
 import { computeClosureDeadline } from "../lib/closure-deadline.js";
-import { sendMail } from "../lib/mail.js";
+import { billingMailContext, sendBillingMail, type BillingMailContext } from "../lib/billing/billing-mail.js";
 import { pushToUser } from "../lib/push.js";
 import { closureOverduePush } from "../lib/push-events.js";
 
@@ -14,7 +14,7 @@ interface ContactConfig {
   closureLeadStatusIds?: string[];
 }
 
-async function processClosureDeadlines(): Promise<void> {
+export async function processClosureDeadlines(): Promise<void> {
   const orgs = await prisma.organization.findMany({ select: { id: true, settings: true } });
   for (const org of orgs) {
     const cc = ((org.settings as Record<string, unknown> | null)?.["contactConfig"] ?? {}) as ContactConfig;
@@ -49,6 +49,8 @@ async function processClosureDeadlines(): Promise<void> {
       take: 500,
     });
 
+    // Looked up at most once per organization in this run, not once per contact.
+    let mailContext: Promise<BillingMailContext> | undefined;
     for (const c of overdue) {
       const userId = c.assignedUserId!;
       const label = c.name ?? c.phoneNumber;
@@ -66,7 +68,10 @@ async function processClosureDeadlines(): Promise<void> {
         const user = await prisma.user.findFirst({ where: { id: userId, organizationId: org.id }, select: { email: true } });
         if (user?.email) {
           const safeLabel = label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-          await sendMail({
+          mailContext ??= billingMailContext(prisma, org.id);
+          await sendBillingMail(prisma, {
+            orgId: org.id,
+            context: await mailContext,
             to: user.email,
             subject: `Closure deadline passed: ${label}`,
             html: `<p>The contact <strong>${safeLabel}</strong> has passed its closure deadline without reaching a closure status.</p><p>Please review and update the contact.</p>`,

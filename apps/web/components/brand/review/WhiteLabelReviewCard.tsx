@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type JSX } from "react";
+import { useRef, useState, type JSX } from "react";
 import { useAuth } from "@/lib/auth/client";
 import { reviewErrorText, setWhiteLabel, type BrandReview } from "@/lib/brand-review";
-import { confirmReducer, runConfirmed, type ConfirmState } from "@/lib/parent-orgs";
+import { finishConfirm, startConfirm } from "@/lib/brand-settings";
+import { confirmReducer, type ConfirmState } from "@/lib/parent-orgs";
 import { WhiteLabelReviewCardView } from "./WhiteLabelReviewCardView";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
@@ -14,6 +15,7 @@ export function WhiteLabelReviewCard({ orgId, review, onChanged }: { orgId: stri
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revokeState, setRevokeState] = useState<ConfirmState>("idle");
+  const revokeRunning = useRef(false);
 
   async function run(enabled: boolean): Promise<boolean> {
     setBusy(true);
@@ -35,11 +37,15 @@ export function WhiteLabelReviewCard({ orgId, review, onChanged }: { orgId: stri
   }
 
   async function confirmRevoke() {
-    const next = confirmReducer(revokeState, "confirm");
-    setRevokeState(next);
-    let ok = false;
-    await runConfirmed(revokeState, async () => { ok = await run(false); });
-    setRevokeState(ok ? "idle" : "confirming");
+    const step = startConfirm(revokeState);
+    if (!step.proceed || revokeRunning.current) return;
+    revokeRunning.current = true;
+    setRevokeState(step.next);
+    try {
+      setRevokeState(finishConfirm(await run(false)));
+    } finally {
+      revokeRunning.current = false;
+    }
   }
 
   return (

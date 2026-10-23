@@ -117,7 +117,12 @@ describe("branded invitation wording", () => {
   });
   it("subjects", () => {
     expect(invitationSubject(brand())).toBe("You've been invited to join Acme Msgs");
-    expect(clientInvitationSubject(brand())).toBe("You've been invited to create a Acme Msgs account");
+    expect(clientInvitationSubject(brand())).toBe("You've been invited to join Acme Msgs");
+  });
+  it("the default client subject keeps its wording and the branded one has no article", () => {
+    expect(clientInvitationSubject()).toBe("You've been invited to create a WBMSG account");
+    expect(invitationSubject()).toBe("You've been invited to join WBMSG");
+    expect(clientInvitationSubject(brand())).not.toMatch(/ a Acme/);
   });
   it("the logo is shown on the team invite only as an img when allowed", () => {
     expect(buildInvitationEmail({ role: "admin", acceptUrl: URL, brand: brand() })).toContain(`src="${LOGO}"`);

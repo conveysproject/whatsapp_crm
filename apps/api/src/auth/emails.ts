@@ -10,6 +10,11 @@ import {
 } from "../lib/email-brand.js";
 import type { CodePurpose } from "./codes.js";
 
+/** Delivers a finished email. Omitted means `sendMail` with the brand's extras, exactly as before. */
+export type MailDeliver = (m: { to: string; subject: string; html: string; brand: EmailBrand | undefined }) => Promise<void>;
+
+const deliverDefault: MailDeliver = ({ to, subject, html, brand }) => sendMail({ to, subject, html, ...brandMailExtras(brand) });
+
 const SUBJECTS: Record<CodePurpose, string> = {
   email_verify: "Verify your email for WBMSG",
   signin_email: "Your WBMSG sign-in code",
@@ -42,6 +47,7 @@ export async function sendCodeEmail(
   code: string,
   lead?: string,
   brand?: EmailBrand,
+  deliver: MailDeliver = deliverDefault,
 ): Promise<void> {
   if (!/^\d{6}$/.test(code)) throw new Error("Invalid code format");
   const b = activeBrand(brand);
@@ -59,15 +65,15 @@ export async function sendCodeEmail(
     console.info(`[dev-code] ${purpose} ${to} ${code}`);
   }
   const subject = b ? SUBJECTS[purpose].replace(/WBMSG/g, () => subjectText(b.name)) : SUBJECTS[purpose];
-  await sendMail({ to, subject, html, ...brandMailExtras(b) });
+  await deliver({ to, subject, html, brand: b });
 }
 
-export async function sendPasswordChangedEmail(to: string, brand?: EmailBrand): Promise<void> {
+export async function sendPasswordChangedEmail(to: string, brand?: EmailBrand, deliver: MailDeliver = deliverDefault): Promise<void> {
   const b = activeBrand(brand);
   const body =
     `<p>The password for your ${b ? escapeHtml(b.name) : "WBMSG"} account was just changed.</p>` +
     `<p>If this was you, no action is needed. If it wasn't, reset your password right away and contact support.</p>`;
   const html = b ? brandedShell(b, body) : wrap(body);
   const subject = b ? `Your ${subjectText(b.name)} password was changed` : "Your WBMSG password was changed";
-  await sendMail({ to, subject, html, ...brandMailExtras(b) });
+  await deliver({ to, subject, html, brand: b });
 }

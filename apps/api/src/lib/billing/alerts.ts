@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import { sendMail } from "../mail.js";
+import { sendBillingMail } from "./billing-mail.js";
 import { bandViews, type BillingConfig } from "./bands.js";
 import { loadBillingConfig } from "./settings.js";
 import { kindWanted, readAlertPrefs } from "./alert-prefs.js";
@@ -124,7 +124,7 @@ async function emailUnsent(prisma: PrismaClient, keyByOrg: Map<string, string>, 
       const to = admins.map((x) => x.email).filter(Boolean);
       if (to.length > 0) {
         const msg = alertMessage(topEvent.kind, topEvent.messages, freeAllowance);
-        await sendMail({ to, subject: msg.subject, html: `<p>${msg.text}</p><p>See details in Settings &gt; Billing.</p>` });
+        await sendBillingMail(prisma, { orgId: organizationId, to, subject: msg.subject, html: `<p>${msg.text}</p><p>See details in Settings &gt; Billing.</p>` });
         sent++;
       }
       await prisma.billingAlertEvent.updateMany({ where: { id: { in: events.map((e) => e.id) }, emailedAt: null }, data: { emailedAt: now } });

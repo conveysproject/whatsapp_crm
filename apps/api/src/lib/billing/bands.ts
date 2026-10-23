@@ -1,4 +1,5 @@
 import { GSTIN_RE } from "./billing-details.js";
+import { LEGAL_SELLER_NAME } from "./legal-seller.js";
 
 /**
  * Monthly price bands for the message-volume bill. Pure functions, no I/O.
@@ -37,7 +38,7 @@ export const DEFAULT_BILLING_CONFIG: BillingConfig = {
   alertsEnabled: false,
   chargingStartDate: null,
   gstRatePercent: 0,
-  seller: { legalName: "Conveys Information Technology", address: "", gstin: "" },
+  seller: { legalName: LEGAL_SELLER_NAME, address: "", gstin: "" },
   autoIssueEnabled: false,
   blockingMode: "watch",
   bands: [

@@ -106,7 +106,8 @@ describe("auth signin", () => {
     await settleSigninWork();
     expect(res.json()).toEqual({ next: "new_device", challengeId: "c1" });
     expect(m.issueCode).toHaveBeenCalledWith(prisma, { purpose: "new_device", target: "foo@x.com", accountId: "usr_a" });
-    expect(m.sendCodeEmail).toHaveBeenCalledWith("foo@x.com", "new_device", "123456");
+    // A known account passes its org delivery as trailing arguments; only the leading ones are asserted.
+    expect(m.sendCodeEmail.mock.calls[0]?.slice(0, 3)).toEqual(["foo@x.com", "new_device", "123456"]);
     expect(m.createSession).not.toHaveBeenCalled();
     // The second factor is still pending: no failure reset, and the log row says so.
     expect(m.clearPasswordFailures).not.toHaveBeenCalled();
@@ -177,7 +178,8 @@ describe("auth signin", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ next: "set_password", challengeId: "c1" });
     expect(m.issueCode).toHaveBeenCalledWith(prisma, { purpose: "password_reset", target: "foo@x.com", accountId: "usr_a" });
-    expect(m.sendCodeEmail).toHaveBeenCalledWith("foo@x.com", "password_reset", "123456");
+    // A known account passes its org delivery as trailing arguments; only the leading ones are asserted.
+    expect(m.sendCodeEmail.mock.calls[0]?.slice(0, 3)).toEqual(["foo@x.com", "password_reset", "123456"]);
     expect(m.createSession).not.toHaveBeenCalled();
     expect(m.recordPasswordFailure).not.toHaveBeenCalled();
   });
@@ -340,7 +342,8 @@ describe("auth signin email code", () => {
     expect(res.statusCode).toBe(202);
     expect(res.json()).toEqual({ ok: true });
     expect(m.issueCode).toHaveBeenCalledWith(prisma, { purpose: "signin_email", target: "foo@x.com", accountId: "usr_a" });
-    expect(m.sendCodeEmail).toHaveBeenCalledWith("foo@x.com", "signin_email", "123456");
+    // A known account passes its org delivery as trailing arguments; only the leading ones are asserted.
+    expect(m.sendCodeEmail.mock.calls[0]?.slice(0, 3)).toEqual(["foo@x.com", "signin_email", "123456"]);
   });
 
   it.each([

@@ -75,6 +75,12 @@ describe("validateBrandInput", () => {
     ["41-char name", { name: "a".repeat(41) }, "name"],
     ["markup in name", { name: "<b>Acme</b>" }, "name"],
     ["control char in name", { name: "Ac\u0000me" }, "name"],
+    ["zero-width space in name", { name: "Ac\u200bme" }, "name"],
+    ["line separator in name", { name: "Ac\u2028me" }, "name"],
+    ["paragraph separator in name", { name: "Ac\u2029me" }, "name"],
+    ["right-to-left override in name", { name: "Acme\u202e" }, "name"],
+    ["zero-width joiners around digits", { name: "\u200d12\u200d" }, "name"],
+    ["41 astral letters", { name: "\u{1d538}".repeat(41) }, "name"],
     ["bad color", { color: "#12345" }, "color"],
     ["named color", { color: "green" }, "color"],
     ["bad email", { supportEmail: "not-an-email" }, "supportEmail"],
@@ -90,6 +96,12 @@ describe("validateBrandInput", () => {
       expect(r.field).toBe(field);
       expect(r.message.length).toBeGreaterThan(0);
     }
+  });
+  it("normalizes a fullwidth lookalike (NFKC) and counts code points", () => {
+    const r = validateBrandInput({ ...good, name: "\uff21\uff43\uff4d\uff45" });
+    expect(r.ok && r.value.name).toBe("Acme");
+    expect(validateBrandInput({ ...good, name: "\u{1d538}".repeat(40) }).ok).toBe(true);
+    expect(validateBrandInput({ ...good, name: "\u{1f600}\u{1f600}A" }).ok).toBe(true);
   });
   it("rejects non-objects", () => {
     expect(validateBrandInput(null).ok).toBe(false);
@@ -272,6 +284,31 @@ describe("resolveBrand", () => {
     const { prisma } = prismaWith({ ...parentRow, id: "p1" });
     expect(Object.keys(await resolveBrand(prisma, "p1")).sort()).toEqual(Object.keys(DEFAULT_BRAND).sort());
     expect(Object.keys(DEFAULT_BRAND).some((k) => /id$/i.test(k))).toBe(false);
+  });
+});
+
+describe("shared default brand", () => {
+  it("DEFAULT_BRAND is frozen", () => {
+    expect(Object.isFrozen(DEFAULT_BRAND)).toBe(true);
+    expect(() => {
+      (DEFAULT_BRAND as { name: string }).name = "X";
+    }).toThrow();
+  });
+  it("resolveBrand returns a copy, so mutating it never changes the next call", async () => {
+    const prisma = { organization: { findUnique: vi.fn().mockResolvedValue(null) } } as unknown as PrismaClient;
+    const a = await resolveBrand(prisma, "x");
+    expect(a).not.toBe(DEFAULT_BRAND);
+    a.name = "Evil";
+    expect((await resolveBrand(prisma, "x")).name).toBe("WBMSG");
+    expect(DEFAULT_BRAND.name).toBe("WBMSG");
+  });
+  it("brandPayload returns a copy and does not alias the input", () => {
+    const p = brandPayload(DEFAULT_BRAND);
+    p.name = "Evil";
+    p.palette["500"] = "#000000";
+    expect(brandPayload(DEFAULT_BRAND).name).toBe("WBMSG");
+    expect(brandPayload(DEFAULT_BRAND).palette["500"]).toBe("#22c55e");
+    expect(p).not.toBe(DEFAULT_BRAND);
   });
 });
 

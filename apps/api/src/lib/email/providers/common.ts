@@ -1,6 +1,7 @@
 import type { OutboundEmail, SendResult, FetchLike } from "../transport.js";
 
 const TIMEOUT_MS = 10_000;
+const USER_AGENT = "wbmsg-mailer/1";
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/g;
@@ -22,10 +23,11 @@ export function isSafeAddress(a: string): boolean {
   return a.length <= 320 && ADDRESS_RE.test(a);
 }
 
-/** "Name <addr>" or the bare address; used by providers taking a single From string. */
+/** `"Name" <addr>` or the bare address; used by providers taking a single From string. The name is a quoted string. */
 export function formatFrom(m: OutboundEmail): string {
-  const n = cleanName(m.from.name);
-  return n ? `${n} <${m.from.address}>` : m.from.address;
+  const raw = m.from.name?.replace(CONTROL, " ").replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 100);
+  if (!raw) return m.from.address;
+  return `"${raw.replace(/[\\"]/g, "\\$&")}" <${m.from.address}>`;
 }
 
 export function validateMail(m: OutboundEmail): SendResult | null {
@@ -40,6 +42,8 @@ const fixed = (retryable: boolean, reason: string): SendResult => ({ ok: false, 
 export function classifyStatus(status: number, code?: number): SendResult {
   const suffix = code !== undefined ? `, code ${code}` : "";
   if (status === 401 || status === 403) return fixed(false, `HTTP ${status}: authentication failed${suffix}`);
+  if (status >= 300 && status < 400) return fixed(false, "unexpected redirect");
+  if (status === 408 || status === 425) return fixed(true, `HTTP ${status}: request timed out${suffix}`);
   if (status === 429) return fixed(true, `HTTP ${status}: rate limited${suffix}`);
   if (status >= 500) return fixed(true, `HTTP ${status}: provider unavailable${suffix}`);
   return fixed(false, `HTTP ${status}: rejected by provider${suffix}`);
@@ -59,7 +63,7 @@ export async function post(o: PostOptions): Promise<SendResult> {
   try {
     res = await o.fetchImpl(o.url, {
       method: "POST",
-      headers: o.headers,
+      headers: { "User-Agent": USER_AGENT, ...o.headers },
       body: o.body,
       redirect: "error",
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -67,6 +71,8 @@ export async function post(o: PostOptions): Promise<SendResult> {
   } catch (e) {
     const name = (e as { name?: string } | null)?.name;
     // Never use the error message: it may contain the request URL or headers.
+    // fetch with redirect "error" rejects a redirect; the server already saw the request, so never retry.
+    if ((e as { cause?: { message?: unknown } } | null)?.cause?.message === "unexpected redirect") return fixed(false, "unexpected redirect");
     if (name === "TimeoutError" || name === "AbortError") return fixed(true, "timeout");
     return fixed(true, "network error");
   }
@@ -76,9 +82,15 @@ export async function post(o: PostOptions): Promise<SendResult> {
     try {
       text = await res.text();
     } catch {
-      return fixed(true, "network error");
+      // The provider answered 2xx: the message may already be accepted, so a retry could send a duplicate.
+      return fixed(false, "could not read the provider response");
     }
     return o.checkBody(text);
+  }
+  try {
+    await res.body?.cancel();
+  } catch {
+    // releasing the connection is best effort
   }
   return classifyStatus(res.status);
 }

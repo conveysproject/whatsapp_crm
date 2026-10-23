@@ -4,9 +4,10 @@
 import { DEFAULT_BRAND, SHADES, signInPath, type Brand } from "./brand";
 import { makePaletteClient } from "./brand-palette";
 import { isPlainEmail } from "./mail-from";
+import type { ConfirmState } from "./parent-orgs";
 
-/** The label of the "Hide powered by" option. It names the platform's own credit, so it keeps the product name. */
-export const HIDE_POWERED_BY_LABEL = "Hide 'Powered by WBMSG'";
+/** The label of the "Hide powered by" option. It names the platform's own credit, taken from the default brand. */
+export const HIDE_POWERED_BY_LABEL = `Hide 'Powered by ${DEFAULT_BRAND.name}'`;
 export const REAPPROVAL_WARNING =
   "Your brand was switched off until it is approved again because the name, web address or an image changed.";
 export const GENERIC_ERROR = "Something went wrong. Please try again.";
@@ -83,12 +84,14 @@ export function formFromSettings(s: BrandSettings): BrandFormValues {
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 // eslint-disable-next-line no-control-regex
-const BAD_NAME_RE = /[<>\u0000-\u001f\u007f]/;
+const BAD_NAME_RE = /[<>\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
 export function validateName(v: string): string | null {
-  const name = v.trim();
-  if (name.length < 2 || name.length > 40) return "Brand name must be 2 to 40 characters";
-  if (BAD_NAME_RE.test(name)) return "Brand name cannot contain < > or control characters";
+  // Same steps as the API: NFKC, trim, length in code points.
+  const name = v.normalize("NFKC").trim();
+  const length = [...name].length;
+  if (length < 2 || length > 40) return "Brand name must be 2 to 40 characters";
+  if (BAD_NAME_RE.test(name)) return "Brand name cannot contain < >, hidden or control characters";
   if (!/[\p{L}\p{N}]/u.test(name)) return "Brand name must contain at least one letter or number";
   return null;
 }
@@ -217,7 +220,29 @@ export function bannerState(s: BrandSettings, reapprovalRequired: boolean): Bann
 /** The address clients sign in at. Relative when the page origin is not known (server render). */
 export function clientSignInUrl(origin: string | null, slug: string): string | null {
   if (!slug) return null;
-  return `${origin ?? ""}${signInPath(slug)}`;
+  // Only a slug the API would accept is shown as the address; anything else shows a placeholder.
+  return `${origin ?? ""}${signInPath(validateSlugInput(slug) === null ? slug : "<your-address>")}`;
+}
+
+/** True while any save, upload or remove is running, so the other controls stay disabled (no out-of-order responses). */
+export function isBrandBusy(p: { saving: boolean; slotState: Partial<Record<SlotName, { busy: boolean }>>; removeState: ConfirmState }): boolean {
+  return p.saving || p.removeState === "running" || Object.values(p.slotState).some((s) => s?.busy === true);
+}
+
+/** Drops the errors of the fields being edited; the other fields keep theirs. */
+export function clearFieldErrors(errors: FormErrors, patch: Partial<BrandFormValues>): FormErrors {
+  const next = { ...errors };
+  for (const k of Object.keys(patch) as (keyof BrandFormValues)[]) delete next[k];
+  return next;
+}
+
+/** A confirm click: only the "confirming" state may start the action; a repeat click while running changes nothing. */
+export function startConfirm(state: ConfirmState): { proceed: boolean; next: ConfirmState } {
+  return state === "confirming" ? { proceed: true, next: "running" } : { proceed: false, next: state };
+}
+/** Where the dialog goes after the action: closed on success, back to "confirming" on failure. */
+export function finishConfirm(ok: boolean): ConfirmState {
+  return ok ? "idle" : "confirming";
 }
 
 export function viewAsClient(s: BrandSettings): { href: string | null; reason: string | null } {

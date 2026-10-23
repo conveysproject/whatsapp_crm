@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import { sendMail } from "../mail.js";
+import { sendBillingMail } from "./billing-mail.js";
 import { createStatementPaymentLink, currencyForOrg, orgCurrencyHints, ORG_CURRENCY_SELECT, type PaymentProvider } from "./payment-links.js";
 import { readBillingDetails, statementRecipients } from "./billing-details.js";
 import { loadBillingConfig } from "./settings.js";
@@ -62,7 +62,8 @@ export async function ensurePaymentLinks(prisma: PrismaClient, now: Date = new D
       if (res.count !== 1) continue;
       created++;
       if (emails.length > 0) {
-        await sendMail({
+        await sendBillingMail(prisma, {
+          orgId: st.organizationId,
           to: emails,
           subject: `WBMSG statement: ${money(currency, amountMinor)} due ${dateText(dueAt)}`,
           html: `<p>Your WBMSG statement for the billing period starting ${esc(st.month)} is ready.</p>
@@ -99,7 +100,8 @@ export async function sendPaymentReminders(prisma: PrismaClient, now: Date = new
       const org = await prisma.organization.findUnique({ where: { id: st.organizationId }, select: { settings: true } });
       const emails = statementRecipients(readBillingDetails(org?.settings), await adminEmails(prisma, st.organizationId));
       if (emails.length === 0) continue;
-      await sendMail({
+      await sendBillingMail(prisma, {
+        orgId: st.organizationId,
         to: emails,
         subject: `Reminder: WBMSG statement of ${money(st.currency, st.amountMinor)} is overdue`,
         html: `<p>Your WBMSG statement for the billing period starting ${esc(st.month)} was due on ${dateText(st.dueAt)} and is still unpaid.</p>
@@ -163,7 +165,8 @@ export async function sendPaymentReceived(prisma: PrismaClient, statementId: str
   const org = await prisma.organization.findUnique({ where: { id: st.organizationId }, select: { settings: true } });
   const to = statementRecipients(readBillingDetails(org?.settings), await adminEmails(prisma, st.organizationId));
   if (to.length === 0) return false;
-  await sendMail({
+  await sendBillingMail(prisma, {
+    orgId: st.organizationId,
     to,
     subject: `WBMSG: payment received, ${money(st.currency, st.amountMinor)}`,
     html: `<p>Thank you. We have received your payment of <strong>${money(st.currency, st.amountMinor)}</strong> for the WBMSG billing period starting ${esc(st.month)}.</p>

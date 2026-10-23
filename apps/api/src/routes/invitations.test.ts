@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import type * as IdentityModule from "../auth/identity.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import type * as TransportModule from "../lib/email/transport.js";
+import { encryptJson } from "../lib/secret-box.js";
 
 // Stub fetch so the disposable-email check never hits the network
 vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
@@ -9,6 +11,12 @@ vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
 const mockSendMail = vi.hoisted(() => vi.fn());
 const mockIsEmailConfigured = vi.hoisted(() => vi.fn());
 vi.mock("../lib/mail.js", () => ({ sendMail: (...a: unknown[]) => mockSendMail(...a), isEmailConfigured: () => mockIsEmailConfigured() }));
+const mockProviderSend = vi.hoisted(() => vi.fn());
+vi.mock("../lib/redis.js", () => ({ redis: { eval: vi.fn().mockResolvedValue(1) } }));
+vi.mock("../lib/email/transport.js", async (orig) => ({
+  ...(await orig<typeof TransportModule>()),
+  buildTransport: () => ({ send: (...a: unknown[]) => mockProviderSend(...a) }),
+}));
 const mockCheckPlanLimit = vi.fn();
 vi.mock("../lib/plan-limits.js", () => ({
   checkPlanLimit: (...args: unknown[]) => mockCheckPlanLimit(...args),
@@ -30,6 +38,7 @@ const mockPrisma: Record<string, any> = vi.hoisted(() => ({
   },
   authAccount: { findUnique: vi.fn() },
   organization: { findUnique: vi.fn() },
+  orgEmailSettings: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   team: { findFirst: vi.fn() },
   $transaction: vi.fn((arg: unknown): unknown =>
     typeof arg === "function" ? (arg as (t: unknown) => unknown)(mockPrisma) : Promise.all(arg as unknown[]),
@@ -154,6 +163,78 @@ describe("invitations", () => {
     expect(arg.html).toContain("Acme Msgs");
     expect(arg.html).not.toContain("WBMSG");
     expect(arg.html).not.toContain(`href="https://wbmsg.com"`);
+  });
+
+  it("sends through the inviting org's verified provider, not the default relay", async () => {
+    process.env["EMAIL_SETTINGS_KEY"] = Buffer.alloc(32, 7).toString("base64");
+    mockCheckPlanLimit.mockResolvedValue({ allowed: true, limit: -1, current: 0 });
+    mockSendMail.mockResolvedValue(undefined);
+    mockPrisma.invitation.create.mockResolvedValue({ id: "i7", email: "new@c.com", role: "agent", token: "tok7", expiresAt: new Date() });
+    mockProviderSend.mockResolvedValue({ ok: true });
+    mockPrisma.orgEmailSettings.findUnique.mockResolvedValue({
+      id: "set-1",
+      provider: "sendgrid",
+      fromAddress: "no-reply@acme.test",
+      fromName: "Acme",
+      replyTo: null,
+      configEnc: encryptJson({ provider: "sendgrid", apiKey: "fake-key-12345" }),
+      status: "verified",
+      consecutiveFailures: 0,
+    });
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      isParent: true,
+      whiteLabelEnabled: true,
+      brandName: "Acme Msgs",
+      brandColor: "#112233",
+      brandSupportEmail: "help@acme.test",
+      brandHidePoweredBy: true,
+      slug: "acme",
+      parentOrganizationId: null,
+      logoImage: null,
+      smallLogoImage: null,
+      favicon: null,
+      darkLogoImage: null,
+      darkSmallLogoImage: null,
+      darkFavicon: null,
+      parentOrganization: null,
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/v1/invitations", payload: { email: "new@c.com", role: "agent" } });
+    expect(res.json().emailSent).toBe(true);
+    expect(mockProviderSend).toHaveBeenCalledTimes(1);
+    expect(mockProviderSend.mock.calls[0]![0]).toMatchObject({ from: { name: "Acme", address: "no-reply@acme.test" }, to: "new@c.com", replyTo: "help@acme.test" });
+    expect(mockPrisma.orgEmailSettings.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: "org-1" } }));
+    expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
+  it("an unverified provider is ignored: default relay as today", async () => {
+    process.env["EMAIL_SETTINGS_KEY"] = Buffer.alloc(32, 7).toString("base64");
+    mockCheckPlanLimit.mockResolvedValue({ allowed: true, limit: -1, current: 0 });
+    mockSendMail.mockResolvedValue(undefined);
+    mockPrisma.invitation.create.mockResolvedValue({ id: "i7", email: "new@c.com", role: "agent", token: "tok7", expiresAt: new Date() });
+    mockPrisma.orgEmailSettings.findUnique.mockResolvedValue({ id: "set-1", status: "unverified" });
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      isParent: true,
+      whiteLabelEnabled: true,
+      brandName: "Acme Msgs",
+      brandColor: "#112233",
+      brandSupportEmail: "help@acme.test",
+      brandHidePoweredBy: true,
+      slug: "acme",
+      parentOrganizationId: null,
+      logoImage: null,
+      smallLogoImage: null,
+      favicon: null,
+      darkLogoImage: null,
+      darkSmallLogoImage: null,
+      darkFavicon: null,
+      parentOrganization: null,
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/v1/invitations", payload: { email: "new@c.com", role: "agent" } });
+    expect(res.json().emailSent).toBe(true);
+    expect(mockProviderSend).not.toHaveBeenCalled();
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
   });
 
   it("still creates the invitation when the email fails", async () => {

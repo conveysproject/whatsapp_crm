@@ -44,6 +44,11 @@ describe("impersonation route classification", () => {
     expect(classifyRoute("POST", "/v1/organizations/brand/assets/:slot")).toBe("blocked");
     expect(classifyRoute("DELETE", "/v1/organizations/brand/assets/:slot")).toBe("blocked");
     expect(classifyRoute("PATCH", "/v1/admin/organizations/:orgId/white-label")).toBe("blocked");
+    // Client email provider settings (credentials): every method blocked, reads included.
+    for (const m of ["GET", "PUT", "POST", "DELETE"]) {
+      expect(classifyRoute(m, "/v1/organizations/email-settings")).toBe("blocked");
+    }
+    expect(classifyRoute("POST", "/v1/organizations/email-settings/test")).toBe("blocked");
     expect(classifyRoute("GET", "/v1/brand")).toBe("read-like");
   });
 

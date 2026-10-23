@@ -3,12 +3,21 @@ import type * as IdentityModule from "../auth/identity.js";
 import type * as ParentOrgsModule from "../lib/parent-orgs.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import type * as TransportModule from "../lib/email/transport.js";
+import { encryptJson } from "../lib/secret-box.js";
 
 const mockSendMail = vi.hoisted(() => vi.fn());
 const mockIsEmailConfigured = vi.hoisted(() => vi.fn());
 vi.mock("../lib/mail.js", () => ({
   sendMail: (...a: unknown[]) => mockSendMail(...a),
   isEmailConfigured: () => mockIsEmailConfigured(),
+}));
+
+const mockProviderSend = vi.hoisted(() => vi.fn());
+vi.mock("../lib/redis.js", () => ({ redis: { eval: vi.fn().mockResolvedValue(1) } }));
+vi.mock("../lib/email/transport.js", async (orig) => ({
+  ...(await orig<typeof TransportModule>()),
+  buildTransport: () => ({ send: (...a: unknown[]) => mockProviderSend(...a) }),
 }));
 
 const mockCanBeParent = vi.hoisted(() => vi.fn());
@@ -37,6 +46,7 @@ const mockPrisma: Record<string, any> = vi.hoisted(() => ({
     updateMany: vi.fn(),
   },
   organization: { findUnique: vi.fn() },
+  orgEmailSettings: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   user: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
   authAccount: { findUnique: vi.fn() },
   $transaction: vi.fn(),
@@ -163,11 +173,79 @@ describe("POST /v1/client-invitations", () => {
     const mail = mockSendMail.mock.calls[0][0];
     expect(mail.fromName).toBe("Acme Msgs");
     expect(mail.replyTo).toBe("help@acme.test");
-    expect(mail.subject).toBe("You've been invited to create a Acme Msgs account");
+    expect(mail.subject).toBe("You've been invited to join Acme Msgs");
     expect(mail.html).toContain("create your own Acme Msgs account");
     expect(mail.html).toContain("full read access");
     expect(mail.html).not.toContain("WBMSG");
     expect(mail.html).not.toContain(`href="https://wbmsg.com"`);
+  });
+
+  it("sends through the inviting parent's verified provider, not the default relay", async () => {
+    process.env["EMAIL_SETTINGS_KEY"] = Buffer.alloc(32, 7).toString("base64");
+    mockProviderSend.mockResolvedValue({ ok: true });
+    mockPrisma.orgEmailSettings.findUnique.mockResolvedValue({
+      id: "set-1",
+      provider: "sendgrid",
+      fromAddress: "no-reply@acme.test",
+      fromName: "Acme",
+      replyTo: null,
+      configEnc: encryptJson({ provider: "sendgrid", apiKey: "fake-key-12345" }),
+      status: "verified",
+      consecutiveFailures: 0,
+    });
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      name: "Acme Agency",
+      isParent: true,
+      whiteLabelEnabled: true,
+      brandName: "Acme Msgs",
+      brandColor: "#112233",
+      brandSupportEmail: "help@acme.test",
+      brandHidePoweredBy: true,
+      slug: "acme",
+      parentOrganizationId: null,
+      logoImage: null,
+      smallLogoImage: null,
+      favicon: null,
+      darkLogoImage: null,
+      darkSmallLogoImage: null,
+      darkFavicon: null,
+      parentOrganization: null,
+    });
+    const app = await buildApp();
+    const res = await post(app);
+    expect(res.json().emailSent).toBe(true);
+    expect(mockProviderSend).toHaveBeenCalledTimes(1);
+    expect(mockProviderSend.mock.calls[0]![0]).toMatchObject({ from: { name: "Acme", address: "no-reply@acme.test" }, to: "client@example.com", replyTo: "help@acme.test" });
+    expect(mockPrisma.orgEmailSettings.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: "org-1" } }));
+    expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
+  it("a failing provider is ignored: default relay as today", async () => {
+    process.env["EMAIL_SETTINGS_KEY"] = Buffer.alloc(32, 7).toString("base64");
+    mockPrisma.orgEmailSettings.findUnique.mockResolvedValue({ id: "set-1", status: "failing" });
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      name: "Acme Agency",
+      isParent: true,
+      whiteLabelEnabled: true,
+      brandName: "Acme Msgs",
+      brandColor: "#112233",
+      brandSupportEmail: "help@acme.test",
+      brandHidePoweredBy: true,
+      slug: "acme",
+      parentOrganizationId: null,
+      logoImage: null,
+      smallLogoImage: null,
+      favicon: null,
+      darkLogoImage: null,
+      darkSmallLogoImage: null,
+      darkFavicon: null,
+      parentOrganization: null,
+    });
+    const app = await buildApp();
+    const res = await post(app);
+    expect(res.json().emailSent).toBe(true);
+    expect(mockProviderSend).not.toHaveBeenCalled();
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
   });
 
   it("returns the created invite", async () => {

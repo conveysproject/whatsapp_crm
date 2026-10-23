@@ -105,6 +105,7 @@ export const BLOCKED_GET_PREFIXES: readonly string[] = [
   "/v1/auth", // own auth: session lists and security overview belong to the target's own sessions only
   "/v1/admin",
   "/v1/super-admins",
+  "/v1/organizations/email-settings", // client email provider settings: no reads while impersonating
 ];
 
 /**
