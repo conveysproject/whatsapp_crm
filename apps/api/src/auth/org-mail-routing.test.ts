@@ -65,20 +65,16 @@ beforeEach(() => {
 });
 
 describe("account emails choose the sending provider by the recipient's organization", () => {
-  it("a client user of an approved parent: code email goes through the parent's provider", async () => {
+  it("a client user of an approved parent: the code goes through OUR sender with the parent's brand, never the parent's provider", async () => {
     await sendCodeEmailToAccount(db, "c@x.test", "signin_email", "123456");
-    expect(mockSendMail).not.toHaveBeenCalled();
-    expect(mockProviderSend).toHaveBeenCalledTimes(1);
-    const m = mockProviderSend.mock.calls[0]![0];
-    expect(m).toMatchObject({ from: { name: "Acme", address: "no-reply@acme.test" }, to: "c@x.test", replyTo: "help@acme.test" });
-    expect(m.subject).toBe("Your Acme Msgs sign-in code");
-    expect(m.html).toContain("123456");
-    expect(prisma.orgEmailSettings.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { organizationId: "parent-1" } }));
+    expect(mockProviderSend).not.toHaveBeenCalled();
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    expect(mockSendMail.mock.calls[0]![0]).toMatchObject({ fromName: "Acme Msgs", replyTo: "help@acme.test", subject: "Your Acme Msgs sign-in code", to: "c@x.test" });
   });
-  it("password-changed also goes through the parent's provider", async () => {
+  it("password-changed for a client also goes through our sender", async () => {
     await sendPasswordChangedToAccount(db, "c@x.test");
-    expect(mockProviderSend).toHaveBeenCalledTimes(1);
-    expect(mockSendMail).not.toHaveBeenCalled();
+    expect(mockProviderSend).not.toHaveBeenCalled();
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
   });
   it("parent not approved for white-label: default path, golden unbranded arguments", async () => {
     prisma.organization.findUnique.mockResolvedValue(clientOrg(false));

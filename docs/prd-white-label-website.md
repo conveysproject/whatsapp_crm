@@ -99,7 +99,7 @@ Owner request (2026-10-22): the brand's emails must be able to go out through th
 | D10 | Email providers in the first release | SMTP plus SendGrid, Mailgun, Postmark, Resend, Brevo, Amazon SES; Gmail API and Microsoft Graph (OAuth) later |
 | D11 | Who configures the email provider | The parent admin; clients inherit |
 | D12 | If the client's provider fails | Fall back once to our sender, mark failing after 3 failures, tell the parent admin |
-| D13 | Which emails use the client's provider | Sign-in codes, password changed, team and client invitations, closure notices, and (D4) billing and statement emails to a client organization. Our own sender for the parent's own billing, owner summaries and admin emails |
+| D13 | Which emails use the client's provider | Team and client invitations, closure notices, and (D4) billing and statement emails to a client organization. Our own sender for the parent's own billing, owner summaries and admin emails. **Amended 2026-10-23 (owner, after the final review):** sign-in codes, password-reset codes and password-changed notices for a CLIENT organization's users go through our default sender with the parent's brand, never the parent's provider, because the parent could otherwise read a code and take over a client account. The parent's own users still use the parent's provider |
 | D14 | Sending through an unverified setting | No: a successful test send is required first |
 
 ## 7. Acceptance criteria
