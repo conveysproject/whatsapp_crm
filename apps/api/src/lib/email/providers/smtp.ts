@@ -2,7 +2,10 @@
 // Railway blocks outbound SMTP, so this adapter does not speak SMTP: it POSTs to the web relay
 // (Vercel), which connects to the client's server through an SSRF-safe, pinned connection.
 // The password is only ever in the relay request body; it never appears in a reason, error or log.
-import { isPublicAddress, normalizeIpv4Mapped, parseDottedQuadIpv4, parseIpv6 } from "@WBMSG/shared";
+import {
+  SMTP_PRESETS, isPublicAddress, normalizeIpv4Mapped, parseDottedQuadIpv4, parseIpv6, smtpPresetFor,
+  type SmtpPresetId,
+} from "@WBMSG/shared";
 import { PLAIN_EMAIL_RE } from "../../brand.js";
 import type { EmailTransport, FetchLike, OutboundEmail, SendResult } from "../transport.js";
 
@@ -94,34 +97,15 @@ export function validateSmtpConfig(raw: unknown): SmtpValidation {
 
 // ---- Presets (used by the settings UI) ----
 
-export type PresetId = "gmail" | "microsoft365" | "ses" | "godaddy" | "zoho";
-export interface SmtpPreset {
-  host: string;
-  port: SmtpConfig["port"];
-  security: SmtpConfig["security"];
-}
+export type PresetId = SmtpPresetId;
+export type SmtpPreset = Pick<SmtpConfig, "host" | "port" | "security">;
 
-/** SES host holds a {region} placeholder; resolve presets with presetFor(). */
-export const PRESETS: Record<PresetId, SmtpPreset & { label: string }> = {
-  gmail: { label: "Gmail / Google Workspace (app password)", host: "smtp.gmail.com", port: 587, security: "starttls" },
-  microsoft365: { label: "Microsoft 365", host: "smtp.office365.com", port: 587, security: "starttls" },
-  ses: { label: "Amazon SES", host: "email-smtp.{region}.amazonaws.com", port: 587, security: "starttls" },
-  godaddy: { label: "GoDaddy", host: "smtpout.secureserver.net", port: 465, security: "ssl" },
-  zoho: { label: "Zoho Mail", host: "smtp.zoho.com", port: 465, security: "ssl" },
-};
-
-const AWS_REGION_RE = /^[a-z]{2}(-[a-z]+){1,2}-\d{1,2}$/;
+/** The preset data lives in @WBMSG/shared so the web settings screen uses the same values. */
+export const PRESETS = SMTP_PRESETS;
 
 /** The host/port/security for a preset; SES needs a valid AWS region. Returns null for a bad id or region. */
 export function presetFor(id: PresetId, region?: string): SmtpPreset | null {
-  if (typeof id !== "string" || !Object.hasOwn(PRESETS, id)) return null;
-  const p = PRESETS[id];
-  let host = p.host;
-  if (id === "ses") {
-    if (typeof region !== "string" || !AWS_REGION_RE.test(region)) return null;
-    host = host.replace("{region}", region);
-  }
-  return { host, port: p.port, security: p.security };
+  return smtpPresetFor(id, region);
 }
 
 // ---- Transport (via the web relay) ----

@@ -75,3 +75,4 @@ export interface ApiError {
 export const API_VERSION = "v1" as const;
 
 export * from "./ip.js";
+export * from "./smtp-presets.js";
