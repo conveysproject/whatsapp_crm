@@ -133,8 +133,41 @@ describe("POST /v1/client-invitations", () => {
     const mail = mockSendMail.mock.calls[0][0];
     expect(mail.to).toBe("client@example.com");
     expect(mail.html).toContain("full read access");
+    // Not an approved white-label parent: today's options, nothing extra.
+    expect(Object.keys(mail).sort()).toEqual(["html", "subject", "to"]);
     expect(mail.html).toContain(data.token);
     expect(res.json().emailSent).toBe(true);
+  });
+
+  it("brands the email with the approved parent's own brand, from-name and reply-to", async () => {
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      name: "Acme Agency",
+      isParent: true,
+      whiteLabelEnabled: true,
+      brandName: "Acme Msgs",
+      brandColor: "#112233",
+      brandSupportEmail: "help@acme.test",
+      brandHidePoweredBy: true,
+      slug: "acme",
+      logoImage: null,
+      smallLogoImage: null,
+      favicon: null,
+      darkLogoImage: null,
+      darkSmallLogoImage: null,
+      darkFavicon: null,
+      parentOrganization: null,
+    });
+    const app = await buildApp();
+    const res = await post(app);
+    expect(res.json().emailSent).toBe(true);
+    const mail = mockSendMail.mock.calls[0][0];
+    expect(mail.fromName).toBe("Acme Msgs");
+    expect(mail.replyTo).toBe("help@acme.test");
+    expect(mail.subject).toBe("You've been invited to create a Acme Msgs account");
+    expect(mail.html).toContain("create your own Acme Msgs account");
+    expect(mail.html).toContain("full read access");
+    expect(mail.html).not.toContain("WBMSG");
+    expect(mail.html).not.toContain(`href="https://wbmsg.com"`);
   });
 
   it("returns the created invite", async () => {
@@ -279,8 +312,41 @@ describe("GET /v1/client-invitations/:token (public)", () => {
     const app = await buildApp();
     const res = await get(app);
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ data: { parentName: "Acme Agency", email: "Client@Example.com", accountExists: false } });
+    expect(res.json()).toEqual({
+      data: { parentName: "Acme Agency", email: "Client@Example.com", accountExists: false, brand: expect.objectContaining({ isDefault: true, name: "WBMSG" }) },
+    });
     expect(mockPrisma.authAccount.findUnique).toHaveBeenCalledWith({ where: { email: "client@example.com" }, select: { id: true } });
+  });
+
+  const brandedParent = {
+    name: "Acme Agency", isParent: true, whiteLabelEnabled: true, brandName: "Acme CRM", brandColor: "#0055ff",
+    brandSupportEmail: "help@acme.test", brandHidePoweredBy: false, slug: "acme", logoImage: null, smallLogoImage: null,
+    favicon: null, darkLogoImage: null, darkSmallLogoImage: null, darkFavicon: null, parentOrganization: null,
+  };
+
+  it("returns the inviting approved parent's brand payload (no ids)", async () => {
+    mockPrisma.clientInvitation.findUnique.mockResolvedValue(invite);
+    mockPrisma.authAccount.findUnique.mockResolvedValue(null);
+    mockPrisma.organization.findUnique.mockResolvedValue(brandedParent);
+    const app = await buildApp();
+    const data = (await get(app)).json().data;
+    expect(Object.keys(data).sort()).toEqual(["accountExists", "brand", "email", "parentName"]);
+    expect(data.brand).toMatchObject({ name: "Acme CRM", isDefault: false, slug: "acme", primaryColor: "#0055ff" });
+    expect(data.brand.palette["500"]).toBe("#0055ff");
+    expect(JSON.stringify(data)).not.toContain("org-1");
+  });
+
+  it("a failing brand lookup gives the default brand and the preview still works", async () => {
+    mockPrisma.clientInvitation.findUnique.mockResolvedValue(invite);
+    mockPrisma.authAccount.findUnique.mockResolvedValue(null);
+    mockPrisma.organization.findUnique
+      .mockResolvedValueOnce({ name: "Acme Agency" })
+      .mockRejectedValueOnce(new Error("db down"));
+    const app = await buildApp();
+    const res = await get(app);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.parentName).toBe("Acme Agency");
+    expect(res.json().data.brand.isDefault).toBe(true);
   });
 
   it("accountExists is true when an account for the invited email exists (nothing else about it)", async () => {
@@ -288,7 +354,9 @@ describe("GET /v1/client-invitations/:token (public)", () => {
     mockPrisma.authAccount.findUnique.mockResolvedValue({ id: "acct-9" });
     const app = await buildApp();
     const res = await get(app);
-    expect(res.json()).toEqual({ data: { parentName: "Acme Agency", email: "client@example.com", accountExists: true } });
+    expect(res.json()).toEqual({
+      data: { parentName: "Acme Agency", email: "client@example.com", accountExists: true, brand: expect.objectContaining({ isDefault: true }) },
+    });
   });
 
   it("does not look up accounts for a bad token", async () => {

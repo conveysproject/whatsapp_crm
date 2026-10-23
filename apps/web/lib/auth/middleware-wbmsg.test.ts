@@ -40,6 +40,28 @@ describe("wbmsgMiddleware", () => {
       expect(r.headers.get("x-middleware-next"), p).toBe("1");
     }
   });
+  describe("branded entry paths (/c/<slug>)", () => {
+    const publicPaths = ["/c/acme/sign-in", "/c/acme/forgot-password", "/c/a-b-c/sign-in", "/c/abc/sign-in", `/c/${"a".repeat(40)}/forgot-password`];
+    const protectedPaths = [
+      "/c", "/c/", "/c/acme", "/c/acme/", "/c/acme/anything-else", "/c/acme/sign-in/extra", "/c/acme/sign-in/", "/c/acme/reset-password",
+      "/c/ab/sign-in", `/c/${"a".repeat(41)}/sign-in`, "/c/Acme/sign-in", "/c/ac_me/sign-in", "/c/acme/%2e%2e/dashboard",
+      "/c/acme/sign-in%2f..%2fdashboard", "/c//sign-in", "/c/a.b.c/sign-in",
+    ];
+    it.each(publicPaths)("%s passes without a session", async (p) => {
+      const r = await wbmsgMiddleware(req(p));
+      expect(r.headers.get("x-middleware-next"), p).toBe("1");
+    });
+    it.each(protectedPaths)("%s needs a session", async (p) => {
+      const r = await wbmsgMiddleware(req(p));
+      expect(r.headers.get("x-middleware-next"), p).toBeNull();
+      expect(loc(r)).toContain("/sign-in?redirect_url=");
+    });
+    it("a literal path traversal never reaches a public /c page", async () => {
+      const r = await wbmsgMiddleware(new NextRequest("https://app.test/c/acme/sign-in/../../dashboard"));
+      // The URL parser resolves the dots first: the request is for /dashboard, which is protected.
+      expect(r.headers.get("x-middleware-next")).toBeNull();
+    });
+  });
   describe("x-pathname", () => {
     const fwd = (r: Response) => r.headers.get("x-middleware-request-x-pathname");
     it("forwards pathname + search to a protected page", async () => {

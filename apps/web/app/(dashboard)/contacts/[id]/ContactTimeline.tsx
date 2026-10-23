@@ -145,7 +145,7 @@ export function ContactTimeline({ contactId }: { contactId: string }): JSX.Eleme
             key={t}
             onClick={() => setTab(t)}
             className={`px-3 py-1 text-xs rounded-full capitalize transition-colors ${
-              tab === t ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              tab === t ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
             {t}

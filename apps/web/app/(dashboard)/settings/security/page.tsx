@@ -12,8 +12,8 @@ import { ConnectedAccountsSection, WhatsAppNumberSection, type SignInMethodsInfo
 interface SecurityInfo extends SignInMethodsInfo { email: string; hasPassword: boolean; mustSetPassword: boolean }
 
 const IMPERSONATING = "Not available while viewing as another user.";
-const inputCls = "w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500";
-const btnCls = "px-3 py-2 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50";
+const inputCls = "w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
+const btnCls = "px-3 py-2 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50";
 
 async function errorCode(res: Response): Promise<string> {
   try { return ((await res.json()) as { error?: { code?: string } }).error?.code ?? ""; } catch { return ""; }
@@ -59,7 +59,7 @@ function PasswordSection({ info, onChanged }: { info: SecurityInfo; onChanged: (
         <h2 className="text-sm font-semibold">{heading}</h2>
         <p className="text-sm text-gray-600">
           You don&apos;t have a password yet. Use Forgot password on the sign-in page to create one.{" "}
-          <Link href="/forgot-password" className="text-green-700 hover:underline">Forgot password</Link>
+          <Link href="/forgot-password" className="text-brand-700 hover:underline">Forgot password</Link>
         </p>
       </section>
     );

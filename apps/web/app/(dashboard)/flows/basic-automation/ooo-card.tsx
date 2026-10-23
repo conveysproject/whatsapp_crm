@@ -94,7 +94,7 @@ export function OooCard({ initial }: Props): JSX.Element {
             title={hasBusinessHours !== true ? "Configure Business Hours first" : undefined}
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
               hasBusinessHours !== true ? "opacity-40 cursor-not-allowed bg-gray-200" :
-              enabled ? "bg-green-500" : "bg-gray-200"
+              enabled ? "bg-brand-500" : "bg-gray-200"
             }`}
           >
             <span

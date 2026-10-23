@@ -3,10 +3,12 @@
 import { useState, type FormEvent, type JSX } from "react";
 import { useAuth } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
+import { useBrand } from "@/hooks/useBrand";
 
 const API_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:4000";
 
 export default function InviteTeamPage(): JSX.Element {
+  const brandName = useBrand().name;
   const { getToken } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -47,7 +49,7 @@ export default function InviteTeamPage(): JSX.Element {
   return (
     <div>
       <h2 className="text-lg font-semibold text-gray-800 mb-2">Invite Your Team</h2>
-      <p className="text-sm text-gray-500 mb-6">Add colleagues who will use WBMSG.</p>
+      <p className="text-sm text-gray-500 mb-6">Add colleagues who will use {brandName}.</p>
 
       <form onSubmit={(e) => { void handleInvite(e); }} className="flex gap-2 mb-4">
         <input
@@ -55,7 +57,7 @@ export default function InviteTeamPage(): JSX.Element {
           placeholder="colleague@company.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
         <select
           value={role}
@@ -71,7 +73,7 @@ export default function InviteTeamPage(): JSX.Element {
         <button
           type="submit"
           disabled={loading}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+          className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
         >
           {loading ? "Sending…" : "Invite"}
         </button>

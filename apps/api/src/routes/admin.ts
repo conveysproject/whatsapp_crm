@@ -173,9 +173,28 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       fastify.prisma.campaign.count({ where: { organizationId: org.id } }),
     ]);
     const { _count, ...orgFields } = org;
+    // Review data for the white-label approval screen (parents only).
+    const brandReview = org.isParent
+      ? {
+          brandName: org.brandName,
+          brandColor: org.brandColor,
+          brandSupportEmail: org.brandSupportEmail,
+          slug: org.slug,
+          hidePoweredBy: org.brandHidePoweredBy,
+          logoUrl: org.logoImage,
+          smallLogoUrl: org.smallLogoImage,
+          faviconUrl: org.favicon,
+          darkLogoUrl: org.darkLogoImage,
+          darkSmallLogoUrl: org.darkSmallLogoImage,
+          darkFaviconUrl: org.darkFavicon,
+          brandRevision: org.brandRevision,
+          whiteLabelEnabled: org.whiteLabelEnabled,
+        }
+      : null;
     return reply.send({
       data: {
         ...orgFields,
+        ...(brandReview ? { brandReview } : {}),
         _count: { members: _count.users, conversations: _count.conversations },
         usage: { contacts: contactCount, messages: messageCount, campaigns: campaignCount },
       },
@@ -269,7 +288,7 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         if (!enabled && (await tx.organization.count({ where: { parentOrganizationId: org.id } })) > 0) {
           return { code: "HAS_CHILDREN" as const };
         }
-        const row = await tx.organization.update({ where: { id: org.id }, data: { isParent: enabled }, select: { id: true, isParent: true } });
+        const row = await tx.organization.update({ where: { id: org.id }, data: { isParent: enabled, ...(enabled ? {} : { whiteLabelEnabled: false }) }, select: { id: true, isParent: true } });
         return { code: "OK" as const, row };
       });
       if (result.code === "NOT_FOUND") return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
@@ -287,6 +306,90 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         request,
       });
       return reply.send({ data: { organizationId: updated.id, isParent: updated.isParent } });
+    }
+  );
+
+  // ── White-label switch (super admin only) ────────────────────────────────
+  // The parent edits its brand freely, but it only SHOWS once a super admin enables it here.
+  fastify.patch<{ Params: { orgId: string }; Body: { enabled: boolean; reviewedRevision?: number } }>(
+    "/admin/organizations/:orgId/white-label",
+    {
+      schema: {
+        params: { type: "object", properties: { orgId: { type: "string", maxLength: 64 } }, required: ["orgId"] },
+        body: {
+          type: "object",
+          required: ["enabled"],
+          properties: { enabled: { type: "boolean" }, reviewedRevision: { type: "integer", minimum: 0 } },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!requireSuperAdmin(request.auth.role, reply)) return;
+      const { orgId } = request.params;
+      const { enabled, reviewedRevision } = request.body;
+      if (enabled && reviewedRevision === undefined) {
+        return reply
+          .status(400)
+          .send({ error: { code: "VALIDATION_FAILED", field: "reviewedRevision", message: "reviewedRevision is required to enable" } });
+      }
+      if (enabled) {
+        // One conditional write: the checks and the switch cannot be separated by a concurrent edit.
+        const res = await fastify.prisma.organization.updateMany({
+          where: {
+            id: orgId,
+            isParent: true,
+            parentOrganizationId: null,
+            brandName: { not: null },
+            brandColor: { not: null },
+            slug: { not: null },
+            brandSupportEmail: { not: null },
+            brandRevision: reviewedRevision as number,
+          },
+          data: { whiteLabelEnabled: true },
+        });
+        if (res.count === 0) {
+          const org = await fastify.prisma.organization.findUnique({
+            where: { id: orgId },
+            select: {
+              id: true,
+              isParent: true,
+              parentOrganizationId: true,
+              brandName: true,
+              brandColor: true,
+              slug: true,
+              brandSupportEmail: true,
+              brandRevision: true,
+            },
+          });
+          if (!org) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
+          if (!org.isParent || org.parentOrganizationId) {
+            return reply.status(409).send({ error: { code: "NOT_PARENT", message: "Only a parent organization can be white-labelled" } });
+          }
+          const missing = (["brandName", "brandColor", "slug", "brandSupportEmail"] as const).filter((f) => !org[f]);
+          if (missing.length === 0 && org.brandRevision !== reviewedRevision) {
+            return reply.status(409).send({
+              error: { code: "BRAND_CHANGED", message: "The brand changed since you reviewed it; reload and review again" },
+            });
+          }
+          return reply
+            .status(409)
+            .send({ error: { code: "BRAND_INCOMPLETE", message: "The brand is not complete yet", missing } });
+        }
+      } else {
+        const res = await fastify.prisma.organization.updateMany({ where: { id: orgId }, data: { whiteLabelEnabled: false } });
+        if (res.count === 0) return reply.status(404).send({ error: { code: "NOT_FOUND", message: "Organization not found" } });
+      }
+      writeAdminAudit({
+        prisma: fastify.prisma,
+        actorId: request.auth.userId,
+        action: "org.white_label",
+        targetType: "organization",
+        targetId: orgId,
+        metadata: { enabled, ...(enabled ? { reviewedRevision } : {}) },
+        request,
+      });
+      return reply.send({ data: { organizationId: orgId, whiteLabelEnabled: enabled } });
     }
   );
 

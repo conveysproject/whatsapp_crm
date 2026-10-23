@@ -134,7 +134,7 @@ export function TemplateActions({
               <button
                 disabled={!exampleImageUrl.trim() || submitting}
                 onClick={() => { void handleSubmitToMeta(exampleImageUrl.trim()); }}
-                className="px-4 py-2 text-sm bg-green-600 text-white rounded disabled:opacity-40 hover:bg-green-700"
+                className="px-4 py-2 text-sm bg-brand-600 text-white rounded disabled:opacity-40 hover:bg-brand-700"
               >
                 {submitting ? "Submitting…" : "Submit to Meta"}
               </button>
@@ -154,7 +154,7 @@ export function TemplateActions({
           <button
             onClick={handleSubmitClick}
             disabled={submitting}
-            className="text-xs text-green-700 hover:text-green-900 px-2 py-1 border border-green-300 rounded disabled:opacity-40 font-medium"
+            className="text-xs text-brand-700 hover:text-brand-900 px-2 py-1 border border-brand-300 rounded disabled:opacity-40 font-medium"
           >
             {submitting ? "Submitting…" : "Submit to Meta"}
           </button>
@@ -178,7 +178,7 @@ export function TemplateActions({
           </Link>
           <button
             onClick={() => setOpen(true)}
-            className="flex h-7 items-center gap-1 rounded-md border border-green-300 bg-green-50 px-2 text-xs font-medium text-green-700 hover:bg-green-100"
+            className="flex h-7 items-center gap-1 rounded-md border border-brand-300 bg-brand-50 px-2 text-xs font-medium text-brand-700 hover:bg-brand-100"
             title="Send to contact"
           >
             <Send className="h-3.5 w-3.5" aria-hidden="true" />
@@ -315,13 +315,13 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
             <div className="px-5 pt-4 space-y-2">
               <input
                 autoFocus
-                className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
                 placeholder="Search by name or phone..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
               <select
-                className="w-full border rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-green-500"
+                className="w-full border rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 value={tagFilter}
                 onChange={(e) => setTagFilter(e.target.value)}
               >
@@ -366,7 +366,7 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
                       checked={checked}
                       disabled={disabled}
                       onChange={() => toggle(c.id)}
-                      className="accent-green-600 w-4 h-4 shrink-0"
+                      className="accent-brand-600 w-4 h-4 shrink-0"
                     />
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm font-medium text-gray-800 truncate">
@@ -392,7 +392,7 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
                 <button
                   disabled={selected.size === 0}
                   onClick={() => setStep(headerFormat || imageCardCount > 0 ? "media" : "confirm")}
-                  className="px-4 py-2 text-sm bg-green-600 text-white rounded disabled:opacity-40 hover:bg-green-700"
+                  className="px-4 py-2 text-sm bg-brand-600 text-white rounded disabled:opacity-40 hover:bg-brand-700"
                 >
                   Next →
                 </button>
@@ -451,7 +451,7 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
                     : !mediaUrl.trim()
                 }
                 onClick={() => setStep("confirm")}
-                className="flex-1 py-2 text-sm bg-green-600 text-white rounded disabled:opacity-40 hover:bg-green-700"
+                className="flex-1 py-2 text-sm bg-brand-600 text-white rounded disabled:opacity-40 hover:bg-brand-700"
               >
                 Next →
               </button>
@@ -477,7 +477,7 @@ function SendModal({ templateId, templateName, headerFormat, imageCardCount = 0,
               </button>
               <button
                 onClick={() => { void handleSend(); }}
-                className="flex-1 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                className="flex-1 py-2 text-sm bg-brand-600 text-white rounded hover:bg-brand-700"
               >
                 Confirm
               </button>

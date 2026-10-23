@@ -20,15 +20,17 @@ import {
   type UsageSummary,
 } from "@/lib/api-usage";
 import { listCredentials, type ApiCredential } from "@/lib/api-credentials";
+import { useBrand } from "@/hooks/useBrand";
 
-const selectCls = "border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500";
+const selectCls = "border rounded px-3 py-1.5 text-sm bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-500";
 
 function GettingStarted({ rangeLabel }: { rangeLabel: string }): JSX.Element {
+  const brandName = useBrand().name;
   return (
     <div data-testid="usage-empty" className="rounded-xl border border-dashed border-gray-300 dark:border-gray-600 p-8 text-center space-y-2">
       <p className="text-sm font-medium">No API requests in the last {rangeLabel}</p>
       <p className="text-sm text-gray-500 dark:text-gray-400">
-        New here? Create an API credential and send your first request to the WBMSG API. Usage appears here within a few seconds.
+        New here? Create an API credential and send your first request to the {brandName} API. Usage appears here within a few seconds.
       </p>
       <Link href="/settings/vendor-settings" className="inline-block text-sm text-blue-600 hover:underline">
         Go to Advanced Settings → API Credentials
@@ -38,6 +40,7 @@ function GettingStarted({ rangeLabel }: { rangeLabel: string }): JSX.Element {
 }
 
 function ApiUsageBody(): JSX.Element {
+  const brandName = useBrand().name;
   const [range, setRange] = useState<UsageRange>(DEFAULT_RANGE);
   const [apiKeyId, setApiKeyId] = useState<string | null>(null);
   // A filtered summary only lists the selected credential, so remember every credential seen to keep the dropdown complete.
@@ -132,7 +135,7 @@ function ApiUsageBody(): JSX.Element {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">API Usage</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Requests, errors and messages sent through the WBMSG API.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Requests, errors and messages sent through the {brandName} API.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <label className="sr-only" htmlFor="usage-range">Time range</label>

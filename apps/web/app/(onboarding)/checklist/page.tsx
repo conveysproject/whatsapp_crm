@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 import { auth } from "@/lib/auth/server";
 import Link from "next/link";
+import { BrandName } from "@/components/brand/BrandName";
 
 async function getOnboardingStatus(token: string): Promise<{
   wabaConnected: boolean;
@@ -33,7 +34,7 @@ export default async function ChecklistPage(): Promise<JSX.Element> {
   return (
     <div>
       <h2 className="text-lg font-semibold text-gray-800 mb-2">Setup Checklist</h2>
-      <p className="text-sm text-gray-500 mb-6">Complete these steps to start using WBMSG.</p>
+      <p className="text-sm text-gray-500 mb-6">Complete these steps to start using <BrandName />.</p>
 
       <ul className="space-y-3 mb-8">
         {steps.map((step) => (
@@ -48,7 +49,7 @@ export default async function ChecklistPage(): Promise<JSX.Element> {
             {step.done ? (
               <span className="text-gray-600 text-sm line-through">{step.label}</span>
             ) : (
-              <Link href={step.href} className="text-green-600 hover:underline text-sm">
+              <Link href={step.href} className="text-brand-600 hover:underline text-sm">
                 {step.label}
               </Link>
             )}
@@ -59,7 +60,7 @@ export default async function ChecklistPage(): Promise<JSX.Element> {
       {allDone && (
         <Link
           href="/"
-          className="block w-full text-center bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 rounded-lg transition-colors"
+          className="block w-full text-center bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 rounded-lg transition-colors"
         >
           Go to Dashboard →
         </Link>

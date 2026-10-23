@@ -23,6 +23,8 @@ const PUBLIC: RegExp[] = [
   /^\/llms\.txt$/,
   /^\/invitations\/[^/]+\/accept$/,
   /^\/client-invitations\/[^/]+\/accept$/,
+  // White-label entry pages: exactly these two, for a well-formed slug. Nothing else under /c is public.
+  /^\/c\/[a-z0-9-]{3,40}\/(sign-in|forgot-password)$/,
   /^\/api\/internal\/.*$/,
 ];
 const isPublic = (p: string) => PUBLIC.some((r) => r.test(p));

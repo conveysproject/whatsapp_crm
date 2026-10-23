@@ -39,6 +39,12 @@ describe("impersonation route classification", () => {
     expect(classifyRoute("POST", "/v1/webhook-endpoints/:id/rotate-secret")).toBe("blocked");
     expect(classifyRoute("POST", "/v1/api-credentials/:id/rotate")).toBe("blocked");
     expect(classifyRoute("POST", "/v1/api-credentials")).toBe("blocked");
+    // White-label brand settings: inherit the /v1/organizations block; the read-only effective brand stays readable.
+    expect(classifyRoute("PUT", "/v1/organizations/brand")).toBe("blocked");
+    expect(classifyRoute("POST", "/v1/organizations/brand/assets/:slot")).toBe("blocked");
+    expect(classifyRoute("DELETE", "/v1/organizations/brand/assets/:slot")).toBe("blocked");
+    expect(classifyRoute("PATCH", "/v1/admin/organizations/:orgId/white-label")).toBe("blocked");
+    expect(classifyRoute("GET", "/v1/brand")).toBe("read-like");
   });
 
   it("blocks GETs of platform families; secret-bearing tenant GETs are readable (and audited)", () => {

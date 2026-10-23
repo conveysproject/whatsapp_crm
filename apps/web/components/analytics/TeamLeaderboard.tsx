@@ -86,7 +86,7 @@ export function TeamLeaderboardPanel({
       <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-gray-900">Team Leaderboard</h3>
         {viewAllHref && (
-          <Link data-testid="leaderboard-view-all" href={viewAllHref} className="text-xs font-semibold text-green-700 underline underline-offset-2">
+          <Link data-testid="leaderboard-view-all" href={viewAllHref} className="text-xs font-semibold text-brand-700 underline underline-offset-2">
             View all
           </Link>
         )}

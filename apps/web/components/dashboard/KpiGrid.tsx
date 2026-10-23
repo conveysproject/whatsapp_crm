@@ -39,7 +39,7 @@ function Card({ id, label, href, value, delta, hasDelta, lowerIsBetter, sub, not
     <Link
       data-testid={`kpi-${id}`}
       href={href}
-      className="block min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 shadow-sm hover:border-green-300 dark:hover:border-green-700"
+      className="block min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 shadow-sm hover:border-brand-300 dark:hover:border-brand-700"
     >
       <p className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
         <span className="min-w-0 break-words">{label}</span>

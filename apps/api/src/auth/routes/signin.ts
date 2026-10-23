@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from "fastify";
 import { issueCode, verifyCode, verifyCodeById, type CodePurpose } from "../codes.js";
 import { isTrustedDevice, trustDevice } from "../devices.js";
-import { sendCodeEmail } from "../emails.js";
+import { sendCodeEmailToAccount } from "../brand-mail.js";
 import { normalizeEmail } from "../ids.js";
 import {
   authClientIp,
@@ -57,7 +57,7 @@ export async function settleSigninWork(): Promise<void> {
 }
 
 function mailInBackground(fastify: FastifyInstance, to: string, purpose: CodePurpose, code: string): void {
-  const work = sendCodeEmail(to, purpose, code).catch((err: unknown) => {
+  const work = sendCodeEmailToAccount(fastify.prisma, to, purpose, code).catch((err: unknown) => {
     fastify.log.warn({ err: err instanceof Error ? err.name : "unknown" }, "signin code email failed");
   });
   pendingSigninWork.add(work);
@@ -311,7 +311,7 @@ export const signinRoutes: FastifyPluginAsync = async (fastify) => {
             accountId: account.id,
           });
           if ("error" in issued) return;
-          await sendCodeEmail(account.email, "signin_email", issued.code);
+          await sendCodeEmailToAccount(fastify.prisma, account.email, "signin_email", issued.code);
         } catch (err) {
           fastify.log.warn({ err: err instanceof Error ? err.name : "unknown" }, "signin code request failed");
         }

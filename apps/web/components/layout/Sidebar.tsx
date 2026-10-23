@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { JSX, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -10,6 +9,7 @@ import { canAccess } from "@/lib/can";
 import { showClientsNav } from "@/lib/parent-orgs";
 import { NewBadge } from "@/components/ui/NewBadge";
 import { WHATSAPP_ADMIN_HOME } from "@/lib/role-home";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 
 interface NavChild {
   href: string;
@@ -114,7 +114,7 @@ export function Sidebar(): JSX.Element {
   return (
     <aside className="flex flex-col w-60 min-h-screen bg-white border-r border-gray-200">
       <div className="flex items-center px-4 py-5 border-b border-gray-200">
-        <Image src="/wbmsg_logo.png" alt="WBMSG" width={200} height={56} style={{ height: "36px", width: "auto" }} priority />
+        <BrandLogo height={36} priority />
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">

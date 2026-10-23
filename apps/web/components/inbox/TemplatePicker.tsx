@@ -234,7 +234,7 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
                 <button
                   onClick={() => void sendTemplate(pendingTemplate.id, "", carouselUrls.map((u) => u.trim()))}
                   disabled={carouselUrls.some((u) => !u.trim()) || !!sending}
-                  className="flex-1 text-xs font-medium bg-green-600 text-white rounded-lg py-1.5 hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  className="flex-1 text-xs font-medium bg-brand-600 text-white rounded-lg py-1.5 hover:bg-brand-700 disabled:opacity-50 transition-colors"
                 >
                   {sending ? "Sending…" : "Send"}
                 </button>
@@ -263,7 +263,7 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
                 <button
                   onClick={() => void sendTemplate(pendingTemplate.id, mediaUrl.trim(), [])}
                   disabled={!mediaUrl.trim() || !!sending}
-                  className="flex-1 text-xs font-medium bg-green-600 text-white rounded-lg py-1.5 hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  className="flex-1 text-xs font-medium bg-brand-600 text-white rounded-lg py-1.5 hover:bg-brand-700 disabled:opacity-50 transition-colors"
                 >
                   {sending ? "Sending…" : "Send"}
                 </button>
@@ -297,7 +297,7 @@ export function TemplatePicker({ conversationId, contactId, initialSearch = "", 
               >
                 {/* Name + category */}
                 <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-sm font-medium text-gray-900 group-hover:text-green-700 transition-colors">
+                  <span className="text-sm font-medium text-gray-900 group-hover:text-brand-700 transition-colors">
                     {t.name}
                   </span>
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${CATEGORY_COLOR[t.category.toLowerCase()] ?? "bg-gray-100 text-gray-600"}`}>

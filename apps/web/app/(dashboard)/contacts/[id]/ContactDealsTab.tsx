@@ -58,7 +58,7 @@ export function ContactDealsTab({ contactId, contactName }: Props): JSX.Element 
         </span>
         <button
           onClick={() => setShowOffer(true)}
-          className="text-xs font-medium text-green-700 border border-green-200 bg-green-50 px-2.5 py-1 rounded-lg hover:bg-green-100 transition-colors"
+          className="text-xs font-medium text-brand-700 border border-brand-200 bg-brand-50 px-2.5 py-1 rounded-lg hover:bg-brand-100 transition-colors"
         >
           + Create Offer
         </button>

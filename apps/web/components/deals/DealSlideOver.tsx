@@ -148,7 +148,7 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Title</label>
             <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
@@ -160,7 +160,7 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
               type="number"
               min="0"
               step="0.01"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               value={value}
               onChange={(e) => setValue(e.target.value)}
             />
@@ -169,7 +169,7 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Stage</label>
             <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               value={stage}
               onChange={(e) => setStage(e.target.value)}
             >
@@ -182,7 +182,7 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
             <textarea
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
               rows={4}
               placeholder="Add notes about this deal..."
               value={notes}
@@ -200,7 +200,7 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
                   onClick={() => setNotifyContact((v) => !v)}
                   className={[
                     "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                    notifyContact ? "bg-green-500" : "bg-gray-200",
+                    notifyContact ? "bg-brand-500" : "bg-gray-200",
                   ].join(" ")}
                 >
                   <span className={["inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform", notifyContact ? "translate-x-4" : "translate-x-1"].join(" ")} />
@@ -234,7 +234,7 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
               <button
                 onClick={() => void handleSave(true)}
                 disabled={saving || !title.trim() || !notes.trim()}
-                className="w-full py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50"
+                className="w-full py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 disabled:opacity-50"
               >
                 {saving ? "Sending..." : "Save & Send"}
               </button>
@@ -250,7 +250,7 @@ export function DealSlideOver({ deal, stages, onClose, onUpdated, onDeleted }: D
             <button
               onClick={() => void handleSave()}
               disabled={saving || !title.trim()}
-              className="w-full py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50"
+              className="w-full py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save Changes"}
             </button>

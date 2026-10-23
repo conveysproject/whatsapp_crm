@@ -29,6 +29,7 @@ const mockPrisma: Record<string, any> = vi.hoisted(() => ({
     findUnique: vi.fn(),
   },
   authAccount: { findUnique: vi.fn() },
+  organization: { findUnique: vi.fn() },
   team: { findFirst: vi.fn() },
   $transaction: vi.fn((arg: unknown): unknown =>
     typeof arg === "function" ? (arg as (t: unknown) => unknown)(mockPrisma) : Promise.all(arg as unknown[]),
@@ -68,6 +69,7 @@ describe("invitations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockIsEmailConfigured.mockReturnValue(true);
+    mockPrisma.organization.findUnique.mockReset().mockResolvedValue(null);
     mockPrisma.team.findFirst.mockResolvedValue({ id: "team-1" });
     // Re-stub fetch after clearAllMocks
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
@@ -116,6 +118,42 @@ describe("invitations", () => {
     const arg = mockSendMail.mock.calls[0]![0];
     expect(arg.to).toBe("new@c.com");
     expect(arg.html).toContain("/invitations/tok3/accept");
+    // Unbranded: sendMail gets exactly today's options, nothing extra.
+    expect(Object.keys(arg).sort()).toEqual(["html", "subject", "to"]);
+    expect(arg.subject).toBe("You've been invited to join WBMSG");
+    expect(mockPrisma.organization.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "org-1" } }));
+  });
+
+  it("brands the invite with the inviting org's brand, from-name and reply-to", async () => {
+    mockCheckPlanLimit.mockResolvedValue({ allowed: true, limit: -1, current: 0 });
+    mockSendMail.mockResolvedValue(undefined);
+    mockPrisma.organization.findUnique.mockResolvedValue({
+      isParent: true,
+      whiteLabelEnabled: true,
+      brandName: "Acme Msgs",
+      brandColor: "#112233",
+      brandSupportEmail: "help@acme.test",
+      brandHidePoweredBy: true,
+      slug: "acme",
+      logoImage: null,
+      smallLogoImage: null,
+      favicon: null,
+      darkLogoImage: null,
+      darkSmallLogoImage: null,
+      darkFavicon: null,
+      parentOrganization: null,
+    });
+    mockPrisma.invitation.create.mockResolvedValue({ id: "i9", email: "new@c.com", role: "agent", token: "tok9", expiresAt: new Date() });
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/v1/invitations", payload: { email: "new@c.com", role: "agent" } });
+    expect(res.json().emailSent).toBe(true);
+    const arg = mockSendMail.mock.calls[0]![0];
+    expect(arg.fromName).toBe("Acme Msgs");
+    expect(arg.replyTo).toBe("help@acme.test");
+    expect(arg.subject).toBe("You've been invited to join Acme Msgs");
+    expect(arg.html).toContain("Acme Msgs");
+    expect(arg.html).not.toContain("WBMSG");
+    expect(arg.html).not.toContain(`href="https://wbmsg.com"`);
   });
 
   it("still creates the invitation when the email fails", async () => {
@@ -234,6 +272,73 @@ describe("invitations", () => {
     });
     expect(res.statusCode).toBe(402);
     expect(res.json().error.code).toBe("PLAN_LIMIT_REACHED");
+  });
+
+  describe("preview (GET /v1/invitations/:token)", () => {
+    const future = new Date(Date.now() + 86_400_000);
+    const row = { email: "a@b.com", role: "agent", expiresAt: future, organizationId: "org-9" };
+    const parentRow = {
+      isParent: true, whiteLabelEnabled: true, brandName: "Acme Agency", brandColor: "#0055ff",
+      brandSupportEmail: "help@acme.test", brandHidePoweredBy: true, slug: "acme",
+      logoImage: "https://cdn.test/logo.png", smallLogoImage: null, favicon: null,
+      darkLogoImage: null, darkSmallLogoImage: null, darkFavicon: null, parentOrganization: null,
+    };
+    const get = async () => (await buildApp()).inject({ method: "GET", url: "/v1/invitations/tok" });
+
+    it("returns the default brand payload for an org without white label", async () => {
+      mockPrisma.invitation.findUnique.mockResolvedValue(row);
+      mockPrisma.organization.findUnique.mockResolvedValue(null);
+      const res = await get();
+      expect(res.statusCode).toBe(200);
+      const data = res.json().data;
+      expect(data).toMatchObject({ email: "a@b.com", role: "agent", organizationId: "org-9" });
+      expect(data.brand).toMatchObject({ name: "WBMSG", isDefault: true, slug: null });
+      expect(data.brand.palette["500"]).toBe("#22c55e");
+    });
+
+    it("returns the approved parent's brand for the inviting org, with no ids", async () => {
+      mockPrisma.invitation.findUnique.mockResolvedValue(row);
+      mockPrisma.organization.findUnique.mockResolvedValue(parentRow);
+      const res = await get();
+      const { brand } = res.json().data;
+      expect(brand).toMatchObject({ name: "Acme Agency", isDefault: false, slug: "acme", primaryColor: "#0055ff", supportEmail: "help@acme.test" });
+      expect(Object.keys(brand).sort()).toEqual([
+        "darkFaviconUrl", "darkLogoUrl", "darkSmallLogoUrl", "faviconUrl", "hidePoweredBy", "isDefault", "logoUrl",
+        "name", "palette", "primaryColor", "slug", "smallLogoUrl", "supportEmail",
+      ]);
+      expect(mockPrisma.organization.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "org-9" } }));
+    });
+
+    it("a failing brand lookup gives the default brand and the preview still works", async () => {
+      mockPrisma.invitation.findUnique.mockResolvedValue(row);
+      mockPrisma.organization.findUnique.mockRejectedValue(new Error("db down"));
+      const res = await get();
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.email).toBe("a@b.com");
+      expect(res.json().data.brand.isDefault).toBe(true);
+    });
+
+    it("logs a failed brand lookup at warn level without the invitation token", async () => {
+      mockPrisma.invitation.findUnique.mockResolvedValue(row);
+      mockPrisma.organization.findUnique.mockRejectedValue(new Error("db down"));
+      const { previewBrandPayload } = await import("../lib/brand.js");
+      const warn = vi.fn();
+      const out = await previewBrandPayload(mockPrisma as never, "org-9", { warn });
+      expect(out.isDefault).toBe(true);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]![1])).not.toContain("tok");
+    });
+
+    it("bad tokens keep the same 404 and never look up a brand", async () => {
+      mockPrisma.invitation.findUnique.mockResolvedValue(null);
+      const a = await get();
+      mockPrisma.invitation.findUnique.mockResolvedValue({ ...row, expiresAt: new Date(Date.now() - 1000) });
+      const b = await get();
+      expect(a.statusCode).toBe(404);
+      expect(b.body).toBe(a.body);
+      expect(a.json()).toEqual({ error: { code: "INVALID_TOKEN", message: "Invitation not found or expired" } });
+      expect(mockPrisma.organization.findUnique).not.toHaveBeenCalled();
+    });
   });
 
   describe("accept", () => {

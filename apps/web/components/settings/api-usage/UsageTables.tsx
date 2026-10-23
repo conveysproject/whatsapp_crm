@@ -93,13 +93,13 @@ export function CredentialTable({
                 <tr
                   key={r.apiKeyId}
                   data-testid="credential-usage-row"
-                  className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 ${selectedId === r.apiKeyId ? "bg-green-50 dark:bg-green-950" : ""}`}
+                  className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 ${selectedId === r.apiKeyId ? "bg-brand-50 dark:bg-green-950" : ""}`}
                   onClick={() => onSelect(r.apiKeyId)}
                 >
                   <td className={td}>
                     <button
                       type="button"
-                      className="font-medium text-left hover:underline focus:outline-none focus:ring-2 focus:ring-green-500 rounded"
+                      className="font-medium text-left hover:underline focus:outline-none focus:ring-2 focus:ring-brand-500 rounded"
                       aria-label={`Filter by ${r.name}`}
                       aria-pressed={selectedId === r.apiKeyId}
                       onClick={(e) => { e.stopPropagation(); onSelect(r.apiKeyId); }}

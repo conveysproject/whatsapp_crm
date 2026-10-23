@@ -26,6 +26,47 @@ describe("POST /api/internal/send-email", () => {
     expect((await POST(req(SECRET))).status).toBe(200);
     expect(sendMail).toHaveBeenCalledTimes(1);
   });
+  describe("fromName and replyTo", () => {
+    const post = (extra: Record<string, unknown>) =>
+      POST(
+        new NextRequest("http://localhost/api/internal/send-email", {
+          method: "POST",
+          headers: { authorization: `Bearer ${SECRET}`, "content-type": "application/json" },
+          body: JSON.stringify({ to: "a@b.co", subject: "hi", html: "<p>x</p>", ...extra }),
+        }),
+      );
+
+    it("passes a valid fromName and replyTo through", async () => {
+      expect((await post({ fromName: "Acme Msgs", replyTo: "help@acme.test" })).status).toBe(200);
+      expect(sendMail).toHaveBeenCalledWith({
+        to: "a@b.co",
+        subject: "hi",
+        html: "<p>x</p>",
+        replyTo: "help@acme.test",
+        fromName: "Acme Msgs",
+      });
+    });
+    it("sends exactly the old options when neither is given", async () => {
+      expect((await post({})).status).toBe(200);
+      expect(sendMail).toHaveBeenCalledWith({ to: "a@b.co", subject: "hi", html: "<p>x</p>" });
+    });
+    it.each([[""], ["   "], ["x".repeat(61)], [42], [null], [["a"]]])("rejects fromName %j with 400", async (fromName) => {
+      expect((await post({ fromName })).status).toBe(400);
+      expect(sendMail).not.toHaveBeenCalled();
+    });
+    it.each([
+      ["a@b.co\r\nBcc: x@y.z"],
+      ["a@b.co, c@d.ef"],
+      ["Name <a@b.co>"],
+      ["nope"],
+      [42],
+      [null],
+    ])("rejects replyTo %j with 400", async (replyTo) => {
+      expect((await post({ replyTo })).status).toBe(400);
+      expect(sendMail).not.toHaveBeenCalled();
+    });
+  });
+
   it("blocks a signed-in user's token", async () => {
     expect((await POST(req("eyJhbGciOi.payload.sig"))).status).toBe(401);
     expect(sendMail).not.toHaveBeenCalled();

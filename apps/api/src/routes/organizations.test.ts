@@ -142,31 +142,19 @@ describe("POST /v1/organizations/branding/logo", () => {
 
   afterAll(() => app.close());
 
-  it("updates org logoImage field with provided URL", async () => {
+  it("every retired branding route answers 410 GONE and never writes", async () => {
     const { prisma } = await import("../lib/prisma.js");
-    vi.mocked(prisma.organization.update).mockResolvedValueOnce({
-      id: "org_123",
-      logoImage: "https://cdn.example.com/logo.png",
-    } as unknown as Organization);
-
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/organizations/branding/logo",
-      payload: { url: "https://cdn.example.com/logo.png" },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(prisma.organization.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { logoImage: "https://cdn.example.com/logo.png" } })
-    );
-  });
-
-  it("branding updates never select wabaAccessToken or stripeId", async () => {
-    const { prisma } = await import("../lib/prisma.js");
-    await app.inject({ method: "POST", url: "/v1/organizations/branding/favicon", payload: { url: "https://cdn.example.com/f.png" } });
-    const call = vi.mocked(prisma.organization.update).mock.calls.at(-1)![0] as { select?: Record<string, boolean> };
-    expect(call.select).toBeDefined();
-    expect(call.select).not.toHaveProperty("wabaAccessToken");
-    expect(call.select).not.toHaveProperty("stripeId");
+    vi.mocked(prisma.organization.update).mockClear();
+    for (const name of ["logo", "small-logo", "favicon", "dark-logo", "dark-favicon"]) {
+      const res = await app.inject({
+        method: "POST",
+        url: `/v1/organizations/branding/${name}`,
+        payload: { url: "https://pub.test-r2.dev/brand/other-org/logo.png" },
+      });
+      expect(res.statusCode).toBe(410);
+      expect(res.json()).toEqual({ error: { code: "GONE", message: "Use /v1/organizations/brand/assets/:slot" } });
+    }
+    expect(prisma.organization.update).not.toHaveBeenCalled();
   });
 });
 

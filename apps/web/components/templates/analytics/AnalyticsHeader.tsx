@@ -18,7 +18,7 @@ const STATUS_COLOR: Record<string, keyof typeof STATUS_CHIP> = {
 const QUALITY_DOT: Record<string, string> = { GREEN: "bg-green-500", YELLOW: "bg-yellow-400", RED: "bg-red-500" };
 
 const btn =
-  "inline-flex items-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-green-500";
+  "inline-flex items-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand-500";
 
 export interface AnalyticsHeaderProps {
   template: TemplateInfo | null;
@@ -84,9 +84,9 @@ export function AnalyticsHeader({ template, range, onRangeChange, spanLabel, onR
               data-testid={`range-${r.value}`}
               aria-pressed={range === r.value}
               onClick={() => onRangeChange(r.value)}
-              className={`px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-500 ${
+              className={`px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 ${
                 range === r.value
-                  ? "bg-green-600 text-white"
+                  ? "bg-brand-600 text-white"
                   : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
               }`}
             >

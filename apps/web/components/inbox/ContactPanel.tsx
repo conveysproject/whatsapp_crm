@@ -89,8 +89,8 @@ export function ContactPanel({ contactId, contactName, conversationStatus, lastM
         <div className="flex flex-col divide-y divide-gray-100 overflow-y-auto">
           {/* Identity */}
           <div className="px-4 py-4 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-              <span className="text-sm font-bold text-green-700">{initials || "?"}</span>
+            <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
+              <span className="text-sm font-bold text-brand-700">{initials || "?"}</span>
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-gray-900 truncate">{contactName}</p>

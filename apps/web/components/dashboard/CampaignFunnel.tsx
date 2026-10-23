@@ -22,7 +22,7 @@ export function CampaignFunnel({ funnel }: { funnel: DashboardData["campaignFunn
       <section aria-label="Campaign funnel" className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 shadow-sm">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Last campaign</h3>
         <p data-testid="funnel-empty" className="mt-3 text-sm text-gray-500 dark:text-gray-400">No campaigns sent yet</p>
-        <Link href="/campaigns/new" className="mt-2 inline-block text-sm font-medium text-green-700 dark:text-green-400 hover:underline">
+        <Link href="/campaigns/new" className="mt-2 inline-block text-sm font-medium text-brand-700 dark:text-brand-400 hover:underline">
           Create a campaign
         </Link>
       </section>

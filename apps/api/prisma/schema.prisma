@@ -74,6 +74,12 @@ model Organization {
   planCancelAtPeriodEnd  Boolean   @default(false) @map("plan_cancel_at_period_end")
   parentOrganizationId   String?   @map("parent_organization_id")
   isParent               Boolean   @default(false) @map("is_parent")
+  brandName              String?   @map("brand_name")
+  brandColor             String?   @map("brand_color")
+  brandSupportEmail      String?   @map("brand_support_email")
+  whiteLabelEnabled      Boolean   @default(false) @map("white_label_enabled")
+  brandRevision          Int       @default(0) @map("brand_revision")
+  brandHidePoweredBy     Boolean   @default(false) @map("brand_hide_powered_by")
   parentOrganization     Organization?  @relation("OrgParentChild", fields: [parentOrganizationId], references: [id], onDelete: SetNull)
   childOrganizations     Organization[] @relation("OrgParentChild")
   vendorSettings     VendorSetting[]
@@ -91,6 +97,7 @@ model Organization {
   trustScoreSnapshots  OrgTrustScoreSnapshot[]
   businessHours        BusinessHours[]
   orgAutomationSettings OrgAutomationSettings?
+  emailSettings        OrgEmailSettings?
 
   @@map("organizations")
   @@index([stripeId])
@@ -1929,4 +1936,26 @@ model AuthTrustedDevice {
 
   @@index([accountId])
   @@map("auth_trusted_devices")
+}
+
+// Outbound email provider per organization. config_enc is encrypted (see lib/secret-box.ts).
+// The status CHECK ('unverified','verified','failing') exists in SQL only.
+model OrgEmailSettings {
+  id                  String    @id @default(uuid())
+  organizationId      String    @unique @map("organization_id")
+  provider            String
+  fromAddress         String    @map("from_address")
+  fromName            String?   @map("from_name")
+  replyTo             String?   @map("reply_to")
+  configEnc           String    @map("config_enc")
+  status              String    @default("unverified")
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
+  lastError           String?   @map("last_error")
+  lastTestedAt        DateTime? @map("last_tested_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("org_email_settings")
 }

@@ -1,0 +1,43 @@
+// Golden output captured from the unbranded templates BEFORE white-labelling. Do not edit.
+export const GOLDEN: Record<string, { subject: string; html: string }> = {
+  "code_email_verify": {
+    "subject": "Verify your email for WBMSG",
+    "html": "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1a1a1a\"><p>Use this code to verify your email address for WBMSG.</p><p style=\"font-size:32px;font-weight:bold;letter-spacing:6px;margin:24px 0\">123456</p><p>This code expires in 10 minutes.</p><p style=\"color:#666\">If you didn't ask for this, you can ignore this email.</p></div>"
+  },
+  "code_signin_email": {
+    "subject": "Your WBMSG sign-in code",
+    "html": "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1a1a1a\"><p>Use this code to sign in to WBMSG.</p><p style=\"font-size:32px;font-weight:bold;letter-spacing:6px;margin:24px 0\">123456</p><p>This code expires in 10 minutes.</p><p style=\"color:#666\">If you didn't ask for this, you can ignore this email.</p></div>"
+  },
+  "code_signin_whatsapp": {
+    "subject": "Your WBMSG sign-in code",
+    "html": "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1a1a1a\"><p>Use this code to sign in to WBMSG.</p><p style=\"font-size:32px;font-weight:bold;letter-spacing:6px;margin:24px 0\">123456</p><p>This code expires in 10 minutes.</p><p style=\"color:#666\">If you didn't ask for this, you can ignore this email.</p></div>"
+  },
+  "code_new_device": {
+    "subject": "Confirm a new device on WBMSG",
+    "html": "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1a1a1a\"><p>Use this code to confirm a new device on your WBMSG account.</p><p style=\"font-size:32px;font-weight:bold;letter-spacing:6px;margin:24px 0\">123456</p><p>This code expires in 10 minutes.</p><p style=\"color:#666\">If you didn't ask for this, you can ignore this email.</p></div>"
+  },
+  "code_password_reset": {
+    "subject": "Your WBMSG password reset code",
+    "html": "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1a1a1a\"><p>Use this code to reset your WBMSG password.</p><p style=\"font-size:32px;font-weight:bold;letter-spacing:6px;margin:24px 0\">123456</p><p>This code expires in 10 minutes.</p><p style=\"color:#666\">If you didn't ask for this, you can ignore this email.</p></div>"
+  },
+  "code_phone_verify": {
+    "subject": "Your WBMSG phone verification code",
+    "html": "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1a1a1a\"><p>Use this code to verify your phone number for WBMSG.</p><p style=\"font-size:32px;font-weight:bold;letter-spacing:6px;margin:24px 0\">123456</p><p>This code expires in 10 minutes.</p><p style=\"color:#666\">If you didn't ask for this, you can ignore this email.</p></div>"
+  },
+  "code_lead": {
+    "subject": "Verify your email for WBMSG",
+    "html": "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1a1a1a\"><p>Custom lead for WBMSG.</p><p style=\"font-size:32px;font-weight:bold;letter-spacing:6px;margin:24px 0\">123456</p><p>This code expires in 10 minutes.</p><p style=\"color:#666\">If you didn't ask for this, you can ignore this email.</p></div>"
+  },
+  "pwchanged": {
+    "subject": "Your WBMSG password was changed",
+    "html": "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1a1a1a\"><p>The password for your WBMSG account was just changed.</p><p>If this was you, no action is needed. If it wasn't, reset your password right away and contact support.</p></div>"
+  },
+  "invite": {
+    "subject": "You've been invited to join WBMSG",
+    "html": "<!DOCTYPE html>\n<html lang=\"en\">\n<head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>\n<body style=\"margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif\">\n  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n    <tr><td align=\"center\" style=\"padding:40px 16px\">\n      <table role=\"presentation\" width=\"560\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:560px;width:100%\">\n\n        <tr><td style=\"background:linear-gradient(135deg,#064e3b 0%,#059669 100%);border-radius:16px 16px 0 0;padding:40px 44px;text-align:center\">\n          <p style=\"margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#a7f3d0\">WBMSG</p>\n          <h1 style=\"margin:0 0 12px;font-size:26px;font-weight:800;color:#fff\">You've been invited!</h1>\n          <p style=\"margin:0;font-size:15px;color:#d1fae5;line-height:1.5\">\n            You've been invited to join as <strong>admin</strong>.<br>\n            Accept below to create your account and get started.\n          </p>\n        </td></tr>\n\n        <tr><td style=\"background:#fff;padding:40px 44px;text-align:center\">\n          <a href=\"https://app.example.com/invitations/tok/accept\"\n             style=\"display:inline-block;background:#059669;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;letter-spacing:0.01em\">\n            Accept Invitation →\n          </a>\n          <p style=\"margin:28px 0 0;font-size:13px;color:#9ca3af\">\n            This invitation expires in 7 days.<br>\n            If you didn't expect this email, you can safely ignore it.\n          </p>\n        </td></tr>\n\n        <tr><td style=\"background:#f8fafc;border-top:1px solid #e2e8f0;border-radius:0 0 16px 16px;padding:20px 44px;text-align:center\">\n          <p style=\"margin:0;font-size:12px;color:#94a3b8\">\n            WBMSG — WhatsApp-first CRM &nbsp;·&nbsp;\n            <a href=\"https://wbmsg.com\" style=\"color:#6b7280;text-decoration:none\">wbmsg.com</a>\n          </p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+  },
+  "clientInvite": {
+    "subject": "You've been invited to create a WBMSG account",
+    "html": "<!DOCTYPE html>\n<html lang=\"en\">\n<head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>\n<body style=\"margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif\">\n  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n    <tr><td align=\"center\" style=\"padding:40px 16px\">\n      <table role=\"presentation\" width=\"560\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:560px;width:100%\">\n\n        <tr><td style=\"background:linear-gradient(135deg,#064e3b 0%,#059669 100%);border-radius:16px 16px 0 0;padding:40px 44px;text-align:center\">\n          <p style=\"margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#a7f3d0\">WBMSG</p>\n          <h1 style=\"margin:0 0 12px;font-size:26px;font-weight:800;color:#fff\">You've been invited!</h1>\n          <p style=\"margin:0;font-size:15px;color:#d1fae5;line-height:1.5\">\n            <strong>Acme Co</strong> has invited you to create your own WBMSG account.<br>Accept below to create your account and get started.\n          </p>\n        </td></tr>\n\n        <tr><td style=\"background:#fff;padding:40px 44px;text-align:center\">\n          <a href=\"https://app.example.com/client-invitations/tok/accept\"\n             style=\"display:inline-block;background:#059669;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;letter-spacing:0.01em\">\n            Accept Invitation →\n          </a>\n          <p style=\"margin:28px 0 0;font-size:13px;color:#9ca3af\">\n            Important: Acme Co will have full read access to the new account, including its conversations, contacts and settings.<br>This invitation expires in 7 days.<br>\n            If you didn't expect this email, you can safely ignore it.\n          </p>\n        </td></tr>\n\n        <tr><td style=\"background:#f8fafc;border-top:1px solid #e2e8f0;border-radius:0 0 16px 16px;padding:20px 44px;text-align:center\">\n          <p style=\"margin:0;font-size:12px;color:#94a3b8\">\n            WBMSG — WhatsApp-first CRM &nbsp;·&nbsp;\n            <a href=\"https://wbmsg.com\" style=\"color:#6b7280;text-decoration:none\">wbmsg.com</a>\n          </p>\n        </td></tr>\n\n      </table>\n    </td></tr>\n  </table>\n</body>\n</html>"
+  }
+};

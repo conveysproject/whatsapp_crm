@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, JSX } from "react";
 import Link from "next/link";
+import { useBrand } from "@/hooks/useBrand";
 import { nextStep, postAuth, postSignInDestination } from "@/lib/auth/flows";
 import { safeRedirect } from "@/lib/auth/redirect";
 import { oauthErrorMessage } from "@/lib/auth/oauth";
@@ -19,8 +20,16 @@ type View = "password" | "code_email" | "code_enter" | "new_device" | "set_passw
  * variant "vendor": goes to redirect_url / dashboard. variant "admin": reloads /admin/sign-in so the
  * existing super-admin check runs with the fresh session.
  */
-export function SignInForm({ variant = "vendor" }: { variant?: "vendor" | "admin" }): JSX.Element {
-  const theme: Theme = variant === "admin" ? "dark" : "light";
+export function SignInForm({
+  variant = "vendor",
+  forgotHref = "/forgot-password",
+}: {
+  variant?: "vendor" | "admin";
+  /** Where "Forgot password?" goes; the branded sign-in page keeps people on its own route. */
+  forgotHref?: string;
+}): JSX.Element {
+  const brand = useBrand();
+  const theme: Theme = variant === "admin" ? "dark" : brand.isDefault ? "light" : "brand";
   const s = styles(theme);
   const [view, setView] = useState<View>("password");
   const [email, setEmail] = useState("");
@@ -177,7 +186,7 @@ export function SignInForm({ variant = "vendor" }: { variant?: "vendor" | "admin
       <div className="space-y-4">
         <h1 className={s.title}>Check WhatsApp</h1>
         <CodeStep
-          intro="If this number is verified on a WBMSG account, we've sent a 6-digit code on WhatsApp."
+          intro={`If this number is verified on a ${brand.name} account, we've sent a 6-digit code on WhatsApp.`}
           submitLabel="Sign in"
           onSubmit={verifyWhatsapp}
           theme={theme}
@@ -273,7 +282,7 @@ export function SignInForm({ variant = "vendor" }: { variant?: "vendor" | "admin
           >
             Email me a code instead
           </button>
-          <Link href="/forgot-password" className={s.link}>
+          <Link href={forgotHref} className={s.link}>
             Forgot password?
           </Link>
         </div>

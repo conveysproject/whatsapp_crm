@@ -38,7 +38,7 @@ export default function NotificationsPage(): JSX.Element {
           type="button"
           onClick={() => toggleSound.mutate(isSoundDisabled ? false : true)}
           className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-            !isSoundDisabled ? "bg-green-500" : "bg-gray-200"
+            !isSoundDisabled ? "bg-brand-500" : "bg-gray-200"
           }`}
         >
           <span

@@ -35,7 +35,7 @@ export default function ProvisionNumberPage(): JSX.Element {
         href="https://business.facebook.com/wa/manage/phone-numbers/"
         target="_blank"
         rel="noreferrer"
-        className="block w-full text-center bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 rounded-lg transition-colors mb-3"
+        className="block w-full text-center bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 rounded-lg transition-colors mb-3"
       >
         Open Meta Business Manager
       </a>

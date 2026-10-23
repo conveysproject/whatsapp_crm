@@ -62,7 +62,7 @@ export function CreatePipelineModal({ onClose, onCreated }: CreatePipelineModalP
           <label className="block text-xs font-medium text-gray-700 mb-1">Pipeline name *</label>
           <input
             autoFocus
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             placeholder="e.g. Sales, Renewals, Partnerships"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -81,7 +81,7 @@ export function CreatePipelineModal({ onClose, onCreated }: CreatePipelineModalP
           </div>
           <div className="flex gap-2">
             <input
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               placeholder="Add a stage..."
               value={newStage}
               onChange={(e) => setNewStage(e.target.value)}
@@ -99,7 +99,7 @@ export function CreatePipelineModal({ onClose, onCreated }: CreatePipelineModalP
           <button
             onClick={() => void handleCreate()}
             disabled={!name.trim() || stages.length === 0 || saving}
-            className="flex-1 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50"
+            className="flex-1 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 disabled:opacity-50"
           >
             {saving ? "Creating..." : "Create Pipeline"}
           </button>

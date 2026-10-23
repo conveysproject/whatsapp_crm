@@ -5,8 +5,16 @@ const u = (role: string, permissions: Record<string, string> = {}) => ({ id: "u"
 const hrefs = (user: ReturnType<typeof u>) => visibleSettingsTiles(user).map((t) => t.href);
 
 describe("visibleSettingsTiles", () => {
-  it("admin sees every tile", () => {
-    expect(hrefs(u("admin"))).toHaveLength(17);
+  it("admin of a parent organization sees every tile", () => {
+    expect(visibleSettingsTiles(u("admin"), { isParent: true })).toHaveLength(17);
+  });
+
+  it("admin of a non-parent sees every tile except Branding", () => {
+    for (const org of [undefined, null, {}, { isParent: false }, { hasParent: true }]) {
+      const visible = visibleSettingsTiles(u("admin"), org).map((t) => t.href);
+      expect(visible).toHaveLength(16);
+      expect(visible).not.toContain("/settings/branding");
+    }
   });
 
   it("manager with default permissions only sees tiles their APIs allow", () => {
@@ -46,5 +54,19 @@ describe("Security tile", () => {
   });
   it("is hidden while the user is unknown", () => {
     expect(visibleSettingsTiles(null)).toEqual([]);
+  });
+});
+
+describe("Branding tile", () => {
+  const branding = (user: ReturnType<typeof u>, org?: { isParent?: boolean; hasParent?: boolean } | null) =>
+    visibleSettingsTiles(user, org).find((t) => t.href === "/settings/branding");
+  it("shows for an admin of a parent, marked New", () => {
+    expect(branding(u("admin"), { isParent: true })?.isNew).toBe(true);
+  });
+  it("is hidden for managers and agents even in a parent", () => {
+    for (const role of ["manager", "agent"]) expect(branding(u(role, { settings_access: "allow" }), { isParent: true })).toBeUndefined();
+  });
+  it("is hidden while the organization is unknown", () => {
+    expect(branding(u("admin"), null)).toBeUndefined();
   });
 });

@@ -1,0 +1,126 @@
+# PRD: White-label website (no domain / DNS)
+
+Status: DRAFT for owner sign-off (2026-10-22). No code is written until this is approved.
+Related: `docs/prd-parent-child-orgs.md` (a parent's clients are child organizations), `docs/parent-child-orgs.md`.
+Evidence: read-only scan of the repo at main `7e25bbe8` (file:line given where read). Items marked **Unverified** were not confirmed at runtime.
+
+## 1. Problem
+
+A parent company (agency / reseller) wants its clients to see the parent's brand in the web app, not "WBMSG": the parent's name, logo, favicon, colors, email wording and a branded sign-in page. The first stage covers the website only. Custom domains, DNS, and sending email from the parent's own domain are a later stage and are out of scope here.
+
+## 2. What exists today (evidence)
+
+- The organization table already has `slug` (unique), `domain` (unused), light/dark `logoImage`, `smallLogoImage`, `favicon` (`apps/api/prisma/schema.prisma:59-70`).
+- The Settings, Branding page (`apps/web/app/(dashboard)/settings/branding/page.tsx`) is upload-only, shows no current values, and uploads to `/api/upload`. **That route does not exist** (`apps/web/app/api` holds only auth, billing, impersonation, internal, register, v1). So saving a logo does not work today. Verified.
+- **No uploaded logo is rendered anywhere** in the web app (zero reads of `logoImage` / `favicon`). The sidebar logo and the sign-in logos are hard-coded. Verified.
+- The five `POST /organizations/branding/*` routes accept any string as the URL (no schema, no host allow-list) (`apps/api/src/routes/organizations.ts:130-154`).
+- A working upload exists on the API: `POST /v1/media-assets/upload` stores to R2 (`apps/api/src/routes/media-assets.ts:60`, `lib/r2.ts`). No branding-specific size or type limit.
+- The brand color is a fixed Tailwind scale (`apps/web/tailwind.config.ts:11-22`, green). About 416 `brand-*` class uses in 79 files; the CSS variable `--color-brand` is barely used. Dark mode toggling is likely broken (no `darkMode` key; **Unverified** at runtime) and is out of scope.
+- "WBMSG" appears as a static string in about 40 dashboard, auth, onboarding and invite places, in the page title template and icons (`apps/web/app/layout.tsx:11-41`), the manifest, and the support email `info@conveys.in` in three places. Marketing, legal and docs pages (about 110 occurrences) are WBMSG's own public site.
+- Emails: one fixed sender `WBMSG <SMTP_USER>` (`apps/web/lib/mail.ts:28`); the mail API passes only `to`, `subject`, `html`, `replyTo` (no from-name) (`apps/api/src/lib/mail.ts`, `apps/web/app/api/internal/send-email/route.ts`). About 10 builders: sign-in / reset codes, password changed, team invite, client invite, billing, closure notice.
+- Unauthenticated pages (sign-in, sign-up, forgot password) have **no way to know which brand to show**: there is no host or slug routing (`middleware-wbmsg.ts`). Invitation pages can: the invite token identifies the inviter.
+- The dashboard layout is a server component that already fetches the organization, so a brand can be fetched once per request without a flash of the wrong brand.
+
+## 3. Goals
+
+1. A parent company sets one brand; its own users and all its linked clients see that brand in the web app: name, logo, favicon, primary color, page titles, support email.
+2. Branded entry points without a custom domain: invitation pages (client and team) and a branded sign-in page at a path like `wbmsg.com/c/<slug>`.
+3. Emails sent to those users carry the brand name, logo and footer and are sent as "<Brand> <our verified address>" with the parent's support address as reply-to.
+4. A brand is shown only after a super admin approves it (anti-impersonation).
+5. Organizations without a brand see exactly what they see today (no visual change).
+6. Fix the broken branding upload and validate what is stored.
+
+## 4. Non-goals
+
+- Custom domains, DNS, TLS, host-based routing (our side). Receiving or reading email (IMAP/POP3 are receiving protocols; replies simply go to the client's own mailbox).
+- The mobile app, the marketing site (`apps/conveys`), WBMSG's public marketing, legal and docs pages (they stay WBMSG; the legal operator stays Conveys).
+- Billing web pages stay WBMSG-branded (D4a). The legal seller identity (Conveys Information Technology and its tax details) always stays visible in billing emails, statements and PDFs. Payment checkout pages belong to our payment provider account and cannot be re-branded.
+- Fixing dark mode. Replacing the green semantic colors (WhatsApp green, success states); only the `brand-*` palette follows the brand.
+- Per-client brands (a client choosing its own brand): clients inherit their parent's.
+
+Anti-goals: a brand that lets one company impersonate another; a logo URL pointing anywhere on the internet; a flash of the WBMSG brand before the client's brand; any parent-organization identity leaking to clients beyond the brand itself.
+
+## 5. Design
+
+**Brand object** `{ name, logoUrl, smallLogoUrl, faviconUrl, dark variants, primaryColor, supportEmail, hidePoweredBy }`. Effective brand of an organization = its own brand if it is a parent with white-label enabled, else its parent's brand if the parent has white-label enabled, else the WBMSG default (current look).
+
+**Data (hand-authored migration, additive):** `organizations.brand_name TEXT`, `brand_color TEXT` (hex), `brand_support_email TEXT`, `white_label_enabled BOOLEAN NOT NULL DEFAULT false`, `brand_hide_powered_by BOOLEAN NOT NULL DEFAULT false`. The existing image columns and `slug` are reused. `white_label_enabled` is set only by a super admin.
+
+**API**
+- `GET/PUT /v1/organizations/brand`: parent admin only; validated (name 2-40 chars no markup; color `#RRGGBB`; slug 3-40, lowercase letters, digits, hyphens, reserved words blocked; support email; image URLs must be under our R2 public URL).
+- `POST /v1/organizations/brand/assets/:slot`: multipart upload to R2, png/jpg/webp (and ico for favicon), size limit (logo 1 MB, favicon 256 KB), SVG refused.
+- `GET /v1/brand`: authenticated; returns only the caller's effective brand fields.
+- `GET /v1/public/brand/:slug`: public, rate limited; returns the brand only when white-label is enabled.
+- Invitation preview endpoints (client and team) also return the brand; no parent id is exposed.
+- `PATCH /v1/admin/organizations/:id/white-label` super admin, with audit.
+
+**Web:** `BrandProvider` fed by the server-rendered dashboard layout (no flash); a `useBrand()` hook replaces the hard-coded logo and name in the shell, onboarding, auth and invite pages; `generateMetadata` for title and favicon in the dashboard segment; the `brand-*` Tailwind scale becomes CSS variables set from the brand color (defaults equal today's green, so nothing changes by default); a rewritten Branding page with current values, preview, remove, and "view as client".
+
+**Approval is bound to a brand revision:** `organizations.brand_revision` (integer, additive migration) goes up on every brand write (settings, upload, delete). A super admin enables white-label by sending the revision they reviewed; if the brand changed since (revision differs) the enable is refused with `BRAND_CHANGED` and nothing is switched on. Changing the name, web address or any image of a live brand switches it off in the same write and asks for a new approval; other writes are conditional on the approval state they read, so a concurrent approval can never carry an unreviewed edit live.
+
+**Email:** `fromName` plumbed through API mail helper, internal send route and web mail; sender address stays our verified mailbox; templates take a brand (name, logo URL, footer, support email); the From name is sanitized (no header injection).
+
+**Security:** brand is data, rendered as text or validated URL only; super admin approval gate; slug reserved words (wbmsg, admin, api, www, support, billing, login, etc.); branded sign-in never reveals whether a user exists; public brand endpoint is rate limited and returns nothing for unknown or disabled slugs (same body).
+
+## 5a. Email: the client connects its own email service (all sending protocols)
+
+Owner request (2026-10-22): the brand's emails must be able to go out through the client's own email service, whatever it uses. This replaces the earlier "sender address stays ours": our mailbox becomes the **fallback**, not the only sender.
+
+**Providers (adapters behind one interface)**
+- **SMTP** (host, port 465 / 587 / 25 / 2525, SSL or STARTTLS, user, password). This covers Gmail and Google Workspace (app password), Microsoft 365, GoDaddy, Zoho, cPanel and most business mailboxes.
+- **HTTP API providers** (API key): SendGrid, Mailgun, Postmark, Resend, Brevo, Amazon SES, SparkPost.
+- **Later (needs OAuth app review):** Gmail API and Microsoft Graph.
+- Not applicable: IMAP and POP3 are for receiving mail; they are not used to send.
+
+**How it works**
+- New per-organization setting `org_email_settings` (provider, from address, from name, reply-to, encrypted credentials, status `unverified | verified | failing`, last error, last tested). Parent admin only. Clients inherit their parent's setting, like the brand.
+- Credentials are encrypted at rest (AES-256-GCM, key from an environment variable), never returned by any API, never logged. The parent can replace or delete them.
+- **Test before live:** a setting is only used after a successful test send to the admin's own address (verified). Changes reset it to unverified.
+- **Where it sends from:** HTTP providers send from the API directly. Railway blocks outbound SMTP, so SMTP goes through the existing web relay route (`/api/internal/send-email`, bearer-protected). The API passes the decrypted SMTP settings in that request over HTTPS; they are not logged or stored by the relay.
+- **Only our fixed templates are sent through it** (sign-in codes, invitations, branded notices). There is no endpoint that lets a client send arbitrary email, so it cannot be used as an open relay.
+- **Fallback and failure handling:** if the client's provider fails (authentication error, rejected, timeout), that email is re-sent once from our default sender so a login code or invite is never lost; after 3 consecutive failures the setting is marked `failing`, the parent admin is told by email from our sender, and the page shows the last error. Billing and statement emails to a client organization follow the same path (D4).
+- **Safety:** the SMTP host and any API base URL are checked against private, loopback and link-local addresses before connecting (reuse the existing safe-URL check), only ports 25 / 465 / 587 / 2525, TLS required unless the admin explicitly accepts plain; test sends are rate limited (5 per hour per organization), and sending is capped per organization per hour.
+- **Deliverability is the client's side:** their SPF and DKIM at their own provider. The settings page shows plain help text. We do not touch DNS.
+
+## 6. Decisions needed (recommended default first)
+
+| # | Decision | Default |
+|---|---|---|
+| D1 | Who sets the brand | The parent sets it; its clients inherit (no per-client brand) |
+| D2 | Super admin approval before a brand shows | Yes (`white_label_enabled`) |
+| D3 | Parent's own dashboard also shows its brand | Yes |
+| D4 | Billing and statement emails to a CLIENT organization (statements, payment confirmations and failures, sending-paused and usage alerts, cancellation notices, closure notices) | **Decided by the owner (2026-10-22):** sent through the parent's email service with the parent's brand. Emails to the parent's own billing contacts, owner summaries and admin emails stay on our sender and brand. The legal seller identity stays in the body and on PDFs |
+| D4a | Billing web pages for a client organization | Stay WBMSG-branded unless you say otherwise (open) |
+| D5 | "Powered by WBMSG" | Hidden when white-label is on (check your terms) |
+| D6 | Branded sign-in at a path (`wbmsg.com/c/<slug>`) | Yes (no domain needed) |
+| D7 | Logo formats | png, jpg, webp (favicon also ico); no SVG |
+| D8 | Support email shown to clients | Required when white-label is enabled; no fallback to our address |
+| D9 | Legal pages and terms | Stay WBMSG / Conveys; add white-label terms in your contract (not engineering) |
+| D10 | Email providers in the first release | SMTP plus SendGrid, Mailgun, Postmark, Resend, Brevo, Amazon SES; Gmail API and Microsoft Graph (OAuth) later |
+| D11 | Who configures the email provider | The parent admin; clients inherit |
+| D12 | If the client's provider fails | Fall back once to our sender, mark failing after 3 failures, tell the parent admin |
+| D13 | Which emails use the client's provider | Sign-in codes, password changed, team and client invitations, closure notices, and (D4) billing and statement emails to a client organization. Our own sender for the parent's own billing, owner summaries and admin emails |
+| D14 | Sending through an unverified setting | No: a successful test send is required first |
+
+## 7. Acceptance criteria
+
+- With white-label off, every page and email is byte-identical to today (snapshot tests).
+- With it on, a client user sees the brand name, logo, favicon, color and title on every dashboard, onboarding, invite and branded sign-in page; no "WBMSG" in those components (automated string-leak test).
+- No flash: the first server render already contains the brand.
+- Another parent's clients never see this brand; a client never receives the parent organization's id.
+- Upload rejects SVG, oversize and non-image files; the stored URL must be under our R2 public URL.
+- Brand emails: From name is the brand, Reply-To is the support email, templates show the brand; the sender address is unchanged.
+- Existing Branding page works end to end (upload, preview, remove).
+
+## 8. Rollout and rollback
+
+No global flag: the gate is `white_label_enabled` per parent (default off, so zero change for everyone). Pilot with one parent. Rollback for one parent: super admin turns white-label off (instant). Migration is additive.
+
+## 9. Risks and open questions
+
+- Impersonation of other companies through the brand name: mitigated by D2 (super admin approval), but needs an approval checklist.
+- About 40 static strings and about 12 logo spots must all be found; the string-leak test is the net.
+- The Next.js behaviour of merging per-segment icons and the manifest is **Unverified**; a dynamic manifest is Phase 2.
+- Billing emails branded as the parent while WBMSG is the legal seller: statements and PDFs must keep the legal seller identity (tax and GST rules require the supplier's name and number); a client may think the parent is billing them. Whether each client pays WBMSG directly or the parent pays for them is not decided; a model where the parent bills its clients would be a separate billing project.
+- Payment links in these emails open our payment provider's page (WBMSG/Conveys account) and cannot carry the parent's brand.
+- Contract and terms: not an engineering item.

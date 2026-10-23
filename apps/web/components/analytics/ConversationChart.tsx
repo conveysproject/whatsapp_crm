@@ -2,6 +2,7 @@
 
 import { JSX, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/client";
+import { useBrandChartColors } from "@/hooks/useBrandChartColors";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 interface DailyVolume { date: string; inbound: number; outbound: number; }
@@ -13,6 +14,7 @@ interface ConversationChartProps {
 export function ConversationChart({ days = 14 }: ConversationChartProps): JSX.Element {
   const [data, setData] = useState<DailyVolume[]>([]);
   const { getToken } = useAuth();
+  const { primary, primarySoft } = useBrandChartColors();
 
   useEffect(() => {
     async function load() {
@@ -35,8 +37,8 @@ export function ConversationChart({ days = 14 }: ConversationChartProps): JSX.El
           <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
           <Tooltip />
           <Legend />
-          <Bar dataKey="inbound" fill="#22c55e" radius={[3, 3, 0, 0]} />
-          <Bar dataKey="outbound" fill="#86efac" radius={[3, 3, 0, 0]} />
+          <Bar dataKey="inbound" fill={primary} radius={[3, 3, 0, 0]} />
+          <Bar dataKey="outbound" fill={primarySoft} radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

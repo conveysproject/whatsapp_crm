@@ -3,6 +3,9 @@
 import { useEffect, useState, type JSX } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/client";
+import { BrandedShell } from "@/components/brand/BrandedShell";
+import { useBrandTitle } from "@/hooks/useBrandTitle";
+import { parseBrand } from "@/lib/brand";
 import { ClientAcceptMessage, ClientAcceptView } from "@/components/parent/ClientAcceptView";
 import {
   NOT_AVAILABLE_MESSAGE, ParentApiError, acceptClientInvitation, acceptClientInvitationNewAccount, acceptViewMode,
@@ -68,18 +71,23 @@ export default function AcceptClientInvitationPage(): JSX.Element {
     setBusy(false);
   }
 
+  useBrandTitle(meta ? parseBrand(meta.brand) : null);
+
   if (metaError) return <ClientAcceptMessage message={metaError} />;
   if (!meta || !isLoaded) return <ClientAcceptMessage message="Loading invitation..." />;
 
+  // The inviter's brand arrives with the preview; anything malformed is the default brand (today's page).
   return (
-    <ClientAcceptView
-      meta={meta}
-      mode={acceptViewMode(meta, isSignedIn)}
-      busy={busy}
-      error={error}
-      redirectPath={`/client-invitations/${encodeURIComponent(token)}/accept`}
-      onSubmit={(form) => { void accept(form); }}
-      onCreateAccount={(form) => { void createAccount(form); }}
-    />
+    <BrandedShell brand={parseBrand(meta.brand)}>
+      <ClientAcceptView
+        meta={meta}
+        mode={acceptViewMode(meta, isSignedIn)}
+        busy={busy}
+        error={error}
+        redirectPath={`/client-invitations/${encodeURIComponent(token)}/accept`}
+        onSubmit={(form) => { void accept(form); }}
+        onCreateAccount={(form) => { void createAccount(form); }}
+      />
+    </BrandedShell>
   );
 }

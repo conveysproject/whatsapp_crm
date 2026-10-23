@@ -127,29 +127,12 @@ export const organizationRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  const brandingFields: Record<string, string> = {
-    logo: "logoImage",
-    "small-logo": "smallLogoImage",
-    favicon: "favicon",
-    "dark-logo": "darkLogoImage",
-    "dark-favicon": "darkFavicon",
-  };
+  const retiredBrandingRoutes = ["logo", "small-logo", "favicon", "dark-logo", "dark-favicon"];
 
-  for (const [slug, field] of Object.entries(brandingFields)) {
-    fastify.post<{ Params: { slug: string }; Body: { url: string } }>(
-      `/organizations/branding/${slug}`,
-      async (request, reply) => {
-        const { organizationId, role } = request.auth;
-        if (role !== "admin") {
-          return reply.status(403).send({ error: { code: "FORBIDDEN", message: "Only admins can update branding" } });
-        }
-        const data = await prisma.organization.update({
-          where: { id: organizationId },
-          data: { [field]: request.body.url },
-          select: ORG_PUBLIC_SELECT,
-        });
-        return reply.send({ data });
-      }
+  for (const slug of retiredBrandingRoutes) {
+    // Retired: assets are uploaded through /organizations/brand/assets/:slot (type checked, org scoped, audited).
+    fastify.post(`/organizations/branding/${slug}`, async (_request, reply) =>
+      reply.status(410).send({ error: { code: "GONE", message: "Use /v1/organizations/brand/assets/:slot" } })
     );
   }
 };

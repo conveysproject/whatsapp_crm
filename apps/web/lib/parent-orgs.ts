@@ -187,7 +187,13 @@ export async function leaveParent(): Promise<void> {
 }
 
 // ── Public accept page ─────────────────────────────────────────────────────────────────────
-export interface ClientInvitationMeta { parentName: string; email: string; accountExists?: boolean }
+export interface ClientInvitationMeta {
+  parentName: string;
+  email: string;
+  accountExists?: boolean;
+  /** The inviting parent's brand as the API sent it; parsed (and defaulted) with parseBrand before use. */
+  brand?: unknown;
+}
 
 /**
  * Which accept screen to show. Signed in: the existing accept form (account, no workspace yet).
