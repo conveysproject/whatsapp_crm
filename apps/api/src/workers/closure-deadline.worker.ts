@@ -14,7 +14,7 @@ interface ContactConfig {
   closureLeadStatusIds?: string[];
 }
 
-async function processClosureDeadlines(): Promise<void> {
+export async function processClosureDeadlines(): Promise<void> {
   const orgs = await prisma.organization.findMany({ select: { id: true, settings: true } });
   for (const org of orgs) {
     const cc = ((org.settings as Record<string, unknown> | null)?.["contactConfig"] ?? {}) as ContactConfig;
