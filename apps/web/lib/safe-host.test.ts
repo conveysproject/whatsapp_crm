@@ -107,3 +107,43 @@ describe("resolveSafeSmtpHost: hostnames", () => {
     expect((await resolveSafeSmtpHost("smtp.example.com", { lookup: lookupOf("not-an-ip") })).ok).toBe(false);
   });
 });
+
+describe("resolveSafeSmtpHost: lookup deadline and normalisation", () => {
+  it("gives up on a lookup that never answers after 5 seconds", async () => {
+    vi.useFakeTimers();
+    try {
+      const lookup = vi.fn(() => new Promise<Addr[]>(() => {}));
+      const p = resolveSafeSmtpHost("slow.example.com", { lookup });
+      await vi.advanceTimersByTimeAsync(4999);
+      let settled = false;
+      void p.then(() => (settled = true));
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(2);
+      expect(await p).toEqual({ ok: false, reason: "unresolvable" });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("clears the timer when the lookup answers", async () => {
+    vi.useFakeTimers();
+    try {
+      expect((await resolveSafeSmtpHost("smtp.example.com", { lookup: lookupOf("93.184.216.34") })).ok).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("normalises a public IPv4-mapped literal and resolver answer to IPv4", async () => {
+    expect(await resolveSafeSmtpHost("::ffff:93.184.216.34")).toEqual({ ok: true, address: "93.184.216.34", family: 4 });
+    expect(await resolveSafeSmtpHost("smtp.example.com", { lookup: lookupOf("::ffff:93.184.216.34") })).toEqual({
+      ok: true, address: "93.184.216.34", family: 4,
+    });
+  });
+  it("rejects ORCHID and benchmarking IPv6 ranges", async () => {
+    for (const ip of ["2001:10::1", "2001:20::1", "2001:2::1"]) {
+      expect(await resolveSafeSmtpHost(ip)).toEqual({ ok: false, reason: "unsafe_address" });
+    }
+  });
+});
